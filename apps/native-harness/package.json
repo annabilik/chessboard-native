@@ -7,7 +7,7 @@
     "android:release": "cd android && ./gradlew :app:assembleRelease --no-daemon",
     "ios": "react-native run-ios",
     "ios:gems": "bundle install",
-    "ios:pods": "bundle exec pod install --project-directory=ios",
+    "ios:pods": "bundle exec pod install --project-directory=ios --deployment",
     "ios:release": "xcodebuild -workspace ios/ChessboardNativeHarness.xcworkspace -scheme ChessboardNativeHarness -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath ios/build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build",
     "start": "react-native start",
     "typecheck": "tsc --project tsconfig.json --noEmit"

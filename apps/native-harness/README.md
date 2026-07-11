@@ -20,6 +20,6 @@ pnpm native:ios
 pnpm native:ios:release
 ```
 
-The iOS commands require Xcode, Ruby, Bundler, and CocoaPods. Release builds use
-the simulator SDK with code signing disabled; the harness is a compile-time
-consumer, not a distributable application.
+The iOS commands require Xcode, the Ruby version pinned by the Gemfile, Bundler,
+and CocoaPods. Release builds use the simulator SDK with code signing disabled;
+the harness is a compile-time consumer, not a distributable application.
