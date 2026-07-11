@@ -5,8 +5,511 @@
 ```ts
 
 import { JSX } from 'react/jsx-runtime';
+import type { ReactElement } from 'react';
+import type { ViewStyle } from 'react-native';
+
+// @public
+export type AnnotationDraft = {
+    readonly id?: never;
+    readonly type: 'arrow';
+    readonly from: SquareId;
+    readonly to: SquareId;
+    readonly color: string;
+    readonly width?: number;
+    readonly opacity?: number;
+    readonly shape?: 'straight' | 'knight';
+    readonly layer?: 'belowPieces' | 'abovePieces';
+} | {
+    readonly id?: never;
+    readonly type: 'square';
+    readonly square: SquareId;
+    readonly color: string;
+    readonly shape?: 'fill' | 'circle' | 'dot' | 'border';
+    readonly layer?: 'belowPieces' | 'abovePieces';
+};
+
+// @public
+export type AnnotationOperation = (AnnotationOperationBase & {
+    readonly type: 'add';
+    readonly annotation: AnnotationDraft;
+}) | (AnnotationOperationBase & {
+    readonly type: 'toggle';
+    readonly annotation: AnnotationDraft;
+    readonly matchingIdsAtBase: readonly string[];
+}) | (AnnotationOperationBase & {
+    readonly type: 'remove';
+    readonly annotationId: string;
+}) | (AnnotationOperationBase & {
+    readonly type: 'clear';
+    readonly annotationIdsAtBase: readonly string[];
+    readonly reason: 'board-press' | 'position-change' | 'consumer-action';
+});
+
+// @public
+export interface AnnotationOperationBase {
+    // (undocumented)
+    readonly baseAnnotationRevision: Revision;
+    // (undocumented)
+    readonly boardId: string;
+    // (undocumented)
+    readonly input: 'touch' | 'keyboard' | 'accessibility' | 'policy';
+    // (undocumented)
+    readonly operationId: string;
+}
+
+// @public
+export type AnnotationsProp = readonly BoardAnnotation[] | ControlledAnnotations;
+
+// @public
+export type AnnotationTool = {
+    readonly type: 'arrow';
+    readonly color: string;
+    readonly width?: number;
+    readonly opacity?: number;
+} | {
+    readonly type: 'square';
+    readonly color: string;
+    readonly shape?: 'fill' | 'circle' | 'dot' | 'border';
+} | null;
+
+// @public
+export interface ArrowAnnotation {
+    // (undocumented)
+    readonly color: string;
+    // (undocumented)
+    readonly from: SquareId;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly layer?: 'belowPieces' | 'abovePieces';
+    // (undocumented)
+    readonly opacity?: number;
+    // (undocumented)
+    readonly shape?: 'straight' | 'knight';
+    // (undocumented)
+    readonly to: SquareId;
+    // (undocumented)
+    readonly type: 'arrow';
+    // (undocumented)
+    readonly width?: number;
+}
+
+// @public
+export interface BoardActionAccessibilityContext {
+    // (undocumented)
+    readonly action: ChessboardAccessibilityAction;
+    // (undocumented)
+    readonly boardId: string;
+    // (undocumented)
+    readonly piece: PieceData | null;
+    // (undocumented)
+    readonly square: SquareId;
+}
+
+// @public
+export type BoardAnnotation = ArrowAnnotation | SquareAnnotation;
+
+// @public
+export interface BoardDimensions {
+    // (undocumented)
+    readonly columns: number;
+    // (undocumented)
+    readonly rows: number;
+}
+
+// @public
+export type BoardOrientation = 'white' | 'black';
+
+// @public
+export interface BoardSquare {
+    // (undocumented)
+    readonly isLight: boolean;
+    // (undocumented)
+    readonly square: SquareId;
+}
+
+// @public
+export interface BoardTransition {
+    // (undocumented)
+    readonly capturedSquare?: SquareId;
+    // (undocumented)
+    readonly from: SquareId;
+    // (undocumented)
+    readonly fromRevision: Revision;
+    // (undocumented)
+    readonly promotion?: PieceType;
+    // (undocumented)
+    readonly rookMove?: Readonly<{
+        from: SquareId;
+        to: SquareId;
+    }>;
+    // (undocumented)
+    readonly to: SquareId;
+    // (undocumented)
+    readonly toRevision: Revision;
+}
 
 // @public
 export function Chessboard(): JSX.Element;
+
+// @public
+export interface ChessboardAccessibility {
+    // (undocumented)
+    readonly announcement?: Readonly<{
+        id: string;
+        message: string;
+    }>;
+    // (undocumented)
+    readonly boardHint?: string;
+    // (undocumented)
+    readonly boardLabel?: string;
+    // (undocumented)
+    readonly formatActionLabel?: (context: BoardActionAccessibilityContext) => string;
+    // (undocumented)
+    readonly formatMoveOutcome?: (context: MoveOutcomeAccessibilityContext) => string | null;
+    // (undocumented)
+    readonly formatSquareValue?: (context: SquareAccessibilityContext) => string;
+}
+
+// @public
+export type ChessboardAccessibilityAction = 'move-cursor-left' | 'move-cursor-right' | 'move-cursor-up' | 'move-cursor-down' | 'activate-square' | 'clear-selection' | 'cancel-move' | 'remove-piece' | 'place-spare' | 'cancel-spare' | 'start-arrow' | 'finish-arrow' | 'toggle-square-annotation' | 'cancel-annotation';
+
+// @public
+export class ChessboardError extends Error {
+    constructor(message: string, details: ChessboardErrorDetails, cause?: unknown);
+    // (undocumented)
+    readonly boardId: string | null;
+    // (undocumented)
+    readonly code: ChessboardErrorCode;
+    // (undocumented)
+    readonly domain: ChessboardErrorDomain;
+    // (undocumented)
+    readonly name = "ChessboardError";
+    // (undocumented)
+    readonly revision: Revision | null;
+}
+
+// @public
+export type ChessboardErrorCode = ChessboardErrorDetails['code'];
+
+// @public
+export interface ChessboardErrorContext {
+    // (undocumented)
+    readonly boardId: string | null;
+    // (undocumented)
+    readonly domain: ChessboardErrorDomain;
+    // (undocumented)
+    readonly revision: Revision | null;
+}
+
+// @public
+export type ChessboardErrorDetails = {
+    readonly code: 'INVALID_BOARD_ID' | 'DUPLICATE_BOARD_ID' | 'BOARD_ID_CHANGED';
+    readonly boardId: string | null;
+    readonly revision: null;
+} | {
+    readonly code: 'INVALID_DIMENSIONS';
+    readonly boardId: string | null;
+    readonly revision: null;
+} | {
+    readonly code: 'INVALID_FEN' | 'FEN_DIMENSION_MISMATCH' | 'INVALID_POSITION' | 'INVALID_POSITION_SQUARE' | 'DUPLICATE_PIECE_ID' | 'INVALID_POSITION_REVISION' | 'POSITION_CONTROL_TIER_CHANGED';
+    readonly boardId: string | null;
+    readonly revision: Revision;
+} | {
+    readonly code: 'INVALID_ANNOTATIONS' | 'DUPLICATE_ANNOTATION_ID' | 'INVALID_ANNOTATION_REVISION' | 'ANNOTATION_CONTROL_TIER_CHANGED';
+    readonly boardId: string | null;
+    readonly revision: Revision;
+} | {
+    readonly code: 'INVALID_SELECTION' | 'INVALID_SELECTION_REVISION' | 'SELECTION_CONTROL_TIER_CHANGED';
+    readonly boardId: string | null;
+    readonly revision: Revision;
+};
+
+// @public
+export type ChessboardErrorDomain = 'board' | 'dimensions' | 'position' | 'annotations' | 'selection';
+
+// @public
+export interface ControlledAnnotations {
+    // (undocumented)
+    readonly revision: Revision;
+    // (undocumented)
+    readonly value: readonly BoardAnnotation[];
+}
+
+// @public
+export interface ControlledPosition {
+    // (undocumented)
+    readonly committedIntentId?: string;
+    // (undocumented)
+    readonly revision: Revision;
+    // (undocumented)
+    readonly transition?: BoardTransition;
+    // (undocumented)
+    readonly value: PositionInput;
+}
+
+// @public
+export type ControlledSelection = PlainSelection & {
+    readonly revision: Revision;
+};
+
+// @public
+export type FenPieceCode = 'p' | 'r' | 'n' | 'b' | 'q' | 'k' | 'P' | 'R' | 'N' | 'B' | 'Q' | 'K';
+
+// @public
+export type MoveDecision = {
+    readonly status: 'accepted';
+} | {
+    readonly status: 'rejected';
+    readonly reason?: string;
+};
+
+// @public
+export type MoveInput = 'drag' | 'tap' | 'keyboard' | 'accessibility';
+
+// @public
+export interface MoveIntent {
+    // (undocumented)
+    readonly basePositionRevision: Revision;
+    // (undocumented)
+    readonly boardId: string;
+    // (undocumented)
+    readonly input: MoveInput;
+    // (undocumented)
+    readonly intentId: string;
+    // (undocumented)
+    readonly piece: PieceData;
+    // (undocumented)
+    readonly source: MoveSource;
+    // (undocumented)
+    readonly targetSquare: SquareId | null;
+}
+
+// @public
+export interface MoveOutcomeAccessibilityContext {
+    // (undocumented)
+    readonly intent: MoveIntent;
+    // (undocumented)
+    readonly outcome: 'committed' | 'rejected' | 'cancelled' | 'timed-out';
+    // (undocumented)
+    readonly reason?: string;
+}
+
+// @public
+export interface MoveRequestTimeouts {
+    readonly commitMs: number;
+    readonly decisionMs: number;
+}
+
+// @public
+export type MoveSource = {
+    readonly kind: 'board';
+    readonly square: SquareId;
+} | {
+    readonly kind: 'spare';
+    readonly spareId: string;
+};
+
+// @public
+export type OnChessboardError = (error: ChessboardError, context: ChessboardErrorContext) => void;
+
+// @public
+export type OnMoveRequest = (intent: MoveIntent, context: {
+    signal: AbortSignal;
+}) => MoveDecision | Promise<MoveDecision>;
+
+// @public
+export interface PieceData {
+    readonly id?: string;
+    readonly pieceType: PieceType;
+}
+
+// @public
+export type PieceInteractionContext = {
+    readonly boardId: string;
+    readonly basePositionRevision: Revision;
+    readonly source: {
+        readonly kind: 'board';
+        readonly square: SquareId;
+    };
+    readonly piece: PieceData;
+} | {
+    readonly boardId: string;
+    readonly basePositionRevision: Revision;
+    readonly source: {
+        readonly kind: 'spare';
+        readonly spareId: string;
+    };
+    readonly piece: PieceData;
+};
+
+// @public
+export type PieceRenderer = (props: PieceRendererProps) => ReactElement | null;
+
+// @public
+export interface PieceRendererProps {
+    // (undocumented)
+    readonly boardId: string;
+    // (undocumented)
+    readonly piece: PieceData;
+    // (undocumented)
+    readonly size: number;
+    // (undocumented)
+    readonly square: SquareId;
+    // (undocumented)
+    readonly state: PieceVisualState;
+    // (undocumented)
+    readonly style: Readonly<ViewStyle>;
+}
+
+// @public
+export type PieceRenderers = Readonly<Partial<Record<PieceType, PieceRenderer>>>;
+
+// @public
+export type PieceType = string;
+
+// @public
+export interface PieceVisualState {
+    // (undocumented)
+    readonly isDragging: boolean;
+    // (undocumented)
+    readonly isGhost: boolean;
+    // (undocumented)
+    readonly isPending: boolean;
+    // (undocumented)
+    readonly isPressed: boolean;
+    // (undocumented)
+    readonly isTransitioning: boolean;
+}
+
+// @public
+export interface PlainSelection {
+    // (undocumented)
+    readonly destinationSquares?: readonly SquareId[];
+    // (undocumented)
+    readonly disabledSquares?: readonly SquareId[];
+    // (undocumented)
+    readonly selectedSquare: SquareId | null;
+}
+
+// @public
+export type PositionInput = string | PositionObject;
+
+// @public
+export type PositionObject = Readonly<Partial<Record<SquareId, Readonly<PieceData>>>>;
+
+// @public
+export type PositionProp = PositionInput | ControlledPosition;
+
+// @public
+export type ReduceMotion = 'system' | 'always' | 'never';
+
+// @public
+export type Revision = number;
+
+// @public
+export type SelectionProp = PlainSelection | ControlledSelection;
+
+// @public
+export interface SquareAccessibilityContext {
+    // (undocumented)
+    readonly boardId: string;
+    // (undocumented)
+    readonly isDestination: boolean;
+    // (undocumented)
+    readonly isDisabled: boolean;
+    // (undocumented)
+    readonly isPendingSource: boolean;
+    // (undocumented)
+    readonly isPendingTarget: boolean;
+    // (undocumented)
+    readonly isSelected: boolean;
+    // (undocumented)
+    readonly orientation: BoardOrientation;
+    // (undocumented)
+    readonly piece: PieceData | null;
+    // (undocumented)
+    readonly square: SquareId;
+}
+
+// @public
+export interface SquareActivationIntent {
+    // (undocumented)
+    readonly action: 'activate' | 'clear-selection';
+    // (undocumented)
+    readonly basePositionRevision: Revision;
+    // (undocumented)
+    readonly baseSelectionRevision: Revision | null;
+    // (undocumented)
+    readonly boardId: string;
+    // (undocumented)
+    readonly input: 'touch' | 'keyboard' | 'accessibility';
+    // (undocumented)
+    readonly intentId: string;
+    // (undocumented)
+    readonly isDestination: boolean;
+    // (undocumented)
+    readonly piece: PieceData | null;
+    // (undocumented)
+    readonly selectedSquare: SquareId | null;
+    // (undocumented)
+    readonly square: SquareId;
+}
+
+// @public
+export interface SquareAnnotation {
+    // (undocumented)
+    readonly color: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly layer?: 'belowPieces' | 'abovePieces';
+    // (undocumented)
+    readonly shape?: 'fill' | 'circle' | 'dot' | 'border';
+    // (undocumented)
+    readonly square: SquareId;
+    // (undocumented)
+    readonly type: 'square';
+}
+
+// @public
+export type SquareId = string;
+
+// @public
+export type SquareRenderer = (props: SquareRendererProps) => ReactElement | null;
+
+// @public
+export interface SquareRendererProps {
+    // (undocumented)
+    readonly boardId: string;
+    // (undocumented)
+    readonly piece: PieceData | null;
+    // (undocumented)
+    readonly size: number;
+    // (undocumented)
+    readonly square: SquareId;
+    // (undocumented)
+    readonly state: SquareVisualState;
+    // (undocumented)
+    readonly style: Readonly<ViewStyle>;
+}
+
+// @public
+export interface SquareVisualState {
+    // (undocumented)
+    readonly isDestination: boolean;
+    // (undocumented)
+    readonly isDisabled: boolean;
+    // (undocumented)
+    readonly isDropTarget: boolean;
+    // (undocumented)
+    readonly isPendingSource: boolean;
+    // (undocumented)
+    readonly isPendingTarget: boolean;
+    // (undocumented)
+    readonly isPressed: boolean;
+    // (undocumented)
+    readonly isSelected: boolean;
+}
 
 ```

@@ -3,8 +3,9 @@
 A controlled, rules-free React Native chessboard component.
 
 > [!NOTE]
-> This repository is in its native-harness phase. The package is not published,
-> and its public component currently renders only a disabled board frame.
+> This repository is in its contract-foundation phase. The package is not
+> published, and its public component currently renders only a disabled board
+> frame.
 
 ## Direction
 
@@ -26,10 +27,16 @@ post-1.0 work.
 
 ## Repository status
 
-The repository baseline, JavaScript package shell, browserless test foundation,
-bare React Native 0.86 harness, packed-artifact build gates, and pinned upstream
-parity inventory are in place. The controlled public data model, interaction,
-pieces, and annotations land in separate reviewable changes.
+The repository baseline, package shell, test foundation, bare React Native 0.86
+harness, packed-artifact build gates, and pinned upstream parity inventory are
+in place. The root package now exports the controlled position, move,
+annotation, renderer, accessibility, and typed-error contracts. The component
+does not render those inputs yet; normalization and static rendering land in
+Phase 1.
+
+The accepted architecture decisions and all 20 reserved invariant contracts
+are indexed in
+[`docs/architecture/invariants.md`](./docs/architecture/invariants.md).
 
 ## Development
 
@@ -43,28 +50,33 @@ pnpm verify
 
 Root commands:
 
-| Command                | Purpose                                      |
-| ---------------------- | -------------------------------------------- |
-| `pnpm build`           | Build package ESM and declarations           |
-| `pnpm test`            | Run the package Jest suite                   |
-| `pnpm api:check`       | Compare built declarations with the API lock |
-| `pnpm api:update`      | Update the API lock after review             |
-| `pnpm package:check`   | Inspect one archive with Publint and ATTW    |
-| `pnpm parity:check`    | Validate the upstream inventory and ledger   |
-| `pnpm parity:update`   | Regenerate the rendered parity document      |
-| `pnpm parity:complete` | Run the eventual 1.0 parity-closure gate     |
-| `pnpm format`          | Format supported repository files            |
-| `pnpm format:check`    | Verify formatting without writing            |
-| `pnpm lint`            | Run code and Markdown linting                |
-| `pnpm typecheck`       | Run strict source and test type checks       |
-| `pnpm check`           | Run static checks and tests                  |
-| `pnpm verify`          | Run the complete pull-request gate locally   |
-| `pnpm changeset`       | Create a package release note                |
-| `pnpm example:start`   | Start the Expo gallery                       |
-| `pnpm example:export`  | Export Android and iOS gallery bundles       |
-| `pnpm native:start`    | Start Metro for the bare native harness      |
-| `pnpm native:android`  | Run the native Android harness               |
-| `pnpm native:ios`      | Run the native iOS harness                   |
+<!-- markdownlint-disable MD013 -->
+
+| Command                              | Purpose                                       |
+| ------------------------------------ | --------------------------------------------- |
+| `pnpm build`                         | Build package ESM and declarations            |
+| `pnpm test`                          | Run the package Jest suite                    |
+| `pnpm api:check`                     | Compare built declarations with the API lock  |
+| `pnpm api:update`                    | Update the API lock after review              |
+| `pnpm package:check`                 | Inspect one archive with Publint and ATTW     |
+| `pnpm parity:verify`                 | Typecheck, test, and validate parity evidence |
+| `pnpm parity:check --results <path>` | Validate supplied parity evidence             |
+| `pnpm parity:update`                 | Regenerate the rendered parity document       |
+| `pnpm parity:complete`               | Run the eventual 1.0 parity-closure gate      |
+| `pnpm format`                        | Format supported repository files             |
+| `pnpm format:check`                  | Verify formatting without writing             |
+| `pnpm lint`                          | Run code and Markdown linting                 |
+| `pnpm typecheck`                     | Run strict source and test type checks        |
+| `pnpm check`                         | Run static checks and tests                   |
+| `pnpm verify`                        | Run the complete pull-request gate locally    |
+| `pnpm changeset`                     | Create a package release note                 |
+| `pnpm example:start`                 | Start the Expo gallery                        |
+| `pnpm example:export`                | Export Android and iOS gallery bundles        |
+| `pnpm native:start`                  | Start Metro for the bare native harness       |
+| `pnpm native:android`                | Run the native Android harness                |
+| `pnpm native:ios`                    | Run the native iOS harness                    |
+
+<!-- markdownlint-enable MD013 -->
 
 Native release gates are platform-specific:
 

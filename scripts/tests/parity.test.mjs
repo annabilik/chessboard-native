@@ -37,6 +37,14 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function allPlannedManifest() {
+  const value = clone(manifest);
+  for (const entry of value.entries) {
+    entry.status = 'planned';
+  }
+  return value;
+}
+
 function messages(errors) {
   return errors.join('\n');
 }
@@ -58,23 +66,46 @@ function jestEvidence({
   status = 'passed',
   success = true,
   title = `[${manifest.entries[0].contractTestId}] executed contract`,
+  titles,
 } = {}) {
+  const assertionTitles = titles ?? [title];
   return {
     success,
     testResults: [
       {
-        assertionResults: [
-          {
-            ancestorTitles: ['parity contract'],
-            fullName: `parity contract ${title}`,
-            status,
-            title,
-          },
-        ],
+        assertionResults: assertionTitles.map((assertionTitle) => ({
+          ancestorTitles: ['parity contract'],
+          fullName: `parity contract ${assertionTitle}`,
+          status,
+          title: assertionTitle,
+        })),
         name: source,
       },
     ],
   };
+}
+
+function implementedJestEvidence() {
+  return jestEvidence({
+    titles: manifest.entries
+      .filter((entry) => entry.status === 'implemented')
+      .map(
+        (entry) => `[${entry.contractTestId}] executed public type contract`,
+      ),
+  });
+}
+
+async function writeImplementedEvidence(directory) {
+  const rawResultPath = path.join(directory, 'jest.raw.json');
+  const shardPath = path.join(directory, 'jest.parity.json');
+  await writeFile(rawResultPath, JSON.stringify(implementedJestEvidence()));
+  await writeJestParityResultShard({
+    command: 'pnpm exec jest --json',
+    outputPath: shardPath,
+    rawResultPath,
+    repositoryRoot,
+  });
+  return shardPath;
 }
 
 test('derives the complete pinned upstream inventory', () => {
@@ -359,7 +390,7 @@ test('locks every pinned target field against the baseline', () => {
 });
 
 test('requires implemented keep/adapt rows to resolve to one passing execution', () => {
-  const mutated = clone(manifest);
+  const mutated = allPlannedManifest();
   const entry = mutated.entries[0];
   entry.status = 'implemented';
 
@@ -417,8 +448,9 @@ test('rejects unknown, failed, and skipped executed results', () => {
 });
 
 test('complete mode requires keep/adapt implementation and every execution', () => {
-  const errors = validateResults(manifest, [], true);
-  const unfinishedKeepAdapt = manifest.entries.filter(
+  const planned = allPlannedManifest();
+  const errors = validateResults(planned, [], true);
+  const unfinishedKeepAdapt = planned.entries.filter(
     (entry) =>
       entry.status !== 'implemented' &&
       (entry.disposition === 'keep' || entry.disposition === 'adapt'),
@@ -444,20 +476,43 @@ test('renders deterministic documentation and catches committed drift', async ()
   assert.match(rendered, /<a id="option-allow-auto-scroll"><\/a>/);
 });
 
-test('normal end-to-end check accepts planned IDs without result files', async () => {
-  const result = await checkParity({ repositoryRoot });
-  assert.equal(result.manifest.entries.length, 131);
-  assert.equal(result.shards.length, 0);
+test('normal end-to-end check accepts evidence for implemented IDs', async () => {
+  const temporaryDirectory = await mkdtemp(
+    path.join(tmpdir(), 'chessboard-native-end-to-end-'),
+  );
+  try {
+    const shardPath = await writeImplementedEvidence(temporaryDirectory);
+    const result = await checkParity({
+      repositoryRoot,
+      resultInputs: [shardPath],
+    });
+    assert.equal(result.manifest.entries.length, 131);
+    assert.equal(result.shards.length, 1);
+  } finally {
+    await rm(temporaryDirectory, { force: true, recursive: true });
+  }
 });
 
-test('CLI ignores the all-zero first-push baseline sentinel', () => {
-  const result = spawnSync(process.execPath, ['scripts/check-parity.mjs'], {
-    cwd: repositoryRoot,
-    encoding: 'utf8',
-    env: { ...process.env, PARITY_BASE_REF: '0'.repeat(40) },
-  });
-  assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Parity manifest valid: 131 entries/);
+test('CLI ignores the all-zero first-push baseline sentinel', async () => {
+  const temporaryDirectory = await mkdtemp(
+    path.join(tmpdir(), 'chessboard-native-cli-'),
+  );
+  try {
+    const shardPath = await writeImplementedEvidence(temporaryDirectory);
+    const result = spawnSync(
+      process.execPath,
+      ['scripts/check-parity.mjs', '--results', shardPath],
+      {
+        cwd: repositoryRoot,
+        encoding: 'utf8',
+        env: { ...process.env, PARITY_BASE_REF: '0'.repeat(40) },
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Parity manifest valid: 131 entries/);
+  } finally {
+    await rm(temporaryDirectory, { force: true, recursive: true });
+  }
 });
 
 test('derives only anchored contract IDs from successful Jest evidence', () => {
@@ -515,7 +570,7 @@ test('accepts fresh commit-bound Jest evidence as a file or directory', async ()
   try {
     const rawResultPath = path.join(temporaryDirectory, 'jest.raw.json');
     const shardPath = path.join(temporaryDirectory, 'jest.parity.json');
-    await writeFile(rawResultPath, JSON.stringify(jestEvidence()));
+    await writeFile(rawResultPath, JSON.stringify(implementedJestEvidence()));
     await writeJestParityResultShard({
       command: 'pnpm exec jest --json',
       outputPath: shardPath,
@@ -527,12 +582,12 @@ test('accepts fresh commit-bound Jest evidence as a file or directory', async ()
       repositoryRoot,
       resultInputs: [shardPath],
     });
-    assert.equal(fromFile.shards[0].value.results.length, 1);
+    assert.equal(fromFile.shards[0].value.results.length, 10);
     const fromDirectory = await checkParity({
       repositoryRoot,
       resultInputs: [temporaryDirectory],
     });
-    assert.equal(fromDirectory.shards[0].value.results.length, 1);
+    assert.equal(fromDirectory.shards[0].value.results.length, 10);
   } finally {
     await rm(temporaryDirectory, { force: true, recursive: true });
   }
