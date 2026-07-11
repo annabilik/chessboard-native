@@ -14,6 +14,10 @@ Prerequisites:
 - Node.js 24.15.0
 - pnpm 11.11.0 through Corepack or an equivalent pinned installation
 
+Changes to the bare native harness additionally require JDK 17 and the Android
+SDK for Android builds, or macOS with Xcode, Ruby, Bundler, and CocoaPods for
+iOS builds.
+
 ```sh
 corepack enable
 pnpm install --frozen-lockfile
@@ -22,6 +26,19 @@ pnpm verify
 
 Use the repository's pinned versions. Do not commit dependency changes without
 the resulting `pnpm-lock.yaml` update.
+
+`pnpm verify` is the portable pull-request gate. When changing the native
+harness, also run the applicable platform build:
+
+```sh
+pnpm native:android:release
+pnpm native:ios:gems
+pnpm native:ios:pods
+pnpm native:ios:release
+```
+
+CI runs both native Release builds even when only one can be exercised on a
+contributor's development machine.
 
 ## Pull requests
 

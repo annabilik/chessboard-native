@@ -32,7 +32,9 @@ export default tseslint.config(
     files: ['**/*.{cjs,js,mjs}'],
     languageOptions: {
       globals: {
+        __dirname: 'readonly',
         jest: 'readonly',
+        module: 'readonly',
         process: 'readonly',
         require: 'readonly',
       },

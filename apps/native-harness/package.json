@@ -1,0 +1,43 @@
+{
+  "name": "@vibechess/chessboard-native-harness",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "android": "react-native run-android",
+    "android:release": "cd android && ./gradlew :app:assembleRelease --no-daemon",
+    "ios": "react-native run-ios",
+    "ios:gems": "bundle install",
+    "ios:pods": "bundle exec pod install --project-directory=ios",
+    "ios:release": "xcodebuild -workspace ios/ChessboardNativeHarness.xcworkspace -scheme ChessboardNativeHarness -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath ios/build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build",
+    "start": "react-native start",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@vibechess/chessboard-native": "workspace:*",
+    "react": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-gesture-handler": "2.32.0",
+    "react-native-reanimated": "4.5.0",
+    "react-native-svg": "15.15.4",
+    "react-native-worklets": "0.10.0"
+  },
+  "devDependencies": {
+    "@babel/core": "7.29.7",
+    "@babel/preset-env": "7.29.7",
+    "@babel/runtime": "7.29.7",
+    "@react-native-community/cli": "20.1.0",
+    "@react-native-community/cli-platform-android": "20.1.0",
+    "@react-native-community/cli-platform-ios": "20.1.0",
+    "@react-native/babel-preset": "0.86.0",
+    "@react-native/codegen": "0.86.0",
+    "@react-native/gradle-plugin": "0.86.0",
+    "@react-native/metro-config": "0.86.0",
+    "@react-native/typescript-config": "0.86.0",
+    "@types/react": "19.2.4",
+    "hermes-compiler": "250829098.0.14",
+    "typescript": "6.0.3"
+  },
+  "engines": {
+    "node": "24.15.0"
+  }
+}
