@@ -1,5 +1,6 @@
 source 'https://rubygems.org'
 
+# Ruby 3.3 can trigger CocoaPods 1.16.2 path corruption during project generation.
 ruby '3.2.11'
 
 # React Native's Xcode 16+ guidance pins these together.

@@ -125,6 +125,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Set up Ruby and gems
+        id: ruby
         uses: ruby/setup-ruby@d45b1a4e94b71acab930e56e79c6aa188764e7f9 # v1
         with:
           ruby-version: '3.2.11'
@@ -132,7 +133,8 @@ jobs:
           working-directory: apps/native-harness
 
       - name: Install CocoaPods dependencies
-        run: pnpm native:ios:pods
+        working-directory: apps/native-harness
+        run: ${{ steps.ruby.outputs.ruby-prefix }}/bin/bundle exec pod install --project-directory=ios
 
       - name: Build iOS Release harness
         run: pnpm native:ios:release
