@@ -27,6 +27,9 @@ describe('ChessboardError', () => {
     expect(error.domain).toBe('position');
     expect(error.revision).toBe(14);
     expect(error.cause).toBe(cause);
+    expect(Object.prototype.propertyIsEnumerable.call(error, 'cause')).toBe(
+      false,
+    );
   });
 
   it('uses null revisions for board and dimension failures', () => {

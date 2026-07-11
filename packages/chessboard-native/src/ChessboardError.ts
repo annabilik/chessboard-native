@@ -107,7 +107,14 @@ export class ChessboardError extends Error {
     details: ChessboardErrorDetails,
     cause?: unknown,
   ) {
-    super(message, { cause });
+    super(message);
+    if (cause !== undefined) {
+      Object.defineProperty(this, 'cause', {
+        configurable: true,
+        value: cause,
+        writable: true,
+      });
+    }
     this.code = details.code;
     this.domain = errorDomainByCode[details.code];
     this.boardId = details.boardId;
