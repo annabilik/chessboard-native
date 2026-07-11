@@ -39,11 +39,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run baseline checks
-        run: pnpm check
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Lint source and documentation
+        run: pnpm lint
+
+      - name: Type-check workspaces and tests
+        run: pnpm typecheck
+
+      - name: Run Jest unit and property tests
+        run: pnpm test:ci
 
       - name: Build package
         run: pnpm build
+
+      - name: Check public API declarations
+        run: pnpm api:check
+
+      - name: Inspect packed package
+        run: pnpm package:check
 
       - name: Export Expo gallery
         run: pnpm example:export

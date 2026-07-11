@@ -4,6 +4,8 @@ import { StyleSheet, View } from 'react-native';
  * Temporary package-wiring surface for the Phase 0 gallery.
  *
  * The controlled position and interaction contract deliberately lands later.
+ *
+ * @public
  */
 export function Chessboard() {
   return (

@@ -10,9 +10,11 @@
   },
   "packageManager": "pnpm@11.11.0",
   "scripts": {
+    "api:check": "api-extractor run --config packages/chessboard-native/api-extractor.json --typescript-compiler-folder node_modules/typescript",
+    "api:update": "pnpm build && api-extractor run --local --config packages/chessboard-native/api-extractor.json --typescript-compiler-folder node_modules/typescript",
     "build": "pnpm --filter @vibechess/chessboard-native build",
     "changeset": "changeset",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:ci",
     "clean": "pnpm --recursive --if-present run clean",
     "example:android": "pnpm --filter @vibechess/chessboard-native-example android",
     "example:export": "pnpm --filter @vibechess/chessboard-native-example export:native",
@@ -22,16 +24,23 @@
     "format:check": "prettier --check .",
     "lint": "pnpm lint:code && pnpm lint:markdown",
     "lint:code": "eslint .",
-    "lint:markdown": "markdownlint-cli2 '**/*.md' '#**/node_modules/**'",
-    "typecheck": "tsc --project tsconfig.json --noEmit && pnpm --recursive --if-present run typecheck"
+    "lint:markdown": "markdownlint-cli2 '**/*.md' '#**/node_modules/**' '#**/*.api.md'",
+    "package:check": "node scripts/inspect-package.mjs",
+    "test": "pnpm --filter @vibechess/chessboard-native test",
+    "test:ci": "pnpm --filter @vibechess/chessboard-native test:ci",
+    "typecheck": "tsc --project tsconfig.json --noEmit && pnpm --recursive --if-present run typecheck",
+    "verify": "pnpm check && pnpm build && pnpm api:check && pnpm package:check && pnpm example:export"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
     "@changesets/cli": "2.31.0",
     "@eslint/js": "10.0.1",
+    "@microsoft/api-extractor": "7.58.9",
     "eslint": "10.6.0",
     "eslint-config-prettier": "10.1.8",
     "markdownlint-cli2": "0.23.0",
     "prettier": "3.9.5",
+    "publint": "0.3.21",
     "typescript": "6.0.3",
     "typescript-eslint": "8.63.0"
   }

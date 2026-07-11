@@ -37,22 +37,30 @@ The toolchain is pinned to Node.js 24.15.0 and pnpm 11.11.0.
 ```sh
 corepack enable
 pnpm install --frozen-lockfile
-pnpm check
+pnpm verify
 ```
 
 Root commands:
 
-| Command               | Purpose                                 |
-| --------------------- | --------------------------------------- |
-| `pnpm build`          | Build package ESM and declarations      |
-| `pnpm format`         | Format supported repository files       |
-| `pnpm format:check`   | Verify formatting without writing       |
-| `pnpm lint`           | Run code and Markdown linting           |
-| `pnpm typecheck`      | Run the strict TypeScript project check |
-| `pnpm check`          | Run every baseline pull-request check   |
-| `pnpm changeset`      | Create a package release note           |
-| `pnpm example:start`  | Start the Expo gallery                  |
-| `pnpm example:export` | Export Android and iOS gallery bundles  |
+| Command               | Purpose                                      |
+| --------------------- | -------------------------------------------- |
+| `pnpm build`          | Build package ESM and declarations           |
+| `pnpm test`           | Run the package Jest suite                   |
+| `pnpm api:check`      | Compare built declarations with the API lock |
+| `pnpm api:update`     | Update the API lock after review             |
+| `pnpm package:check`  | Pack once, then run Publint and ATTW         |
+| `pnpm format`         | Format supported repository files            |
+| `pnpm format:check`   | Verify formatting without writing            |
+| `pnpm lint`           | Run code and Markdown linting                |
+| `pnpm typecheck`      | Run strict source and test type checks       |
+| `pnpm check`          | Run static checks and tests                  |
+| `pnpm verify`         | Run the complete pull-request gate locally   |
+| `pnpm changeset`      | Create a package release note                |
+| `pnpm example:start`  | Start the Expo gallery                       |
+| `pnpm example:export` | Export Android and iOS gallery bundles       |
+
+`pnpm api:check` expects a fresh `pnpm build`. Use `pnpm api:update` only when
+an intentional public declaration change has been reviewed.
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a pull request. Report
 security issues according to [SECURITY.md](./SECURITY.md).

@@ -3,8 +3,9 @@
   "compilerOptions": {
     "customConditions": ["react-native"],
     "lib": ["ES2022"],
-    "rootDir": "."
+    "rootDir": ".",
+    "types": ["jest"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts", "tests/**/*.tsx"],
   "exclude": ["lib"]
 }
