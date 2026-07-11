@@ -42,6 +42,25 @@ contributor's development machine. Those required jobs install the single
 inspected npm archive into consumers outside the checkout; workspace-linked
 builds are development conveniences, not package-release evidence.
 
+## Parity ledger changes
+
+Do not edit the pinned `fixtures/parity/upstream-b74704a` source or licenses.
+The machine-readable `fixtures/parity/react-chessboard-5.10.json` file is the
+only authored parity source; regenerate its rendered document with
+`pnpm parity:update`.
+
+Implementation status is forward-only: `planned` may move to `in-progress` or
+`implemented`, and `in-progress` may move to `implemented`. An implemented
+`keep`/`adapt` row must have one collected passing result matching its unique
+`contractTestId`; placing the ID in source text does not count. Result shards follow
+`fixtures/parity/results.schema.json` and are supplied with repeated
+`--results <path>` arguments. Contract tests put the ID at the start of an
+executed Jest title, for example `[PARITY-OPTION-POSITION] ...`; the CI runner
+collects raw output and creates the commit-bound shard. Do not author or commit
+result shards. CI compares pull requests with their base manifest and rejects
+removed rows, status regressions, and changes to an implemented row's
+disposition, native mapping, or contract ID.
+
 ## Pull requests
 
 - Keep each pull request focused and explain user-visible behavior.

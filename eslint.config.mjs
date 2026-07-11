@@ -11,6 +11,7 @@ export default tseslint.config(
       '**/build/**',
       '**/coverage/**',
       '**/dist/**',
+      'fixtures/parity/upstream-*/**',
       '**/lib/**',
       '**/node_modules/**',
     ],

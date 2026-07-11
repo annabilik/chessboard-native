@@ -3,6 +3,9 @@
 **/build/
 **/coverage/
 **/dist/
+fixtures/parity/upstream-*/LICENSE*
+fixtures/parity/upstream-*/src/
+docs/parity/react-chessboard-5.10.md
 **/lib/
 **/node_modules/
 **/*.api.md

@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   copyFile,
   mkdir,
@@ -18,6 +19,7 @@ const repositoryRoot = path.resolve(
   '..',
 );
 const packageRoot = path.join(repositoryRoot, 'packages/chessboard-native');
+const parityFixturesRoot = path.join(repositoryRoot, 'fixtures/parity');
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const argumentsList = process.argv.slice(2);
@@ -47,6 +49,19 @@ const requiredPackageFiles = new Set([
   'package.json',
   'src/index.ts',
 ]);
+const forbiddenPackagePathPatterns = [
+  /(?:^|\/)fixtures?(?:\/|$)/i,
+  /(?:^|\/)parity(?:\/|$)/i,
+  /(?:^|\/)provenance\.md$/i,
+  /(?:^|\/)third_party_notices\.md$/i,
+  /(?:^|\/)license\.cc-by-sa-/i,
+  /upstream-b74704a/i,
+];
+const forbiddenPackageContentMarkers = [
+  'By en:User:Cburnett - Own work',
+  'commons.wikimedia.org/wiki/Category:SVG_chess_pieces',
+  'm 22.5,9 c -2.21,0 -4,1.79 -4,4',
+];
 const builtinModuleSpecifiers = new Set([
   ...builtinModules,
   ...builtinModules.map((moduleName) => `node:${moduleName}`),
@@ -115,6 +130,9 @@ function assertPackageContents(files) {
       !file.startsWith('lib/') &&
       !file.startsWith('src/'),
   );
+  const forbidden = paths.filter((file) =>
+    forbiddenPackagePathPatterns.some((pattern) => pattern.test(file)),
+  );
 
   if (missing.length > 0) {
     throw new Error(`Packed archive is missing: ${missing.join(', ')}`);
@@ -124,6 +142,69 @@ function assertPackageContents(files) {
     throw new Error(
       `Packed archive contains files outside the allowlist: ${unexpected.join(', ')}`,
     );
+  }
+
+  if (forbidden.length > 0) {
+    throw new Error(
+      `Packed archive contains vendored parity material: ${forbidden.join(', ')}`,
+    );
+  }
+}
+
+function sha256(content) {
+  return createHash('sha256').update(content).digest('hex');
+}
+
+async function collectFixtureHashes(directory, hashes = new Map()) {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const entryPath = path.join(directory, entry.name);
+
+    if (entry.isDirectory()) {
+      await collectFixtureHashes(entryPath, hashes);
+      continue;
+    }
+
+    if (!entry.isFile()) {
+      continue;
+    }
+
+    const content = await readFile(entryPath);
+    const digest = sha256(content);
+    const relativePath = path.relative(repositoryRoot, entryPath);
+    const matches = hashes.get(digest) ?? [];
+
+    matches.push({ content, relativePath });
+    hashes.set(digest, matches);
+  }
+
+  return hashes;
+}
+
+async function assertPackageExcludesParityMaterial(files) {
+  const fixtureHashes = await collectFixtureHashes(parityFixturesRoot);
+
+  for (const file of files) {
+    const packedContent = await readFile(path.join(packageRoot, file.path));
+    const exactFixtureMatches = fixtureHashes.get(sha256(packedContent)) ?? [];
+    const exactFixtureMatch = exactFixtureMatches.find(({ content }) =>
+      content.equals(packedContent),
+    );
+
+    if (exactFixtureMatch) {
+      throw new Error(
+        `Packed archive file ${file.path} duplicates parity fixture ${exactFixtureMatch.relativePath}`,
+      );
+    }
+
+    const leakedMarker = forbiddenPackageContentMarkers.find((marker) =>
+      packedContent.includes(marker),
+    );
+
+    if (leakedMarker) {
+      throw new Error(
+        `Packed archive file ${file.path} contains vendored artwork/source marker: ${leakedMarker}`,
+      );
+    }
   }
 }
 
@@ -336,6 +417,7 @@ try {
   }
 
   assertPackageContents(packResults[0].files);
+  await assertPackageExcludesParityMaterial(packResults[0].files);
   await assertPackageModuleGraph(packResults[0].files);
 
   const archives = (await readdir(temporaryDirectory)).filter((file) =>
