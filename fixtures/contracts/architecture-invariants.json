@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "id": "CBN-INV-001",
+      "statement": "`position` is the only canonical logical position.",
+      "contractTestIds": ["CBN-CONTRACT-001-POSITION-CANONICAL"],
+      "adrs": [
+        "docs/architecture/controlled-state.md",
+        "docs/architecture/api-tiers.md"
+      ]
+    },
+    {
+      "id": "CBN-INV-002",
+      "statement": "`annotations` is the only persistent annotation collection.",
+      "contractTestIds": ["CBN-CONTRACT-002-ANNOTATIONS-CANONICAL"],
+      "adrs": ["docs/architecture/controlled-state.md"]
+    },
+    {
+      "id": "CBN-INV-003",
+      "statement": "A gesture cannot commit semantic state.",
+      "contractTestIds": ["CBN-CONTRACT-003-GESTURE-NONCOMMITTING"],
+      "adrs": [
+        "docs/architecture/controlled-state.md",
+        "docs/architecture/gestures.md"
+      ]
+    },
+    {
+      "id": "CBN-INV-004",
+      "statement": "A callback result cannot substitute for a new controlled prop.",
+      "contractTestIds": ["CBN-CONTRACT-004-CALLBACK-NONCOMMITTING"],
+      "adrs": [
+        "docs/architecture/controlled-state.md",
+        "docs/architecture/gestures.md"
+      ]
+    },
+    {
+      "id": "CBN-INV-005",
+      "statement": "A transient visual snapshot cannot become canonical state.",
+      "contractTestIds": ["CBN-CONTRACT-005-VISUAL-NONCANONICAL"],
+      "adrs": [
+        "docs/architecture/controlled-state.md",
+        "docs/architecture/transitions.md"
+      ]
+    },
+    {
+      "id": "CBN-INV-006",
+      "statement": "The latest prop update always wins over an active animation.",
+      "contractTestIds": ["CBN-CONTRACT-006-LATEST-PROP-WINS"],
+      "adrs": ["docs/architecture/transitions.md"]
+    },
+    {
+      "id": "CBN-INV-007",
+      "statement": "Revisions are monotonic, and every async result is correlated to its epoch and base revision.",
+      "contractTestIds": ["CBN-CONTRACT-007-REVISION-EPOCH"],
+      "adrs": [
+        "docs/architecture/api-tiers.md",
+        "docs/architecture/gestures.md",
+        "docs/architecture/transitions.md"
+      ]
+    },
+    {
+      "id": "CBN-INV-008",
+      "statement": "Rejection and cancellation restore the current controlled position.",
+      "contractTestIds": ["CBN-CONTRACT-008-RESTORE-CONTROLLED"],
+      "adrs": [
+        "docs/architecture/controlled-state.md",
+        "docs/architecture/gestures.md"
+      ]
+    },
+    {
+      "id": "CBN-INV-009",
+      "statement": "Position changes during a gesture cancel the gesture and every associated timer/signal; late results are inert.",
+      "contractTestIds": ["CBN-CONTRACT-009-UPDATE-CANCELS-GESTURE"],
+      "adrs": ["docs/architecture/gestures.md"]
+    },
+    {
+      "id": "CBN-INV-010",
+      "statement": "Annotation drafts are visually distinguishable and never persisted.",
+      "contractTestIds": ["CBN-CONTRACT-010-DRAFT-NONPERSISTENT"],
+      "adrs": [
+        "docs/architecture/controlled-state.md",
+        "docs/architecture/rendering-layers.md"
+      ]
+    },
+    {
+      "id": "CBN-INV-011",
+      "statement": "Annotation operations never replace a collection and cannot silently remove IDs created after their base revision.",
+      "contractTestIds": ["CBN-CONTRACT-011-OPERATION-NONREPLACING"],
+      "adrs": ["docs/architecture/controlled-state.md"]
+    },
+    {
+      "id": "CBN-INV-012",
+      "statement": "Semantic board selection and destinations are consumer-owned; the provider may own only transient spare-source selection for accessible placement.",
+      "contractTestIds": ["CBN-CONTRACT-012-SELECTION-CONSUMER-OWNED"],
+      "adrs": [
+        "docs/architecture/controlled-state.md",
+        "docs/architecture/gestures.md"
+      ]
+    },
+    {
+      "id": "CBN-INV-013",
+      "statement": "Orientation changes coordinates, not canonical square names.",
+      "contractTestIds": ["CBN-CONTRACT-013-ORIENTATION-PRESERVES-IDS"],
+      "adrs": [
+        "docs/architecture/rendering-layers.md",
+        "docs/architecture/transitions.md"
+      ]
+    },
+    {
+      "id": "CBN-INV-014",
+      "statement": "Multiple board instances share no semantic, SVG, animation, or annotation state. Provider gesture infrastructure is shared transiently and must route all active state by stable `boardId` without leaking between boards.",
+      "contractTestIds": ["CBN-CONTRACT-014-MULTIBOARD-ISOLATION"],
+      "adrs": [
+        "docs/architecture/gestures.md",
+        "docs/architecture/rendering-layers.md"
+      ]
+    },
+    {
+      "id": "CBN-INV-015",
+      "statement": "A provider owns transient cross-component dragging but no semantic board state.",
+      "contractTestIds": ["CBN-CONTRACT-015-PROVIDER-NONSEMANTIC"],
+      "adrs": [
+        "docs/architecture/controlled-state.md",
+        "docs/architecture/gestures.md"
+      ]
+    },
+    {
+      "id": "CBN-INV-016",
+      "statement": "The core package does not enforce chess rules.",
+      "contractTestIds": ["CBN-CONTRACT-016-RULES-FREE"],
+      "adrs": ["docs/architecture/controlled-state.md"]
+    },
+    {
+      "id": "CBN-INV-017",
+      "statement": "Reduced motion is honored by every transition path.",
+      "contractTestIds": ["CBN-CONTRACT-017-REDUCED-MOTION"],
+      "adrs": ["docs/architecture/transitions.md"]
+    },
+    {
+      "id": "CBN-INV-018",
+      "statement": "Every drag-only action has a non-drag accessible alternative.",
+      "contractTestIds": ["CBN-CONTRACT-018-NONDRAG-ALTERNATIVE"],
+      "adrs": [
+        "docs/architecture/gestures.md",
+        "docs/architecture/rendering-layers.md"
+      ]
+    },
+    {
+      "id": "CBN-INV-019",
+      "statement": "Malformed controlled input fails predictably and loudly in development.",
+      "contractTestIds": ["CBN-CONTRACT-019-MALFORMED-INPUT-LOUD"],
+      "adrs": [
+        "docs/architecture/controlled-state.md",
+        "docs/architecture/api-tiers.md"
+      ]
+    },
+    {
+      "id": "CBN-INV-020",
+      "statement": "FEN is valid only for an 8x8 board; variants use object positions.",
+      "contractTestIds": ["CBN-CONTRACT-020-FEN-EIGHT-BY-EIGHT"],
+      "adrs": [
+        "docs/architecture/controlled-state.md",
+        "docs/architecture/api-tiers.md"
+      ]
+    }
+  ]
+}

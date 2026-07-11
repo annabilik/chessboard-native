@@ -36,6 +36,7 @@
     "parity:check": "node scripts/check-parity.mjs",
     "parity:complete": "node scripts/check-parity.mjs --complete",
     "parity:update": "node scripts/check-parity.mjs --write-doc",
+    "parity:verify": "pnpm typecheck && pnpm test:ci && pnpm parity:check --results coverage/parity/jest.parity.json",
     "test": "pnpm --filter @vibechess/chessboard-native test",
     "test:ci": "node scripts/run-jest-ci.mjs",
     "test:tooling": "node --test scripts/tests/*.test.mjs",

@@ -966,7 +966,7 @@
         "surface": "compat",
         "symbols": ["ReactChessboardArrow", "ArrowAnnotation"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-EXPORT-ARROW",
       "compatibilityNotes": "Compatibility arrows map to ID-bearing controlled native annotations."
     },
@@ -990,7 +990,7 @@
         "surface": "root",
         "symbols": ["BoardSquare"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-SQUARE-DATA-TYPE",
       "compatibilityNotes": "Square identity and light/dark parity remain pure derived geometry."
     },
@@ -1014,7 +1014,7 @@
         "surface": "root",
         "symbols": ["PieceData"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-PIECE-DATA-TYPE",
       "compatibilityNotes": "Piece data keeps an open pieceType and adds optional consumer-owned identity."
     },
@@ -1038,7 +1038,7 @@
         "surface": "root",
         "symbols": ["MoveSource", "MoveIntent"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-DRAGGING-PIECE-DATA-TYPE",
       "compatibilityNotes": "Move payloads distinguish board and spare sources and carry revision/intent correlation.",
       "rationale": "A durable dragging-piece value lacks board identity, controlled base revision, input modality, and cancellation correlation required by the native intent lifecycle.",
@@ -1064,9 +1064,9 @@
         "surface": "root",
         "symbols": ["PositionObject"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-POSITION-DATA-TYPE",
-      "compatibilityNotes": "The record becomes deeply readonly and validates canonical square keys atomically."
+      "compatibilityNotes": "The type becomes a deeply readonly sparse record; canonical square validation lands with Phase 1 normalization."
     },
     {
       "id": "export.square-handler-args",
@@ -1088,7 +1088,7 @@
         "surface": "root",
         "symbols": ["SquareActivationIntent"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-SQUARE-HANDLER-ARGS",
       "compatibilityNotes": "Native square activation adds board, revision, selection, action, and input context."
     },
@@ -1112,7 +1112,7 @@
         "surface": "root",
         "symbols": ["PieceInteractionContext"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-PIECE-HANDLER-ARGS",
       "compatibilityNotes": "Native payloads use typed board/spare sources and current controlled revision context."
     },
@@ -1136,7 +1136,7 @@
         "surface": "root",
         "symbols": ["MoveIntent"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-PIECE-DROP-HANDLER-ARGS",
       "compatibilityNotes": "The move intent carries identity, source kind, target, revision, and input modality.",
       "rationale": "The upstream payload and synchronous Boolean callback cannot represent async validation, controlled commit correlation, cancellation, or spare-to-board routing.",
@@ -1162,7 +1162,7 @@
         "surface": "root",
         "symbols": ["SquareRenderer"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-SQUARE-RENDERER",
       "compatibilityNotes": "The native renderer is visual-only and receives size plus resolved interaction state without owning handlers."
     },
@@ -1186,7 +1186,7 @@
         "surface": "root",
         "symbols": ["PieceRenderers"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-PIECE-RENDER-OBJECT",
       "compatibilityNotes": "Native renderers receive piece, square, size, and interaction state instead of SVG CSS props."
     },
@@ -1210,7 +1210,7 @@
         "surface": "root",
         "symbols": ["FenPieceCode"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-FEN-PIECE-STRING",
       "compatibilityNotes": "The twelve standard FEN piece-placement codes remain unchanged."
     },

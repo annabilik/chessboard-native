@@ -1,0 +1,394 @@
+import type { ReactElement } from 'react';
+import type { ViewStyle } from 'react-native';
+
+/**
+ * Monotonic consumer-owned snapshot revision.
+ *
+ * Revisions are non-negative safe integers. A changed semantic snapshot must
+ * receive a greater revision; an explicit no-op commit may do the same.
+ *
+ * @public
+ */
+export type Revision = number;
+
+/**
+ * Canonical lowercase square name from `a1` through `z99`.
+ *
+ * Orientation never changes a square ID.
+ *
+ * @public
+ */
+export type SquareId = string;
+
+/**
+ * Open piece vocabulary. The bundled chess vocabulary is `wP` through `bK`.
+ *
+ * @public
+ */
+export type PieceType = string;
+
+/** Standard single-character piece codes accepted by FEN piece placement. @public */
+export type FenPieceCode =
+  'p' | 'r' | 'n' | 'b' | 'q' | 'k' | 'P' | 'R' | 'N' | 'B' | 'Q' | 'K';
+
+/** Consumer-owned piece data. @public */
+export interface PieceData {
+  /** Piece renderer key. */
+  readonly pieceType: PieceType;
+  /** Optional stable identity, unique within one position. */
+  readonly id?: string;
+}
+
+/** Deeply readonly sparse position keyed by canonical square IDs. @public */
+export type PositionObject = Readonly<
+  Partial<Record<SquareId, Readonly<PieceData>>>
+>;
+
+/**
+ * FEN piece placement for an 8x8 board, or an object position for any supported
+ * dimensions.
+ *
+ * @public
+ */
+export type PositionInput = string | PositionObject;
+
+/** Supported board dimensions: 1..99 rows and 1..26 columns. @public */
+export interface BoardDimensions {
+  readonly rows: number;
+  readonly columns: number;
+}
+
+/** White-at-bottom or black-at-bottom presentation. @public */
+export type BoardOrientation = 'white' | 'black';
+
+/** Presentation-only transition hint for one exact revision pair. @public */
+export interface BoardTransition {
+  readonly fromRevision: Revision;
+  readonly toRevision: Revision;
+  readonly from: SquareId;
+  readonly to: SquareId;
+  readonly promotion?: PieceType;
+  readonly capturedSquare?: SquareId;
+  readonly rookMove?: Readonly<{ from: SquareId; to: SquareId }>;
+}
+
+/** Revisioned position envelope for commit correlation and transition hints. @public */
+export interface ControlledPosition {
+  readonly value: PositionInput;
+  readonly revision: Revision;
+  readonly committedIntentId?: string;
+  readonly transition?: BoardTransition;
+}
+
+/** Plain controlled selection presentation. @public */
+export interface PlainSelection {
+  readonly selectedSquare: SquareId | null;
+  readonly destinationSquares?: readonly SquareId[];
+  readonly disabledSquares?: readonly SquareId[];
+}
+
+/** Revisioned controlled selection presentation. @public */
+export type ControlledSelection = PlainSelection & {
+  readonly revision: Revision;
+};
+
+/** Position prop accepted by the plain and revisioned API tiers. @public */
+export type PositionProp = PositionInput | ControlledPosition;
+
+/** Selection prop accepted by the plain and revisioned API tiers. @public */
+export type SelectionProp = PlainSelection | ControlledSelection;
+
+/** Board or provider spare source for a move intent. @public */
+export type MoveSource =
+  | { readonly kind: 'board'; readonly square: SquareId }
+  | { readonly kind: 'spare'; readonly spareId: string };
+
+/** Input modality that created a move intent. @public */
+export type MoveInput = 'drag' | 'tap' | 'keyboard' | 'accessibility';
+
+/** A request to change consumer-owned position state. @public */
+export interface MoveIntent {
+  readonly intentId: string;
+  readonly boardId: string;
+  readonly basePositionRevision: Revision;
+  readonly source: MoveSource;
+  readonly targetSquare: SquareId | null;
+  readonly piece: PieceData;
+  readonly input: MoveInput;
+}
+
+/** Validation result for a move request; it never commits position state. @public */
+export type MoveDecision =
+  | { readonly status: 'accepted' }
+  | { readonly status: 'rejected'; readonly reason?: string };
+
+/** Cancellable consumer validation callback for a move intent. @public */
+export type OnMoveRequest = (
+  intent: MoveIntent,
+  context: { signal: AbortSignal },
+) => MoveDecision | Promise<MoveDecision>;
+
+/** Decision and controlled-commit timeout budgets, in milliseconds. @public */
+export interface MoveRequestTimeouts {
+  /** Defaults to 10,000 ms. */
+  readonly decisionMs: number;
+  /** Defaults to 1,500 ms after acceptance. */
+  readonly commitMs: number;
+}
+
+/** Consumer-owned arrow annotation. @public */
+export interface ArrowAnnotation {
+  readonly id: string;
+  readonly type: 'arrow';
+  readonly from: SquareId;
+  readonly to: SquareId;
+  readonly color: string;
+  readonly width?: number;
+  readonly opacity?: number;
+  readonly shape?: 'straight' | 'knight';
+  readonly layer?: 'belowPieces' | 'abovePieces';
+}
+
+/** Consumer-owned square annotation. @public */
+export interface SquareAnnotation {
+  readonly id: string;
+  readonly type: 'square';
+  readonly square: SquareId;
+  readonly color: string;
+  readonly shape?: 'fill' | 'circle' | 'dot' | 'border';
+  readonly layer?: 'belowPieces' | 'abovePieces';
+}
+
+/** Persistent consumer-owned board annotation. @public */
+export type BoardAnnotation = ArrowAnnotation | SquareAnnotation;
+
+/** Transient annotation candidate that cannot carry a persistent consumer ID. @public */
+export type AnnotationDraft =
+  | {
+      readonly id?: never;
+      readonly type: 'arrow';
+      readonly from: SquareId;
+      readonly to: SquareId;
+      readonly color: string;
+      readonly width?: number;
+      readonly opacity?: number;
+      readonly shape?: 'straight' | 'knight';
+      readonly layer?: 'belowPieces' | 'abovePieces';
+    }
+  | {
+      readonly id?: never;
+      readonly type: 'square';
+      readonly square: SquareId;
+      readonly color: string;
+      readonly shape?: 'fill' | 'circle' | 'dot' | 'border';
+      readonly layer?: 'belowPieces' | 'abovePieces';
+    };
+
+/** Revisioned controlled annotation collection. @public */
+export interface ControlledAnnotations {
+  readonly value: readonly BoardAnnotation[];
+  readonly revision: Revision;
+}
+
+/** Annotation prop accepted by the plain and revisioned API tiers. @public */
+export type AnnotationsProp =
+  readonly BoardAnnotation[] | ControlledAnnotations;
+
+/** Correlation shared by every annotation delta. @public */
+export interface AnnotationOperationBase {
+  readonly operationId: string;
+  readonly boardId: string;
+  readonly baseAnnotationRevision: Revision;
+  readonly input: 'touch' | 'keyboard' | 'accessibility' | 'policy';
+}
+
+/**
+ * A revision-correlated annotation delta. Operations never replace the whole
+ * controlled collection.
+ *
+ * @public
+ */
+export type AnnotationOperation =
+  | (AnnotationOperationBase & {
+      readonly type: 'add';
+      readonly annotation: AnnotationDraft;
+    })
+  | (AnnotationOperationBase & {
+      readonly type: 'toggle';
+      readonly annotation: AnnotationDraft;
+      readonly matchingIdsAtBase: readonly string[];
+    })
+  | (AnnotationOperationBase & {
+      readonly type: 'remove';
+      readonly annotationId: string;
+    })
+  | (AnnotationOperationBase & {
+      readonly type: 'clear';
+      readonly annotationIdsAtBase: readonly string[];
+      readonly reason: 'board-press' | 'position-change' | 'consumer-action';
+    });
+
+/** Consumer-selected annotation presentation tool. @public */
+export type AnnotationTool =
+  | {
+      readonly type: 'arrow';
+      readonly color: string;
+      readonly width?: number;
+      readonly opacity?: number;
+    }
+  | {
+      readonly type: 'square';
+      readonly color: string;
+      readonly shape?: 'fill' | 'circle' | 'dot' | 'border';
+    }
+  | null;
+
+/** A consumer-owned square activation request. @public */
+export interface SquareActivationIntent {
+  readonly intentId: string;
+  readonly boardId: string;
+  readonly basePositionRevision: Revision;
+  readonly baseSelectionRevision: Revision | null;
+  readonly square: SquareId;
+  readonly piece: PieceData | null;
+  readonly selectedSquare: SquareId | null;
+  readonly isDestination: boolean;
+  readonly action: 'activate' | 'clear-selection';
+  readonly input: 'touch' | 'keyboard' | 'accessibility';
+}
+
+/** Derived logical square data used by visual renderers. @public */
+export interface BoardSquare {
+  readonly square: SquareId;
+  readonly isLight: boolean;
+}
+
+/** Current controlled context for piece press and drag-start callbacks. @public */
+export type PieceInteractionContext =
+  | {
+      readonly boardId: string;
+      readonly basePositionRevision: Revision;
+      readonly source: { readonly kind: 'board'; readonly square: SquareId };
+      readonly piece: PieceData;
+    }
+  | {
+      readonly boardId: string;
+      readonly basePositionRevision: Revision;
+      readonly source: { readonly kind: 'spare'; readonly spareId: string };
+      readonly piece: PieceData;
+    };
+
+/** Visual interaction flags for a square renderer. @public */
+export interface SquareVisualState {
+  readonly isSelected: boolean;
+  readonly isDestination: boolean;
+  readonly isDisabled: boolean;
+  readonly isPressed: boolean;
+  readonly isDropTarget: boolean;
+  readonly isPendingSource: boolean;
+  readonly isPendingTarget: boolean;
+}
+
+/** Visual interaction flags for a piece renderer. @public */
+export interface PieceVisualState {
+  readonly isPressed: boolean;
+  readonly isDragging: boolean;
+  readonly isGhost: boolean;
+  readonly isPending: boolean;
+  readonly isTransitioning: boolean;
+}
+
+/** Visual-only square renderer input; it intentionally exposes no handlers. @public */
+export interface SquareRendererProps {
+  readonly boardId: string;
+  readonly square: SquareId;
+  readonly piece: PieceData | null;
+  readonly size: number;
+  readonly state: SquareVisualState;
+  readonly style: Readonly<ViewStyle>;
+}
+
+/** Visual-only piece renderer input; it intentionally exposes no handlers. @public */
+export interface PieceRendererProps {
+  readonly boardId: string;
+  readonly square: SquareId;
+  readonly piece: PieceData;
+  readonly size: number;
+  readonly state: PieceVisualState;
+  readonly style: Readonly<ViewStyle>;
+}
+
+/** Custom visual square renderer. @public */
+export type SquareRenderer = (
+  props: SquareRendererProps,
+) => ReactElement | null;
+
+/** Custom visual piece renderer. @public */
+export type PieceRenderer = (props: PieceRendererProps) => ReactElement | null;
+
+/** Piece renderer lookup keyed by the open piece vocabulary. @public */
+export type PieceRenderers = Readonly<
+  Partial<Record<PieceType, PieceRenderer>>
+>;
+
+/** Consumer preference for animation reduction. @public */
+export type ReduceMotion = 'system' | 'always' | 'never';
+
+/** Data supplied to the square accessibility value formatter. @public */
+export interface SquareAccessibilityContext {
+  readonly boardId: string;
+  readonly orientation: BoardOrientation;
+  readonly square: SquareId;
+  readonly piece: PieceData | null;
+  readonly isSelected: boolean;
+  readonly isDisabled: boolean;
+  readonly isDestination: boolean;
+  readonly isPendingSource: boolean;
+  readonly isPendingTarget: boolean;
+}
+
+/** Action names exposed by the single adjustable board control. @public */
+export type ChessboardAccessibilityAction =
+  | 'move-cursor-left'
+  | 'move-cursor-right'
+  | 'move-cursor-up'
+  | 'move-cursor-down'
+  | 'activate-square'
+  | 'clear-selection'
+  | 'cancel-move'
+  | 'remove-piece'
+  | 'place-spare'
+  | 'cancel-spare'
+  | 'start-arrow'
+  | 'finish-arrow'
+  | 'toggle-square-annotation'
+  | 'cancel-annotation';
+
+/** Data supplied to a board accessibility action-label formatter. @public */
+export interface BoardActionAccessibilityContext {
+  readonly boardId: string;
+  readonly action: ChessboardAccessibilityAction;
+  readonly square: SquareId;
+  readonly piece: PieceData | null;
+}
+
+/** Data supplied after a move request reaches a terminal presentation state. @public */
+export interface MoveOutcomeAccessibilityContext {
+  readonly intent: MoveIntent;
+  readonly outcome: 'committed' | 'rejected' | 'cancelled' | 'timed-out';
+  readonly reason?: string;
+}
+
+/** Single-control accessibility labels, formatters, and announcements. @public */
+export interface ChessboardAccessibility {
+  readonly boardLabel?: string;
+  readonly boardHint?: string;
+  readonly formatSquareValue?: (context: SquareAccessibilityContext) => string;
+  readonly formatActionLabel?: (
+    context: BoardActionAccessibilityContext,
+  ) => string;
+  readonly formatMoveOutcome?: (
+    context: MoveOutcomeAccessibilityContext,
+  ) => string | null;
+  readonly announcement?: Readonly<{ id: string; message: string }>;
+}
