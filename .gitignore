@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build and test output
+build/
+coverage/
+dist/
+lib/
+*.tsbuildinfo
+*.tgz
+
+# Expo and React Native tooling
+.expo/
+.metro-health-check*
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
