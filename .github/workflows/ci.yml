@@ -17,7 +17,10 @@ jobs:
   baseline:
     name: Baseline
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+
+    env:
+      EXPO_NO_TELEMETRY: 1
 
     steps:
       - name: Check out repository
@@ -38,3 +41,9 @@ jobs:
 
       - name: Run baseline checks
         run: pnpm check
+
+      - name: Build package
+        run: pnpm build
+
+      - name: Export Expo gallery
+        run: pnpm example:export

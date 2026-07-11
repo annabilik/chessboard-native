@@ -3,8 +3,8 @@
 A controlled, rules-free React Native chessboard component.
 
 > [!NOTE]
-> This repository is at its baseline scaffold. No npm package or functional
-> board component has been published yet.
+> This repository is in its package-shell phase. The package is not published,
+> and the gallery currently renders only a disabled board frame.
 
 ## Direction
 
@@ -26,9 +26,9 @@ post-1.0 work.
 
 ## Repository status
 
-The first implementation phase establishes the repository and contract
-foundation. Package code, the Expo gallery, and native consumers land in
-separate, reviewable changes.
+The repository baseline and JavaScript-only package shell are in place. The
+controlled public data model, native harness, interaction, pieces, and
+annotations land in separate reviewable changes.
 
 ## Development
 
@@ -42,14 +42,17 @@ pnpm check
 
 Root commands:
 
-| Command             | Purpose                                 |
-| ------------------- | --------------------------------------- |
-| `pnpm format`       | Format supported repository files       |
-| `pnpm format:check` | Verify formatting without writing       |
-| `pnpm lint`         | Run code and Markdown linting           |
-| `pnpm typecheck`    | Run the strict TypeScript project check |
-| `pnpm check`        | Run every baseline pull-request check   |
-| `pnpm changeset`    | Create a package release note           |
+| Command               | Purpose                                 |
+| --------------------- | --------------------------------------- |
+| `pnpm build`          | Build package ESM and declarations      |
+| `pnpm format`         | Format supported repository files       |
+| `pnpm format:check`   | Verify formatting without writing       |
+| `pnpm lint`           | Run code and Markdown linting           |
+| `pnpm typecheck`      | Run the strict TypeScript project check |
+| `pnpm check`          | Run every baseline pull-request check   |
+| `pnpm changeset`      | Create a package release note           |
+| `pnpm example:start`  | Start the Expo gallery                  |
+| `pnpm example:export` | Export Android and iOS gallery bundles  |
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a pull request. Report
 security issues according to [SECURITY.md](./SECURITY.md).

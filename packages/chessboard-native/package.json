@@ -1,0 +1,92 @@
+{
+  "name": "@vibechess/chessboard-native",
+  "version": "0.0.0",
+  "description": "Controlled, rules-free React Native chessboard component",
+  "source": "./src/index.ts",
+  "main": "./lib/module/index.js",
+  "module": "./lib/module/index.js",
+  "types": "./lib/typescript/src/index.d.ts",
+  "react-native": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/typescript/src/index.d.ts",
+      "react-native": "./src/index.ts",
+      "import": "./lib/module/index.js",
+      "default": "./lib/module/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "lib",
+    "LICENSE",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "bob build",
+    "clean": "del-cli lib",
+    "prepack": "bob build",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "keywords": [
+    "chess",
+    "chessboard",
+    "react-native",
+    "android",
+    "ios"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/annabilik/chessboard-native.git",
+    "directory": "packages/chessboard-native"
+  },
+  "author": "Anna Bilik <iamannabilik@gmail.com> (https://github.com/annabilik)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/annabilik/chessboard-native/issues"
+  },
+  "homepage": "https://github.com/annabilik/chessboard-native#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "peerDependencies": {
+    "react": "19.2.x",
+    "react-native": "0.86.x",
+    "react-native-gesture-handler": "2.32.x",
+    "react-native-reanimated": "4.5.x",
+    "react-native-svg": "15.15.x"
+  },
+  "devDependencies": {
+    "@react-native/babel-preset": "0.86.0",
+    "@types/react": "19.2.4",
+    "del-cli": "7.0.0",
+    "react": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-builder-bob": "0.43.0",
+    "typescript": "6.0.3"
+  },
+  "react-native-builder-bob": {
+    "source": "src",
+    "output": "lib",
+    "targets": [
+      [
+        "module",
+        {
+          "esm": true
+        }
+      ],
+      [
+        "typescript",
+        {
+          "project": "tsconfig.build.json"
+        }
+      ]
+    ]
+  },
+  "create-react-native-library": {
+    "type": "library",
+    "languages": "js",
+    "version": "0.63.0"
+  }
+}

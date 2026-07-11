@@ -10,14 +10,20 @@
   },
   "packageManager": "pnpm@11.11.0",
   "scripts": {
+    "build": "pnpm --filter @vibechess/chessboard-native build",
     "changeset": "changeset",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck",
+    "clean": "pnpm --recursive --if-present run clean",
+    "example:android": "pnpm --filter @vibechess/chessboard-native-example android",
+    "example:export": "pnpm --filter @vibechess/chessboard-native-example export:native",
+    "example:ios": "pnpm --filter @vibechess/chessboard-native-example ios",
+    "example:start": "pnpm --filter @vibechess/chessboard-native-example start",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "pnpm lint:code && pnpm lint:markdown",
     "lint:code": "eslint .",
-    "lint:markdown": "markdownlint-cli2 '**/*.md' '#node_modules'",
-    "typecheck": "tsc --project tsconfig.json --noEmit"
+    "lint:markdown": "markdownlint-cli2 '**/*.md' '#**/node_modules/**'",
+    "typecheck": "tsc --project tsconfig.json --noEmit && pnpm --recursive --if-present run typecheck"
   },
   "devDependencies": {
     "@changesets/cli": "2.31.0",

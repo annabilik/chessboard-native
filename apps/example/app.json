@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "chessboard-native gallery",
+    "slug": "chessboard-native-gallery",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "scheme": "chessboard-native-gallery",
+    "userInterfaceStyle": "light",
+    "web": {
+      "output": "static"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
