@@ -13,6 +13,8 @@ lib/
 # Expo and React Native tooling
 .expo/
 .metro-health-check*
+/apps/example/android/
+/apps/example/ios/
 
 # Local environment
 .env
