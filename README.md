@@ -27,9 +27,9 @@ post-1.0 work.
 ## Repository status
 
 The repository baseline, JavaScript package shell, browserless test foundation,
-and bare React Native 0.86 harness are in place. The controlled public data
-model, interaction, pieces, and annotations land in separate reviewable
-changes.
+bare React Native 0.86 harness, and packed-artifact build gates are in place.
+The controlled public data model, interaction, pieces, and annotations land in
+separate reviewable changes.
 
 ## Development
 
@@ -49,7 +49,7 @@ Root commands:
 | `pnpm test`           | Run the package Jest suite                   |
 | `pnpm api:check`      | Compare built declarations with the API lock |
 | `pnpm api:update`     | Update the API lock after review             |
-| `pnpm package:check`  | Pack once, then run Publint and ATTW         |
+| `pnpm package:check`  | Inspect one archive with Publint and ATTW    |
 | `pnpm format`         | Format supported repository files            |
 | `pnpm format:check`   | Verify formatting without writing            |
 | `pnpm lint`           | Run code and Markdown linting                |
@@ -75,6 +75,32 @@ pnpm native:ios:release
 The iOS commands require macOS with Xcode, Ruby, Bundler, and CocoaPods.
 `pnpm verify` remains portable and does not invoke either native toolchain; CI
 runs Android and iOS Release builds as independent required jobs.
+
+## Packed artifact gate
+
+CI builds and inspects one npm archive, then installs those exact bytes into
+fresh Expo and bare React Native consumers outside the checkout. The smoke
+runner rejects workspace dependencies, source-repository resolution, package
+symlinks, and missing declared peers before any build starts. CI then runs both
+Expo production exports, an Expo Android Release assembly, and bare Android and
+iOS Release builds after a clean CocoaPods install.
+
+To prepare either isolated consumer locally:
+
+```sh
+smoke_root="$(mktemp -d)"
+pnpm build
+node scripts/inspect-package.mjs \
+  --output "$smoke_root/chessboard-native.tgz"
+node scripts/smoke-packed.mjs \
+  --consumer expo \
+  --archive "$smoke_root/chessboard-native.tgz" \
+  --destination "$smoke_root/expo"
+```
+
+Use `--consumer native` with a different fresh destination for the bare
+harness. The workspace-linked commands remain useful for development, but do
+not replace the packed package gate.
 
 `pnpm api:check` expects a fresh `pnpm build`. Use `pnpm api:update` only when
 an intentional public declaration change has been reviewed.

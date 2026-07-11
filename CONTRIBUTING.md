@@ -38,7 +38,9 @@ pnpm native:ios:release
 ```
 
 CI runs both native Release builds even when only one can be exercised on a
-contributor's development machine.
+contributor's development machine. Those required jobs install the single
+inspected npm archive into consumers outside the checkout; workspace-linked
+builds are development conveniences, not package-release evidence.
 
 ## Pull requests
 
