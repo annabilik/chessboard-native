@@ -3,8 +3,8 @@
 A controlled, rules-free React Native chessboard component.
 
 > [!NOTE]
-> This repository is in its package-shell phase. The package is not published,
-> and the gallery currently renders only a disabled board frame.
+> This repository is in its native-harness phase. The package is not published,
+> and its public component currently renders only a disabled board frame.
 
 ## Direction
 
@@ -26,9 +26,10 @@ post-1.0 work.
 
 ## Repository status
 
-The repository baseline and JavaScript-only package shell are in place. The
-controlled public data model, native harness, interaction, pieces, and
-annotations land in separate reviewable changes.
+The repository baseline, JavaScript package shell, browserless test foundation,
+and bare React Native 0.86 harness are in place. The controlled public data
+model, interaction, pieces, and annotations land in separate reviewable
+changes.
 
 ## Development
 
@@ -58,6 +59,22 @@ Root commands:
 | `pnpm changeset`      | Create a package release note                |
 | `pnpm example:start`  | Start the Expo gallery                       |
 | `pnpm example:export` | Export Android and iOS gallery bundles       |
+| `pnpm native:start`   | Start Metro for the bare native harness      |
+| `pnpm native:android` | Run the native Android harness               |
+| `pnpm native:ios`     | Run the native iOS harness                   |
+
+Native release gates are platform-specific:
+
+```sh
+pnpm native:android:release
+pnpm native:ios:gems
+pnpm native:ios:pods
+pnpm native:ios:release
+```
+
+The iOS commands require macOS with Xcode, Ruby, Bundler, and CocoaPods.
+`pnpm verify` remains portable and does not invoke either native toolchain; CI
+runs Android and iOS Release builds as independent required jobs.
 
 `pnpm api:check` expects a fresh `pnpm build`. Use `pnpm api:update` only when
 an intentional public declaration change has been reviewed.
