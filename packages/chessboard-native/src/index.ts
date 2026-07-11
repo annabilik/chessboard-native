@@ -5,6 +5,14 @@
  */
 export { Chessboard } from './Chessboard';
 export { ChessboardError } from './ChessboardError';
+export {
+  columnIndexToFile,
+  fileToColumnIndex,
+  generateBoardGeometry,
+  rankToRowIndex,
+  rowIndexToRank,
+} from './core/coordinates';
+export { parseFenPosition } from './core/fen';
 
 export type {
   ChessboardErrorCode,

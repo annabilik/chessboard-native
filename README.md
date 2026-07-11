@@ -29,14 +29,17 @@ post-1.0 work.
 
 The repository baseline, package shell, test foundation, bare React Native 0.86
 harness, packed-artifact build gates, and pinned upstream parity inventory are
-in place. The root package now exports the controlled position, move,
-annotation, renderer, accessibility, and typed-error contracts. The component
-does not render those inputs yet; normalization and static rendering land in
-Phase 1.
+in place. The root package exports the controlled public contracts plus pure,
+validated dimension, coordinate, logical-grid, and strict 8x8 FEN utilities.
+The full `a1` through `z99` coordinate space and both orientations are covered
+by property tests. The component does not render controlled inputs yet; object
+position normalization, hit testing, and static rendering remain Phase 1 work.
 
 The accepted architecture decisions and all 20 reserved invariant contracts
 are indexed in
 [`docs/architecture/invariants.md`](./docs/architecture/invariants.md).
+The pure-core semantics are documented in
+[`docs/architecture/coordinates-and-fen.md`](./docs/architecture/coordinates-and-fen.md).
 
 ## Development
 
