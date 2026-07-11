@@ -1,0 +1,4049 @@
+{
+  "$schema": "./manifest.schema.json",
+  "schemaVersion": 1,
+  "target": {
+    "package": "react-chessboard",
+    "version": "5.10.0",
+    "tag": "v5.10.0",
+    "repository": "https://github.com/Clariity/react-chessboard",
+    "commit": "b74704af988396d3da32a8c1627d95341e1e0061",
+    "commitTree": "ce320e6926f680c9880a7a4f5af7e92f7b7e972a",
+    "sourceTree": "1a18be85a7cc4af14e21fb575fc594f9a349eb19",
+    "fixture": "fixtures/parity/upstream-b74704a",
+    "licenseSha256": "3081fe03f1fc49022e944ab7854004c8027e92b06f8cdaf177cb0781dcf06ba0",
+    "ccBySaLicenseSha256": "3f941b3b89cf7b8370ceb83cc76d2120d471b58735d8ca60238a751a48d7f72f",
+    "provenanceSha256": "813bc7cca1557bb3a8a73b188c85da1416d18ae131c129dc41c47c2d1c615a17",
+    "sourceFiles": [
+      {
+        "path": "src/Arrows.tsx",
+        "lines": 188,
+        "sha256": "8bbee9bbe458b341d015f069032653806334b9819c8865d9d92eb77acd221355"
+      },
+      {
+        "path": "src/Board.tsx",
+        "lines": 76,
+        "sha256": "dd005f8d43a1374ed391eb7e3d0fd7204a6a728b4765b467118b5d535ab32fdc"
+      },
+      {
+        "path": "src/Chessboard.tsx",
+        "lines": 24,
+        "sha256": "b9b3067cf6df4213db4b92e04aaaef23ee2dbe98135346bc7eea0eb87d9a38dd"
+      },
+      {
+        "path": "src/ChessboardProvider.tsx",
+        "lines": 730,
+        "sha256": "d91f0b6e16c3cb68762162b0f9ecc7e49a93c25b778344cc19cfecfaedaf9416"
+      },
+      {
+        "path": "src/Draggable.tsx",
+        "lines": 42,
+        "sha256": "40d1f91b3b2086a1f036358a8f23fd1f61a994b2fcd55c4a771480a10e527e82"
+      },
+      {
+        "path": "src/Droppable.tsx",
+        "lines": 14,
+        "sha256": "e5cbac86f54277dea3bb1344d1ff727b95a147e49a44fef3ae82871ff0fae14a"
+      },
+      {
+        "path": "src/Piece.tsx",
+        "lines": 107,
+        "sha256": "0b232f462975db869501fd1015a92a8071da60b7edd89314800ec52f53e11d8a"
+      },
+      {
+        "path": "src/RightClickCancelSensor.tsx",
+        "lines": 32,
+        "sha256": "bb4c4a6094a2a1cff23ee27bf894479eb354fa78e5064f79fa791b2a0ee59a65"
+      },
+      {
+        "path": "src/SparePiece.tsx",
+        "lines": 14,
+        "sha256": "bf7d4d58b8386486de1d0dfac018d6263dbfbd88fef0e797cb7039913720005f"
+      },
+      {
+        "path": "src/Square.tsx",
+        "lines": 285,
+        "sha256": "bbc6e990208df475eb59da3ba152b2566d2c4ef996583e7bab0d04e2b9438882"
+      },
+      {
+        "path": "src/defaults.ts",
+        "lines": 77,
+        "sha256": "0cb3635711a2aa545c6a4eaa8911dc3464d0673133255e352a2e9f51ae44554c"
+      },
+      {
+        "path": "src/index.ts",
+        "lines": 7,
+        "sha256": "924f092d74eb0cfb35ec9da4c02165441e28c5e89619b0060d39c376ac9ad3ea"
+      },
+      {
+        "path": "src/modifiers.ts",
+        "lines": 65,
+        "sha256": "0d4b470f27bffc5ea5693c0446ec9fc3e641becdd78dc478174fd34ed3618a6f"
+      },
+      {
+        "path": "src/pieces.tsx",
+        "lines": 573,
+        "sha256": "6e72bf71cfcc472a0c3684410645bd564b8b8fcc2ce6e4fb51c2372d349a8668"
+      },
+      {
+        "path": "src/types.ts",
+        "lines": 70,
+        "sha256": "4d932d07d7dd2a6ff0a80e9f2f0dae556dc67c9490da335d98ba3ac672e76458"
+      },
+      {
+        "path": "src/utils.ts",
+        "lines": 449,
+        "sha256": "3a36ea713fce8e1d92add51796009226867ec3cad5c73302232c60196fe35ee2"
+      }
+    ],
+    "arrowOptionDefaults": [
+      {
+        "name": "color",
+        "expression": "'#ffaa00'"
+      },
+      {
+        "name": "secondaryColor",
+        "expression": "'#4caf50'"
+      },
+      {
+        "name": "tertiaryColor",
+        "expression": "'#f44336'"
+      },
+      {
+        "name": "arrowLengthReducerDenominator",
+        "expression": "8"
+      },
+      {
+        "name": "sameTargetArrowLengthReducerDenominator",
+        "expression": "4"
+      },
+      {
+        "name": "arrowWidthDenominator",
+        "expression": "5"
+      },
+      {
+        "name": "activeArrowWidthMultiplier",
+        "expression": "0.9"
+      },
+      {
+        "name": "opacity",
+        "expression": "0.65"
+      },
+      {
+        "name": "activeOpacity",
+        "expression": "0.5"
+      },
+      {
+        "name": "arrowStartOffset",
+        "expression": "0"
+      }
+    ],
+    "defaultPieceRenderers": [
+      "wP",
+      "wR",
+      "wN",
+      "wB",
+      "wQ",
+      "wK",
+      "bP",
+      "bR",
+      "bN",
+      "bB",
+      "bQ",
+      "bK"
+    ]
+  },
+  "expectedCounts": {
+    "sourceFiles": 16,
+    "sourceLines": 2753,
+    "exports": 39,
+    "runtimeExports": 27,
+    "typeExports": 12,
+    "defaultExports": 13,
+    "options": 42,
+    "explicitOptionDefaults": 30,
+    "implicitUndefinedOptionDefaults": 12,
+    "callbackOptions": 11,
+    "styleOptions": 12,
+    "rendererOptions": 1,
+    "arrowOptionFields": 10,
+    "defaultPieceRenderers": 12,
+    "behaviors": 50,
+    "entries": 131
+  },
+  "documentation": "docs/parity/react-chessboard-5.10.md",
+  "entries": [
+    {
+      "id": "export.chessboard",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "Chessboard",
+        "references": [
+          {
+            "path": "src/Chessboard.tsx",
+            "startLine": 12,
+            "endLine": 23
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["Chessboard"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-CHESSBOARD",
+      "compatibilityNotes": "The native component keeps the standalone entry point but uses direct controlled props instead of an options object."
+    },
+    {
+      "id": "export.chessboard-provider",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "ChessboardProvider",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 208,
+            "endLine": 730
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProvider"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-CHESSBOARD-PROVIDER",
+      "compatibilityNotes": "The provider remains compositional but owns only cross-board gesture, layout, and overlay coordination."
+    },
+    {
+      "id": "export.use-chessboard-context",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "useChessboardContext",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 134,
+            "endLine": 134
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "drop",
+      "native": {
+        "surface": "none",
+        "symbols": []
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-USE-CHESSBOARD-CONTEXT",
+      "compatibilityNotes": "The inferred 46-property browser context is intentionally private and has no public native hook.",
+      "rationale": "The upstream hook leaks internal shadow position, annotation, and browser-drag state; exporting it would make those implementation details a compatibility contract.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#export-use-chessboard-context"
+    },
+    {
+      "id": "export.spare-piece",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "SparePiece",
+        "references": [
+          {
+            "path": "src/SparePiece.tsx",
+            "startLine": 8,
+            "endLine": 14
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["SparePiece"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-SPARE-PIECE",
+      "compatibilityNotes": "The native spare piece is provider-coordinated and identifies both its spare source and target board."
+    },
+    {
+      "id": "export.default-board-style",
+      "kind": "export",
+      "facets": ["default"],
+      "upstream": {
+        "name": "defaultBoardStyle",
+        "references": [
+          {
+            "path": "src/defaults.ts",
+            "startLine": 1,
+            "endLine": 12
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["defaultTheme.board"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-DEFAULT-BOARD-STYLE",
+      "compatibilityNotes": "CSS grid defaults become React Native theme/style defaults."
+    },
+    {
+      "id": "export.default-square-style",
+      "kind": "export",
+      "facets": ["default"],
+      "upstream": {
+        "name": "defaultSquareStyle",
+        "references": [
+          {
+            "path": "src/defaults.ts",
+            "startLine": 14,
+            "endLine": 20
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["defaultTheme.square"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-DEFAULT-SQUARE-STYLE",
+      "compatibilityNotes": "Flexbox-compatible square defaults move into the native theme."
+    },
+    {
+      "id": "export.default-dark-square-style",
+      "kind": "export",
+      "facets": ["default"],
+      "upstream": {
+        "name": "defaultDarkSquareStyle",
+        "references": [
+          {
+            "path": "src/defaults.ts",
+            "startLine": 22,
+            "endLine": 24
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["defaultTheme.darkSquare"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-DEFAULT-DARK-SQUARE-STYLE",
+      "compatibilityNotes": "The default dark-square color is preserved in the native theme."
+    },
+    {
+      "id": "export.default-light-square-style",
+      "kind": "export",
+      "facets": ["default"],
+      "upstream": {
+        "name": "defaultLightSquareStyle",
+        "references": [
+          {
+            "path": "src/defaults.ts",
+            "startLine": 26,
+            "endLine": 28
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["defaultTheme.lightSquare"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-DEFAULT-LIGHT-SQUARE-STYLE",
+      "compatibilityNotes": "The default light-square color is preserved in the native theme."
+    },
+    {
+      "id": "export.default-drop-square-style",
+      "kind": "export",
+      "facets": ["default"],
+      "upstream": {
+        "name": "defaultDropSquareStyle",
+        "references": [
+          {
+            "path": "src/defaults.ts",
+            "startLine": 30,
+            "endLine": 32
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["defaultTheme.dropTarget"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-DEFAULT-DROP-SQUARE-STYLE",
+      "compatibilityNotes": "The CSS inset shadow becomes a native drop-target state style."
+    },
+    {
+      "id": "export.default-dark-square-notation-style",
+      "kind": "export",
+      "facets": ["default"],
+      "upstream": {
+        "name": "defaultDarkSquareNotationStyle",
+        "references": [
+          {
+            "path": "src/defaults.ts",
+            "startLine": 34,
+            "endLine": 36
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["defaultTheme.darkSquareNotation"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-DEFAULT-DARK-SQUARE-NOTATION-STYLE",
+      "compatibilityNotes": "Notation contrast remains theme-driven with React Native text styles."
+    },
+    {
+      "id": "export.default-light-square-notation-style",
+      "kind": "export",
+      "facets": ["default"],
+      "upstream": {
+        "name": "defaultLightSquareNotationStyle",
+        "references": [
+          {
+            "path": "src/defaults.ts",
+            "startLine": 38,
+            "endLine": 40
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["defaultTheme.lightSquareNotation"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-DEFAULT-LIGHT-SQUARE-NOTATION-STYLE",
+      "compatibilityNotes": "Notation contrast remains theme-driven with React Native text styles."
+    },
+    {
+      "id": "export.default-alpha-notation-style",
+      "kind": "export",
+      "facets": ["default"],
+      "upstream": {
+        "name": "defaultAlphaNotationStyle",
+        "references": [
+          {
+            "path": "src/defaults.ts",
+            "startLine": 42,
+            "endLine": 48
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["defaultTheme.fileNotation"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-DEFAULT-ALPHA-NOTATION-STYLE",
+      "compatibilityNotes": "Absolute CSS text placement becomes native notation layout."
+    },
+    {
+      "id": "export.default-numeric-notation-style",
+      "kind": "export",
+      "facets": ["default"],
+      "upstream": {
+        "name": "defaultNumericNotationStyle",
+        "references": [
+          {
+            "path": "src/defaults.ts",
+            "startLine": 50,
+            "endLine": 56
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["defaultTheme.rankNotation"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-DEFAULT-NUMERIC-NOTATION-STYLE",
+      "compatibilityNotes": "Absolute CSS text placement becomes native notation layout."
+    },
+    {
+      "id": "export.default-dragging-piece-style",
+      "kind": "export",
+      "facets": ["default"],
+      "upstream": {
+        "name": "defaultDraggingPieceStyle",
+        "references": [
+          {
+            "path": "src/defaults.ts",
+            "startLine": 58,
+            "endLine": 60
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["defaultTheme.draggingPiece"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-DEFAULT-DRAGGING-PIECE-STYLE",
+      "compatibilityNotes": "The lift transform becomes a Reanimated drag-overlay style."
+    },
+    {
+      "id": "export.default-dragging-piece-ghost-style",
+      "kind": "export",
+      "facets": ["default"],
+      "upstream": {
+        "name": "defaultDraggingPieceGhostStyle",
+        "references": [
+          {
+            "path": "src/defaults.ts",
+            "startLine": 62,
+            "endLine": 64
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["defaultTheme.draggingPieceGhost"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-DEFAULT-DRAGGING-PIECE-GHOST-STYLE",
+      "compatibilityNotes": "The source ghost opacity remains configurable in the native theme."
+    },
+    {
+      "id": "export.default-arrow-options",
+      "kind": "export",
+      "facets": ["default"],
+      "upstream": {
+        "name": "defaultArrowOptions",
+        "references": [
+          {
+            "path": "src/defaults.ts",
+            "startLine": 66,
+            "endLine": 77
+          }
+        ],
+        "exportKind": "runtime",
+        "members": [
+          {
+            "name": "color",
+            "expression": "'#ffaa00'"
+          },
+          {
+            "name": "secondaryColor",
+            "expression": "'#4caf50'"
+          },
+          {
+            "name": "tertiaryColor",
+            "expression": "'#f44336'"
+          },
+          {
+            "name": "arrowLengthReducerDenominator",
+            "expression": "8"
+          },
+          {
+            "name": "sameTargetArrowLengthReducerDenominator",
+            "expression": "4"
+          },
+          {
+            "name": "arrowWidthDenominator",
+            "expression": "5"
+          },
+          {
+            "name": "activeArrowWidthMultiplier",
+            "expression": "0.9"
+          },
+          {
+            "name": "opacity",
+            "expression": "0.65"
+          },
+          {
+            "name": "activeOpacity",
+            "expression": "0.5"
+          },
+          {
+            "name": "arrowStartOffset",
+            "expression": "0"
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["defaultAnnotationStyle"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-DEFAULT-ARROW-OPTIONS",
+      "compatibilityNotes": "All ten geometry and opacity defaults are retained in native annotation styling."
+    },
+    {
+      "id": "export.default-pieces",
+      "kind": "export",
+      "facets": ["default"],
+      "upstream": {
+        "name": "defaultPieces",
+        "references": [
+          {
+            "path": "src/pieces.tsx",
+            "startLine": 7,
+            "endLine": 573
+          }
+        ],
+        "exportKind": "runtime",
+        "members": [
+          {
+            "name": "wP",
+            "expression": "renderer"
+          },
+          {
+            "name": "wR",
+            "expression": "renderer"
+          },
+          {
+            "name": "wN",
+            "expression": "renderer"
+          },
+          {
+            "name": "wB",
+            "expression": "renderer"
+          },
+          {
+            "name": "wQ",
+            "expression": "renderer"
+          },
+          {
+            "name": "wK",
+            "expression": "renderer"
+          },
+          {
+            "name": "bP",
+            "expression": "renderer"
+          },
+          {
+            "name": "bR",
+            "expression": "renderer"
+          },
+          {
+            "name": "bN",
+            "expression": "renderer"
+          },
+          {
+            "name": "bB",
+            "expression": "renderer"
+          },
+          {
+            "name": "bQ",
+            "expression": "renderer"
+          },
+          {
+            "name": "bK",
+            "expression": "renderer"
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["defaultPieceRenderers"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-DEFAULT-PIECES",
+      "compatibilityNotes": "The twelve standard piece keys remain, but published defaults use original permissive artwork rather than the fixture-only Cburnett set."
+    },
+    {
+      "id": "export.generate-board",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "generateBoard",
+        "references": [
+          {
+            "path": "src/utils.ts",
+            "startLine": 7,
+            "endLine": 27
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["generateBoardGeometry"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-GENERATE-BOARD",
+      "compatibilityNotes": "The grid generator uses validated dimensions and canonical square identifiers."
+    },
+    {
+      "id": "export.row-index-to-chess-row",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "rowIndexToChessRow",
+        "references": [
+          {
+            "path": "src/utils.ts",
+            "startLine": 29,
+            "endLine": 37
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["rowIndexToRank"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-ROW-INDEX-TO-CHESS-ROW",
+      "compatibilityNotes": "The orientation-aware conversion remains a pure coordinate utility."
+    },
+    {
+      "id": "export.column-index-to-chess-column",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "columnIndexToChessColumn",
+        "references": [
+          {
+            "path": "src/utils.ts",
+            "startLine": 39,
+            "endLine": 47
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["columnIndexToFile"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-COLUMN-INDEX-TO-CHESS-COLUMN",
+      "compatibilityNotes": "The conversion remains pure and is bounded to files a through z."
+    },
+    {
+      "id": "export.chess-column-to-column-index",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "chessColumnToColumnIndex",
+        "references": [
+          {
+            "path": "src/utils.ts",
+            "startLine": 49,
+            "endLine": 57
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["fileToColumnIndex"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-CHESS-COLUMN-TO-COLUMN-INDEX",
+      "compatibilityNotes": "The inverse conversion remains pure and validates canonical file identifiers."
+    },
+    {
+      "id": "export.chess-row-to-row-index",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "chessRowToRowIndex",
+        "references": [
+          {
+            "path": "src/utils.ts",
+            "startLine": 59,
+            "endLine": 67
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["rankToRowIndex"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-CHESS-ROW-TO-ROW-INDEX",
+      "compatibilityNotes": "The inverse conversion remains pure and validates ranks 1 through 99."
+    },
+    {
+      "id": "export.fen-string-to-position-object",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "fenStringToPositionObject",
+        "references": [
+          {
+            "path": "src/utils.ts",
+            "startLine": 69,
+            "endLine": 103
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": ["parseFenPosition"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-FEN-STRING-TO-POSITION-OBJECT",
+      "compatibilityNotes": "The native parser is strict, atomic, and permits FEN only for an 8x8 board.",
+      "rationale": "The upstream parser silently accepts malformed rows, treats multi-digit empties one digit at a time, and performs no dimension validation; native invalid input must fail atomically.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#export-fen-string-to-position-object"
+    },
+    {
+      "id": "export.get-position-updates",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "getPositionUpdates",
+        "references": [
+          {
+            "path": "src/utils.ts",
+            "startLine": 123,
+            "endLine": 274
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "internal",
+        "symbols": ["inferPositionTransition"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-GET-POSITION-UPDATES",
+      "compatibilityNotes": "Unique upstream movement heuristics remain only as a visual fallback; ambiguous ties fade or snap.",
+      "rationale": "The upstream utility embeds partial chess heuristics and chooses the first object-iteration candidate on ties, which can animate the wrong identical piece.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#export-get-position-updates"
+    },
+    {
+      "id": "export.get-promotion-updates",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "getPromotionUpdates",
+        "references": [
+          {
+            "path": "src/utils.ts",
+            "startLine": 279,
+            "endLine": 315
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "internal",
+        "symbols": ["inferPromotionTransition"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-GET-PROMOTION-UPDATES",
+      "compatibilityNotes": "Promotion inference is a safe fallback behind explicit transition hints and piece IDs.",
+      "rationale": "Promotion and reversal inference is presentation-only and cannot decide game semantics or manufacture a canonical move.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#export-get-promotion-updates"
+    },
+    {
+      "id": "export.get-relative-coords",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "getRelativeCoords",
+        "references": [
+          {
+            "path": "src/utils.ts",
+            "startLine": 394,
+            "endLine": 420
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["squareToBoardPoint"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-GET-RELATIVE-COORDS",
+      "compatibilityNotes": "Coordinates derive from measured rectangular native board geometry, not DOM width."
+    },
+    {
+      "id": "export.is-touch-end-within-square",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "isTouchEndWithinSquare",
+        "references": [
+          {
+            "path": "src/utils.ts",
+            "startLine": 422,
+            "endLine": 449
+          }
+        ],
+        "exportKind": "runtime"
+      },
+      "disposition": "drop",
+      "native": {
+        "surface": "none",
+        "symbols": []
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-IS-TOUCH-END-WITHIN-SQUARE",
+      "compatibilityNotes": "DOM element lookup and React.TouchEvent hit testing have no public native equivalent.",
+      "rationale": "Native input uses one board-level gesture surface and measured coordinate hit testing; exposing a document-based helper would be unusable and misleading.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#export-is-touch-end-within-square"
+    },
+    {
+      "id": "export.chessboard-options",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "ChessboardOptions",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 136,
+            "endLine": 206
+          }
+        ],
+        "exportKind": "type"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "compat",
+        "symbols": ["ReactChessboardOptions"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-CHESSBOARD-OPTIONS",
+      "compatibilityNotes": "The exact options object belongs only to the future react-chessboard compatibility subpath; the primary API uses direct props."
+    },
+    {
+      "id": "export.arrow",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "Arrow",
+        "references": [
+          {
+            "path": "src/types.ts",
+            "startLine": 1,
+            "endLine": 5
+          }
+        ],
+        "exportKind": "type"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "compat",
+        "symbols": ["ReactChessboardArrow", "ArrowAnnotation"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-ARROW",
+      "compatibilityNotes": "Compatibility arrows map to ID-bearing controlled native annotations."
+    },
+    {
+      "id": "export.square-data-type",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "SquareDataType",
+        "references": [
+          {
+            "path": "src/types.ts",
+            "startLine": 7,
+            "endLine": 10
+          }
+        ],
+        "exportKind": "type"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["BoardSquare"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-SQUARE-DATA-TYPE",
+      "compatibilityNotes": "Square identity and light/dark parity remain pure derived geometry."
+    },
+    {
+      "id": "export.piece-data-type",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "PieceDataType",
+        "references": [
+          {
+            "path": "src/types.ts",
+            "startLine": 12,
+            "endLine": 14
+          }
+        ],
+        "exportKind": "type"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["PieceData"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-PIECE-DATA-TYPE",
+      "compatibilityNotes": "Piece data keeps an open pieceType and adds optional consumer-owned identity."
+    },
+    {
+      "id": "export.dragging-piece-data-type",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "DraggingPieceDataType",
+        "references": [
+          {
+            "path": "src/types.ts",
+            "startLine": 16,
+            "endLine": 20
+          }
+        ],
+        "exportKind": "type"
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": ["MoveSource", "MoveIntent"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-DRAGGING-PIECE-DATA-TYPE",
+      "compatibilityNotes": "Move payloads distinguish board and spare sources and carry revision/intent correlation.",
+      "rationale": "A durable dragging-piece value lacks board identity, controlled base revision, input modality, and cancellation correlation required by the native intent lifecycle.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#export-dragging-piece-data-type"
+    },
+    {
+      "id": "export.position-data-type",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "PositionDataType",
+        "references": [
+          {
+            "path": "src/types.ts",
+            "startLine": 22,
+            "endLine": 24
+          }
+        ],
+        "exportKind": "type"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["PositionObject"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-POSITION-DATA-TYPE",
+      "compatibilityNotes": "The record becomes deeply readonly and validates canonical square keys atomically."
+    },
+    {
+      "id": "export.square-handler-args",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "SquareHandlerArgs",
+        "references": [
+          {
+            "path": "src/types.ts",
+            "startLine": 26,
+            "endLine": 29
+          }
+        ],
+        "exportKind": "type"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["SquareActivationIntent"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-SQUARE-HANDLER-ARGS",
+      "compatibilityNotes": "Native square activation adds board, revision, selection, action, and input context."
+    },
+    {
+      "id": "export.piece-handler-args",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "PieceHandlerArgs",
+        "references": [
+          {
+            "path": "src/types.ts",
+            "startLine": 31,
+            "endLine": 35
+          }
+        ],
+        "exportKind": "type"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["PieceInteractionContext"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-PIECE-HANDLER-ARGS",
+      "compatibilityNotes": "Native payloads use typed board/spare sources and current controlled revision context."
+    },
+    {
+      "id": "export.piece-drop-handler-args",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "PieceDropHandlerArgs",
+        "references": [
+          {
+            "path": "src/types.ts",
+            "startLine": 37,
+            "endLine": 41
+          }
+        ],
+        "exportKind": "type"
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": ["MoveIntent"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-PIECE-DROP-HANDLER-ARGS",
+      "compatibilityNotes": "The move intent carries identity, source kind, target, revision, and input modality.",
+      "rationale": "The upstream payload and synchronous Boolean callback cannot represent async validation, controlled commit correlation, cancellation, or spare-to-board routing.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#export-piece-drop-handler-args"
+    },
+    {
+      "id": "export.square-renderer",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "SquareRenderer",
+        "references": [
+          {
+            "path": "src/types.ts",
+            "startLine": 43,
+            "endLine": 47
+          }
+        ],
+        "exportKind": "type"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["SquareRenderer"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-SQUARE-RENDERER",
+      "compatibilityNotes": "The native renderer is visual-only and receives size plus resolved interaction state without owning handlers."
+    },
+    {
+      "id": "export.piece-render-object",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "PieceRenderObject",
+        "references": [
+          {
+            "path": "src/types.ts",
+            "startLine": 49,
+            "endLine": 56
+          }
+        ],
+        "exportKind": "type"
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["PieceRenderers"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-PIECE-RENDER-OBJECT",
+      "compatibilityNotes": "Native renderers receive piece, square, size, and interaction state instead of SVG CSS props."
+    },
+    {
+      "id": "export.fen-piece-string",
+      "kind": "export",
+      "facets": [],
+      "upstream": {
+        "name": "FenPieceString",
+        "references": [
+          {
+            "path": "src/types.ts",
+            "startLine": 58,
+            "endLine": 70
+          }
+        ],
+        "exportKind": "type"
+      },
+      "disposition": "keep",
+      "native": {
+        "surface": "root",
+        "symbols": ["FenPieceCode"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-EXPORT-FEN-PIECE-STRING",
+      "compatibilityNotes": "The twelve standard FEN piece-placement codes remain unchanged."
+    },
+    {
+      "id": "option.id",
+      "kind": "option",
+      "facets": [],
+      "upstream": {
+        "name": "id",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 138,
+            "endLine": 138
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 214,
+            "endLine": 214
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "'chessboard'"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.boardId"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ID",
+      "compatibilityNotes": "Renamed to required, non-empty, provider-unique boardId."
+    },
+    {
+      "id": "option.pieces",
+      "kind": "option",
+      "facets": [],
+      "upstream": {
+        "name": "pieces",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 141,
+            "endLine": 141
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 217,
+            "endLine": 217
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "defaultPieces"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.pieceRenderers"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-PIECES",
+      "compatibilityNotes": "Whole-object renderer replacement remains explicit; published defaults use permissive native artwork."
+    },
+    {
+      "id": "option.position",
+      "kind": "option",
+      "facets": [],
+      "upstream": {
+        "name": "position",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 142,
+            "endLine": 142
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 218,
+            "endLine": 218
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR'"
+        }
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.position"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-POSITION",
+      "compatibilityNotes": "The prop is the only canonical position and may be plain or revisioned.",
+      "rationale": "Upstream stores a mutable currentPosition mirror and mutates presentation snapshots; native rendering must always derive semantics from the latest controlled prop.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#option-position"
+    },
+    {
+      "id": "option.board-orientation",
+      "kind": "option",
+      "facets": [],
+      "upstream": {
+        "name": "boardOrientation",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 145,
+            "endLine": 145
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 221,
+            "endLine": 221
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "'white'"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.orientation"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-BOARD-ORIENTATION",
+      "compatibilityNotes": "Renamed to orientation; canonical square IDs never change."
+    },
+    {
+      "id": "option.chessboard-rows",
+      "kind": "option",
+      "facets": [],
+      "upstream": {
+        "name": "chessboardRows",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 146,
+            "endLine": 146
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 222,
+            "endLine": 222
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "8"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.dimensions.rows"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-CHESSBOARD-ROWS",
+      "compatibilityNotes": "Rows are validated integers from 1 through 99."
+    },
+    {
+      "id": "option.chessboard-columns",
+      "kind": "option",
+      "facets": [],
+      "upstream": {
+        "name": "chessboardColumns",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 147,
+            "endLine": 147
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 223,
+            "endLine": 223
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "8"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.dimensions.columns"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-CHESSBOARD-COLUMNS",
+      "compatibilityNotes": "Columns are validated integers from 1 through 26."
+    },
+    {
+      "id": "option.board-style",
+      "kind": "option",
+      "facets": ["style"],
+      "upstream": {
+        "name": "boardStyle",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 150,
+            "endLine": 150
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 226,
+            "endLine": 226
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "defaultBoardStyle(chessboardColumns)"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.styles.board"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-BOARD-STYLE",
+      "compatibilityNotes": "React.CSSProperties becomes a React Native StyleProp with documented precedence."
+    },
+    {
+      "id": "option.square-style",
+      "kind": "option",
+      "facets": ["style"],
+      "upstream": {
+        "name": "squareStyle",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 151,
+            "endLine": 151
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 227,
+            "endLine": 227
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "defaultSquareStyle"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.styles.square"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-SQUARE-STYLE",
+      "compatibilityNotes": "Base square styling becomes a React Native StyleProp."
+    },
+    {
+      "id": "option.square-styles",
+      "kind": "option",
+      "facets": ["style"],
+      "upstream": {
+        "name": "squareStyles",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 152,
+            "endLine": 152
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 228,
+            "endLine": 228
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "{}"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.squareStyles"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-SQUARE-STYLES",
+      "compatibilityNotes": "Per-square styles remain declarative and keyed by canonical square."
+    },
+    {
+      "id": "option.dark-square-style",
+      "kind": "option",
+      "facets": ["style"],
+      "upstream": {
+        "name": "darkSquareStyle",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 153,
+            "endLine": 153
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 229,
+            "endLine": 229
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "defaultDarkSquareStyle"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.theme.darkSquare"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-DARK-SQUARE-STYLE",
+      "compatibilityNotes": "Dark-square overrides move into the native theme/style contract."
+    },
+    {
+      "id": "option.light-square-style",
+      "kind": "option",
+      "facets": ["style"],
+      "upstream": {
+        "name": "lightSquareStyle",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 154,
+            "endLine": 154
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 230,
+            "endLine": 230
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "defaultLightSquareStyle"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.theme.lightSquare"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-LIGHT-SQUARE-STYLE",
+      "compatibilityNotes": "Light-square overrides move into the native theme/style contract."
+    },
+    {
+      "id": "option.drop-square-style",
+      "kind": "option",
+      "facets": ["style"],
+      "upstream": {
+        "name": "dropSquareStyle",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 155,
+            "endLine": 155
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 231,
+            "endLine": 231
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "defaultDropSquareStyle"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.styles.dropTarget"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-DROP-SQUARE-STYLE",
+      "compatibilityNotes": "The drop-target state is exposed to native styles/renderers."
+    },
+    {
+      "id": "option.dragging-piece-style",
+      "kind": "option",
+      "facets": ["style"],
+      "upstream": {
+        "name": "draggingPieceStyle",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 156,
+            "endLine": 156
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 232,
+            "endLine": 232
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "defaultDraggingPieceStyle"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.styles.draggingPiece"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-DRAGGING-PIECE-STYLE",
+      "compatibilityNotes": "The active overlay style is animated on the UI thread."
+    },
+    {
+      "id": "option.dragging-piece-ghost-style",
+      "kind": "option",
+      "facets": ["style"],
+      "upstream": {
+        "name": "draggingPieceGhostStyle",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 157,
+            "endLine": 157
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 233,
+            "endLine": 233
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "defaultDraggingPieceGhostStyle"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.styles.draggingPieceGhost"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-DRAGGING-PIECE-GHOST-STYLE",
+      "compatibilityNotes": "The source ghost style remains configurable."
+    },
+    {
+      "id": "option.dark-square-notation-style",
+      "kind": "option",
+      "facets": ["style"],
+      "upstream": {
+        "name": "darkSquareNotationStyle",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 160,
+            "endLine": 160
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 236,
+            "endLine": 236
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "defaultDarkSquareNotationStyle"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.theme.darkSquareNotation"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-DARK-SQUARE-NOTATION-STYLE",
+      "compatibilityNotes": "CSS text properties become native TextStyle values."
+    },
+    {
+      "id": "option.light-square-notation-style",
+      "kind": "option",
+      "facets": ["style"],
+      "upstream": {
+        "name": "lightSquareNotationStyle",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 161,
+            "endLine": 161
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 237,
+            "endLine": 237
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "defaultLightSquareNotationStyle"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.theme.lightSquareNotation"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-LIGHT-SQUARE-NOTATION-STYLE",
+      "compatibilityNotes": "CSS text properties become native TextStyle values."
+    },
+    {
+      "id": "option.alpha-notation-style",
+      "kind": "option",
+      "facets": ["style"],
+      "upstream": {
+        "name": "alphaNotationStyle",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 162,
+            "endLine": 162
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 238,
+            "endLine": 238
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "defaultAlphaNotationStyle"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.styles.fileNotation"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ALPHA-NOTATION-STYLE",
+      "compatibilityNotes": "File-label styling uses native layout and typography."
+    },
+    {
+      "id": "option.numeric-notation-style",
+      "kind": "option",
+      "facets": ["style"],
+      "upstream": {
+        "name": "numericNotationStyle",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 163,
+            "endLine": 163
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 239,
+            "endLine": 239
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "defaultNumericNotationStyle"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.styles.rankNotation"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-NUMERIC-NOTATION-STYLE",
+      "compatibilityNotes": "Rank-label styling uses native layout and typography."
+    },
+    {
+      "id": "option.show-notation",
+      "kind": "option",
+      "facets": [],
+      "upstream": {
+        "name": "showNotation",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 164,
+            "endLine": 164
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 240,
+            "endLine": 240
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "true"
+        }
+      },
+      "disposition": "keep",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.showNotation"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-SHOW-NOTATION",
+      "compatibilityNotes": "The Boolean notation toggle is retained."
+    },
+    {
+      "id": "option.animation-duration-in-ms",
+      "kind": "option",
+      "facets": [],
+      "upstream": {
+        "name": "animationDurationInMs",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 167,
+            "endLine": 167
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 243,
+            "endLine": 243
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "300"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.transitionDurationMs"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ANIMATION-DURATION-IN-MS",
+      "compatibilityNotes": "Renamed and applied only to presentation transitions."
+    },
+    {
+      "id": "option.show-animations",
+      "kind": "option",
+      "facets": [],
+      "upstream": {
+        "name": "showAnimations",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 168,
+            "endLine": 168
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 244,
+            "endLine": 244
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "true"
+        }
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": [
+          "ChessboardProps.reduceMotion",
+          "ChessboardProps.transitionDurationMs"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-SHOW-ANIMATIONS",
+      "compatibilityNotes": "Animation policy honors system reduced motion and latest-wins transitions.",
+      "rationale": "A Boolean browser animation switch cannot express the required system, always, and never reduced-motion policy or deterministic interruption semantics.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#option-show-animations"
+    },
+    {
+      "id": "option.allow-dragging",
+      "kind": "option",
+      "facets": [],
+      "upstream": {
+        "name": "allowDragging",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 171,
+            "endLine": 171
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 247,
+            "endLine": 247
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "true"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": [
+          "ChessboardProps.onMoveRequest",
+          "ChessboardProps.interactionPermissions"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ALLOW-DRAGGING",
+      "compatibilityNotes": "The primary board is move-read-only without onMoveRequest; permissions gate eligible inputs."
+    },
+    {
+      "id": "option.allow-drag-off-board",
+      "kind": "option",
+      "facets": [],
+      "upstream": {
+        "name": "allowDragOffBoard",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 172,
+            "endLine": 172
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 248,
+            "endLine": 248
+          },
+          {
+            "path": "src/Board.tsx",
+            "startLine": 57,
+            "endLine": 64
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "true"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.gesture.allowDragOffBoard"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ALLOW-DRAG-OFF-BOARD",
+      "compatibilityNotes": "This remains a visual drag-overlay bounds policy; it does not decide whether a null-target move intent is accepted."
+    },
+    {
+      "id": "option.allow-auto-scroll",
+      "kind": "option",
+      "facets": [],
+      "upstream": {
+        "name": "allowAutoScroll",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 173,
+            "endLine": 173
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 249,
+            "endLine": 249
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "false"
+        }
+      },
+      "disposition": "drop",
+      "native": {
+        "surface": "none",
+        "symbols": []
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ALLOW-AUTO-SCROLL",
+      "compatibilityNotes": "No programmatic ancestor scrolling is promised for 1.0; gesture arbitration is still required.",
+      "rationale": "Portable React Native code cannot generically control an arbitrary ancestor ScrollView while preserving deterministic destination geometry.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#option-allow-auto-scroll"
+    },
+    {
+      "id": "option.drag-activation-distance",
+      "kind": "option",
+      "facets": [],
+      "upstream": {
+        "name": "dragActivationDistance",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 174,
+            "endLine": 174
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 250,
+            "endLine": 250
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "1"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.gesture.activationDistance"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-DRAG-ACTIVATION-DISTANCE",
+      "compatibilityNotes": "Mapped to the native gesture activation threshold."
+    },
+    {
+      "id": "option.allow-drawing-arrows",
+      "kind": "option",
+      "facets": [],
+      "upstream": {
+        "name": "allowDrawingArrows",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 177,
+            "endLine": 177
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 253,
+            "endLine": 253
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "true"
+        }
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": [
+          "ChessboardProps.annotationTool",
+          "ChessboardProps.onAnnotationOperation"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ALLOW-DRAWING-ARROWS",
+      "compatibilityNotes": "Drawing is enabled by a controlled native tool and operation handler.",
+      "rationale": "The upstream gate controls an internal arrow list; native drawing must emit revisioned operations without accepting semantic state inside the component.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#option-allow-drawing-arrows"
+    },
+    {
+      "id": "option.arrows",
+      "kind": "option",
+      "facets": [],
+      "upstream": {
+        "name": "arrows",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 178,
+            "endLine": 178
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 254,
+            "endLine": 254
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "[]"
+        }
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.annotations"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ARROWS",
+      "compatibilityNotes": "Arrows become ID-bearing controlled annotations, with at most one transient draft.",
+      "rationale": "Combining external arrows with a persistent internal list creates dual ownership and cannot safely reconcile concurrent store updates.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#option-arrows"
+    },
+    {
+      "id": "option.arrow-options",
+      "kind": "option",
+      "facets": [],
+      "upstream": {
+        "name": "arrowOptions",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 179,
+            "endLine": 179
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 255,
+            "endLine": 255
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "defaultArrowOptions"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.annotationStyle"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ARROW-OPTIONS",
+      "compatibilityNotes": "All ten geometry/style controls map to native SVG annotation options; the object remains whole-value replacement."
+    },
+    {
+      "id": "option.clear-arrows-on-click",
+      "kind": "option",
+      "facets": [],
+      "upstream": {
+        "name": "clearArrowsOnClick",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 180,
+            "endLine": 180
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 256,
+            "endLine": 256
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "true"
+        }
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": [
+          "ChessboardProps.annotationPolicies.clearOnBoardPress",
+          "ChessboardProps.onAnnotationOperation"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-CLEAR-ARROWS-ON-CLICK",
+      "compatibilityNotes": "A policy emits a revisioned clear operation naming only observed annotation IDs.",
+      "rationale": "The board cannot clear consumer-owned annotations itself; emitting a scoped operation avoids overwriting annotations added concurrently.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#option-clear-arrows-on-click"
+    },
+    {
+      "id": "option.clear-arrows-on-position-change",
+      "kind": "option",
+      "facets": [],
+      "upstream": {
+        "name": "clearArrowsOnPositionChange",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 181,
+            "endLine": 181
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 257,
+            "endLine": 257
+          }
+        ],
+        "default": {
+          "kind": "expression",
+          "expression": "true"
+        }
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": [
+          "ChessboardProps.annotationPolicies.clearOnPositionChange",
+          "ChessboardProps.onAnnotationOperation"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-CLEAR-ARROWS-ON-POSITION-CHANGE",
+      "compatibilityNotes": "The policy is independent of click clearing and emits a reasoned controlled operation.",
+      "rationale": "Upstream accidentally gates position-change clearing on clearArrowsOnClick and mutates internal state; native policy must be independent and store-driven.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#option-clear-arrows-on-position-change"
+    },
+    {
+      "id": "option.can-drag-piece",
+      "kind": "option",
+      "facets": ["callback"],
+      "upstream": {
+        "name": "canDragPiece",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 184,
+            "endLine": 184
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 260,
+            "endLine": 260
+          }
+        ],
+        "default": {
+          "kind": "undefined"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.canDragPiece"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-CAN-DRAG-PIECE",
+      "compatibilityNotes": "Retained as a synchronous permission callback with typed board/spare source context."
+    },
+    {
+      "id": "option.on-arrows-change",
+      "kind": "option",
+      "facets": ["callback"],
+      "upstream": {
+        "name": "onArrowsChange",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 185,
+            "endLine": 185
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 261,
+            "endLine": 261
+          }
+        ],
+        "default": {
+          "kind": "undefined"
+        }
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "compat",
+        "symbols": [
+          "ReactChessboardOptions.onArrowsChange",
+          "ChessboardProps.onAnnotationOperation"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ON-ARROWS-CHANGE",
+      "compatibilityNotes": "The compatibility adapter reduces one operation against latest controlled arrows; the primary API emits the operation.",
+      "rationale": "Emitting whole internal-arrow snapshots on effects can overwrite concurrent controlled updates and fires even for the initial empty state.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#option-on-arrows-change"
+    },
+    {
+      "id": "option.on-mouse-out-square",
+      "kind": "option",
+      "facets": ["callback"],
+      "upstream": {
+        "name": "onMouseOutSquare",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 186,
+            "endLine": 186
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 262,
+            "endLine": 262
+          }
+        ],
+        "default": {
+          "kind": "undefined"
+        }
+      },
+      "disposition": "drop",
+      "native": {
+        "surface": "none",
+        "symbols": []
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ON-MOUSE-OUT-SQUARE",
+      "compatibilityNotes": "Pointer hover compatibility is deferred to post-1.0 React Native Web work.",
+      "rationale": "Touch-first Android and iOS have no mouse-out event, and browser hover ordering is not a portable native contract.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#option-on-mouse-out-square"
+    },
+    {
+      "id": "option.on-mouse-over-square",
+      "kind": "option",
+      "facets": ["callback"],
+      "upstream": {
+        "name": "onMouseOverSquare",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 187,
+            "endLine": 187
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 263,
+            "endLine": 263
+          }
+        ],
+        "default": {
+          "kind": "undefined"
+        }
+      },
+      "disposition": "drop",
+      "native": {
+        "surface": "none",
+        "symbols": []
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ON-MOUSE-OVER-SQUARE",
+      "compatibilityNotes": "Pointer hover compatibility is deferred to post-1.0 React Native Web work.",
+      "rationale": "Touch-first Android and iOS have no mouse-over event, and browser hover ordering is not a portable native contract.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#option-on-mouse-over-square"
+    },
+    {
+      "id": "option.on-piece-click",
+      "kind": "option",
+      "facets": ["callback"],
+      "upstream": {
+        "name": "onPieceClick",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 188,
+            "endLine": 188
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 264,
+            "endLine": 264
+          }
+        ],
+        "default": {
+          "kind": "undefined"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "compat",
+        "symbols": [
+          "ReactChessboardOptions.onPieceClick",
+          "ChessboardProps.onPiecePress"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ON-PIECE-CLICK",
+      "compatibilityNotes": "Mapped onto one authoritative press pipeline; it never bubbles into a duplicate semantic callback."
+    },
+    {
+      "id": "option.on-piece-drag",
+      "kind": "option",
+      "facets": ["callback"],
+      "upstream": {
+        "name": "onPieceDrag",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 189,
+            "endLine": 189
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 265,
+            "endLine": 265
+          }
+        ],
+        "default": {
+          "kind": "undefined"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "compat",
+        "symbols": [
+          "ReactChessboardOptions.onPieceDrag",
+          "ChessboardProps.onPieceDragStart"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ON-PIECE-DRAG",
+      "compatibilityNotes": "Mapped to native drag start with current controlled revision context."
+    },
+    {
+      "id": "option.on-piece-drop",
+      "kind": "option",
+      "facets": ["callback"],
+      "upstream": {
+        "name": "onPieceDrop",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 190,
+            "endLine": 194
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 266,
+            "endLine": 266
+          }
+        ],
+        "default": {
+          "kind": "undefined"
+        }
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": [
+          "ChessboardProps.onMoveRequest",
+          "ReactChessboardOptions.onPieceDrop"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ON-PIECE-DROP",
+      "compatibilityNotes": "The primary callback is async/cancellable; compatibility maps Boolean true/false exactly once.",
+      "rationale": "A synchronous Boolean result cannot correlate acceptance with a later controlled commit, cancel stale promises, or handle timeouts deterministically.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#option-on-piece-drop"
+    },
+    {
+      "id": "option.on-square-click",
+      "kind": "option",
+      "facets": ["callback"],
+      "upstream": {
+        "name": "onSquareClick",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 195,
+            "endLine": 195
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 267,
+            "endLine": 267
+          }
+        ],
+        "default": {
+          "kind": "undefined"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "compat",
+        "symbols": [
+          "ReactChessboardOptions.onSquareClick",
+          "ChessboardProps.onSquareActivate"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ON-SQUARE-CLICK",
+      "compatibilityNotes": "Mapped to an orientation-aware touch/keyboard/accessibility activation intent."
+    },
+    {
+      "id": "option.on-square-mouse-down",
+      "kind": "option",
+      "facets": ["callback"],
+      "upstream": {
+        "name": "onSquareMouseDown",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 196,
+            "endLine": 199
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 268,
+            "endLine": 268
+          }
+        ],
+        "default": {
+          "kind": "undefined"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "compat",
+        "symbols": [
+          "ReactChessboardOptions.onSquareMouseDown",
+          "ChessboardProps.onSquarePressIn"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ON-SQUARE-MOUSE-DOWN",
+      "compatibilityNotes": "Mapped where supported to portable press-in data without React.MouseEvent."
+    },
+    {
+      "id": "option.on-square-mouse-up",
+      "kind": "option",
+      "facets": ["callback"],
+      "upstream": {
+        "name": "onSquareMouseUp",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 200,
+            "endLine": 203
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 269,
+            "endLine": 269
+          }
+        ],
+        "default": {
+          "kind": "undefined"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "compat",
+        "symbols": [
+          "ReactChessboardOptions.onSquareMouseUp",
+          "ChessboardProps.onSquarePressOut"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ON-SQUARE-MOUSE-UP",
+      "compatibilityNotes": "Mapped where supported to portable press-out data without React.MouseEvent."
+    },
+    {
+      "id": "option.on-square-right-click",
+      "kind": "option",
+      "facets": ["callback"],
+      "upstream": {
+        "name": "onSquareRightClick",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 204,
+            "endLine": 204
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 270,
+            "endLine": 270
+          }
+        ],
+        "default": {
+          "kind": "undefined"
+        }
+      },
+      "disposition": "drop",
+      "native": {
+        "surface": "none",
+        "symbols": []
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-ON-SQUARE-RIGHT-CLICK",
+      "compatibilityNotes": "Right-click compatibility is post-1.0; native annotation uses long-press, two-finger, or explicit mode.",
+      "rationale": "Secondary-button semantics and browser event ordering do not exist consistently on the first-class Android and iOS targets.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#option-on-square-right-click"
+    },
+    {
+      "id": "option.square-renderer",
+      "kind": "option",
+      "facets": ["renderer"],
+      "upstream": {
+        "name": "squareRenderer",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 205,
+            "endLine": 205
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 271,
+            "endLine": 271
+          }
+        ],
+        "default": {
+          "kind": "undefined"
+        }
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.renderSquare"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-OPTION-SQUARE-RENDERER",
+      "compatibilityNotes": "The visual-only native renderer receives piece, square, size, styles, and interaction state but cannot own gestures or accessibility."
+    },
+    {
+      "id": "behavior.b01-standalone-and-provider-nesting",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Standalone and provider nesting",
+        "references": [
+          {
+            "path": "src/Chessboard.tsx",
+            "startLine": 12,
+            "endLine": 23
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["Chessboard", "ChessboardProvider"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B01",
+      "compatibilityNotes": "A standalone board creates a private native provider; an existing provider is reused."
+    },
+    {
+      "id": "behavior.b02-provider-context-ownership",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Provider context ownership",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 57,
+            "endLine": 134
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 655,
+            "endLine": 729
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProvider"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B02",
+      "compatibilityNotes": "The native provider owns only gesture coordination, layout registration, and a shared overlay.",
+      "rationale": "The upstream context exposes canonical-looking position and arrow state plus browser implementation details, which would recreate dual ownership.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b02-provider-context-ownership"
+    },
+    {
+      "id": "behavior.b03-spare-piece-composition",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Spare-piece composition",
+        "references": [
+          {
+            "path": "src/SparePiece.tsx",
+            "startLine": 4,
+            "endLine": 14
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["SparePiece"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B03",
+      "compatibilityNotes": "Spare pieces require a provider and identify spareId, targetBoardId, and piece."
+    },
+    {
+      "id": "behavior.b04-board-identity-and-dom-ids",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Board identity and DOM IDs",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 315,
+            "endLine": 316
+          },
+          {
+            "path": "src/Board.tsx",
+            "startLine": 26,
+            "endLine": 29
+          },
+          {
+            "path": "src/Square.tsx",
+            "startLine": 97,
+            "endLine": 109
+          },
+          {
+            "path": "src/Piece.tsx",
+            "startLine": 84,
+            "endLine": 86
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.boardId"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B04",
+      "compatibilityNotes": "Required stable boardId drives a provider registry; no DOM IDs are generated."
+    },
+    {
+      "id": "behavior.b05-dimensions-orientation-and-grid",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Dimensions, orientation, and grid",
+        "references": [
+          {
+            "path": "src/utils.ts",
+            "startLine": 7,
+            "endLine": 67
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 456,
+            "endLine": 460
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "internal",
+        "symbols": ["CoordinateCodec", "BoardGeometry"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B05",
+      "compatibilityNotes": "Validated dimensions use canonical square IDs; orientation changes visual order only."
+    },
+    {
+      "id": "behavior.b06-fen-and-object-position-inputs",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "FEN and object position inputs",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 216,
+            "endLine": 218
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 278,
+            "endLine": 283
+          },
+          {
+            "path": "src/utils.ts",
+            "startLine": 69,
+            "endLine": 103
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": ["PositionInput", "parseFenPosition"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B06",
+      "compatibilityNotes": "FEN is strict and 8x8-only; variants use PositionObject and non-placement fields are intentionally discarded.",
+      "rationale": "The upstream parser accepts malformed and dimension-mismatched input, so retaining it would violate atomic validation and predictable variant behavior.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b06-fen-and-object-position-inputs"
+    },
+    {
+      "id": "behavior.b07-shadow-current-position-source",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Shadow currentPosition source",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 278,
+            "endLine": 288
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.position"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B07",
+      "compatibilityNotes": "Rendering always uses the latest normalized controlled prop and never a durable mirror.",
+      "rationale": "A mutable shadow position can diverge from the consumer store during gestures and animations, creating the second source of truth this port exists to remove.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b07-shadow-current-position-source"
+    },
+    {
+      "id": "behavior.b08-dimension-and-orientation-reconciliation",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Dimension and orientation reconciliation",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 442,
+            "endLine": 449
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "internal",
+        "symbols": ["InteractionEpoch", "TransitionEpoch"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B08",
+      "compatibilityNotes": "Changes cancel interaction and transition epochs before reconciling the latest controlled input.",
+      "rationale": "Directly replacing a local position without cancelling asynchronous work allows stale gestures and timers to overwrite newer geometry.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b08-dimension-and-orientation-reconciliation"
+    },
+    {
+      "id": "behavior.b09-animation-enable-and-duration",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Animation enable and duration",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 330,
+            "endLine": 334
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 419,
+            "endLine": 439
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": [
+          "ChessboardProps.transitionDurationMs",
+          "ChessboardProps.reduceMotion"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B09",
+      "compatibilityNotes": "Transitions are deterministic presentation and honor the native reduced-motion policy."
+    },
+    {
+      "id": "behavior.b10-external-diff-and-one-deep-timeout-queue",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "External diff and one-deep timeout queue",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 336,
+            "endLine": 353
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 419,
+            "endLine": 439
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "internal",
+        "symbols": ["TransitionPlanner", "TransitionEpoch"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B10",
+      "compatibilityNotes": "Revisioned latest-wins transitions replace the one-deep timeout queue.",
+      "rationale": "The upstream queue can commit stale snapshots after rapid updates because timeouts and effect dependencies do not correlate every update to an epoch.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b10-external-diff-and-one-deep-timeout-queue"
+    },
+    {
+      "id": "behavior.b11-accepted-manual-drop-presentation",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Accepted manual drop presentation",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 383,
+            "endLine": 389
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 556,
+            "endLine": 600
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "internal",
+        "symbols": ["MoveIntentLifecycle"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B11",
+      "compatibilityNotes": "Pending intent presentation never changes semantics; only a new controlled position commits.",
+      "rationale": "Suppressing animation through internal manual-drop flags treats a gesture result as accepted state before the consumer has committed it.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b11-accepted-manual-drop-presentation"
+    },
+    {
+      "id": "behavior.b12-castling-fake-intermediate-position",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Castling fake intermediate position",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 355,
+            "endLine": 381
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": ["BoardTransition.rookMove"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B12",
+      "compatibilityNotes": "An explicit rookMove hint animates castling without fabricating a logical position.",
+      "rationale": "A fake intermediate position temporarily renders state the consumer never supplied and can become stale when another update interrupts the timeout.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b12-castling-fake-intermediate-position"
+    },
+    {
+      "id": "behavior.b13-promotion-and-reversal-fallback",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Promotion and reversal fallback",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 391,
+            "endLine": 417
+          },
+          {
+            "path": "src/utils.ts",
+            "startLine": 276,
+            "endLine": 389
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "internal",
+        "symbols": ["inferPromotionTransition"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B13",
+      "compatibilityNotes": "Explicit hints and piece IDs take precedence; only a safe unambiguous promotion fallback animates."
+    },
+    {
+      "id": "behavior.b14-ambiguous-diff-first-candidate-fallback",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Ambiguous diff first-candidate fallback",
+        "references": [
+          {
+            "path": "src/utils.ts",
+            "startLine": 118,
+            "endLine": 274
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "internal",
+        "symbols": ["inferPositionTransition"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B14",
+      "compatibilityNotes": "A tie is explicitly ambiguous and fades/snaps; unique upstream piece heuristics remain fallback hints.",
+      "rationale": "Object iteration order is not evidence of piece identity, so selecting the first identical candidate can animate a legal-looking but incorrect move.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b14-ambiguous-diff-first-candidate-fallback"
+    },
+    {
+      "id": "behavior.b15-dom-single-character-animation-geometry",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "DOM single-character animation geometry",
+        "references": [
+          {
+            "path": "src/Piece.tsx",
+            "startLine": 49,
+            "endLine": 79
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "internal",
+        "symbols": ["CoordinateCodec", "PieceTransition"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B15",
+      "compatibilityNotes": "Pure geometry and Reanimated support files a-z and ranks 1-99 without DOM transforms."
+    },
+    {
+      "id": "behavior.b16-stale-effects-and-timeout-cleanup",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Stale effects and timeout cleanup",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 318,
+            "endLine": 440
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "internal",
+        "symbols": ["InteractionEpoch", "TransitionEpoch"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B16",
+      "compatibilityNotes": "Every update, unmount, orientation, dimension, and permission change invalidates timers and epochs.",
+      "rationale": "The pinned effect omits state and option dependencies and only clears the latest timeout on cleanup, allowing stale closures to settle obsolete state.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b16-stale-effects-and-timeout-cleanup"
+    },
+    {
+      "id": "behavior.b17-dragging-gate-and-piece-permission",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Dragging gate and piece permission",
+        "references": [
+          {
+            "path": "src/Draggable.tsx",
+            "startLine": 19,
+            "endLine": 35
+          },
+          {
+            "path": "src/Piece.tsx",
+            "startLine": 40,
+            "endLine": 47
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": [
+          "ChessboardProps.onMoveRequest",
+          "ChessboardProps.canDragPiece"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B17",
+      "compatibilityNotes": "Direct permissions remain; without onMoveRequest the primary board is move-read-only."
+    },
+    {
+      "id": "behavior.b18-browser-sensors-and-activation-distance",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Browser sensors and activation distance",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 630,
+            "endLine": 642
+          },
+          {
+            "path": "src/RightClickCancelSensor.tsx",
+            "startLine": 1,
+            "endLine": 32
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.gesture", "ChessboardAccessibility"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B18",
+      "compatibilityNotes": "RNGH handles touch/tap/drag; keyboard/accessibility input and second-finger cancel are first-class."
+    },
+    {
+      "id": "behavior.b19-automatic-scroll-during-drag",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Automatic scroll during drag",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 717,
+            "endLine": 724
+          }
+        ]
+      },
+      "disposition": "drop",
+      "native": {
+        "surface": "none",
+        "symbols": []
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B19",
+      "compatibilityNotes": "1.0 preserves ScrollView arbitration but never programmatically scrolls an ancestor.",
+      "rationale": "React Native cannot generically discover and control arbitrary ancestor scrolling while retaining a stable measured destination.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b19-automatic-scroll-during-drag"
+    },
+    {
+      "id": "behavior.b20-pointer-and-rectangle-collision-detection",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Pointer and rectangle collision detection",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 644,
+            "endLine": 653
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "internal",
+        "symbols": ["BoardHitTest", "BoardLayoutRegistry"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B20",
+      "compatibilityNotes": "One board-level coordinate hit test and epoch-correlated remeasurement replace DOM collision detection."
+    },
+    {
+      "id": "behavior.b21-drag-start-callback-and-overlay-state",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Drag-start callback and overlay state",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 602,
+            "endLine": 628
+          },
+          {
+            "path": "src/Board.tsx",
+            "startLine": 57,
+            "endLine": 73
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.onPieceDragStart", "ChessboardProvider"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B21",
+      "compatibilityNotes": "A single interaction epoch drives the shared native drag overlay."
+    },
+    {
+      "id": "behavior.b22-on-board-boolean-drop-decision",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "On-board Boolean drop decision",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 581,
+            "endLine": 597
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": [
+          "ChessboardProps.onMoveRequest",
+          "ReactChessboardOptions.onPieceDrop"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B22",
+      "compatibilityNotes": "The async intent lifecycle owns decision, cancellation, timeout, and controlled commit; compatibility maps Boolean results once.",
+      "rationale": "The upstream callback cannot represent pending validation or correlate a true result with the later authoritative position update.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b22-on-board-boolean-drop-decision"
+    },
+    {
+      "id": "behavior.b23-off-board-drop-ignores-boolean-result",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Off-board drop ignores Boolean result",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 562,
+            "endLine": 579
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": ["MoveIntent.targetSquare", "ChessboardProps.onMoveRequest"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B23",
+      "compatibilityNotes": "targetSquare null follows the same decision and commit lifecycle as an on-board target.",
+      "rationale": "Ignoring the off-board Boolean return creates different acceptance semantics for the same callback and can falsely present a removal as accepted.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b23-off-board-drop-ignores-boolean-result"
+    },
+    {
+      "id": "behavior.b24-drag-and-right-click-cancellation",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Drag and right-click cancellation",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 552,
+            "endLine": 554
+          },
+          {
+            "path": "src/RightClickCancelSensor.tsx",
+            "startLine": 9,
+            "endLine": 30
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardActions.cancelMove"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B24",
+      "compatibilityNotes": "Second-finger and accessibility cancel abort the active interaction epoch."
+    },
+    {
+      "id": "behavior.b25-drag-off-board-visual-clamp",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Drag-off-board visual clamp",
+        "references": [
+          {
+            "path": "src/Board.tsx",
+            "startLine": 57,
+            "endLine": 64
+          },
+          {
+            "path": "src/modifiers.ts",
+            "startLine": 3,
+            "endLine": 65
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "internal",
+        "symbols": ["DragOverlayBounds", "BoardLayoutRegistry"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B25",
+      "compatibilityNotes": "Native overlay policy and final remeasurement replace DOM transform clamping."
+    },
+    {
+      "id": "behavior.b26-clone-and-ghost-drag-presentation",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Clone and ghost drag presentation",
+        "references": [
+          {
+            "path": "src/Piece.tsx",
+            "startLine": 83,
+            "endLine": 105
+          },
+          {
+            "path": "src/defaults.ts",
+            "startLine": 58,
+            "endLine": 64
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "internal",
+        "symbols": ["DragOverlay", "PendingMovePresentation"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B26",
+      "compatibilityNotes": "Native overlay, source ghost, and pending styles preserve the useful visual states."
+    },
+    {
+      "id": "behavior.b27-piece-and-square-click-bubbling",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Piece and square click bubbling",
+        "references": [
+          {
+            "path": "src/Piece.tsx",
+            "startLine": 100,
+            "endLine": 102
+          },
+          {
+            "path": "src/Square.tsx",
+            "startLine": 110,
+            "endLine": 117
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": [
+          "ChessboardProps.onPiecePress",
+          "ChessboardProps.onSquareActivate"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B27",
+      "compatibilityNotes": "One authoritative pipeline prevents one press from emitting duplicate semantic intents.",
+      "rationale": "Browser bubbling makes piece clicks also reach the square handler and contradicts documented conditions; native intent ordering must be explicit.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b27-piece-and-square-click-bubbling"
+    },
+    {
+      "id": "behavior.b28-mobile-same-square-tap-hit-test",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Mobile same-square tap hit test",
+        "references": [
+          {
+            "path": "src/Square.tsx",
+            "startLine": 118,
+            "endLine": 136
+          },
+          {
+            "path": "src/utils.ts",
+            "startLine": 422,
+            "endLine": 449
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "internal",
+        "symbols": ["BoardTapGesture", "BoardHitTest"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B28",
+      "compatibilityNotes": "A board-level tap recognizer uses measured coordinates instead of document lookup."
+    },
+    {
+      "id": "behavior.b29-hover-in-and-out-transitions",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Hover in and out transitions",
+        "references": [
+          {
+            "path": "src/Square.tsx",
+            "startLine": 66,
+            "endLine": 84
+          },
+          {
+            "path": "src/Square.tsx",
+            "startLine": 189,
+            "endLine": 222
+          }
+        ]
+      },
+      "disposition": "drop",
+      "native": {
+        "surface": "none",
+        "symbols": []
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B29",
+      "compatibilityNotes": "Hover is post-1.0 RN Web work; native pressed/drag-over state is renderer data.",
+      "rationale": "Android and iOS touch input has no portable hover lifecycle, and exact synthesized browser event ordering is outside the native support tier.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b29-hover-in-and-out-transitions"
+    },
+    {
+      "id": "behavior.b30-mouse-down-and-up-callbacks",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Mouse down and up callbacks",
+        "references": [
+          {
+            "path": "src/Square.tsx",
+            "startLine": 148,
+            "endLine": 188
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "compat",
+        "symbols": [
+          "ChessboardProps.onSquarePressIn",
+          "ChessboardProps.onSquarePressOut"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B30",
+      "compatibilityNotes": "Portable press-in/out callbacks carry native data rather than React.MouseEvent."
+    },
+    {
+      "id": "behavior.b31-context-menu-right-click-ordering",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Context-menu right-click ordering",
+        "references": [
+          {
+            "path": "src/Square.tsx",
+            "startLine": 137,
+            "endLine": 180
+          }
+        ]
+      },
+      "disposition": "drop",
+      "native": {
+        "surface": "none",
+        "symbols": []
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B31",
+      "compatibilityNotes": "Long-press and native annotation gestures replace right-click for 1.0.",
+      "rationale": "Secondary-button context menus, preventDefault, and DOM bubbling order are browser-specific and deferred to the post-1.0 web tier.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b31-context-menu-right-click-ordering"
+    },
+    {
+      "id": "behavior.b32-spare-callback-payload-semantics",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Spare callback payload semantics",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 602,
+            "endLine": 624
+          },
+          {
+            "path": "src/SparePiece.tsx",
+            "startLine": 8,
+            "endLine": 12
+          },
+          {
+            "path": "src/Draggable.tsx",
+            "startLine": 19,
+            "endLine": 35
+          },
+          {
+            "path": "src/Piece.tsx",
+            "startLine": 40,
+            "endLine": 47
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 562,
+            "endLine": 579
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": ["MoveSource", "SparePiece"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B32",
+      "compatibilityNotes": "A typed spare source carries spareId and resolves the target board revision at emission.",
+      "rationale": "Using piece type as a pseudo-square is ambiguous, conflicts with the declared nullable square payload, and cannot route multiple boards.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b32-spare-callback-payload-semantics"
+    },
+    {
+      "id": "behavior.b33-callback-lookup-from-shadow-position",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Callback lookup from shadow position",
+        "references": [
+          {
+            "path": "src/Square.tsx",
+            "startLine": 69,
+            "endLine": 84
+          },
+          {
+            "path": "src/Square.tsx",
+            "startLine": 110,
+            "endLine": 220
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 602,
+            "endLine": 628
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": ["MoveIntent", "SquareActivationIntent"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B33",
+      "compatibilityNotes": "Callback payloads come from the current normalized controlled snapshot and include its revision.",
+      "rationale": "Reading callback pieces from a mutable mirror can report data from a stale animation snapshot instead of the consumer's authoritative position.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b33-callback-lookup-from-shadow-position"
+    },
+    {
+      "id": "behavior.b34-external-internal-and-draft-arrow-composition",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "External internal and draft arrow composition",
+        "references": [
+          {
+            "path": "src/Arrows.tsx",
+            "startLine": 22,
+            "endLine": 35
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 298,
+            "endLine": 306
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.annotations", "AnnotationDraft"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B34",
+      "compatibilityNotes": "Rendered annotations equal the controlled collection plus at most one ephemeral draft.",
+      "rationale": "A second persistent internal arrow list makes rendering and callbacks diverge from the controlled collection and cannot safely merge concurrent changes.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b34-external-internal-and-draft-arrow-composition"
+    },
+    {
+      "id": "behavior.b35-arrow-drawing-gate-and-lifecycle",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Arrow drawing gate and lifecycle",
+        "references": [
+          {
+            "path": "src/Square.tsx",
+            "startLine": 148,
+            "endLine": 204
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 462,
+            "endLine": 523
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": [
+          "ChessboardProps.annotationTool",
+          "ChessboardProps.onAnnotationOperation"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B35",
+      "compatibilityNotes": "Long-press, two-finger, and explicit-mode gestures emit one controlled annotation operation."
+    },
+    {
+      "id": "behavior.b36-modifier-color-precedence",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Modifier color precedence",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 491,
+            "endLine": 495
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 538,
+            "endLine": 542
+          }
+        ]
+      },
+      "disposition": "drop",
+      "native": {
+        "surface": "none",
+        "symbols": []
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B36",
+      "compatibilityNotes": "1.0 uses an explicit portable palette; Shift-over-Control behavior is compat/web work.",
+      "rationale": "Hardware keyboard modifier and secondary-button combinations are not consistently available on first-class Android and iOS touch targets.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b36-modifier-color-precedence"
+    },
+    {
+      "id": "behavior.b37-internal-arrow-toggle-and-external-duplicate-refusal",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Internal arrow toggle and external duplicate refusal",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 471,
+            "endLine": 510
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": ["AnnotationOperation"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B37",
+      "compatibilityNotes": "ID-based add/toggle/remove operations include base revision and deterministic geometry matching.",
+      "rationale": "Index-based internal toggling cannot represent duplicate controlled arrows or safely modify a store collection that changed during the gesture.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b37-internal-arrow-toggle-and-external-duplicate-refusal"
+    },
+    {
+      "id": "behavior.b38-on-arrows-change-effect-lifecycle",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "onArrowsChange effect lifecycle",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 451,
+            "endLine": 454
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": [
+          "ChessboardProps.onAnnotationOperation",
+          "ReactChessboardOptions.onArrowsChange"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B38",
+      "compatibilityNotes": "Primary code emits an operation; compatibility reduces it against latest arrows and requires controlled feedback.",
+      "rationale": "Effect-driven snapshots fire for the initial empty list and can overwrite controlled annotations that arrived after a gesture began.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b38-on-arrows-change-effect-lifecycle"
+    },
+    {
+      "id": "behavior.b39-click-clearing-arrows",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Click clearing arrows",
+        "references": [
+          {
+            "path": "src/Square.tsx",
+            "startLine": 148,
+            "endLine": 151
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 525,
+            "endLine": 531
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": ["AnnotationOperation"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B39",
+      "compatibilityNotes": "A clear operation names IDs observed at its base revision and includes reason board-press.",
+      "rationale": "Clearing internal state cannot clear controlled arrows and offers no safe concurrency semantics for a store-owned annotation collection.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b39-click-clearing-arrows"
+    },
+    {
+      "id": "behavior.b40-position-clear-coupling-bug",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Position-clear coupling bug",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 325,
+            "endLine": 328
+          },
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 525,
+            "endLine": 531
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.annotationPolicies.clearOnPositionChange"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B40",
+      "compatibilityNotes": "Position clearing is an independent policy operation and is never gated by click-clearing configuration.",
+      "rationale": "The upstream clearArrows helper checks clearArrowsOnClick, so clearArrowsOnPositionChange silently fails when click clearing is disabled.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b40-position-clear-coupling-bug"
+    },
+    {
+      "id": "behavior.b41-arrow-coordinates-orientation-and-rectangular-boards",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Arrow coordinates orientation and rectangular boards",
+        "references": [
+          {
+            "path": "src/Arrows.tsx",
+            "startLine": 19,
+            "endLine": 20
+          },
+          {
+            "path": "src/Arrows.tsx",
+            "startLine": 50,
+            "endLine": 64
+          },
+          {
+            "path": "src/utils.ts",
+            "startLine": 394,
+            "endLine": 420
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "internal",
+        "symbols": ["computeAnnotationGeometry"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B41",
+      "compatibilityNotes": "Pure 2048-wide geometry scales height by rows/columns and handles both orientations."
+    },
+    {
+      "id": "behavior.b42-straight-and-knight-arrow-path-selection",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Straight and knight arrow path selection",
+        "references": [
+          {
+            "path": "src/Arrows.tsx",
+            "startLine": 87,
+            "endLine": 148
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "internal",
+        "symbols": ["computeArrowPath"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B42",
+      "compatibilityNotes": "Both shapes remain, but knight detection uses integer file/rank deltas rather than exact floating hypot."
+    },
+    {
+      "id": "behavior.b43-target-shortening-and-active-draft-exemption",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Target shortening and active draft exemption",
+        "references": [
+          {
+            "path": "src/Arrows.tsx",
+            "startLine": 66,
+            "endLine": 85
+          },
+          {
+            "path": "src/Arrows.tsx",
+            "startLine": 121,
+            "endLine": 145
+          }
+        ]
+      },
+      "disposition": "keep",
+      "native": {
+        "surface": "internal",
+        "symbols": ["computeArrowPath"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B43",
+      "compatibilityNotes": "Endpoint and same-target shortening remain, and the active draft stays exempt."
+    },
+    {
+      "id": "behavior.b44-arrow-width-opacity-offset-layers-and-marker-ids",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Arrow width opacity offset layers and marker IDs",
+        "references": [
+          {
+            "path": "src/Arrows.tsx",
+            "startLine": 38,
+            "endLine": 48
+          },
+          {
+            "path": "src/Arrows.tsx",
+            "startLine": 95,
+            "endLine": 97
+          },
+          {
+            "path": "src/Arrows.tsx",
+            "startLine": 150,
+            "endLine": 183
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "internal",
+        "symbols": ["computeArrowPath", "AnnotationLayer"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B44",
+      "compatibilityNotes": "RN SVG draws deterministic paths/heads in below/above layers without global marker IDs."
+    },
+    {
+      "id": "behavior.b45-board-square-and-drop-style-precedence",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Board square and drop style precedence",
+        "references": [
+          {
+            "path": "src/Board.tsx",
+            "startLine": 26,
+            "endLine": 29
+          },
+          {
+            "path": "src/Square.tsx",
+            "startLine": 96,
+            "endLine": 106
+          },
+          {
+            "path": "src/defaults.ts",
+            "startLine": 1,
+            "endLine": 64
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.theme", "ChessboardProps.styles"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B45",
+      "compatibilityNotes": "A documented React Native StyleProp order replaces CSS object spread precedence."
+    },
+    {
+      "id": "behavior.b46-notation-placement-and-style-precedence",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Notation placement and style precedence",
+        "references": [
+          {
+            "path": "src/Square.tsx",
+            "startLine": 224,
+            "endLine": 266
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "internal",
+        "symbols": ["NotationLayer"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B46",
+      "compatibilityNotes": "Native Text renders oriented file/rank edges with explicit theme and override precedence."
+    },
+    {
+      "id": "behavior.b47-square-styles-and-square-renderer-fallback",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "squareStyles and squareRenderer fallback",
+        "references": [
+          {
+            "path": "src/Square.tsx",
+            "startLine": 268,
+            "endLine": 282
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": [
+          "ChessboardProps.renderSquare",
+          "ChessboardProps.squareStyles"
+        ]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B47",
+      "compatibilityNotes": "The visual-only renderer receives resolved style, size, piece, and interaction state under explicit layer precedence.",
+      "rationale": "Upstream custom square rendering bypasses squareStyles and can own DOM children/handlers, making styling and interaction behavior dependent on fallback selection.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b47-square-styles-and-square-renderer-fallback"
+    },
+    {
+      "id": "behavior.b48-piece-renderers-and-default-artwork",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Piece renderers and default artwork",
+        "references": [
+          {
+            "path": "src/Piece.tsx",
+            "startLine": 81,
+            "endLine": 105
+          },
+          {
+            "path": "src/pieces.tsx",
+            "startLine": 1,
+            "endLine": 573
+          }
+        ]
+      },
+      "disposition": "adapt",
+      "native": {
+        "surface": "root",
+        "symbols": ["ChessboardProps.pieceRenderers", "defaultPieceRenderers"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B48",
+      "compatibilityNotes": "Custom renderers receive square, native size/state, and the published default set uses original permissive artwork; Cburnett stays fixture-only."
+    },
+    {
+      "id": "behavior.b49-rules-promotion-decisions-and-premove-absence",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "Rules promotion decisions and premove absence",
+        "references": [
+          {
+            "path": "src/ChessboardProvider.tsx",
+            "startLine": 556,
+            "endLine": 600
+          }
+        ]
+      },
+      "disposition": "keep",
+      "native": {
+        "surface": "root",
+        "symbols": ["Chessboard"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B49",
+      "compatibilityNotes": "The board remains rules-free: consumers own legality, promotion decisions, premoves, selection, history, and game state."
+    },
+    {
+      "id": "behavior.b50-dom-css-dnd-kit-and-accessibility-absence",
+      "kind": "behavior",
+      "facets": [],
+      "upstream": {
+        "name": "DOM CSS dnd-kit and accessibility absence",
+        "references": [
+          {
+            "path": "src/Board.tsx",
+            "startLine": 1,
+            "endLine": 76
+          },
+          {
+            "path": "src/Square.tsx",
+            "startLine": 1,
+            "endLine": 285
+          },
+          {
+            "path": "src/Piece.tsx",
+            "startLine": 1,
+            "endLine": 107
+          },
+          {
+            "path": "src/Arrows.tsx",
+            "startLine": 1,
+            "endLine": 188
+          }
+        ]
+      },
+      "disposition": "redesign",
+      "native": {
+        "surface": "root",
+        "symbols": ["Chessboard", "ChessboardAccessibility"]
+      },
+      "status": "planned",
+      "contractTestId": "PARITY-BEHAVIOR-B50",
+      "compatibilityNotes": "View, RNGH, Reanimated, and RN SVG replace browser primitives; one adjustable board control and reduced motion are first-class.",
+      "rationale": "Copying DOM, CSS, dnd-kit sensors, and absent accessibility semantics would not produce a native component or satisfy TalkBack and VoiceOver contracts.",
+      "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b50-dom-css-dnd-kit-and-accessibility-absence"
+    }
+  ]
+}

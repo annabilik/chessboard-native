@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/annabilik/chessboard-native/fixtures/parity/results.schema.json",
+  "title": "chessboard-native collected parity contract results",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "runner",
+    "commit",
+    "command",
+    "evidence",
+    "results"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 1 },
+    "runner": { "const": "jest" },
+    "commit": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "command": { "type": "string", "minLength": 1 },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "path", "sha256"],
+      "properties": {
+        "format": { "const": "jest-json-v29" },
+        "path": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*\\.json$"
+        },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "name", "source"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^PARITY-(EXPORT|OPTION|BEHAVIOR)-[A-Z0-9-]+$"
+          },
+          "status": { "enum": ["passed", "failed", "skipped"] },
+          "name": { "type": "string", "minLength": 1 },
+          "source": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-][A-Za-z0-9._/-]*\\.(cjs|cts|js|jsx|mjs|mts|ts|tsx)$"
+          }
+        }
+      }
+    }
+  }
+}

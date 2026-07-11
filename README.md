@@ -27,9 +27,9 @@ post-1.0 work.
 ## Repository status
 
 The repository baseline, JavaScript package shell, browserless test foundation,
-bare React Native 0.86 harness, and packed-artifact build gates are in place.
-The controlled public data model, interaction, pieces, and annotations land in
-separate reviewable changes.
+bare React Native 0.86 harness, packed-artifact build gates, and pinned upstream
+parity inventory are in place. The controlled public data model, interaction,
+pieces, and annotations land in separate reviewable changes.
 
 ## Development
 
@@ -43,25 +43,28 @@ pnpm verify
 
 Root commands:
 
-| Command               | Purpose                                      |
-| --------------------- | -------------------------------------------- |
-| `pnpm build`          | Build package ESM and declarations           |
-| `pnpm test`           | Run the package Jest suite                   |
-| `pnpm api:check`      | Compare built declarations with the API lock |
-| `pnpm api:update`     | Update the API lock after review             |
-| `pnpm package:check`  | Inspect one archive with Publint and ATTW    |
-| `pnpm format`         | Format supported repository files            |
-| `pnpm format:check`   | Verify formatting without writing            |
-| `pnpm lint`           | Run code and Markdown linting                |
-| `pnpm typecheck`      | Run strict source and test type checks       |
-| `pnpm check`          | Run static checks and tests                  |
-| `pnpm verify`         | Run the complete pull-request gate locally   |
-| `pnpm changeset`      | Create a package release note                |
-| `pnpm example:start`  | Start the Expo gallery                       |
-| `pnpm example:export` | Export Android and iOS gallery bundles       |
-| `pnpm native:start`   | Start Metro for the bare native harness      |
-| `pnpm native:android` | Run the native Android harness               |
-| `pnpm native:ios`     | Run the native iOS harness                   |
+| Command                | Purpose                                      |
+| ---------------------- | -------------------------------------------- |
+| `pnpm build`           | Build package ESM and declarations           |
+| `pnpm test`            | Run the package Jest suite                   |
+| `pnpm api:check`       | Compare built declarations with the API lock |
+| `pnpm api:update`      | Update the API lock after review             |
+| `pnpm package:check`   | Inspect one archive with Publint and ATTW    |
+| `pnpm parity:check`    | Validate the upstream inventory and ledger   |
+| `pnpm parity:update`   | Regenerate the rendered parity document      |
+| `pnpm parity:complete` | Run the eventual 1.0 parity-closure gate     |
+| `pnpm format`          | Format supported repository files            |
+| `pnpm format:check`    | Verify formatting without writing            |
+| `pnpm lint`            | Run code and Markdown linting                |
+| `pnpm typecheck`       | Run strict source and test type checks       |
+| `pnpm check`           | Run static checks and tests                  |
+| `pnpm verify`          | Run the complete pull-request gate locally   |
+| `pnpm changeset`       | Create a package release note                |
+| `pnpm example:start`   | Start the Expo gallery                       |
+| `pnpm example:export`  | Export Android and iOS gallery bundles       |
+| `pnpm native:start`    | Start Metro for the bare native harness      |
+| `pnpm native:android`  | Run the native Android harness               |
+| `pnpm native:ios`      | Run the native iOS harness                   |
 
 Native release gates are platform-specific:
 
@@ -104,6 +107,36 @@ not replace the packed package gate.
 
 `pnpm api:check` expects a fresh `pnpm build`. Use `pnpm api:update` only when
 an intentional public declaration change has been reviewed.
+
+## Upstream parity
+
+The compatibility target is frozen to `react-chessboard@5.10.0`, commit
+`b74704af988396d3da32a8c1627d95341e1e0061`. Its byte-identical 16-file,
+2,753-line source tree and complete licensing are kept under
+[`fixtures/parity/upstream-b74704a`](./fixtures/parity/upstream-b74704a/PROVENANCE.md)
+for offline, line-addressable review. The fixture is reference-only and the
+package inspection gate rejects any source or Cburnett artwork leaking into the
+npm archive.
+
+The [machine-readable ledger](./fixtures/parity/react-chessboard-5.10.json) is
+the source of truth; its [rendered view](./docs/parity/react-chessboard-5.10.md)
+tracks all 39 root exports, 42 options, and 50 reviewed observable behaviors.
+The checker derives exports, defaults, callback/style facets, and nested default
+members directly from the vendored TypeScript AST. It also verifies fixture
+hashes, unique dispositions and contract IDs, forward-only status transitions,
+source references, and generated documentation.
+
+Rows begin as `planned`. Future implementation PRs move them through
+`in-progress` to `implemented` and supply normalized, executed contract-result
+shards matching
+[`results.schema.json`](./fixtures/parity/results.schema.json). The checker
+never searches source text for a test ID. CI generates each shard from raw Jest
+runner output, binds it to the checked-out commit and evidence hash, and rejects
+tracked or hand-edited normalization. Normal CI permits reserved IDs for
+unfinished work but requires every implemented row to resolve to exactly one
+passing execution when its disposition is `keep` or `adapt`;
+`pnpm parity:complete --results <path>` additionally requires every keep/adapt
+row to be implemented and all 131 contract IDs to be passing.
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a pull request. Report
 security issues according to [SECURITY.md](./SECURITY.md).

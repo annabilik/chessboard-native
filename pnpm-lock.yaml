@@ -20,6 +20,9 @@ importers:
       '@microsoft/api-extractor':
         specifier: 7.58.9
         version: 7.58.9
+      ajv:
+        specifier: 8.18.0
+        version: 8.18.0
       eslint:
         specifier: 10.6.0
         version: 10.6.0
