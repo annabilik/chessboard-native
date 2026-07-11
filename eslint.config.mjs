@@ -30,6 +30,17 @@ export default tseslint.config(
   {
     ...tseslint.configs.disableTypeChecked,
     files: ['**/*.{cjs,js,mjs}'],
+    languageOptions: {
+      globals: {
+        jest: 'readonly',
+        process: 'readonly',
+        require: 'readonly',
+      },
+    },
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+      '@typescript-eslint/no-require-imports': 'off',
+    },
   },
   eslintConfigPrettier,
 );
