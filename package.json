@@ -1,0 +1,32 @@
+{
+  "name": "chessboard-native-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Workspace for the controlled React Native chessboard library",
+  "license": "MIT",
+  "engines": {
+    "node": "24.15.0",
+    "pnpm": "11.11.0"
+  },
+  "packageManager": "pnpm@11.11.0",
+  "scripts": {
+    "changeset": "changeset",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "pnpm lint:code && pnpm lint:markdown",
+    "lint:code": "eslint .",
+    "lint:markdown": "markdownlint-cli2 '**/*.md' '#node_modules'",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@changesets/cli": "2.31.0",
+    "@eslint/js": "10.0.1",
+    "eslint": "10.6.0",
+    "eslint-config-prettier": "10.1.8",
+    "markdownlint-cli2": "0.23.0",
+    "prettier": "3.9.5",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.63.0"
+  }
+}
