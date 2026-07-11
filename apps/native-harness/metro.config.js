@@ -1,22 +1,32 @@
+const fs = require('node:fs');
 const path = require('node:path');
 const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
 
-const workspaceRoot = path.resolve(__dirname, '../..');
+const appRoot = fs.realpathSync(__dirname);
+const packageRoot = fs.realpathSync(
+  path.join(appRoot, 'node_modules', '@vibechess', 'chessboard-native'),
+);
+const packageRelativeToApp = path.relative(appRoot, packageRoot);
+const isWorkspaceLink =
+  packageRelativeToApp === '..' ||
+  packageRelativeToApp.startsWith(`..${path.sep}`) ||
+  path.isAbsolute(packageRelativeToApp);
 
 /**
- * Keep Metro rooted in the native app while allowing it to follow the
- * workspace package symlink and resolve that package's peers from this app.
+ * A packed install lives inside this app and needs only Metro's defaults. A
+ * workspace install points outside the app, so watch that package alone and
+ * resolve its peers from the harness. Never add the whole workspace as a
+ * watch folder: the packed smoke must not see source-repository files.
  *
  * @type {import('@react-native/metro-config').MetroConfig}
  */
-const config = {
-  watchFolders: [workspaceRoot],
-  resolver: {
-    nodeModulesPaths: [
-      path.resolve(__dirname, 'node_modules'),
-      path.resolve(workspaceRoot, 'node_modules'),
-    ],
-  },
-};
+const config = isWorkspaceLink
+  ? {
+      watchFolders: [packageRoot],
+      resolver: {
+        nodeModulesPaths: [path.join(appRoot, 'node_modules')],
+      },
+    }
+  : {};
 
 module.exports = mergeConfig(getDefaultConfig(__dirname), config);

@@ -57,16 +57,16 @@ jobs:
       - name: Check public API declarations
         run: pnpm api:check
 
-      - name: Inspect packed package
-        run: pnpm package:check
-
       - name: Export Expo gallery
         run: pnpm example:export
 
-  native-android:
-    name: Native / Android Release
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
+  package-artifact:
+    name: Package artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
 
     steps:
       - name: Check out repository
@@ -81,6 +81,100 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build package
+        run: pnpm build
+
+      - name: Pack and inspect package once
+        run: node scripts/inspect-package.mjs --output "$RUNNER_TEMP/package/chessboard-native.tgz"
+
+      - name: Upload inspected package
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: chessboard-native-package
+          path: ${{ runner.temp }}/package/chessboard-native.tgz
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+
+  packed-expo:
+    name: Packed / Expo
+    needs:
+      - baseline
+      - package-artifact
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    env:
+      CI: 1
+      EXPO_NO_TELEMETRY: 1
+      NODE_ENV: production
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+
+      - name: Set up Java
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: apps/example/package.json
+
+      - name: Install pinned Android SDK packages
+        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
+
+      - name: Download inspected package
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.package-artifact.outputs.artifact-id }}
+          path: ${{ runner.temp }}/package
+
+      - name: Prepare isolated Expo consumer
+        run: >-
+          node scripts/smoke-packed.mjs
+          --consumer expo
+          --archive "$RUNNER_TEMP/package/chessboard-native.tgz"
+          --destination "$RUNNER_TEMP/packed-expo"
+
+      - name: Export Android and iOS production bundles
+        working-directory: ${{ runner.temp }}/packed-expo
+        run: npm run export:native
+
+      - name: Generate clean Expo Android project
+        working-directory: ${{ runner.temp }}/packed-expo
+        run: npx expo prebuild --platform android --no-install --clean
+
+      - name: Build Expo Android Release
+        working-directory: ${{ runner.temp }}/packed-expo/android
+        run: ./gradlew :app:assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+
+  packed-bare-android:
+    name: Native / Android Release
+    needs:
+      - baseline
+      - package-artifact
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
 
       - name: Set up Java
         uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
@@ -91,19 +185,32 @@ jobs:
           cache-dependency-path: |
             apps/native-harness/android/**/*.gradle*
             apps/native-harness/android/gradle/wrapper/gradle-wrapper.properties
-            pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Install pinned Android SDK packages
         run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
 
-      - name: Build Android Release harness
-        run: pnpm native:android:release
+      - name: Download inspected package
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.package-artifact.outputs.artifact-id }}
+          path: ${{ runner.temp }}/package
 
-  native-ios:
+      - name: Prepare isolated bare consumer
+        run: >-
+          node scripts/smoke-packed.mjs
+          --consumer native
+          --archive "$RUNNER_TEMP/package/chessboard-native.tgz"
+          --destination "$RUNNER_TEMP/packed-native"
+
+      - name: Build Android Release harness
+        working-directory: ${{ runner.temp }}/packed-native/android
+        run: ./gradlew :app:assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+
+  packed-bare-ios:
     name: Native / iOS Release
+    needs:
+      - baseline
+      - package-artifact
     runs-on: macos-26
     timeout-minutes: 60
 
@@ -111,18 +218,23 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
-
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Download inspected package
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.package-artifact.outputs.artifact-id }}
+          path: ${{ runner.temp }}/package
+
+      - name: Prepare isolated bare consumer
+        run: >-
+          node scripts/smoke-packed.mjs
+          --consumer native
+          --archive "$RUNNER_TEMP/package/chessboard-native.tgz"
+          --destination "$RUNNER_TEMP/packed-native"
 
       - name: Set up Ruby and gems
         id: ruby
@@ -130,11 +242,54 @@ jobs:
         with:
           ruby-version: '3.2.11'
           bundler-cache: true
-          working-directory: apps/native-harness
+          working-directory: ${{ runner.temp }}/packed-native
 
       - name: Install CocoaPods dependencies
-        working-directory: apps/native-harness
+        working-directory: ${{ runner.temp }}/packed-native
         run: ${{ steps.ruby.outputs.ruby-prefix }}/bin/bundle exec pod install --project-directory=ios
 
       - name: Build iOS Release harness
-        run: pnpm native:ios:release
+        working-directory: ${{ runner.temp }}/packed-native
+        run: npm run ios:release
+
+  ci-gate:
+    name: CI gate
+    if: ${{ always() }}
+    needs:
+      - baseline
+      - package-artifact
+      - packed-expo
+      - packed-bare-android
+      - packed-bare-ios
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      BASELINE_RESULT: ${{ needs.baseline.result }}
+      PACKAGE_ARTIFACT_RESULT: ${{ needs.package-artifact.result }}
+      PACKED_EXPO_RESULT: ${{ needs.packed-expo.result }}
+      PACKED_BARE_ANDROID_RESULT: ${{ needs.packed-bare-android.result }}
+      PACKED_BARE_IOS_RESULT: ${{ needs.packed-bare-ios.result }}
+
+    steps:
+      - name: Require every CI job to succeed
+        shell: bash
+        run: |
+          failed=0
+
+          for variable in \
+            BASELINE_RESULT \
+            PACKAGE_ARTIFACT_RESULT \
+            PACKED_EXPO_RESULT \
+            PACKED_BARE_ANDROID_RESULT \
+            PACKED_BARE_IOS_RESULT
+          do
+            result="${!variable}"
+
+            if [[ "$result" != "success" ]]; then
+              echo "$variable was $result"
+              failed=1
+            fi
+          done
+
+          exit "$failed"

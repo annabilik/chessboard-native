@@ -8,6 +8,11 @@ The Phase 0 shell imports `@vibechess/chessboard-native` through its public
 workspace export and renders the disabled board frame. Native UI tests,
 accessibility targets, and benchmarks land in the phases that own them.
 
+CI also copies this harness to a fresh directory outside the repository,
+replaces `workspace:*` with the inspected npm archive, performs a clean npm
+install, and builds the packed consumer. Metro watches the package source only
+for workspace development; a packed install uses normal standalone resolution.
+
 From the repository root:
 
 ```sh

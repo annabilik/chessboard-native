@@ -10,7 +10,7 @@
     "web": "expo start --web",
     "export:android": "expo export --platform android --output-dir dist/android",
     "export:ios": "expo export --platform ios --output-dir dist/ios",
-    "export:native": "pnpm export:android && pnpm export:ios",
+    "export:native": "npm run export:android && npm run export:ios",
     "export:web": "expo export --platform web --output-dir dist/web",
     "typecheck": "tsc --project tsconfig.json --noEmit"
   },
