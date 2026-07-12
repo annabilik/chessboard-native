@@ -2,10 +2,12 @@ import { ChessboardError } from '../ChessboardError';
 import {
   STANDARD_BOARD_DIMENSIONS,
   validateBoardDimensions,
+  validateOrientation,
   type ValidatedBoardDimensions,
 } from '../core/dimensions';
 import type {
   BoardAnnotation,
+  BoardOrientation,
   PlainSelection,
   PositionObject,
 } from '../public-types';
@@ -30,6 +32,7 @@ export interface NormalizedBoardModel {
   readonly status: 'ready' | 'disabled';
   readonly boardId: string | null;
   readonly dimensions: ValidatedBoardDimensions | null;
+  readonly orientation: BoardOrientation | null;
   readonly position: NormalizedControlledValue<PositionObject> | null;
   readonly annotations: NormalizedControlledValue<
     readonly Readonly<BoardAnnotation>[]
@@ -49,6 +52,7 @@ export interface PrepareBoardModelOptions {
   readonly boardId: unknown;
   readonly position: unknown;
   readonly dimensions?: unknown;
+  readonly orientation?: unknown;
   readonly annotations?: unknown;
   readonly selection?: unknown;
   readonly development: boolean;
@@ -114,11 +118,13 @@ function finish(
 function disabledModel(
   boardId: string | null,
   dimensions: ValidatedBoardDimensions | null,
+  orientation: BoardOrientation | null,
 ): NormalizedBoardModel {
   return {
     annotations: null,
     boardId,
     dimensions,
+    orientation,
     position: null,
     selection: null,
     status: 'disabled',
@@ -145,7 +151,7 @@ export function prepareBoardModel(
       ),
       development,
     );
-    return finish(disabledModel(null, null), [error], previousMetadata);
+    return finish(disabledModel(null, null, null), [error], previousMetadata);
   }
 
   if (
@@ -159,7 +165,7 @@ export function prepareBoardModel(
       ),
       development,
     );
-    return finish(disabledModel(null, null), [error], previousMetadata);
+    return finish(disabledModel(null, null, null), [error], previousMetadata);
   }
 
   const acceptedBoardId = previousMetadata.boardId ?? boardId;
@@ -186,7 +192,29 @@ export function prepareBoardModel(
       ),
       development,
     );
-    return finish(disabledModel(boardId, null), [error], boardMetadata);
+    return finish(disabledModel(boardId, null, null), [error], boardMetadata);
+  }
+
+  let orientation: BoardOrientation;
+  try {
+    orientation =
+      options.orientation === undefined
+        ? 'white'
+        : validateOrientation(options.orientation);
+  } catch (cause) {
+    const error = recover(
+      new ChessboardError(
+        safeErrorMessage(cause, 'Invalid board orientation.'),
+        { boardId, code: 'INVALID_ORIENTATION', revision: null },
+        cause,
+      ),
+      development,
+    );
+    return finish(
+      disabledModel(boardId, dimensions, null),
+      [error],
+      boardMetadata,
+    );
   }
 
   const position = normalizePositionDomain({
@@ -239,11 +267,12 @@ export function prepareBoardModel(
 
   return finish(
     disabled
-      ? disabledModel(boardId, dimensions)
+      ? disabledModel(boardId, dimensions, orientation)
       : {
           annotations: annotations?.current ?? null,
           boardId,
           dimensions,
+          orientation,
           position: position.current,
           selection: selection?.current ?? null,
           status: 'ready',

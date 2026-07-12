@@ -7,10 +7,11 @@ export type ChessboardErrorDomain =
 /**
  * Code and metadata for one typed contract violation.
  *
- * Board and dimension failures have no semantic revision. Controlled value
- * failures identify the offending revision; malformed revisions and incoming
- * plain-tier switches use `null` because no valid consumer revision exists.
- * The domain itself is derived from the code and cannot disagree with it.
+ * Board, dimension, and orientation failures have no semantic revision.
+ * Controlled value failures identify the offending revision; malformed
+ * revisions and incoming plain-tier switches use `null` because no valid
+ * consumer revision exists. The domain itself is derived from the code and
+ * cannot disagree with it.
  *
  * @public
  */
@@ -22,7 +23,7 @@ export type ChessboardErrorDetails =
       readonly revision: null;
     }
   | {
-      readonly code: 'INVALID_DIMENSIONS';
+      readonly code: 'INVALID_DIMENSIONS' | 'INVALID_ORIENTATION';
       readonly boardId: string | null;
       readonly revision: null;
     }
@@ -87,6 +88,7 @@ const errorDomainByCode = {
   INVALID_BOARD_ID: 'board',
   INVALID_DIMENSIONS: 'dimensions',
   INVALID_FEN: 'position',
+  INVALID_ORIENTATION: 'dimensions',
   INVALID_POSITION: 'position',
   INVALID_POSITION_REVISION: 'position',
   INVALID_POSITION_SQUARE: 'position',

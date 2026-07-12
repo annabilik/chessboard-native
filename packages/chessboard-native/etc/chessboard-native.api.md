@@ -223,7 +223,7 @@ export type ChessboardErrorDetails = {
     readonly boardId: string | null;
     readonly revision: null;
 } | {
-    readonly code: 'INVALID_DIMENSIONS';
+    readonly code: 'INVALID_DIMENSIONS' | 'INVALID_ORIENTATION';
     readonly boardId: string | null;
     readonly revision: null;
 } | {
@@ -261,8 +261,10 @@ export interface ChessboardProps {
     readonly boardId: string;
     readonly dimensions?: BoardDimensions;
     readonly onError?: OnChessboardError;
+    readonly orientation?: BoardOrientation;
     readonly position: PositionProp;
     readonly selection?: SelectionProp;
+    readonly showNotation?: boolean;
 }
 
 // @public

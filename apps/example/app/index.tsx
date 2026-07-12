@@ -7,21 +7,38 @@ export default function GalleryIndex() {
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.heading}>
-          <Text style={styles.eyebrow}>PHASE 1 · CONTROLLED INPUTS</Text>
+          <Text style={styles.eyebrow}>PHASE 1 · STATIC SURFACE</Text>
           <Text style={styles.title}>chessboard-native</Text>
           <Text style={styles.description}>
-            A controlled frame proving that the Expo gallery consumes and
-            normalizes the public board contract.
+            Responsive native square geometry driven by controlled dimensions,
+            orientation, and notation props.
           </Text>
         </View>
 
         <View style={styles.boardContainer}>
-          <Chessboard boardId="gallery" position="8/8/8/8/8/8/8/8" />
+          <Chessboard boardId="standard-white" position="8/8/8/8/8/8/8/8" />
         </View>
 
         <Text style={styles.caption}>
-          Controlled inputs are normalized now; square, piece, interaction, and
-          annotation rendering land in later Phase 1 slices.
+          Standard 8×8 · white orientation · parent-constrained width
+        </Text>
+
+        <View style={styles.variantContainer}>
+          <Chessboard
+            boardId="variant-black"
+            dimensions={{ columns: 5, rows: 3 }}
+            orientation="black"
+            position={{}}
+          />
+        </View>
+
+        <Text style={styles.caption}>
+          5×3 bounded variant · black orientation · measured rectangular height
+        </Text>
+
+        <Text style={styles.pending}>
+          Pieces, annotations, selection styling, themes, interaction, and the
+          accessibility control land in the following Phase 1 slices.
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -74,5 +91,18 @@ const styles = StyleSheet.create({
     color: '#766c5d',
     fontSize: 14,
     lineHeight: 21,
+  },
+  pending: {
+    width: '100%',
+    maxWidth: 520,
+    marginTop: 28,
+    color: '#665c4d',
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  variantContainer: {
+    width: '72%',
+    maxWidth: 380,
+    marginTop: 32,
   },
 });

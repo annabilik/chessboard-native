@@ -94,12 +94,29 @@ public pure utility for obtaining a square center. Width and height are divided
 independently, so rectangular boards and cells do not repeat the upstream
 width-for-both-axes bug.
 
+P1.3 connects that model to the native `BoardSurface`. The surface fills its
+parent width and uses `columns / rows` as its aspect ratio, so a standard board
+is square and bounded variant boards remain grids of square cells. After Yoga
+layout, the exact positive `onLayout` width and height are authoritative for
+absolute cell placement. Parent resize remeasures the surface, and zero-size
+layout removes projected cells. A row/column change with the same aspect ratio
+reuses and immediately reprojects the unchanged native bounds; an aspect-ratio
+change waits for the corresponding native resize measurement. No global
+`Dimensions` value participates.
+
+Cell rectangles use cumulative fractional edges rather than rounded square
+sizes. That makes the rendered surface share the same half-open boundary model
+as hit testing even when the measured width is not divisible by the column
+count. The static surface does not yet translate window coordinates or register
+provider bounds.
+
 The internal inverse, `hitTestBoardPoint`, returns a canonical square or `null`
 for a finite point outside the board. Board coverage is half-open:
 `0 <= x < width` and `0 <= y < height`. Top and left are included, exact right
 and bottom edges are outside, and an exact internal boundary belongs to the row
 or column after it. This gives every point at most one owner.
 
-Window-coordinate translation, provider registration, remeasurement epochs,
-and gesture lifecycle remain later integration work. Non-finite point or size
-components throw `TypeError`; non-positive measured sizes throw `RangeError`.
+Window-coordinate translation, provider registration, cross-component
+measurement epochs, and gesture lifecycle remain later integration work.
+Non-finite point or size components throw `TypeError`; non-positive measured
+sizes throw `RangeError`.

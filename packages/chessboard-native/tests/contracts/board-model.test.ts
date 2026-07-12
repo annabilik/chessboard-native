@@ -247,6 +247,14 @@ describe('normalized board model', () => {
         },
         'INVALID_DIMENSIONS',
       ],
+      [
+        {
+          boardId: 'analysis',
+          orientation: 'sideways',
+          position: {},
+        },
+        'INVALID_ORIENTATION',
+      ],
       [{ boardId: 'analysis', position: 'not/fen' }, 'INVALID_FEN'],
       [
         {

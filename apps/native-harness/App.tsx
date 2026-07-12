@@ -19,7 +19,7 @@ export default function App() {
       <View style={styles.content}>
         <Text style={[styles.title, { color: textColor }]}>Native harness</Text>
         <Text style={[styles.description, { color: textColor }]}>
-          Workspace package · React Native Release build
+          Responsive static surface · React Native Release build
         </Text>
         <View style={styles.board}>
           <Chessboard boardId="native-harness" position="8/8/8/8/8/8/8/8" />
