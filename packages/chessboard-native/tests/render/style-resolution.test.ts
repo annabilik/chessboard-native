@@ -98,7 +98,12 @@ describe('native style resolution', () => {
             aspectRatio: 3,
             borderWidth: 8,
             boxSizing: 'content-box',
+            display: 'none',
+            margin: 20,
+            marginBlockEnd: 21,
+            marginInlineStart: 22,
             paddingLeft: 20,
+            pointerEvents: 'auto',
             transform: [{ scale: 2 }],
             transformOrigin: 'left top',
             width: 80,
@@ -204,6 +209,28 @@ describe('native style resolution', () => {
     ).toEqual(expect.objectContaining({ fontSize: 10, top: 6 }));
   });
 
+  it('lets native line height follow an overridden font size unless explicitly set', () => {
+    const options = {
+      axis: 'file' as const,
+      cellHeight: 40,
+      cellWidth: 40,
+      isLight: true,
+    };
+
+    const derived = resolveNotationStyle({
+      ...options,
+      styles: { fileNotation: { fontSize: 24 } },
+    });
+    const explicit = resolveNotationStyle({
+      ...options,
+      styles: { fileNotation: { fontSize: 24, lineHeight: 30 } },
+    });
+
+    expect(derived.fontSize).toBe(24);
+    expect(derived.lineHeight).toBeUndefined();
+    expect(explicit.lineHeight).toBe(30);
+  });
+
   it('flattens registered and nested styles without mutating inputs', () => {
     const registered = StyleSheet.create({
       piece: { opacity: 0.8, transform: [{ scale: 0.9 }] },
@@ -280,6 +307,34 @@ describe('native style resolution', () => {
         right: 0.1,
       }),
     );
+  });
+
+  it('treats falsy conditional notation styles as absent overrides', () => {
+    const fileOptions = {
+      axis: 'file' as const,
+      cellHeight: 40,
+      cellWidth: 40,
+      isLight: true,
+    };
+    const rankOptions = {
+      axis: 'rank' as const,
+      cellHeight: 40,
+      cellWidth: 40,
+      isLight: false,
+    };
+
+    expect(
+      resolveNotationStyle({
+        ...fileOptions,
+        theme: { fileNotation: null, lightSquareNotation: false },
+      }),
+    ).toEqual(resolveNotationStyle(fileOptions));
+    expect(
+      resolveNotationStyle({
+        ...rankOptions,
+        theme: { darkSquareNotation: '', rankNotation: false },
+      }),
+    ).toEqual(resolveNotationStyle(rankOptions));
   });
 
   it('lets transient square paint win without mutating a prototype-less map', () => {

@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import type { JSXElementConstructor, ReactElement } from 'react';
 import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
 
 /**
@@ -389,8 +389,8 @@ export type SquareRenderer = (
   props: SquareRendererProps,
 ) => ReactElement | null;
 
-/** Custom visual piece renderer. @public */
-export type PieceRenderer = (props: PieceRendererProps) => ReactElement | null;
+/** Custom visual piece component. @public */
+export type PieceRenderer = JSXElementConstructor<PieceRendererProps>;
 
 /** Piece renderer lookup keyed by the open piece vocabulary. @public */
 export type PieceRenderers = Readonly<

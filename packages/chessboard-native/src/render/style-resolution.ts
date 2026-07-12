@@ -30,6 +30,7 @@ const BOARD_GEOMETRY_KEYS = Object.freeze([
   'bottom',
   'boxSizing',
   'columnGap',
+  'display',
   'end',
   'flex',
   'flexBasis',
@@ -48,6 +49,21 @@ const BOARD_GEOMETRY_KEYS = Object.freeze([
   'insetInlineStart',
   'justifyContent',
   'left',
+  'margin',
+  'marginBlock',
+  'marginBlockEnd',
+  'marginBlockStart',
+  'marginBottom',
+  'marginEnd',
+  'marginHorizontal',
+  'marginInline',
+  'marginInlineEnd',
+  'marginInlineStart',
+  'marginLeft',
+  'marginRight',
+  'marginStart',
+  'marginTop',
+  'marginVertical',
   'maxHeight',
   'maxWidth',
   'minHeight',
@@ -68,6 +84,7 @@ const BOARD_GEOMETRY_KEYS = Object.freeze([
   'paddingTop',
   'paddingVertical',
   'position',
+  'pointerEvents',
   'right',
   'rowGap',
   'start',
@@ -133,7 +150,10 @@ function notationThemeOverride(
     return undefined;
   }
 
-  const flattened = StyleSheet.flatten<TextStyle>(value);
+  const flattened: unknown = StyleSheet.flatten<TextStyle>(value);
+  if (flattened === null || typeof flattened !== 'object') {
+    return undefined;
+  }
   const baseline = StyleSheet.flatten<TextStyle>(defaultTheme[slot]);
   const entries = Object.entries(flattened);
   const equalsDefault =
@@ -239,13 +259,11 @@ export function resolveNotationStyle(options: {
       ? {
           bottom: Math.min(1, cellSize * 0.04),
           fontSize,
-          lineHeight: fontSize,
           right: Math.min(3, cellSize * 0.1),
         }
       : {
           fontSize,
           left: Math.min(2, cellSize * 0.08),
-          lineHeight: fontSize,
           top: Math.min(2, cellSize * 0.08),
         };
 

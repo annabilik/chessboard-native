@@ -96,16 +96,16 @@ interaction state. The board-owned piece wrapper applies the resolved
 `ViewStyle` once; the renderer receives the same frozen value for inspection or
 derived non-View artwork and must not merge it onto the wrapper a second time.
 Board-local measurement and absolute cell geometry remain owned by the renderer
-rather than custom content. Host layout fields such as width, height, aspect
-ratio, flex sizing, insets, and padding are removed from resolved board paint;
-board transforms, box sizing, and border widths are removed for the same reason.
-Consumers size, transform, or border a parent wrapper instead. Cell and piece
-top, left, width, and height are applied by board-owned wrappers after visual
-styles; inner square paint and the piece host also neutralize insets, min/max
-sizes, and physical/logical margins. Consumer square or piece transforms may
-alter paint presentation, and piece geometry-like fields remain in the frozen
-value exposed to a renderer for derivation, but none of them changes the shared
-measured coordinate system or hit-test semantics.
+rather than custom content. Host layout fields such as display, width, height,
+aspect ratio, flex sizing, margins, insets, and padding are removed from resolved
+board paint; board transforms, box sizing, and border widths are removed for the
+same reason. Consumers size, transform, or border a parent wrapper instead. Cell
+and piece top, left, width, and height are applied by board-owned wrappers after
+visual styles; inner square paint and the piece host also neutralize insets,
+min/max sizes, physical/logical margins, and pointer-event overrides. Consumer
+square or piece transforms may alter paint presentation, and piece geometry-like
+fields remain in the frozen value exposed to a renderer for derivation, but none
+of them changes the shared measured coordinate system or hit-test semantics.
 
 Custom square rendering, interaction-state styling, Reanimated transitions,
 gesture handling, and SVG annotation composition remain later slices.

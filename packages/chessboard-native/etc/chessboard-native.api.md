@@ -4,6 +4,7 @@
 
 ```ts
 
+import type { JSXElementConstructor } from 'react';
 import { ReactElement } from 'react';
 import type { StyleProp } from 'react-native';
 import type { TextStyle } from 'react-native';
@@ -440,7 +441,7 @@ export type PieceInteractionContext = {
 };
 
 // @public
-export type PieceRenderer = (props: PieceRendererProps) => ReactElement | null;
+export type PieceRenderer = JSXElementConstructor<PieceRendererProps>;
 
 // @public
 export interface PieceRendererProps {

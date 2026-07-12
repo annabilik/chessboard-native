@@ -32,7 +32,8 @@ import { Chessboard } from '@vibechess/chessboard-native';
 from the root and the focused `@vibechess/chessboard-native/pieces` subpath.
 Supplying `pieceRenderers` replaces the whole lookup; spread the defaults
 explicitly when overriding only one standard piece. A renderer may also
-introduce any custom piece type used by an object position.
+introduce any custom piece type used by an object position. Ordinary,
+memoized, and forwarded-ref React components are accepted.
 
 `defaultTheme` is safe to spread as a customization base. Unchanged nested
 notation defaults retain their responsive measured font size and insets; only
@@ -79,11 +80,11 @@ the entire visual subtree non-interactive and decorative. Host measurement and
 absolute square/piece wrapper rectangles remain structural and cannot be
 replaced by visual styles.
 
-Board width, height, aspect ratio, flex sizing, insets, padding, transforms,
-box sizing, and border widths are ignored in `theme.board` and `styles.board`;
-use a parent wrapper for those concerns. Square and piece geometry-like styles
-can inform paint or renderer derivation but cannot replace canonical measured
-placement.
+Board display, width, height, aspect ratio, flex sizing, margins, insets,
+padding, transforms, box sizing, border widths, and pointer-event modes are
+ignored in `theme.board` and `styles.board`; use a parent wrapper for those
+concerns. Square and piece geometry-like styles can inform paint or renderer
+derivation but cannot replace canonical measured placement.
 
 ## Pure core
 

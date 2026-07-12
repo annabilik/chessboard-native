@@ -109,8 +109,8 @@ export function BoardSurface({
       onLayout={handleLayout}
       pointerEvents="none"
       style={[
-        boardStyle,
         internalStyles.host,
+        boardStyle,
         {
           aspectRatio: currentAspectRatio,
           flexBasis: undefined,
@@ -122,6 +122,7 @@ export function BoardSurface({
           minHeight: undefined,
           minWidth: undefined,
           padding: 0,
+          pointerEvents: 'none',
         },
       ]}
     >

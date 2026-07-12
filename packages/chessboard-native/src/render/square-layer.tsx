@@ -128,6 +128,7 @@ const internalStyles = StyleSheet.create({
     maxWidth: undefined,
     minHeight: undefined,
     minWidth: undefined,
+    pointerEvents: 'none',
     position: 'absolute',
     right: 0,
     start: undefined,

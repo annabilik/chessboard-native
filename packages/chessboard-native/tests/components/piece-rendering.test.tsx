@@ -257,7 +257,9 @@ describe('controlled piece rendering', () => {
         dimensions={{ columns: 3, rows: 2 }}
         pieceRenderers={{ fairy: HookRenderer }}
         position={{ b1: { id: 'fairy-1', pieceType: 'fairy' } }}
-        styles={{ piece: { backgroundColor: '#445566' } }}
+        styles={{
+          piece: { backgroundColor: '#445566', pointerEvents: 'auto' },
+        }}
         theme={{ piece: { opacity: 0.8 } }}
       />,
     );
@@ -289,6 +291,7 @@ describe('controlled piece rendering', () => {
       expect.objectContaining({
         backgroundColor: '#445566',
         opacity: 0.8,
+        pointerEvents: 'auto',
       }),
     );
     expect(Object.isFrozen(captured.style)).toBe(true);
@@ -297,6 +300,7 @@ describe('controlled piece rendering', () => {
         backgroundColor: '#445566',
         height: 100,
         opacity: 0.8,
+        pointerEvents: 'none',
         width: 100,
       }),
     );
@@ -368,6 +372,7 @@ describe('controlled piece rendering', () => {
             marginInlineStart: 12,
             maxWidth: 1,
             minHeight: 999,
+            pointerEvents: 'auto',
             position: 'relative',
             width: 1,
           },
@@ -378,7 +383,13 @@ describe('controlled piece rendering', () => {
             borderRadius: 6,
             borderWidth: 8,
             boxSizing: 'content-box',
+            display: 'none',
+            margin: 20,
+            marginBlockEnd: 21,
+            marginInlineStart: 22,
+            overflow: 'visible',
             paddingLeft: 24,
+            pointerEvents: 'auto',
             transform: [{ scale: 2 }],
             transformOrigin: 'left top',
             width: 24,
@@ -397,13 +408,19 @@ describe('controlled piece rendering', () => {
         aspectRatio: 1,
         backgroundColor: '#202020',
         borderRadius: 6,
+        overflow: 'visible',
         padding: 0,
+        pointerEvents: 'none',
         width: '100%',
       }),
     );
     expect(flattenedViewStyle(root).paddingLeft).toBeUndefined();
     expect(flattenedViewStyle(root).borderWidth).toBeUndefined();
     expect(flattenedViewStyle(root).boxSizing).toBeUndefined();
+    expect(flattenedViewStyle(root).display).toBeUndefined();
+    expect(flattenedViewStyle(root).margin).toBeUndefined();
+    expect(flattenedViewStyle(root).marginBlockEnd).toBeUndefined();
+    expect(flattenedViewStyle(root).marginInlineStart).toBeUndefined();
     expect(flattenedViewStyle(root).transform).toBeUndefined();
     expect(flattenedViewStyle(root).transformOrigin).toBeUndefined();
     await measure(root, 200, 200);
@@ -424,6 +441,7 @@ describe('controlled piece rendering', () => {
         marginInlineStart: 0,
         maxWidth: undefined,
         minHeight: undefined,
+        pointerEvents: 'none',
         position: 'absolute',
       }),
     );

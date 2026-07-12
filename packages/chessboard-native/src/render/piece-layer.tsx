@@ -95,7 +95,20 @@ export function resolvePieceRenderer(
     const renderer: unknown = (
       pieceRenderers as Readonly<Record<string, unknown>>
     )[pieceType];
-    return typeof renderer === 'function' ? (renderer as PieceRenderer) : null;
+    if (typeof renderer === 'function') {
+      return renderer as PieceRenderer;
+    }
+    if (typeof renderer !== 'object' || renderer === null) {
+      return null;
+    }
+
+    const componentType = (renderer as Readonly<{ $$typeof?: unknown }>)
+      .$$typeof;
+    return componentType === Symbol.for('react.forward_ref') ||
+      componentType === Symbol.for('react.lazy') ||
+      componentType === Symbol.for('react.memo')
+      ? (renderer as PieceRenderer)
+      : null;
   } catch {
     return null;
   }
@@ -174,6 +187,7 @@ export const PieceLayer = memo(function PieceLayer({
                 aspectRatio: undefined,
                 bottom: undefined,
                 boxSizing: 'border-box',
+                display: 'flex',
                 end: undefined,
                 flex: undefined,
                 flexBasis: undefined,
@@ -207,6 +221,7 @@ export const PieceLayer = memo(function PieceLayer({
                 maxWidth: undefined,
                 minHeight: undefined,
                 minWidth: undefined,
+                pointerEvents: 'none',
                 right: undefined,
                 start: undefined,
                 top: pieceLayout.rect.top,

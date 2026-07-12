@@ -1,5 +1,5 @@
 import { render } from '@testing-library/react-native';
-import { useState, type ReactElement } from 'react';
+import { forwardRef, memo, useState, type ReactElement } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import type { TestInstance } from 'test-renderer';
 
@@ -168,6 +168,7 @@ describe('piece renderer resolution and composition', () => {
       aspectRatio: 8,
       bottom: 999,
       boxSizing: 'content-box',
+      display: 'contents',
       height: 999,
       inset: 999,
       left: 999,
@@ -179,6 +180,7 @@ describe('piece renderer resolution and composition', () => {
       minHeight: 999,
       minWidth: 999,
       opacity: 0.4,
+      pointerEvents: 'auto',
       position: 'relative',
       right: 999,
       top: 999,
@@ -212,6 +214,7 @@ describe('piece renderer resolution and composition', () => {
         aspectRatio: undefined,
         bottom: undefined,
         boxSizing: 'border-box',
+        display: 'flex',
         height: 100,
         inset: undefined,
         left: 200,
@@ -223,6 +226,7 @@ describe('piece renderer resolution and composition', () => {
         minHeight: undefined,
         minWidth: undefined,
         opacity: 0.4,
+        pointerEvents: 'none',
         position: 'absolute',
         right: undefined,
         top: 0,
@@ -252,6 +256,50 @@ describe('piece renderer resolution and composition', () => {
       }),
     );
     expect(calls[0]?.style).toBe(resolvedStyle);
+    expect(calls[0]?.style.display).toBe('contents');
+    expect(calls[0]?.style.pointerEvents).toBe('auto');
+  });
+
+  it('accepts memoized and forwarded custom piece components', async () => {
+    const MemoPiece = memo(function MemoPiece({
+      square,
+    }: PieceRendererProps): ReactElement {
+      return <View testID={`memo-${square}`} />;
+    });
+    const ForwardedPiece = forwardRef<unknown, PieceRendererProps>(
+      function ForwardedPiece({ square }, ref): ReactElement {
+        void ref;
+        return <View testID={`forwarded-${square}`} />;
+      },
+    );
+    const renderers = Object.freeze({
+      forwarded: ForwardedPiece,
+      memo: MemoPiece,
+    }) satisfies PieceRenderers;
+    const layout = createBoardSurfaceLayout(
+      { height: 80, width: 160 },
+      { columns: 2, rows: 1 },
+      'white',
+    );
+    const result = await render(
+      <PieceLayer
+        boardId="component-types"
+        layout={layout}
+        pieceRenderers={renderers}
+        position={currentPosition(
+          frozenPosition({
+            a1: { pieceType: 'memo' },
+            b1: { pieceType: 'forwarded' },
+          }),
+        )}
+        style={EMPTY_STYLE}
+      />,
+    );
+
+    expect(resolvePieceRenderer(renderers, 'memo')).toBe(MemoPiece);
+    expect(resolvePieceRenderer(renderers, 'forwarded')).toBe(ForwardedPiece);
+    expect(nodeByTestId(rootOf(result), 'memo-a1')).not.toBeNull();
+    expect(nodeByTestId(rootOf(result), 'forwarded-b1')).not.toBeNull();
   });
 
   it('resolves exact own open-vocabulary keys and rejects unsafe lookups', () => {
