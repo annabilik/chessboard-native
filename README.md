@@ -32,16 +32,24 @@ harness, packed-artifact build gates, and pinned upstream parity inventory are
 in place. The root package exports the controlled public contracts plus pure,
 validated dimension, coordinate, logical-grid, strict 8x8 FEN, and measured
 square-center utilities. Object-position normalization and board-local hit
-testing now complete the pure P1.1 layer. The full `a1` through `z99` coordinate
-space and both orientations are covered by property tests. The component does
-not render controlled inputs yet; API-tier normalization, contextual recovery,
-and static rendering remain Phase 1 work.
+testing complete the pure P1.1 layer. The public P1.2 component boundary now
+normalizes plain and revisioned position, annotation, and optional selection
+props into detached current snapshots. It derives plain revisions, enforces
+revision ordering and mounted tier stability, applies domain-isolated recovery,
+and reports production errors once after commit without retaining renderable
+semantic state. Concurrent and Strict Mode tests cover abandoned renders and
+report replay. The full `a1` through `z99` coordinate space and both
+orientations are covered by property tests. `Chessboard` still draws only the
+package-verification frame; responsive squares and pieces are the next Phase 1
+work.
 
 The accepted architecture decisions and all 20 reserved invariant contracts
 are indexed in
 [`docs/architecture/invariants.md`](./docs/architecture/invariants.md).
 The pure-core semantics are documented in
 [`docs/architecture/coordinates-and-fen.md`](./docs/architecture/coordinates-and-fen.md).
+Controlled tier and error semantics are documented in
+[`docs/architecture/api-tiers.md`](./docs/architecture/api-tiers.md).
 
 ## Development
 

@@ -5,8 +5,32 @@ A controlled, rules-free React Native chessboard component.
 This unpublished Phase 1 package includes the controlled public contracts and
 the platform-free position, coordinate, measured-geometry, and strict FEN
 foundation. Its `Chessboard` component still renders a disabled
-package-verification frame; API-tier normalization and static rendering have
-not landed yet.
+package-verification frame. Its public props already execute the standalone
+controlled-value boundary for position, annotations, selection,
+board identity, and dimensions. Provider-level identity registration and
+responsive square and piece rendering have not landed yet.
+
+```tsx
+import { Chessboard } from '@vibechess/chessboard-native';
+
+<Chessboard
+  boardId="analysis"
+  position={{ revision: 12, value: '8/8/8/3q4/4P3/8/8/8' }}
+  annotations={{
+    revision: 4,
+    value: [
+      {
+        id: 'candidate',
+        type: 'arrow',
+        from: 'e4',
+        to: 'd5',
+        color: '#ef4444',
+      },
+    ],
+  }}
+  selection={{ revision: 8, selectedSquare: 'e4' }}
+/>;
+```
 
 ## Pure core
 
@@ -45,7 +69,12 @@ positions are validated into detached immutable snapshots, and measured width
 and height drive rectangular square-center and internal hit-test geometry.
 
 Standalone validation uses standard `TypeError`, `RangeError`, and
-`SyntaxError` failures. Contextual `ChessboardError` recovery belongs to the
-component normalization layer planned for the next Phase 1 work.
+`SyntaxError` failures. `Chessboard` translates them into contextual
+`ChessboardError` values, derives plain revisions without renderable shadow
+snapshots, and rejects invalid revision ordering or mounted tier changes.
+Development throws; production calls `onError` once per domain and revision
+after commit, or logs once when no handler exists. Annotation IDs are non-empty
+and unique, annotation order is semantic, and selection square arrays normalize
+as sorted sets.
 
 Do not use this package in production yet.

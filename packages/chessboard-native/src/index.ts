@@ -15,6 +15,7 @@ export {
 export { parseFenPosition } from './core/fen';
 export { squareToBoardPoint } from './core/hit-test';
 
+export type { ChessboardProps } from './Chessboard';
 export type {
   ChessboardErrorCode,
   ChessboardErrorContext,

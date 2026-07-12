@@ -1,12 +1,19 @@
 import type { BoardDimensions, BoardOrientation } from '../public-types';
 
+declare const validatedBoardDimensionsBrand: unique symbol;
+
+/** Dimensions that have passed the board-wide validation boundary. */
+export type ValidatedBoardDimensions = Readonly<BoardDimensions> & {
+  readonly [validatedBoardDimensionsBrand]: true;
+};
+
 export const MIN_BOARD_ROWS = 1;
 export const MAX_BOARD_ROWS = 99;
 export const MIN_BOARD_COLUMNS = 1;
 export const MAX_BOARD_COLUMNS = 26;
 
-export const STANDARD_BOARD_DIMENSIONS: Readonly<BoardDimensions> =
-  Object.freeze({ columns: 8, rows: 8 });
+export const STANDARD_BOARD_DIMENSIONS: ValidatedBoardDimensions =
+  Object.freeze({ columns: 8, rows: 8 }) as ValidatedBoardDimensions;
 
 function validateBoundedInteger(
   value: unknown,
@@ -51,7 +58,7 @@ export function validateColumnCount(columns: unknown): number {
 
 export function validateBoardDimensions(
   dimensions: unknown,
-): Readonly<BoardDimensions> {
+): ValidatedBoardDimensions {
   if (
     typeof dimensions !== 'object' ||
     dimensions === null ||
@@ -66,7 +73,7 @@ export function validateBoardDimensions(
   const rows = validateRowCount(candidate['rows']);
   const columns = validateColumnCount(candidate['columns']);
 
-  return Object.freeze({ columns, rows });
+  return Object.freeze({ columns, rows }) as ValidatedBoardDimensions;
 }
 
 export function validateOrientation(orientation: unknown): BoardOrientation {

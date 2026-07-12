@@ -22,7 +22,7 @@ export default function App() {
           Workspace package · React Native Release build
         </Text>
         <View style={styles.board}>
-          <Chessboard />
+          <Chessboard boardId="native-harness" position="8/8/8/8/8/8/8/8" />
         </View>
       </View>
     </GestureHandlerRootView>

@@ -192,7 +192,7 @@
         "surface": "root",
         "symbols": ["Chessboard"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-EXPORT-CHESSBOARD",
       "compatibilityNotes": "The native component keeps the standalone entry point but uses direct controlled props instead of an options object."
     },
@@ -1242,7 +1242,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.boardId"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-OPTION-ID",
       "compatibilityNotes": "Renamed to required, non-empty, provider-unique boardId."
     },
@@ -1306,7 +1306,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.position"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-OPTION-POSITION",
       "compatibilityNotes": "The prop is the only canonical position and may be plain or revisioned.",
       "rationale": "Upstream stores a mutable currentPosition mirror and mutates presentation snapshots; native rendering must always derive semantics from the latest controlled prop.",
@@ -1372,7 +1372,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.dimensions.rows"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-OPTION-CHESSBOARD-ROWS",
       "compatibilityNotes": "Rows are validated integers from 1 through 99."
     },
@@ -1404,7 +1404,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.dimensions.columns"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-OPTION-CHESSBOARD-COLUMNS",
       "compatibilityNotes": "Columns are validated integers from 1 through 26."
     },
@@ -2096,7 +2096,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.annotations"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-OPTION-ARROWS",
       "compatibilityNotes": "Arrows become ID-bearing controlled annotations, with at most one transient draft.",
       "rationale": "Combining external arrows with a persistent internal list creates dual ownership and cannot safely reconcile concurrent store updates.",
@@ -2721,7 +2721,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.boardId"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B04",
       "compatibilityNotes": "Required stable boardId drives a provider registry; no DOM IDs are generated."
     },
@@ -2816,7 +2816,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.position"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B07",
       "compatibilityNotes": "Rendering always uses the latest normalized controlled prop and never a durable mirror.",
       "rationale": "A mutable shadow position can diverge from the consumer store during gestures and animations, creating the second source of truth this port exists to remove.",
@@ -3582,7 +3582,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.annotations", "AnnotationDraft"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B34",
       "compatibilityNotes": "Rendered annotations equal the controlled collection plus at most one ephemeral draft.",
       "rationale": "A second persistent internal arrow list makes rendering and callbacks diverge from the controlled collection and cannot safely merge concurrent changes.",
