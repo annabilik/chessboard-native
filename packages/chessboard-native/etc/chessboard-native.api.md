@@ -121,6 +121,22 @@ export interface BoardDimensions {
 export type BoardOrientation = 'white' | 'black';
 
 // @public
+export interface BoardPoint {
+    // (undocumented)
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
+
+// @public
+export interface BoardSize {
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly width: number;
+}
+
+// @public
 export interface BoardSquare {
     // (undocumented)
     readonly isLight: boolean;
@@ -511,6 +527,9 @@ export interface SquareRendererProps {
     // (undocumented)
     readonly style: Readonly<ViewStyle>;
 }
+
+// @public
+export function squareToBoardPoint(square: SquareId, size: BoardSize, dimensions: BoardDimensions, orientation: BoardOrientation): Readonly<BoardPoint>;
 
 // @public
 export interface SquareVisualState {

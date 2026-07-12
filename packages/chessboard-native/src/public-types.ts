@@ -58,6 +58,18 @@ export interface BoardDimensions {
   readonly columns: number;
 }
 
+/** Board-local coordinates measured from the top-left of the board. @public */
+export interface BoardPoint {
+  readonly x: number;
+  readonly y: number;
+}
+
+/** Positive measured content size of a board. @public */
+export interface BoardSize {
+  readonly width: number;
+  readonly height: number;
+}
+
 /** White-at-bottom or black-at-bottom presentation. @public */
 export type BoardOrientation = 'white' | 'black';
 

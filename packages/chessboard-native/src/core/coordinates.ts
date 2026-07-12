@@ -84,7 +84,7 @@ function parseFile(file: unknown, columns: number): number {
   return fileIndex;
 }
 
-function parseSquare(
+export function parseSquareId(
   square: unknown,
   dimensions: Readonly<BoardDimensions>,
 ): Readonly<{ fileIndex: number; rank: number }> {
@@ -236,7 +236,7 @@ export function squareToCoordinate(
 ): Readonly<BoardCoordinate> {
   const validDimensions = validateBoardDimensions(dimensions);
   const validOrientation = validateOrientation(orientation);
-  const { fileIndex, rank } = parseSquare(square, validDimensions);
+  const { fileIndex, rank } = parseSquareId(square, validDimensions);
 
   return Object.freeze({
     column: fileIndexToColumnIndexUnchecked(
