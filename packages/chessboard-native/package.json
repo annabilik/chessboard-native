@@ -14,7 +14,14 @@
       "react-native": "./src/index.ts",
       "import": "./lib/module/index.js",
       "default": "./lib/module/index.js"
-    }
+    },
+    "./pieces": {
+      "types": "./lib/typescript/src/pieces/index.d.ts",
+      "react-native": "./src/pieces/index.ts",
+      "import": "./lib/module/pieces/index.js",
+      "default": "./lib/module/pieces/index.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "src",

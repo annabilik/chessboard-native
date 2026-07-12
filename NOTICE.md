@@ -2,6 +2,12 @@
 
 Copyright (c) 2026 chessboard-native contributors.
 
+The package's interim geometric chess-piece renderers are original project
+work released under the repository's MIT License. They do not copy or adapt the
+Cburnett artwork described below. The interim set supports development;
+polished permissive artwork and its final provenance review remain pre-1.0
+work.
+
 This repository includes a byte-for-byte reference snapshot of
 `react-chessboard@5.10.0` at commit
 `b74704af988396d3da32a8c1627d95341e1e0061`. The snapshot is used for offline

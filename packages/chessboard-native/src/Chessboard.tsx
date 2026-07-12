@@ -11,16 +11,21 @@ import {
   dispatchChessboardErrorReports,
   planChessboardErrorReports,
 } from './internal/error-reporting';
+import { defaultPieceRenderers } from './pieces';
 import { BoardSurface } from './render/board-surface';
 import type {
   AnnotationsProp,
   BoardDimensions,
   BoardOrientation,
+  ChessboardStyles,
+  ChessboardTheme,
+  PieceRenderers,
   PositionProp,
   SelectionProp,
+  SquareStyles,
 } from './public-types';
 
-/** Controlled semantic inputs accepted by the native board. @public */
+/** Controlled semantic inputs and visual configuration accepted by the board. @public */
 export interface ChessboardProps {
   /** Required stable identity for the mounted board. */
   readonly boardId: string;
@@ -32,6 +37,14 @@ export interface ChessboardProps {
   readonly orientation?: BoardOrientation;
   /** Show decorative file and rank labels; defaults to true. */
   readonly showNotation?: boolean;
+  /** Reusable visual defaults applied over the built-in theme. */
+  readonly theme?: ChessboardTheme;
+  /** Per-instance visual overrides applied after the theme. */
+  readonly styles?: ChessboardStyles;
+  /** Declarative visual overrides keyed by canonical square ID. */
+  readonly squareStyles?: SquareStyles;
+  /** Whole-map piece renderer replacement; defaults are not merged into it. */
+  readonly pieceRenderers?: PieceRenderers;
   /** The only persistent annotation collection when supplied. */
   readonly annotations?: AnnotationsProp;
   /** Consumer-owned selection presentation when supplied. */
@@ -93,15 +106,23 @@ export function ChessboardRuntime({
   const model = useBoardModel(props, development, logError);
 
   return (
-    <BoardSurface model={model} showNotation={props.showNotation ?? true} />
+    <BoardSurface
+      model={model}
+      pieceRenderers={props.pieceRenderers ?? defaultPieceRenderers}
+      showNotation={props.showNotation ?? true}
+      squareStyles={props.squareStyles}
+      styles={props.styles}
+      theme={props.theme}
+    />
   );
 }
 
 /**
  * Controlled, rules-free React Native chessboard.
  *
- * The responsive static surface renders controlled dimensions, orientation,
- * and notation. Piece and interaction layers remain later Phase 1 slices.
+ * The responsive static surface renders the latest controlled position with
+ * measured squares, notation, and visual-only default or custom pieces.
+ * Interaction remains a later Phase 1 slice.
  *
  * @public
  */

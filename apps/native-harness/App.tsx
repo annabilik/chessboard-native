@@ -1,4 +1,5 @@
 import { Chessboard } from '@vibechess/chessboard-native';
+import { defaultPieceRenderers } from '@vibechess/chessboard-native/pieces';
 import {
   StatusBar,
   StyleSheet,
@@ -19,10 +20,14 @@ export default function App() {
       <View style={styles.content}>
         <Text style={[styles.title, { color: textColor }]}>Native harness</Text>
         <Text style={[styles.description, { color: textColor }]}>
-          Responsive static surface · React Native Release build
+          Controlled static pieces · React Native Release build
         </Text>
         <View style={styles.board}>
-          <Chessboard boardId="native-harness" position="8/8/8/8/8/8/8/8" />
+          <Chessboard
+            boardId="native-harness"
+            pieceRenderers={defaultPieceRenderers}
+            position="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+          />
         </View>
       </View>
     </GestureHandlerRootView>

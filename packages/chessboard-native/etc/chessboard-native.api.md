@@ -4,7 +4,10 @@
 
 ```ts
 
+import type { JSXElementConstructor } from 'react';
 import { ReactElement } from 'react';
+import type { StyleProp } from 'react-native';
+import type { TextStyle } from 'react-native';
 import type { ViewStyle } from 'react-native';
 
 // @public
@@ -262,9 +265,39 @@ export interface ChessboardProps {
     readonly dimensions?: BoardDimensions;
     readonly onError?: OnChessboardError;
     readonly orientation?: BoardOrientation;
+    readonly pieceRenderers?: PieceRenderers;
     readonly position: PositionProp;
     readonly selection?: SelectionProp;
     readonly showNotation?: boolean;
+    readonly squareStyles?: SquareStyles;
+    readonly styles?: ChessboardStyles;
+    readonly theme?: ChessboardTheme;
+}
+
+// @public
+export interface ChessboardStyles {
+    readonly board?: StyleProp<ViewStyle>;
+    readonly darkSquare?: StyleProp<ViewStyle>;
+    readonly darkSquareNotation?: StyleProp<TextStyle>;
+    readonly fileNotation?: StyleProp<TextStyle>;
+    readonly lightSquare?: StyleProp<ViewStyle>;
+    readonly lightSquareNotation?: StyleProp<TextStyle>;
+    readonly piece?: StyleProp<ViewStyle>;
+    readonly rankNotation?: StyleProp<TextStyle>;
+    readonly square?: StyleProp<ViewStyle>;
+}
+
+// @public
+export interface ChessboardTheme {
+    readonly board?: StyleProp<ViewStyle>;
+    readonly darkSquare?: StyleProp<ViewStyle>;
+    readonly darkSquareNotation?: StyleProp<TextStyle>;
+    readonly fileNotation?: StyleProp<TextStyle>;
+    readonly lightSquare?: StyleProp<ViewStyle>;
+    readonly lightSquareNotation?: StyleProp<TextStyle>;
+    readonly piece?: StyleProp<ViewStyle>;
+    readonly rankNotation?: StyleProp<TextStyle>;
+    readonly square?: StyleProp<ViewStyle>;
 }
 
 // @public
@@ -301,6 +334,12 @@ export interface ControlledSelection {
     // (undocumented)
     readonly selectedSquare: SquareId | null;
 }
+
+// @public
+export const defaultPieceRenderers: PieceRenderers;
+
+// @public
+export const defaultTheme: Readonly<Required<ChessboardTheme>>;
 
 // @public
 export type FenPieceCode = 'p' | 'r' | 'n' | 'b' | 'q' | 'k' | 'P' | 'R' | 'N' | 'B' | 'Q' | 'K';
@@ -402,7 +441,7 @@ export type PieceInteractionContext = {
 };
 
 // @public
-export type PieceRenderer = (props: PieceRendererProps) => ReactElement | null;
+export type PieceRenderer = JSXElementConstructor<PieceRendererProps>;
 
 // @public
 export interface PieceRendererProps {
@@ -558,6 +597,9 @@ export interface SquareRendererProps {
     // (undocumented)
     readonly style: Readonly<ViewStyle>;
 }
+
+// @public
+export type SquareStyles = Readonly<Partial<Record<SquareId, StyleProp<ViewStyle>>>>;
 
 // @public
 export function squareToBoardPoint(square: SquareId, size: BoardSize, dimensions: BoardDimensions, orientation: BoardOrientation): Readonly<BoardPoint>;
