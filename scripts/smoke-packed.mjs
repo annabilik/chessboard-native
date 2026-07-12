@@ -24,7 +24,7 @@ const repositoryRoot = path.resolve(
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const consumers = {
   expo: {
-    entries: ['app', 'app.json', 'package.json', 'tsconfig.json'],
+    entries: ['app', 'app.json', 'package.json', 'src', 'tsconfig.json'],
     source: path.join(repositoryRoot, 'apps/example'),
   },
   native: {

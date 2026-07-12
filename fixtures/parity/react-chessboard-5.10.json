@@ -1887,7 +1887,7 @@
           "ChessboardProps.transitionDurationMs"
         ]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-OPTION-SHOW-ANIMATIONS",
       "compatibilityNotes": "Animation policy honors system reduced motion and latest-wins transitions.",
       "rationale": "A Boolean browser animation switch cannot express the required system, always, and never reduced-motion policy or deterministic interruption semantics.",
@@ -2874,7 +2874,7 @@
           "ChessboardProps.reduceMotion"
         ]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B09",
       "compatibilityNotes": "Transitions are deterministic presentation and honor the native reduced-motion policy."
     },
@@ -4048,7 +4048,7 @@
         "surface": "root",
         "symbols": ["Chessboard", "ChessboardAccessibility"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B50",
       "compatibilityNotes": "View, RNGH, Reanimated, and RN SVG replace browser primitives; one adjustable board control and reduced motion are first-class.",
       "rationale": "Copying DOM, CSS, dnd-kit sensors, and absent accessibility semantics would not produce a native component or satisfy TalkBack and VoiceOver contracts.",

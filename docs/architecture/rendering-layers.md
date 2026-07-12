@@ -110,12 +110,38 @@ of them changes the shared measured coordinate system or hit-test semantics.
 Custom square rendering, interaction-state styling, Reanimated transitions,
 gesture handling, and SVG annotation composition remain later slices.
 
-The outer host is non-interactive and not yet an accessibility control. The
-inner surface, every visual square, piece wrapper, renderer subtree, and
-notation label are explicitly decorative and hidden from assistive technology.
-P1.5 will promote only the outer host to the single adjustable control; visual
-descendants will remain hidden. Hit testing and annotations will use this same
-measured coordinate system.
+P1.5 promotes only the stable outer host to one adjustable accessibility
+control. It uses `pointerEvents="box-none"` so ordinary touch remains available
+to ancestors while the native host can receive assistive-technology actions.
+The inner surface, every visual square, piece wrapper, renderer subtree, and
+notation label remain explicitly decorative and hidden. The host owns only a
+transient canonical virtual cursor. Reading-order and directional navigation
+project that cursor through current dimensions and orientation without using
+measurement or updating consumer-owned selection. Position and selection
+changes refresh its value; orientation retains the canonical square and host
+identity. Hit testing and annotations will use the same measured coordinate
+system in later slices.
+
+The accessibility action surface in P1.5 contains navigation only. Semantic
+activation, controlled selection clearing, move/removal intents, spare
+placement, and annotation operations remain with the later interaction slices.
+Consumer announcements are correlated by ID and deduplicated per mounted board.
+The centralized reduced-motion provider follows `system`, `always`, or `never`
+without remounting this host or its cursor.
+
+React Native 0.86 suppresses Android's adjustable `TYPE_VIEW_SELECTED` feedback
+when `accessibilityValue.text` is present, and directional custom actions do not
+take that standard scroll-action path. After a successful Android cursor action
+commits, the board therefore announces the current formatted value explicitly.
+It never announces from a state updater or for a boundary no-op. Consumer
+announcements use non-empty IDs and queued iOS delivery independently of cursor
+feedback.
+
+Android lists unlabeled increment/decrement actions for TalkBack. iOS receives
+those events from the adjustable trait without listing them, because Fabric
+otherwise duplicates every listed standard action in the custom rotor using its
+non-localized action name. Directional custom labels are trimmed and repaired
+to remain non-empty and unique before they reach that label-based dispatch map.
 
 An invalid position with valid dimensions renders this dimension-correct empty
 grid with no pieces, never an older position. Invalid dimensions or orientation
@@ -133,7 +159,9 @@ several native primitives. P1.3 tests verify responsive measured geometry,
 orientation, notation, decorative descendants, and invalid-domain fallbacks.
 P1.4 tests add current-prop piece rendering, default and whole-map custom
 renderers, static style precedence, instance isolation, square-before-piece
-ordering, and board-owned visual-only wrappers. Later slices must verify the
+ordering, and board-owned visual-only wrappers. P1.5 tests add virtual-cursor
+projection, single-host semantics, formatter contexts, announcement lifetimes,
+reduced-motion races, and mounted-board isolation. Later slices must verify the
 complete annotation/interaction layer order and custom square renderer behavior.
 
 This decision owns invariants `CBN-INV-010`, `CBN-INV-013`, `CBN-INV-014`,

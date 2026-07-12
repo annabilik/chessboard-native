@@ -410,7 +410,7 @@ describe('controlled piece rendering', () => {
         borderRadius: 6,
         overflow: 'visible',
         padding: 0,
-        pointerEvents: 'none',
+        pointerEvents: 'box-none',
         width: '100%',
       }),
     );

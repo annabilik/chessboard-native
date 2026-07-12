@@ -1,10 +1,13 @@
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
+import { useAccessibilityAnnouncement } from '../accessibility/announcements';
+import { useBoardAccessibility } from '../accessibility/board-accessibility';
 import { STANDARD_BOARD_DIMENSIONS } from '../core/dimensions';
 import type { NormalizedBoardModel } from '../internal/board-model';
 import type {
   BoardSize,
+  ChessboardAccessibility,
   ChessboardStyles,
   ChessboardTheme,
   PieceRenderers,
@@ -20,6 +23,7 @@ interface MeasuredBoardSize extends BoardSize {
 }
 
 interface BoardSurfaceProps {
+  readonly accessibility: ChessboardAccessibility | undefined;
   readonly model: NormalizedBoardModel;
   readonly pieceRenderers: PieceRenderers;
   readonly showNotation: boolean;
@@ -34,6 +38,7 @@ function isPositiveFinite(value: number): boolean {
 
 /** Responsive native host for measured visual board layers. */
 export function BoardSurface({
+  accessibility,
   model,
   pieceRenderers,
   showNotation,
@@ -41,6 +46,8 @@ export function BoardSurface({
   styles,
   theme,
 }: BoardSurfaceProps): ReactElement {
+  useAccessibilityAnnouncement(accessibility?.announcement);
+  const accessibilityProps = useBoardAccessibility(model, accessibility);
   const fallbackDimensions = model.dimensions ?? STANDARD_BOARD_DIMENSIONS;
   const modelColumns = model.dimensions?.columns ?? null;
   const modelRows = model.dimensions?.rows ?? null;
@@ -103,11 +110,18 @@ export function BoardSurface({
 
   return (
     <View
+      accessibilityActions={accessibilityProps.accessibilityActions}
+      accessibilityHint={accessibilityProps.accessibilityHint}
+      accessibilityLabel={accessibilityProps.accessibilityLabel}
+      accessibilityRole="adjustable"
       accessibilityState={{ disabled: model.status === 'disabled' }}
-      accessible={false}
+      accessibilityValue={accessibilityProps.accessibilityValue}
+      accessible
       collapsable={false}
+      importantForAccessibility="yes"
       onLayout={handleLayout}
-      pointerEvents="none"
+      onAccessibilityAction={accessibilityProps.onAccessibilityAction}
+      pointerEvents="box-none"
       style={[
         internalStyles.host,
         boardStyle,
@@ -122,7 +136,7 @@ export function BoardSurface({
           minHeight: undefined,
           minWidth: undefined,
           padding: 0,
-          pointerEvents: 'none',
+          pointerEvents: 'box-none',
         },
       ]}
     >

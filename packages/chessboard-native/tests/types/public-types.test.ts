@@ -268,13 +268,19 @@ describe('public data contracts', () => {
     const pieceRenderers = {
       wK: () => null,
     } satisfies PieceRenderers;
+    const accessibility = {
+      boardHint: 'Navigate the board.',
+      boardLabel: 'Analysis board, black orientation',
+    } satisfies ChessboardAccessibility;
     const props = {
+      accessibility,
       annotations: [],
       boardId: 'diagram',
       dimensions: { columns: 8, rows: 8 },
       orientation: 'black',
       pieceRenderers,
       position: '8/8/8/8/8/8/8/8',
+      reduceMotion: 'always',
       selection: { selectedSquare: null },
       showNotation: false,
       squareStyles,
@@ -302,8 +308,10 @@ describe('public data contracts', () => {
     };
 
     expect(props.boardId).toBe('diagram');
+    expect(props.accessibility).toBe(accessibility);
     expect(props.orientation).toBe('black');
     expect(props.pieceRenderers).toBe(pieceRenderers);
+    expect(props.reduceMotion).toBe('always');
     expect(props.showNotation).toBe(false);
     expect(props.squareStyles).toBe(squareStyles);
     expect(props.styles).toBe(styles);

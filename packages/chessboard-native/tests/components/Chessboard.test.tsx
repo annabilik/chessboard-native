@@ -92,7 +92,7 @@ function requiredNode(
 }
 
 describe('Chessboard controlled boundary', () => {
-  it('renders one responsive decorative host for valid controlled input', async () => {
+  it('renders one responsive adjustable host with decorative visual layers', async () => {
     const result = await render(
       <Chessboard boardId="diagram" position="8/8/8/8/8/8/8/8" />,
     );
@@ -100,9 +100,11 @@ describe('Chessboard controlled boundary', () => {
     expect(result.container.children).toHaveLength(1);
     const root = rootOf(result);
     expect(root).toHaveProp('accessibilityState', { disabled: false });
-    expect(root).toHaveProp('accessible', false);
+    expect(root).toHaveProp('accessibilityRole', 'adjustable');
+    expect(root).toHaveProp('accessible', true);
     expect(root).toHaveProp('collapsable', false);
-    expect(root).toHaveProp('pointerEvents', 'none');
+    expect(root).toHaveProp('importantForAccessibility', 'yes');
+    expect(root).toHaveProp('pointerEvents', 'box-none');
     expect(root).toHaveStyle({ aspectRatio: 1, width: '100%' });
     expect(squareNodes(root)).toEqual([]);
 
