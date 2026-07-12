@@ -110,6 +110,13 @@ as hit testing even when the measured width is not divisible by the column
 count. The static surface does not yet translate window coordinates or register
 provider bounds.
 
+P1.4 reuses those exact cell rectangles for pieces. Position keys remain
+canonical, and the current orientation selects only which measured rectangle a
+key occupies. Default and custom renderers therefore receive the same square and
+piece data in either orientation while their visual placement reverses with the
+grid. The piece layer does not introduce a second size calculation, position
+codec, or hit-test surface.
+
 The internal inverse, `hitTestBoardPoint`, returns a canonical square or `null`
 for a finite point outside the board. Board coverage is half-open:
 `0 <= x < width` and `0 <= y < height`. Top and left are included, exact right

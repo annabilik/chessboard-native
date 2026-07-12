@@ -1,44 +1,86 @@
-import { Chessboard } from '@vibechess/chessboard-native';
+import {
+  Chessboard,
+  type PieceRenderer,
+  type PieceRenderers,
+} from '@vibechess/chessboard-native';
+import { defaultPieceRenderers } from '@vibechess/chessboard-native/pieces';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const GuidePiece: PieceRenderer = ({ size }) => (
+  <View
+    style={[
+      styles.guidePiece,
+      { borderRadius: size / 2, height: size, width: size },
+    ]}
+  >
+    <Text style={[styles.guidePieceText, { fontSize: size * 0.42 }]}>G</Text>
+  </View>
+);
+
+const customPieceRenderers = Object.freeze({
+  ...defaultPieceRenderers,
+  guide: GuidePiece,
+}) satisfies PieceRenderers;
 
 export default function GalleryIndex() {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.heading}>
-          <Text style={styles.eyebrow}>PHASE 1 · STATIC SURFACE</Text>
+          <Text style={styles.eyebrow}>PHASE 1 · CONTROLLED PIECES</Text>
           <Text style={styles.title}>chessboard-native</Text>
           <Text style={styles.description}>
-            Responsive native square geometry driven by controlled dimensions,
-            orientation, and notation props.
+            Responsive current-prop positions with original default pieces,
+            whole-map custom renderers, and declarative native styles.
           </Text>
         </View>
 
         <View style={styles.boardContainer}>
-          <Chessboard boardId="standard-white" position="8/8/8/8/8/8/8/8" />
-        </View>
-
-        <Text style={styles.caption}>
-          Standard 8×8 · white orientation · parent-constrained width
-        </Text>
-
-        <View style={styles.variantContainer}>
           <Chessboard
-            boardId="variant-black"
-            dimensions={{ columns: 5, rows: 3 }}
-            orientation="black"
-            position={{}}
+            boardId="standard-white"
+            position="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
           />
         </View>
 
         <Text style={styles.caption}>
-          5×3 bounded variant · black orientation · measured rectangular height
+          Starting FEN · original interim geometric set · white orientation
+        </Text>
+
+        <View style={styles.variantContainer}>
+          <Chessboard
+            boardId="custom-variant-black"
+            dimensions={{ columns: 5, rows: 3 }}
+            orientation="black"
+            pieceRenderers={customPieceRenderers}
+            position={{
+              a1: { pieceType: 'wK' },
+              c2: { id: 'custom-guide', pieceType: 'guide' },
+              e3: { pieceType: 'bK' },
+            }}
+            squareStyles={{ c2: { backgroundColor: '#f2b84b' } }}
+            styles={{
+              board: { borderRadius: 12 },
+              piece: { opacity: 0.94 },
+            }}
+            theme={{
+              darkSquare: { backgroundColor: '#655374' },
+              darkSquareNotation: { color: '#f4ecff' },
+              lightSquare: { backgroundColor: '#ded1e8' },
+              lightSquareNotation: { color: '#513f60' },
+            }}
+          />
+        </View>
+
+        <Text style={styles.caption}>
+          Open “guide” piece type · explicit default spread · black 5×3 variant
+          · canonical c2 style
         </Text>
 
         <Text style={styles.pending}>
-          Pieces, annotations, selection styling, themes, interaction, and the
-          accessibility control land in the following Phase 1 slices.
+          The boards are still decorative and non-interactive. Custom square
+          rendering, annotations, selection styling, transitions, gestures, and
+          the adjustable accessibility control remain later slices.
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -79,6 +121,17 @@ const styles = StyleSheet.create({
     color: '#665c4d',
     fontSize: 17,
     lineHeight: 25,
+  },
+  guidePiece: {
+    alignItems: 'center',
+    backgroundColor: '#236a5b',
+    borderColor: '#d9fff5',
+    borderWidth: 2,
+    justifyContent: 'center',
+  },
+  guidePieceText: {
+    color: '#ffffff',
+    fontWeight: '800',
   },
   boardContainer: {
     width: '100%',

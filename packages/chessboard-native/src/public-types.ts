@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import type { ViewStyle } from 'react-native';
+import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
 
 /**
  * Monotonic consumer-owned snapshot revision.
@@ -314,6 +314,55 @@ export interface PieceVisualState {
   readonly isPending: boolean;
   readonly isTransitioning: boolean;
 }
+
+/** Reusable visual defaults layered over the built-in native theme. @public */
+export interface ChessboardTheme {
+  /** Root paint; layout, border widths, and transforms are measurement-owned. */
+  readonly board?: StyleProp<ViewStyle>;
+  /** Base paint shared by every square. */
+  readonly square?: StyleProp<ViewStyle>;
+  /** Paint layered onto light squares. */
+  readonly lightSquare?: StyleProp<ViewStyle>;
+  /** Paint layered onto dark squares. */
+  readonly darkSquare?: StyleProp<ViewStyle>;
+  /** Notation contrast layered onto light squares. */
+  readonly lightSquareNotation?: StyleProp<TextStyle>;
+  /** Notation contrast layered onto dark squares. */
+  readonly darkSquareNotation?: StyleProp<TextStyle>;
+  /** File-label typography and placement. */
+  readonly fileNotation?: StyleProp<TextStyle>;
+  /** Rank-label typography and placement. */
+  readonly rankNotation?: StyleProp<TextStyle>;
+  /** Static piece-host paint. */
+  readonly piece?: StyleProp<ViewStyle>;
+}
+
+/** Per-instance visual overrides applied after the theme. @public */
+export interface ChessboardStyles {
+  /** Root paint; layout, border widths, and transforms are measurement-owned. */
+  readonly board?: StyleProp<ViewStyle>;
+  /** Base paint shared by every square. */
+  readonly square?: StyleProp<ViewStyle>;
+  /** Paint layered onto light squares. */
+  readonly lightSquare?: StyleProp<ViewStyle>;
+  /** Paint layered onto dark squares. */
+  readonly darkSquare?: StyleProp<ViewStyle>;
+  /** Notation contrast layered onto light squares. */
+  readonly lightSquareNotation?: StyleProp<TextStyle>;
+  /** Notation contrast layered onto dark squares. */
+  readonly darkSquareNotation?: StyleProp<TextStyle>;
+  /** File-label typography and placement. */
+  readonly fileNotation?: StyleProp<TextStyle>;
+  /** Rank-label typography and placement. */
+  readonly rankNotation?: StyleProp<TextStyle>;
+  /** Static piece-host paint. */
+  readonly piece?: StyleProp<ViewStyle>;
+}
+
+/** Declarative visual overrides keyed by canonical square ID. @public */
+export type SquareStyles = Readonly<
+  Partial<Record<SquareId, StyleProp<ViewStyle>>>
+>;
 
 /** Visual-only square renderer input; it intentionally exposes no handlers. @public */
 export interface SquareRendererProps {

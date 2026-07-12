@@ -14,6 +14,8 @@ export {
 } from './core/coordinates';
 export { parseFenPosition } from './core/fen';
 export { squareToBoardPoint } from './core/hit-test';
+export { defaultPieceRenderers } from './pieces';
+export { defaultTheme } from './theme';
 
 export type { ChessboardProps } from './Chessboard';
 export type {
@@ -40,6 +42,8 @@ export type {
   BoardTransition,
   ChessboardAccessibility,
   ChessboardAccessibilityAction,
+  ChessboardStyles,
+  ChessboardTheme,
   ControlledAnnotations,
   ControlledPosition,
   ControlledSelection,
@@ -70,6 +74,7 @@ export type {
   SquareId,
   SquareRenderer,
   SquareRendererProps,
+  SquareStyles,
   SquareVisualState,
   PieceVisualState,
 } from './public-types';

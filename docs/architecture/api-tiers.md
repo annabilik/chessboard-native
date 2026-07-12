@@ -87,6 +87,15 @@ canonical sorted sets, so order, duplicates, omission, and an explicit empty
 array do not manufacture revisions. Annotation IDs must be non-empty and unique;
 arrow width must be positive and opacity must be between zero and one.
 
+P1.4 renders pieces directly from the current normalized position returned by
+that boundary. The metadata above never supplies a renderable fallback, so a
+new plain value or accepted envelope is visible immediately and invalid current
+position input cannot reveal an older piece snapshot. Equal plain and revisioned
+values produce the same static piece tree. `pieceRenderers`, `theme`, `styles`,
+and `squareStyles` are presentation inputs rather than controlled semantic
+domains: they carry no revision, establish no tier, and cannot create position
+state.
+
 ## Consequences
 
 Simple diagrams stay simple, while stores can opt into explicit correlation per

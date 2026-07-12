@@ -4,8 +4,9 @@ A controlled, rules-free React Native chessboard component.
 
 > [!NOTE]
 > This repository is in Phase 1 and the package is not published. The public
-> component now renders a responsive static square surface with orientation
-> and notation; pieces and interaction are not implemented yet.
+> component now renders responsive, controlled static positions with default
+> or custom pieces, orientation, notation, and native styles. Interaction and
+> the board accessibility control are not implemented yet.
 
 ## Direction
 
@@ -41,10 +42,15 @@ semantic state. Concurrent and Strict Mode tests cover abandoned renders and
 report replay. The full `a1` through `z99` coordinate space and both
 orientations are covered by property tests. `Chessboard` now measures its
 width, derives a rectangular board height from rows and columns, and renders
-gap-free square backgrounds and oriented edge notation. Consumers set an
-explicit width by constraining the parent. Pieces, themes and style overrides,
-annotations, selection styling, interaction, and the adjustable accessibility
-control remain later Phase 1 work.
+gap-free square backgrounds, oriented edge notation, and the latest normalized
+controlled position. The package includes an original interim geometric set
+for the twelve standard chess pieces, also available from the focused `/pieces`
+export; a supplied `pieceRenderers` map replaces that set as a whole and
+supports any open `pieceType`. Theme, instance, and canonical per-square styles
+use one documented precedence chain. Consumers set an explicit width by
+constraining the parent. Custom square rendering,
+annotations, selection styling, interaction, transitions, and the adjustable
+accessibility control remain later work.
 
 The accepted architecture decisions and all 20 reserved invariant contracts
 are indexed in
@@ -53,6 +59,8 @@ The pure-core semantics are documented in
 [`docs/architecture/coordinates-and-fen.md`](./docs/architecture/coordinates-and-fen.md).
 Controlled tier and error semantics are documented in
 [`docs/architecture/api-tiers.md`](./docs/architecture/api-tiers.md).
+Native composition and style precedence are documented in
+[`docs/architecture/rendering-layers.md`](./docs/architecture/rendering-layers.md).
 
 ## Development
 

@@ -1,3 +1,6 @@
+import { StyleSheet } from 'react-native';
+
+import { defaultTheme } from '../../src/index';
 import type {
   AnnotationDraft,
   AnnotationOperation,
@@ -10,6 +13,8 @@ import type {
   BoardTransition,
   ChessboardAccessibility,
   ChessboardProps,
+  ChessboardStyles,
+  ChessboardTheme,
   ControlledAnnotations,
   ControlledPosition,
   ControlledSelection,
@@ -31,9 +36,28 @@ import type {
   SquareActivationIntent,
   SquareRenderer,
   SquareRendererProps,
+  SquareStyles,
 } from '../../src/index';
 
 describe('public data contracts', () => {
+  it('publishes one complete immutable native default theme', () => {
+    expect(Object.keys(defaultTheme).sort()).toEqual([
+      'board',
+      'darkSquare',
+      'darkSquareNotation',
+      'fileNotation',
+      'lightSquare',
+      'lightSquareNotation',
+      'piece',
+      'rankNotation',
+      'square',
+    ]);
+    expect(Object.isFrozen(defaultTheme)).toBe(true);
+    expect(
+      Object.values(defaultTheme).every((style) => Object.isFrozen(style)),
+    ).toBe(true);
+  });
+
   it('[PARITY-EXPORT-SQUARE-DATA-TYPE] exposes canonical square identity and parity', () => {
     const square = {
       isLight: true,
@@ -223,14 +247,39 @@ describe('public data contracts', () => {
   });
 
   it('requires direct board identity and position props and discriminates selection tiers', () => {
+    const nativeStyles = StyleSheet.create({
+      board: { borderRadius: 8 },
+      darkSquare: { backgroundColor: '#76543a' },
+      fileNotation: { fontSize: 11 },
+      piece: { opacity: 0.9 },
+      square: { borderWidth: 1 },
+    });
+    const theme = {
+      darkSquare: nativeStyles.darkSquare,
+      piece: nativeStyles.piece,
+    } satisfies ChessboardTheme;
+    const styles = {
+      board: [false, nativeStyles.board],
+      fileNotation: nativeStyles.fileNotation,
+    } satisfies ChessboardStyles;
+    const squareStyles = {
+      a1: [nativeStyles.square, null],
+    } satisfies SquareStyles;
+    const pieceRenderers = {
+      wK: () => null,
+    } satisfies PieceRenderers;
     const props = {
       annotations: [],
       boardId: 'diagram',
       dimensions: { columns: 8, rows: 8 },
       orientation: 'black',
+      pieceRenderers,
       position: '8/8/8/8/8/8/8/8',
       selection: { selectedSquare: null },
       showNotation: false,
+      squareStyles,
+      styles,
+      theme,
     } satisfies ChessboardProps;
     const revisioned = {
       revision: 4,
@@ -254,7 +303,11 @@ describe('public data contracts', () => {
 
     expect(props.boardId).toBe('diagram');
     expect(props.orientation).toBe('black');
+    expect(props.pieceRenderers).toBe(pieceRenderers);
     expect(props.showNotation).toBe(false);
+    expect(props.squareStyles).toBe(squareStyles);
+    expect(props.styles).toBe(styles);
+    expect(props.theme).toBe(theme);
     expect(revisioned.revision).toBe(4);
     expect(missingBoardId).toEqual(expect.any(Object));
     expect(missingPosition).toEqual(expect.any(Object));

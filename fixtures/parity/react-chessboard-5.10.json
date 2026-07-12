@@ -290,7 +290,7 @@
         "surface": "root",
         "symbols": ["defaultTheme.board"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-DEFAULT-BOARD-STYLE",
       "compatibilityNotes": "CSS grid defaults become React Native theme/style defaults."
     },
@@ -314,7 +314,7 @@
         "surface": "root",
         "symbols": ["defaultTheme.square"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-DEFAULT-SQUARE-STYLE",
       "compatibilityNotes": "Flexbox-compatible square defaults move into the native theme."
     },
@@ -338,7 +338,7 @@
         "surface": "root",
         "symbols": ["defaultTheme.darkSquare"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-DEFAULT-DARK-SQUARE-STYLE",
       "compatibilityNotes": "The default dark-square color is preserved in the native theme."
     },
@@ -362,7 +362,7 @@
         "surface": "root",
         "symbols": ["defaultTheme.lightSquare"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-DEFAULT-LIGHT-SQUARE-STYLE",
       "compatibilityNotes": "The default light-square color is preserved in the native theme."
     },
@@ -410,7 +410,7 @@
         "surface": "root",
         "symbols": ["defaultTheme.darkSquareNotation"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-DEFAULT-DARK-SQUARE-NOTATION-STYLE",
       "compatibilityNotes": "Notation contrast remains theme-driven with React Native text styles."
     },
@@ -434,7 +434,7 @@
         "surface": "root",
         "symbols": ["defaultTheme.lightSquareNotation"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-DEFAULT-LIGHT-SQUARE-NOTATION-STYLE",
       "compatibilityNotes": "Notation contrast remains theme-driven with React Native text styles."
     },
@@ -458,7 +458,7 @@
         "surface": "root",
         "symbols": ["defaultTheme.fileNotation"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-DEFAULT-ALPHA-NOTATION-STYLE",
       "compatibilityNotes": "Absolute CSS text placement becomes native notation layout."
     },
@@ -482,7 +482,7 @@
         "surface": "root",
         "symbols": ["defaultTheme.rankNotation"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-DEFAULT-NUMERIC-NOTATION-STYLE",
       "compatibilityNotes": "Absolute CSS text placement becomes native notation layout."
     },
@@ -670,7 +670,7 @@
         "surface": "root",
         "symbols": ["defaultPieceRenderers"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-DEFAULT-PIECES",
       "compatibilityNotes": "The twelve standard piece keys remain, but published defaults use original permissive artwork rather than the fixture-only Cburnett set."
     },
@@ -1274,7 +1274,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.pieceRenderers"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-PIECES",
       "compatibilityNotes": "Whole-object renderer replacement remains explicit; published defaults use permissive native artwork."
     },
@@ -1306,7 +1306,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.position"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-POSITION",
       "compatibilityNotes": "The prop is the only canonical position and may be plain or revisioned.",
       "rationale": "Upstream stores a mutable currentPosition mirror and mutates presentation snapshots; native rendering must always derive semantics from the latest controlled prop.",
@@ -1436,7 +1436,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.styles.board"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-BOARD-STYLE",
       "compatibilityNotes": "React.CSSProperties becomes a React Native StyleProp with documented precedence."
     },
@@ -1468,7 +1468,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.styles.square"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-SQUARE-STYLE",
       "compatibilityNotes": "Base square styling becomes a React Native StyleProp."
     },
@@ -1500,7 +1500,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.squareStyles"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-SQUARE-STYLES",
       "compatibilityNotes": "Per-square styles remain declarative and keyed by canonical square."
     },
@@ -1532,7 +1532,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.theme.darkSquare"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-DARK-SQUARE-STYLE",
       "compatibilityNotes": "Dark-square overrides move into the native theme/style contract."
     },
@@ -1564,7 +1564,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.theme.lightSquare"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-LIGHT-SQUARE-STYLE",
       "compatibilityNotes": "Light-square overrides move into the native theme/style contract."
     },
@@ -1692,7 +1692,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.theme.darkSquareNotation"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-DARK-SQUARE-NOTATION-STYLE",
       "compatibilityNotes": "CSS text properties become native TextStyle values."
     },
@@ -1724,7 +1724,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.theme.lightSquareNotation"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-LIGHT-SQUARE-NOTATION-STYLE",
       "compatibilityNotes": "CSS text properties become native TextStyle values."
     },
@@ -1756,7 +1756,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.styles.fileNotation"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ALPHA-NOTATION-STYLE",
       "compatibilityNotes": "File-label styling uses native layout and typography."
     },
@@ -1788,7 +1788,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.styles.rankNotation"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-NUMERIC-NOTATION-STYLE",
       "compatibilityNotes": "Rank-label styling uses native layout and typography."
     },
@@ -2816,7 +2816,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.position"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B07",
       "compatibilityNotes": "Rendering always uses the latest normalized controlled prop and never a durable mirror.",
       "rationale": "A mutable shadow position can diverge from the consumer store during gestures and animations, creating the second source of truth this port exists to remove.",
@@ -3908,7 +3908,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.theme", "ChessboardProps.styles"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B45",
       "compatibilityNotes": "A documented React Native StyleProp order replaces CSS object spread precedence."
     },
@@ -3931,7 +3931,7 @@
         "surface": "internal",
         "symbols": ["NotationLayer"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B46",
       "compatibilityNotes": "Native Text renders oriented file/rank edges with explicit theme and override precedence."
     },
@@ -3957,7 +3957,7 @@
           "ChessboardProps.squareStyles"
         ]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B47",
       "compatibilityNotes": "The visual-only renderer receives resolved style, size, piece, and interaction state under explicit layer precedence.",
       "rationale": "Upstream custom square rendering bypasses squareStyles and can own DOM children/handlers, making styling and interaction behavior dependent on fallback selection.",
@@ -3987,7 +3987,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.pieceRenderers", "defaultPieceRenderers"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B48",
       "compatibilityNotes": "Custom renderers receive square, native size/state, and the published default set uses original permissive artwork; Cburnett stays fixture-only."
     },

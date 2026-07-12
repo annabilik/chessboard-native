@@ -47,11 +47,18 @@ function flattenedStyle(node: TestInstance): ViewStyle {
 }
 
 function squareNodes(root: TestInstance): TestInstance[] {
-  return root.queryAll((node) => {
+  const paints = root.queryAll((node) => {
     const backgroundColor = flattenedStyle(node).backgroundColor;
     return (
       typeof backgroundColor === 'string' && SQUARE_COLORS.has(backgroundColor)
     );
+  });
+
+  return paints.map((paint) => {
+    if (paint.parent === null) {
+      throw new Error('Expected square paint inside a measured frame.');
+    }
+    return paint.parent;
   });
 }
 
@@ -104,7 +111,7 @@ describe('Chessboard controlled boundary', () => {
     const visualLayers = root.queryAll(
       (node) => node.props['accessibilityElementsHidden'] === true,
     );
-    expect(visualLayers).toHaveLength(1);
+    expect(visualLayers).toHaveLength(2);
     const visualLayer = requiredNode(visualLayers, 0);
     expect(visualLayer).toHaveProp('accessible', false);
     expect(visualLayer).toHaveProp(

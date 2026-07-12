@@ -1,35 +1,49 @@
 import { Fragment, type ReactElement } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { Text } from 'react-native';
 
-const MAX_NOTATION_FONT_SIZE = 13;
-const NOTATION_SCALE = 0.325;
+import type { ChessboardStyles, ChessboardTheme } from '../public-types';
+import { resolveNotationStyle } from './style-resolution';
 
 interface NotationLayerProps {
   readonly cellHeight: number;
   readonly cellWidth: number;
-  readonly color: string;
   readonly fileLabel: string | null;
+  readonly isLight: boolean;
   readonly rankLabel: string | null;
+  readonly styles?: ChessboardStyles | undefined;
+  readonly theme?: ChessboardTheme | undefined;
 }
 
 /** Decorative file/rank labels for one measured edge square. */
 export function NotationLayer({
   cellHeight,
   cellWidth,
-  color,
   fileLabel,
+  isLight,
   rankLabel,
+  styles,
+  theme,
 }: NotationLayerProps): ReactElement | null {
   if (fileLabel === null && rankLabel === null) {
     return null;
   }
 
-  const fontSize = Math.min(
-    MAX_NOTATION_FONT_SIZE,
-    Math.min(cellHeight, cellWidth) * NOTATION_SCALE,
-  );
-  const cellSize = Math.min(cellHeight, cellWidth);
-  const textStyle = { color, fontSize, lineHeight: fontSize };
+  const rankStyle = resolveNotationStyle({
+    axis: 'rank',
+    cellHeight,
+    cellWidth,
+    isLight,
+    styles,
+    theme,
+  });
+  const fileStyle = resolveNotationStyle({
+    axis: 'file',
+    cellHeight,
+    cellWidth,
+    isLight,
+    styles,
+    theme,
+  });
 
   return (
     <Fragment>
@@ -39,14 +53,7 @@ export function NotationLayer({
           allowFontScaling={false}
           importantForAccessibility="no-hide-descendants"
           pointerEvents="none"
-          style={[
-            styles.label,
-            {
-              left: Math.min(2, cellSize * 0.08),
-              top: Math.min(2, cellSize * 0.08),
-            },
-            textStyle,
-          ]}
+          style={rankStyle}
         >
           {rankLabel}
         </Text>
@@ -57,14 +64,7 @@ export function NotationLayer({
           allowFontScaling={false}
           importantForAccessibility="no-hide-descendants"
           pointerEvents="none"
-          style={[
-            styles.label,
-            {
-              bottom: Math.min(1, cellSize * 0.04),
-              right: Math.min(3, cellSize * 0.1),
-            },
-            textStyle,
-          ]}
+          style={fileStyle}
         >
           {fileLabel}
         </Text>
@@ -72,11 +72,3 @@ export function NotationLayer({
     </Fragment>
   );
 }
-
-const styles = StyleSheet.create({
-  label: {
-    fontWeight: '700',
-    includeFontPadding: false,
-    position: 'absolute',
-  },
-});

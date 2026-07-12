@@ -45,9 +45,12 @@ const requiredPackageFiles = new Set([
   'LICENSE',
   'README.md',
   'lib/module/index.js',
+  'lib/module/pieces/index.js',
   'lib/typescript/src/index.d.ts',
+  'lib/typescript/src/pieces/index.d.ts',
   'package.json',
   'src/index.ts',
+  'src/pieces/index.ts',
 ]);
 const forbiddenPackagePathPatterns = [
   /(?:^|\/)fixtures?(?:\/|$)/i,

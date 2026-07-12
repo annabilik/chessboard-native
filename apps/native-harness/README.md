@@ -4,9 +4,11 @@ Private bare React Native 0.86 consumer for native build and test gates. The
 Android and iOS projects are checked in deliberately; Expo CNG does not own or
 regenerate them.
 
-The harness imports `@vibechess/chessboard-native` through its public workspace
-export and renders the responsive static square surface. Native UI tests,
-accessibility targets, and benchmarks land in the phases that own them.
+The harness imports `@vibechess/chessboard-native` and its public `/pieces`
+subpath through the workspace exports, then renders a responsive starting
+position with the package's interim default pieces. The board remains
+non-interactive and decorative. Native UI tests, accessibility targets, and
+benchmarks land in the phases that own them.
 
 CI also copies this harness to a fresh directory outside the repository,
 replaces `workspace:*` with the inspected npm archive, performs a clean npm
