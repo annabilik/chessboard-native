@@ -5,8 +5,8 @@ A controlled, rules-free React Native chessboard component.
 > [!NOTE]
 > This repository is in Phase 1 and the package is not published. The public
 > component now renders responsive, controlled static positions with default
-> or custom pieces, orientation, notation, and native styles. Interaction and
-> the board accessibility control are not implemented yet.
+> or custom pieces, orientation, notation, native styles, and a single-control
+> accessibility prototype. Semantic move interaction is not implemented yet.
 
 ## Direction
 
@@ -49,8 +49,11 @@ export; a supplied `pieceRenderers` map replaces that set as a whole and
 supports any open `pieceType`. Theme, instance, and canonical per-square styles
 use one documented precedence chain. Consumers set an explicit width by
 constraining the parent. Custom square rendering,
-annotations, selection styling, interaction, transitions, and the adjustable
-accessibility control remain later work.
+annotations, selection styling, interaction, and transitions remain later
+work. The P1.5 accessibility prototype adds an orientation-aware virtual cursor,
+native adjustable/directional navigation, current controlled square values,
+correlated announcements, and the centralized reduced-motion policy without
+owning semantic selection or moves.
 
 The accepted architecture decisions and all 20 reserved invariant contracts
 are indexed in
@@ -61,6 +64,8 @@ Controlled tier and error semantics are documented in
 [`docs/architecture/api-tiers.md`](./docs/architecture/api-tiers.md).
 Native composition and style precedence are documented in
 [`docs/architecture/rendering-layers.md`](./docs/architecture/rendering-layers.md).
+The accessibility control and manual TalkBack/VoiceOver pass are documented in
+[`docs/accessibility.md`](./docs/accessibility.md).
 
 ## Development
 

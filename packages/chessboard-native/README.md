@@ -12,9 +12,11 @@ position. Constrain the parent to set an explicit width.
 The default set contains twelve original interim geometric chess pieces.
 Consumers can replace it with a visual-only renderer map keyed by the open
 `pieceType` vocabulary. Theme, instance, and canonical per-square styles are
-also declarative. Annotations, selection styling, custom square rendering,
-interaction, transitions, and the adjustable accessibility control are not
-rendered yet. Provider-level identity registration remains future work.
+also declarative. The board is one adjustable accessibility control with an
+orientation-aware virtual cursor and decorative visual descendants. Annotations,
+selection styling, custom square rendering, semantic interaction, and
+transitions are not rendered yet. Provider-level identity registration remains
+future work.
 
 ```tsx
 import { Chessboard } from '@vibechess/chessboard-native';
@@ -76,15 +78,35 @@ not rotate when orientation changes. Custom piece content receives the resolved
 piece style for inspection or derived artwork, while the board-owned wrapper
 applies that style exactly once. Renderers should not blindly apply it again.
 Renderer props contain no event or accessibility handlers, and the board keeps
-the entire visual subtree non-interactive and decorative. Host measurement and
-absolute square/piece wrapper rectangles remain structural and cannot be
-replaced by visual styles.
+the entire visual subtree non-interactive and decorative. Only the stable outer
+host is exposed to assistive technology. Host measurement and absolute
+square/piece wrapper rectangles remain structural and cannot be replaced by
+visual styles.
 
 Board display, width, height, aspect ratio, flex sizing, margins, insets,
 padding, transforms, box sizing, border widths, and pointer-event modes are
 ignored in `theme.board` and `styles.board`; use a parent wrapper for those
 concerns. Square and piece geometry-like styles can inform paint or renderer
 derivation but cannot replace canonical measured placement.
+
+## Accessibility and reduced motion
+
+`Chessboard` owns a transient virtual cursor, never semantic selection. It
+starts at a valid controlled selected square or the visual top-left, traverses
+orientation-aware reading order through adjustable increment/decrement events,
+and exposes four directional custom actions. Position and selection prop changes
+refresh its value without moving a valid cursor; orientation keeps the same
+canonical square.
+
+Use `accessibility` for a full board label/hint override, square/action
+formatters, and `{ id, message }` announcements. Announcement IDs are spoken
+once per mounted board. `reduceMotion="system"` is the default; `always` forces
+reduced motion and `never` explicitly permits it. Semantic activation, moves,
+removal, spare placement, and annotation actions remain later slices.
+
+See the repository's
+[`docs/accessibility.md`](https://github.com/annabilik/chessboard-native/blob/main/docs/accessibility.md)
+for the complete contract and manual TalkBack/VoiceOver checklist.
 
 ## Pure core
 

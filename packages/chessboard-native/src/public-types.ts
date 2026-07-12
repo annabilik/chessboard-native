@@ -447,14 +447,19 @@ export interface MoveOutcomeAccessibilityContext {
 
 /** Single-control accessibility labels, formatters, and announcements. @public */
 export interface ChessboardAccessibility {
+  /** Full board-label override; include an orientation summary when desired. */
   readonly boardLabel?: string;
+  /** Full board-hint override. */
   readonly boardHint?: string;
+  /** Replaces the square value; empty output falls back to the default value. */
   readonly formatSquareValue?: (context: SquareAccessibilityContext) => string;
+  /** Formats directional actions; labels are trimmed and made non-empty/unique. */
   readonly formatActionLabel?: (
     context: BoardActionAccessibilityContext,
   ) => string;
   readonly formatMoveOutcome?: (
     context: MoveOutcomeAccessibilityContext,
   ) => string | null;
+  /** Non-empty correlation ID and message, spoken once per mounted board. */
   readonly announcement?: Readonly<{ id: string; message: string }>;
 }

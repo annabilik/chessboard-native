@@ -172,20 +172,15 @@ export function Chessboard(props: ChessboardProps): ReactElement;
 
 // @public
 export interface ChessboardAccessibility {
-    // (undocumented)
     readonly announcement?: Readonly<{
         id: string;
         message: string;
     }>;
-    // (undocumented)
     readonly boardHint?: string;
-    // (undocumented)
     readonly boardLabel?: string;
-    // (undocumented)
     readonly formatActionLabel?: (context: BoardActionAccessibilityContext) => string;
     // (undocumented)
     readonly formatMoveOutcome?: (context: MoveOutcomeAccessibilityContext) => string | null;
-    // (undocumented)
     readonly formatSquareValue?: (context: SquareAccessibilityContext) => string;
 }
 
@@ -260,6 +255,7 @@ export type ChessboardErrorDomain = 'board' | 'dimensions' | 'position' | 'annot
 
 // @public
 export interface ChessboardProps {
+    readonly accessibility?: ChessboardAccessibility;
     readonly annotations?: AnnotationsProp;
     readonly boardId: string;
     readonly dimensions?: BoardDimensions;
@@ -267,6 +263,7 @@ export interface ChessboardProps {
     readonly orientation?: BoardOrientation;
     readonly pieceRenderers?: PieceRenderers;
     readonly position: PositionProp;
+    readonly reduceMotion?: ReduceMotion;
     readonly selection?: SelectionProp;
     readonly showNotation?: boolean;
     readonly squareStyles?: SquareStyles;

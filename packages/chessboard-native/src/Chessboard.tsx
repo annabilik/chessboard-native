@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 
+import { ReducedMotionProvider } from './accessibility/reduced-motion';
 import type { ChessboardError, OnChessboardError } from './ChessboardError';
 import {
   createBoardModelMetadata,
@@ -17,10 +18,12 @@ import type {
   AnnotationsProp,
   BoardDimensions,
   BoardOrientation,
+  ChessboardAccessibility,
   ChessboardStyles,
   ChessboardTheme,
   PieceRenderers,
   PositionProp,
+  ReduceMotion,
   SelectionProp,
   SquareStyles,
 } from './public-types';
@@ -49,6 +52,10 @@ export interface ChessboardProps {
   readonly annotations?: AnnotationsProp;
   /** Consumer-owned selection presentation when supplied. */
   readonly selection?: SelectionProp;
+  /** Labels, formatters, and correlated announcements for the board control. */
+  readonly accessibility?: ChessboardAccessibility;
+  /** Animation-reduction policy; defaults to the operating-system preference. */
+  readonly reduceMotion?: ReduceMotion;
   /** Receives deduplicated production contract errors after commit. */
   readonly onError?: OnChessboardError;
 }
@@ -106,14 +113,17 @@ export function ChessboardRuntime({
   const model = useBoardModel(props, development, logError);
 
   return (
-    <BoardSurface
-      model={model}
-      pieceRenderers={props.pieceRenderers ?? defaultPieceRenderers}
-      showNotation={props.showNotation ?? true}
-      squareStyles={props.squareStyles}
-      styles={props.styles}
-      theme={props.theme}
-    />
+    <ReducedMotionProvider preference={props.reduceMotion ?? 'system'}>
+      <BoardSurface
+        accessibility={props.accessibility}
+        model={model}
+        pieceRenderers={props.pieceRenderers ?? defaultPieceRenderers}
+        showNotation={props.showNotation ?? true}
+        squareStyles={props.squareStyles}
+        styles={props.styles}
+        theme={props.theme}
+      />
+    </ReducedMotionProvider>
   );
 }
 
@@ -121,8 +131,9 @@ export function ChessboardRuntime({
  * Controlled, rules-free React Native chessboard.
  *
  * The responsive static surface renders the latest controlled position with
- * measured squares, notation, and visual-only default or custom pieces.
- * Interaction remains a later Phase 1 slice.
+ * measured squares, notation, visual-only default or custom pieces, and one
+ * adjustable accessibility control. Semantic interaction remains controlled
+ * by later APIs.
  *
  * @public
  */

@@ -7,7 +7,8 @@ regenerate them.
 The harness imports `@vibechess/chessboard-native` and its public `/pieces`
 subpath through the workspace exports, then renders a responsive starting
 position with the package's interim default pieces. The board remains
-non-interactive and decorative. Native UI tests, accessibility targets, and
+touch-noninteractive; its outer host is one adjustable accessibility control
+and its visual descendants are decorative. Native UI accessibility targets and
 benchmarks land in the phases that own them.
 
 CI also copies this harness to a fresh directory outside the repository,

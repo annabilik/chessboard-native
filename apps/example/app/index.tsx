@@ -4,7 +4,8 @@ import {
   type PieceRenderers,
 } from '@vibechess/chessboard-native';
 import { defaultPieceRenderers } from '@vibechess/chessboard-native/pieces';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Link } from 'expo-router';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const GuidePiece: PieceRenderer = ({ size }) => (
@@ -78,10 +79,19 @@ export default function GalleryIndex() {
         </Text>
 
         <Text style={styles.pending}>
-          The boards are still decorative and non-interactive. Custom square
-          rendering, annotations, selection styling, transitions, gestures, and
-          the adjustable accessibility control remain later slices.
+          The boards now expose one adjustable accessibility control while the
+          visual subtree remains decorative. Custom square rendering,
+          annotations, selection styling, transitions, and touch gestures remain
+          later slices.
         </Text>
+
+        <Link asChild href="/accessibility">
+          <Pressable style={styles.routeLink}>
+            <Text style={styles.routeLinkText}>
+              Open accessibility prototype
+            </Text>
+          </Pressable>
+        </Link>
       </ScrollView>
     </SafeAreaView>
   );
@@ -152,6 +162,21 @@ const styles = StyleSheet.create({
     color: '#665c4d',
     fontSize: 15,
     lineHeight: 22,
+  },
+  routeLink: {
+    width: '100%',
+    maxWidth: 520,
+    alignItems: 'center',
+    backgroundColor: '#236a5b',
+    borderRadius: 10,
+    marginTop: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+  },
+  routeLinkText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
   },
   variantContainer: {
     width: '72%',

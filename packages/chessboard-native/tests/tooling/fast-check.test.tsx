@@ -21,8 +21,8 @@ describe('fast-check infrastructure smoke', () => {
             }
 
             expect(result.container.children).toHaveLength(1);
-            expect(result.root).toHaveProp('accessible', false);
-            expect(result.root).toHaveProp('pointerEvents', 'none');
+            expect(result.root).toHaveProp('accessible', true);
+            expect(result.root).toHaveProp('pointerEvents', 'box-none');
           } finally {
             await result.unmount();
           }
