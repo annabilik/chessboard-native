@@ -32,6 +32,9 @@ const manifestPath = path.join(
 );
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
 const inventory = await collectUpstreamInventory(repositoryRoot, manifest);
+const implementedContractCount = manifest.entries.filter(
+  (entry) => entry.status === 'implemented',
+).length;
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -582,12 +585,18 @@ test('accepts fresh commit-bound Jest evidence as a file or directory', async ()
       repositoryRoot,
       resultInputs: [shardPath],
     });
-    assert.equal(fromFile.shards[0].value.results.length, 10);
+    assert.equal(
+      fromFile.shards[0].value.results.length,
+      implementedContractCount,
+    );
     const fromDirectory = await checkParity({
       repositoryRoot,
       resultInputs: [temporaryDirectory],
     });
-    assert.equal(fromDirectory.shards[0].value.results.length, 10);
+    assert.equal(
+      fromDirectory.shards[0].value.results.length,
+      implementedContractCount,
+    );
   } finally {
     await rm(temporaryDirectory, { force: true, recursive: true });
   }

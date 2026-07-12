@@ -694,7 +694,7 @@
         "surface": "root",
         "symbols": ["generateBoardGeometry"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-GENERATE-BOARD",
       "compatibilityNotes": "The grid generator uses validated dimensions and canonical square identifiers."
     },
@@ -718,7 +718,7 @@
         "surface": "root",
         "symbols": ["rowIndexToRank"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-ROW-INDEX-TO-CHESS-ROW",
       "compatibilityNotes": "The orientation-aware conversion remains a pure coordinate utility."
     },
@@ -742,7 +742,7 @@
         "surface": "root",
         "symbols": ["columnIndexToFile"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-COLUMN-INDEX-TO-CHESS-COLUMN",
       "compatibilityNotes": "The conversion remains pure and is bounded to files a through z."
     },
@@ -766,7 +766,7 @@
         "surface": "root",
         "symbols": ["fileToColumnIndex"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-CHESS-COLUMN-TO-COLUMN-INDEX",
       "compatibilityNotes": "The inverse conversion remains pure and validates canonical file identifiers."
     },
@@ -790,7 +790,7 @@
         "surface": "root",
         "symbols": ["rankToRowIndex"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-CHESS-ROW-TO-ROW-INDEX",
       "compatibilityNotes": "The inverse conversion remains pure and validates ranks 1 through 99."
     },
@@ -814,7 +814,7 @@
         "surface": "root",
         "symbols": ["parseFenPosition"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-FEN-STRING-TO-POSITION-OBJECT",
       "compatibilityNotes": "The native parser is strict, atomic, and permits FEN only for an 8x8 board.",
       "rationale": "The upstream parser silently accepts malformed rows, treats multi-digit empties one digit at a time, and performs no dimension validation; native invalid input must fail atomically.",
@@ -2747,9 +2747,14 @@
       "disposition": "adapt",
       "native": {
         "surface": "internal",
-        "symbols": ["CoordinateCodec", "BoardGeometry"]
+        "symbols": [
+          "validateBoardDimensions",
+          "coordinateToSquare",
+          "squareToCoordinate",
+          "generateBoardGeometry"
+        ]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B05",
       "compatibilityNotes": "Validated dimensions use canonical square IDs; orientation changes visual order only."
     },
@@ -2782,7 +2787,7 @@
         "surface": "root",
         "symbols": ["PositionInput", "parseFenPosition"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B06",
       "compatibilityNotes": "FEN is strict and 8x8-only; variants use PositionObject and non-placement fields are intentionally discarded.",
       "rationale": "The upstream parser accepts malformed and dimension-mismatched input, so retaining it would violate atomic validation and predictable variant behavior.",

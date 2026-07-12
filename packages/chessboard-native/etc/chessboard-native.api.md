@@ -229,6 +229,9 @@ export type ChessboardErrorDetails = {
 export type ChessboardErrorDomain = 'board' | 'dimensions' | 'position' | 'annotations' | 'selection';
 
 // @public
+export function columnIndexToFile(columnIndex: number, columns: number, orientation: BoardOrientation): string;
+
+// @public
 export interface ControlledAnnotations {
     // (undocumented)
     readonly revision: Revision;
@@ -255,6 +258,12 @@ export type ControlledSelection = PlainSelection & {
 
 // @public
 export type FenPieceCode = 'p' | 'r' | 'n' | 'b' | 'q' | 'k' | 'P' | 'R' | 'N' | 'B' | 'Q' | 'K';
+
+// @public
+export function fileToColumnIndex(file: string, columns: number, orientation: BoardOrientation): number;
+
+// @public
+export function generateBoardGeometry(dimensions: BoardDimensions, orientation: BoardOrientation): readonly (readonly BoardSquare[])[];
 
 // @public
 export type MoveDecision = {
@@ -317,6 +326,9 @@ export type OnChessboardError = (error: ChessboardError, context: ChessboardErro
 export type OnMoveRequest = (intent: MoveIntent, context: {
     signal: AbortSignal;
 }) => MoveDecision | Promise<MoveDecision>;
+
+// @public
+export function parseFenPosition(fen: string, dimensions?: BoardDimensions): PositionObject;
 
 // @public
 export interface PieceData {
@@ -402,10 +414,16 @@ export type PositionObject = Readonly<Partial<Record<SquareId, Readonly<PieceDat
 export type PositionProp = PositionInput | ControlledPosition;
 
 // @public
+export function rankToRowIndex(rank: number, rows: number, orientation: BoardOrientation): number;
+
+// @public
 export type ReduceMotion = 'system' | 'always' | 'never';
 
 // @public
 export type Revision = number;
+
+// @public
+export function rowIndexToRank(rowIndex: number, rows: number, orientation: BoardOrientation): number;
 
 // @public
 export type SelectionProp = PlainSelection | ControlledSelection;
