@@ -1,5 +1,6 @@
 .changeset/pre.json
 **/.expo/
+**/.cxx/
 **/build/
 **/coverage/
 **/dist/

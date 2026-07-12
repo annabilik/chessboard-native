@@ -140,5 +140,40 @@ separately:
 10. Confirm there is no activation, move, removal, or annotation action in this
     Phase 1 prototype.
 
-The automated component contracts do not replace this assistive-technology
-pass. Static Espresso and XCUITest audit targets are the next roadmap slice.
+The automated component and native contracts do not replace this
+assistive-technology pass.
+
+## Automated native audits
+
+The checked-in bare React Native harness provides deterministic native audits
+for the static accessibility projection:
+
+- Android runs Espresso Accessibility Test Framework checks from the full
+  screen root, verifies that exactly one board host exposes the adjustable
+  range and expected navigation actions, exercises all six actions, and checks
+  that the visual layers hide their descendants.
+- iOS locates exactly one aggregated board element, verifies its current value
+  and enabled state, checks that it has no accessible descendants, and runs
+  `XCUIApplication.performAccessibilityAudit()` without broad suppressions.
+
+Both targets use a Release fixture with embedded JavaScript. CI installs the
+single inspected npm archive into a fresh copy of the harness before running
+the audits, so workspace source resolution cannot make them pass. Run them
+locally with:
+
+```sh
+pnpm native:android:accessibility
+pnpm native:ios:accessibility
+```
+
+The Android command expects a running device or emulator. CI uses the
+Gradle-managed API 35 target through
+`pnpm native:android:accessibility:managed`. The iOS command requires Xcode and
+an available iPhone simulator running iOS 17 or newer.
+
+These audits catch native hierarchy, trait, label, value, range, action, hit
+region, contrast, and similar static regressions. They cannot establish spoken
+output or pronunciation, TalkBack gesture behavior, VoiceOver rotor/action
+discoverability, announcement delivery, or focus retention during live
+controlled updates. The physical-device checklist above remains authoritative
+for those behaviors.
