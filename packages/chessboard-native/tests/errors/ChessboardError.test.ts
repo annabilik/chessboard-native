@@ -56,6 +56,14 @@ describe('ChessboardError', () => {
     expect(error.boardId).toBeNull();
     expect(error.revision).toBeNull();
     expect(error.cause).toBeUndefined();
+
+    const orientation = new ChessboardError('Invalid orientation.', {
+      boardId: 'analysis',
+      code: 'INVALID_ORIENTATION',
+      revision: null,
+    });
+    expect(orientation.domain).toBe('dimensions');
+    expect(orientation.revision).toBeNull();
   });
 
   it('uses null when malformed revisions and plain tier switches have no consumer revision', () => {

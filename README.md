@@ -3,9 +3,9 @@
 A controlled, rules-free React Native chessboard component.
 
 > [!NOTE]
-> This repository is in its contract-foundation phase. The package is not
-> published, and its public component currently renders only a disabled board
-> frame.
+> This repository is in Phase 1 and the package is not published. The public
+> component now renders a responsive static square surface with orientation
+> and notation; pieces and interaction are not implemented yet.
 
 ## Direction
 
@@ -39,9 +39,12 @@ revision ordering and mounted tier stability, applies domain-isolated recovery,
 and reports production errors once after commit without retaining renderable
 semantic state. Concurrent and Strict Mode tests cover abandoned renders and
 report replay. The full `a1` through `z99` coordinate space and both
-orientations are covered by property tests. `Chessboard` still draws only the
-package-verification frame; responsive squares and pieces are the next Phase 1
-work.
+orientations are covered by property tests. `Chessboard` now measures its
+width, derives a rectangular board height from rows and columns, and renders
+gap-free square backgrounds and oriented edge notation. Consumers set an
+explicit width by constraining the parent. Pieces, themes and style overrides,
+annotations, selection styling, interaction, and the adjustable accessibility
+control remain later Phase 1 work.
 
 The accepted architecture decisions and all 20 reserved invariant contracts
 are indexed in

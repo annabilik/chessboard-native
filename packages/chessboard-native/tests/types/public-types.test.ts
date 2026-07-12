@@ -227,8 +227,10 @@ describe('public data contracts', () => {
       annotations: [],
       boardId: 'diagram',
       dimensions: { columns: 8, rows: 8 },
+      orientation: 'black',
       position: '8/8/8/8/8/8/8/8',
       selection: { selectedSquare: null },
+      showNotation: false,
     } satisfies ChessboardProps;
     const revisioned = {
       revision: 4,
@@ -251,6 +253,8 @@ describe('public data contracts', () => {
     };
 
     expect(props.boardId).toBe('diagram');
+    expect(props.orientation).toBe('black');
+    expect(props.showNotation).toBe(false);
     expect(revisioned.revision).toBe(4);
     expect(missingBoardId).toEqual(expect.any(Object));
     expect(missingPosition).toEqual(expect.any(Object));

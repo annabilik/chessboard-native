@@ -77,7 +77,8 @@ and revision metadata. Omitting optional annotations or selection does not
 establish a tier and makes that current domain unavailable. Omission does not
 erase a tier already established earlier in the same mounted lifetime.
 
-Board identity and dimensions are validated before any controlled value.
+Board identity, dimensions, and orientation are validated before any controlled
+value. Invalid orientation uses the revisionless `dimensions` recovery domain.
 Concrete adapters then create detached, deeply frozen current snapshots for all
 three domains. Position key order and annotation object field order are not
 semantic; annotation collection order remains semantic because it defines

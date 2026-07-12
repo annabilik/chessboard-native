@@ -45,16 +45,19 @@ Invalid updates fail atomically within one of five recovery domains:
 `ChessboardError.code` identifies the violation while `domain` identifies the
 fallback:
 
-- Invalid board identity, dimensions, or position produces a disabled empty
-  board frame.
+- Invalid board identity, dimensions, orientation, or position produces a
+  disabled empty board surface.
 - Invalid annotations leaves the valid position visible with no annotations.
 - Invalid selection leaves position and annotations visible and ignores the
   selection snapshot.
 
-The controlled model now represents those fallbacks as unavailable domains and
-the component marks the hidden verification frame as disabled. Visible
-square, piece, and annotation fallback rendering begins with the static renderer
-work; this boundary does not claim those layers yet.
+The controlled model represents those fallbacks as unavailable domains. The
+P1.3 renderer now makes the square-layer behavior visible: an invalid position
+with valid dimensions and orientation renders the current empty grid, while
+invalid dimensions or orientation render the neutral disabled frame without
+projected cells. No fallback retains a prior position. Piece, annotation,
+selection, and interaction layers remain future work, so this slice does not
+claim their visible recovery behavior.
 
 Development throws `ChessboardError`. Production plans a post-commit `onError`
 report once per domain and revision, or logs once when no handler exists.

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
-import { StyleSheet, View } from 'react-native';
 
 import type { ChessboardError, OnChessboardError } from './ChessboardError';
 import {
@@ -12,9 +11,11 @@ import {
   dispatchChessboardErrorReports,
   planChessboardErrorReports,
 } from './internal/error-reporting';
+import { BoardSurface } from './render/board-surface';
 import type {
   AnnotationsProp,
   BoardDimensions,
+  BoardOrientation,
   PositionProp,
   SelectionProp,
 } from './public-types';
@@ -27,6 +28,10 @@ export interface ChessboardProps {
   readonly position: PositionProp;
   /** Defaults to an 8x8 board. */
   readonly dimensions?: BoardDimensions;
+  /** Visual orientation; defaults to white at the bottom. */
+  readonly orientation?: BoardOrientation;
+  /** Show decorative file and rank labels; defaults to true. */
+  readonly showNotation?: boolean;
   /** The only persistent annotation collection when supplied. */
   readonly annotations?: AnnotationsProp;
   /** Consumer-owned selection presentation when supplied. */
@@ -65,6 +70,7 @@ function useBoardModel(
     boardId: props.boardId,
     development,
     dimensions: props.dimensions,
+    orientation: props.orientation,
     position: props.position,
     previousMetadata: metadata,
     selection: props.selection,
@@ -87,22 +93,15 @@ export function ChessboardRuntime({
   const model = useBoardModel(props, development, logError);
 
   return (
-    <View
-      accessibilityElementsHidden
-      accessibilityState={{ disabled: model.status === 'disabled' }}
-      accessible={false}
-      importantForAccessibility="no-hide-descendants"
-      pointerEvents="none"
-      style={styles.frame}
-    />
+    <BoardSurface model={model} showNotation={props.showNotation ?? true} />
   );
 }
 
 /**
  * Controlled, rules-free React Native chessboard.
  *
- * Static square and piece rendering lands in the next Phase 1 slice; this
- * frame already enforces standalone controlled-value normalization.
+ * The responsive static surface renders controlled dimensions, orientation,
+ * and notation. Piece and interaction layers remain later Phase 1 slices.
  *
  * @public
  */
@@ -110,14 +109,3 @@ export function Chessboard(props: ChessboardProps): ReactElement {
   const development = typeof __DEV__ !== 'undefined' && __DEV__;
   return <ChessboardRuntime {...props} development={development} />;
 }
-
-const styles = StyleSheet.create({
-  frame: {
-    width: '100%',
-    aspectRatio: 1,
-    backgroundColor: '#e7e0d2',
-    borderColor: '#9c8f7a',
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-});

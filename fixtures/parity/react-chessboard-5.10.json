@@ -1340,7 +1340,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.orientation"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-BOARD-ORIENTATION",
       "compatibilityNotes": "Renamed to orientation; canonical square IDs never change."
     },
@@ -1372,7 +1372,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.dimensions.rows"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-CHESSBOARD-ROWS",
       "compatibilityNotes": "Rows are validated integers from 1 through 99."
     },
@@ -1404,7 +1404,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.dimensions.columns"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-CHESSBOARD-COLUMNS",
       "compatibilityNotes": "Columns are validated integers from 1 through 26."
     },
@@ -1820,7 +1820,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.showNotation"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-SHOW-NOTATION",
       "compatibilityNotes": "The Boolean notation toggle is retained."
     },
@@ -3931,7 +3931,7 @@
         "surface": "internal",
         "symbols": ["NotationLayer"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B46",
       "compatibilityNotes": "Native Text renders oriented file/rank edges with explicit theme and override precedence."
     },
