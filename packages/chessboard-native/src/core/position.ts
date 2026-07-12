@@ -10,6 +10,7 @@ import {
   validateBoardDimensions,
 } from './dimensions';
 import { parseFenPosition } from './fen';
+import { isPlainRecord } from './records';
 
 export type PositionValidationCode =
   'INVALID_POSITION' | 'INVALID_POSITION_SQUARE' | 'DUPLICATE_PIECE_ID';
@@ -29,15 +30,6 @@ export class PositionValidationError extends TypeError {
     }
     this.code = code;
   }
-}
-
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return false;
-  }
-
-  const prototype = Object.getPrototypeOf(value) as unknown;
-  return prototype === Object.prototype || prototype === null;
 }
 
 function invalidPosition(message: string, cause?: unknown): never {

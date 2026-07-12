@@ -9,11 +9,15 @@ describe('fast-check infrastructure smoke', () => {
       fc.asyncProperty(
         fc.integer({ max: 3, min: 0 }),
         async (rerenderCount) => {
-          const result = await render(<Chessboard />);
+          const result = await render(
+            <Chessboard boardId="property" position={{}} />,
+          );
 
           try {
             for (let index = 0; index < rerenderCount; index += 1) {
-              await result.rerender(<Chessboard />);
+              await result.rerender(
+                <Chessboard boardId="property" position={{}} />,
+              );
             }
 
             expect(result.container.children).toHaveLength(1);

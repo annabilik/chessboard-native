@@ -4,8 +4,7 @@
 
 ```ts
 
-import { JSX } from 'react/jsx-runtime';
-import type { ReactElement } from 'react';
+import { ReactElement } from 'react';
 import type { ViewStyle } from 'react-native';
 
 // @public
@@ -166,7 +165,7 @@ export interface BoardTransition {
 }
 
 // @public
-export function Chessboard(): JSX.Element;
+export function Chessboard(props: ChessboardProps): ReactElement;
 
 // @public
 export interface ChessboardAccessibility {
@@ -228,21 +227,43 @@ export type ChessboardErrorDetails = {
     readonly boardId: string | null;
     readonly revision: null;
 } | {
-    readonly code: 'INVALID_FEN' | 'FEN_DIMENSION_MISMATCH' | 'INVALID_POSITION' | 'INVALID_POSITION_SQUARE' | 'DUPLICATE_PIECE_ID' | 'INVALID_POSITION_REVISION' | 'POSITION_CONTROL_TIER_CHANGED';
+    readonly code: 'INVALID_FEN' | 'FEN_DIMENSION_MISMATCH' | 'INVALID_POSITION' | 'INVALID_POSITION_SQUARE' | 'DUPLICATE_PIECE_ID';
     readonly boardId: string | null;
     readonly revision: Revision;
 } | {
-    readonly code: 'INVALID_ANNOTATIONS' | 'DUPLICATE_ANNOTATION_ID' | 'INVALID_ANNOTATION_REVISION' | 'ANNOTATION_CONTROL_TIER_CHANGED';
+    readonly code: 'INVALID_POSITION_REVISION' | 'POSITION_CONTROL_TIER_CHANGED';
+    readonly boardId: string | null;
+    readonly revision: Revision | null;
+} | {
+    readonly code: 'INVALID_ANNOTATIONS' | 'DUPLICATE_ANNOTATION_ID';
     readonly boardId: string | null;
     readonly revision: Revision;
 } | {
-    readonly code: 'INVALID_SELECTION' | 'INVALID_SELECTION_REVISION' | 'SELECTION_CONTROL_TIER_CHANGED';
+    readonly code: 'INVALID_ANNOTATION_REVISION' | 'ANNOTATION_CONTROL_TIER_CHANGED';
+    readonly boardId: string | null;
+    readonly revision: Revision | null;
+} | {
+    readonly code: 'INVALID_SELECTION';
     readonly boardId: string | null;
     readonly revision: Revision;
+} | {
+    readonly code: 'INVALID_SELECTION_REVISION' | 'SELECTION_CONTROL_TIER_CHANGED';
+    readonly boardId: string | null;
+    readonly revision: Revision | null;
 };
 
 // @public
 export type ChessboardErrorDomain = 'board' | 'dimensions' | 'position' | 'annotations' | 'selection';
+
+// @public
+export interface ChessboardProps {
+    readonly annotations?: AnnotationsProp;
+    readonly boardId: string;
+    readonly dimensions?: BoardDimensions;
+    readonly onError?: OnChessboardError;
+    readonly position: PositionProp;
+    readonly selection?: SelectionProp;
+}
 
 // @public
 export function columnIndexToFile(columnIndex: number, columns: number, orientation: BoardOrientation): string;
@@ -268,9 +289,16 @@ export interface ControlledPosition {
 }
 
 // @public
-export type ControlledSelection = PlainSelection & {
+export interface ControlledSelection {
+    // (undocumented)
+    readonly destinationSquares?: readonly SquareId[];
+    // (undocumented)
+    readonly disabledSquares?: readonly SquareId[];
+    // (undocumented)
     readonly revision: Revision;
-};
+    // (undocumented)
+    readonly selectedSquare: SquareId | null;
+}
 
 // @public
 export type FenPieceCode = 'p' | 'r' | 'n' | 'b' | 'q' | 'k' | 'P' | 'R' | 'N' | 'B' | 'Q' | 'K';
@@ -416,6 +444,7 @@ export interface PlainSelection {
     readonly destinationSquares?: readonly SquareId[];
     // (undocumented)
     readonly disabledSquares?: readonly SquareId[];
+    readonly revision?: never;
     // (undocumented)
     readonly selectedSquare: SquareId | null;
 }

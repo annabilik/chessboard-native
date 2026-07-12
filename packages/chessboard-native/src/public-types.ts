@@ -97,12 +97,17 @@ export interface PlainSelection {
   readonly selectedSquare: SquareId | null;
   readonly destinationSquares?: readonly SquareId[];
   readonly disabledSquares?: readonly SquareId[];
+  /** Discriminates this plain form from a revisioned selection. */
+  readonly revision?: never;
 }
 
-/** Revisioned controlled selection presentation. @public */
-export type ControlledSelection = PlainSelection & {
+/** Revisioned controlled selection presentation with an inline revision. @public */
+export interface ControlledSelection {
+  readonly selectedSquare: SquareId | null;
+  readonly destinationSquares?: readonly SquareId[];
+  readonly disabledSquares?: readonly SquareId[];
   readonly revision: Revision;
-};
+}
 
 /** Position prop accepted by the plain and revisioned API tiers. @public */
 export type PositionProp = PositionInput | ControlledPosition;

@@ -58,6 +58,24 @@ describe('ChessboardError', () => {
     expect(error.cause).toBeUndefined();
   });
 
+  it('uses null when malformed revisions and plain tier switches have no consumer revision', () => {
+    const revision = new ChessboardError('Revision must be a safe integer.', {
+      boardId: 'analysis',
+      code: 'INVALID_POSITION_REVISION',
+      revision: null,
+    });
+    const tier = new ChessboardError('Selection tier changed.', {
+      boardId: 'analysis',
+      code: 'SELECTION_CONTROL_TIER_CHANGED',
+      revision: null,
+    });
+
+    expect(revision.domain).toBe('position');
+    expect(revision.revision).toBeNull();
+    expect(tier.domain).toBe('selection');
+    expect(tier.revision).toBeNull();
+  });
+
   it('derives recovery domains and rejects impossible detail combinations', () => {
     const error = new ChessboardError('Selection revision moved backwards.', {
       boardId: 'analysis',

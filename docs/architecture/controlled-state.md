@@ -51,13 +51,22 @@ fallback:
 - Invalid selection leaves position and annotations visible and ignores the
   selection snapshot.
 
-Development throws `ChessboardError`. Production invokes `onError` once per
-offending domain and revision, or logs once when no handler exists. Error
-context contains `boardId`, a code-derived `domain`, and a nullable `revision`;
-identity and dimension failures have no revision. Recovery never renders a
-partially parsed value and never falls back to a retained older semantic
-snapshot. Invalid presentation-only transition hints are warning-only and do
-not enter this recovery path.
+The controlled model now represents those fallbacks as unavailable domains and
+the component marks the hidden verification frame as disabled. Visible
+square, piece, and annotation fallback rendering begins with the static renderer
+work; this boundary does not claim those layers yet.
+
+Development throws `ChessboardError`. Production plans a post-commit `onError`
+report once per domain and revision, or logs once when no handler exists.
+Deduplication lasts for the mounted lifetime and keys only on `(domain,
+revision)`, so Strict Mode replay or a changed handler cannot repeat a report.
+Error context contains `boardId`, a code-derived `domain`, and a nullable
+`revision`. Identity and dimension failures have no revision; malformed
+revision values and incoming plain-tier switches also use `null` because no
+valid consumer revision exists. Recovery never renders a partially parsed value
+and never falls back to a retained older semantic snapshot. Invalid
+presentation-only transition hints are warning-only and do not enter this
+recovery path.
 
 ## Consequences
 

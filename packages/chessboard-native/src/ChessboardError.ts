@@ -7,9 +7,10 @@ export type ChessboardErrorDomain =
 /**
  * Code and metadata for one typed contract violation.
  *
- * Board and dimension failures have no semantic revision. Controlled-domain
- * failures always identify the offending domain revision. The domain itself is
- * derived from the code and cannot disagree with it.
+ * Board and dimension failures have no semantic revision. Controlled value
+ * failures identify the offending revision; malformed revisions and incoming
+ * plain-tier switches use `null` because no valid consumer revision exists.
+ * The domain itself is derived from the code and cannot disagree with it.
  *
  * @public
  */
@@ -31,28 +32,37 @@ export type ChessboardErrorDetails =
         | 'FEN_DIMENSION_MISMATCH'
         | 'INVALID_POSITION'
         | 'INVALID_POSITION_SQUARE'
-        | 'DUPLICATE_PIECE_ID'
-        | 'INVALID_POSITION_REVISION'
-        | 'POSITION_CONTROL_TIER_CHANGED';
+        | 'DUPLICATE_PIECE_ID';
       readonly boardId: string | null;
       readonly revision: Revision;
     }
   | {
       readonly code:
-        | 'INVALID_ANNOTATIONS'
-        | 'DUPLICATE_ANNOTATION_ID'
-        | 'INVALID_ANNOTATION_REVISION'
-        | 'ANNOTATION_CONTROL_TIER_CHANGED';
+        'INVALID_POSITION_REVISION' | 'POSITION_CONTROL_TIER_CHANGED';
+      readonly boardId: string | null;
+      readonly revision: Revision | null;
+    }
+  | {
+      readonly code: 'INVALID_ANNOTATIONS' | 'DUPLICATE_ANNOTATION_ID';
       readonly boardId: string | null;
       readonly revision: Revision;
     }
   | {
       readonly code:
-        | 'INVALID_SELECTION'
-        | 'INVALID_SELECTION_REVISION'
-        | 'SELECTION_CONTROL_TIER_CHANGED';
+        'INVALID_ANNOTATION_REVISION' | 'ANNOTATION_CONTROL_TIER_CHANGED';
+      readonly boardId: string | null;
+      readonly revision: Revision | null;
+    }
+  | {
+      readonly code: 'INVALID_SELECTION';
       readonly boardId: string | null;
       readonly revision: Revision;
+    }
+  | {
+      readonly code:
+        'INVALID_SELECTION_REVISION' | 'SELECTION_CONTROL_TIER_CHANGED';
+      readonly boardId: string | null;
+      readonly revision: Revision | null;
     };
 
 /** Stable diagnostic category for a chessboard contract violation. @public */

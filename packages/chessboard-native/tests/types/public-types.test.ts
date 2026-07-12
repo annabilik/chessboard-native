@@ -9,6 +9,7 @@ import type {
   BoardSquare,
   BoardTransition,
   ChessboardAccessibility,
+  ChessboardProps,
   ControlledAnnotations,
   ControlledPosition,
   ControlledSelection,
@@ -219,6 +220,42 @@ describe('public data contracts', () => {
     expect(positionProps).toHaveLength(2);
     expect(selectionProps).toHaveLength(2);
     expect(position.transition).toBe(transition);
+  });
+
+  it('requires direct board identity and position props and discriminates selection tiers', () => {
+    const props = {
+      annotations: [],
+      boardId: 'diagram',
+      dimensions: { columns: 8, rows: 8 },
+      position: '8/8/8/8/8/8/8/8',
+      selection: { selectedSquare: null },
+    } satisfies ChessboardProps;
+    const revisioned = {
+      revision: 4,
+      selectedSquare: 'e4',
+    } satisfies SelectionProp;
+
+    // @ts-expect-error Chessboard identity is required.
+    const missingBoardId: ChessboardProps = { position: {} };
+    // @ts-expect-error A canonical position is required.
+    const missingPosition: ChessboardProps = { boardId: 'diagram' };
+    const malformedRevision: SelectionProp = {
+      // @ts-expect-error A malformed revision cannot typecheck through the plain selection tier.
+      revision: '4',
+      selectedSquare: null,
+    };
+    const nestedSelection: SelectionProp = {
+      revision: 4,
+      // @ts-expect-error Selection uses an inline revision, not a nested value envelope.
+      value: { selectedSquare: null },
+    };
+
+    expect(props.boardId).toBe('diagram');
+    expect(revisioned.revision).toBe(4);
+    expect(missingBoardId).toEqual(expect.any(Object));
+    expect(missingPosition).toEqual(expect.any(Object));
+    expect(malformedRevision).toEqual(expect.any(Object));
+    expect(nestedSelection).toEqual(expect.any(Object));
   });
 
   it('models annotation snapshots, drafts, tools, and deltas', () => {

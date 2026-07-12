@@ -1,0 +1,154 @@
+import { ChessboardError } from '../ChessboardError';
+import type { PositionObject, Revision } from '../public-types';
+import type { ValidatedBoardDimensions } from '../core/dimensions';
+import {
+  normalizePositionInput,
+  PositionValidationError,
+} from '../core/position';
+import {
+  normalizeControlledDomain,
+  type ClassifiedControlledValue,
+  type ControlledDomainAdapter,
+  type ControlledDomainMetadata,
+  type ControlledDomainResult,
+} from './controlled-domain';
+import { safeErrorMessage } from './safe-error';
+
+function classifyPositionProp(input: unknown): ClassifiedControlledValue {
+  if (
+    typeof input === 'object' &&
+    input !== null &&
+    !Array.isArray(input) &&
+    Object.hasOwn(input, 'revision')
+  ) {
+    const envelope = input as Record<string, unknown>;
+    return Object.freeze({
+      readRevision: () => envelope['revision'],
+      readValue: () => envelope['value'],
+      tier: 'envelope',
+    });
+  }
+  return Object.freeze({ readValue: () => input, tier: 'plain' });
+}
+
+/** Canonical comparison metadata; key order and input spelling are non-semantic. */
+export function positionComparisonToken(position: PositionObject): string {
+  const entries: (
+    readonly [string, string, 0] | readonly [string, string, 1, string]
+  )[] = [];
+  for (const square of Object.keys(position).sort()) {
+    const piece = position[square];
+    if (piece === undefined) {
+      continue;
+    }
+    entries.push(
+      piece.id === undefined
+        ? [square, piece.pieceType, 0]
+        : [square, piece.pieceType, 1, piece.id],
+    );
+  }
+  return JSON.stringify(entries);
+}
+
+function positionValueError(
+  error: unknown,
+  value: unknown,
+  boardId: string | null,
+  revision: Revision,
+): ChessboardError {
+  let validationDetails:
+    | Readonly<{
+        code: PositionValidationError['code'];
+        message: string;
+      }>
+    | undefined;
+  try {
+    if (error instanceof PositionValidationError) {
+      const code: unknown = error.code;
+      if (
+        code === 'INVALID_POSITION' ||
+        code === 'INVALID_POSITION_SQUARE' ||
+        code === 'DUPLICATE_PIECE_ID'
+      ) {
+        validationDetails = {
+          code,
+          message: safeErrorMessage(error, 'Invalid position.'),
+        };
+      }
+    }
+  } catch {
+    validationDetails = undefined;
+  }
+  if (validationDetails !== undefined) {
+    return new ChessboardError(
+      validationDetails.message,
+      { boardId, code: validationDetails.code, revision },
+      error,
+    );
+  }
+  if (typeof value === 'string') {
+    let dimensionMismatch: boolean;
+    try {
+      dimensionMismatch = error instanceof RangeError;
+    } catch {
+      dimensionMismatch = false;
+    }
+    if (dimensionMismatch) {
+      return new ChessboardError(
+        safeErrorMessage(error, 'FEN dimensions do not match the board.'),
+        { boardId, code: 'FEN_DIMENSION_MISMATCH', revision },
+        error,
+      );
+    }
+    return new ChessboardError(
+      safeErrorMessage(error, 'Invalid FEN piece placement.'),
+      { boardId, code: 'INVALID_FEN', revision },
+      error,
+    );
+  }
+  return new ChessboardError(
+    safeErrorMessage(error, 'Invalid position.'),
+    { boardId, code: 'INVALID_POSITION', revision },
+    error,
+  );
+}
+
+function positionAdapter(
+  dimensions: ValidatedBoardDimensions,
+): ControlledDomainAdapter<PositionObject> {
+  const adapter: ControlledDomainAdapter<PositionObject> = {
+    classify: classifyPositionProp,
+    comparisonToken: positionComparisonToken,
+    createValueError: (error, context) =>
+      positionValueError(
+        error,
+        context.value,
+        context.boardId,
+        context.revision,
+      ),
+    normalizeValue: (value) => normalizePositionInput(value, dimensions),
+  };
+  return Object.freeze(adapter);
+}
+
+export interface NormalizePositionDomainOptions {
+  readonly input: unknown;
+  readonly previousMetadata: ControlledDomainMetadata;
+  readonly boardId: string | null;
+  /** Must come from `validateBoardDimensions`. */
+  readonly dimensions: ValidatedBoardDimensions;
+  readonly development: boolean;
+}
+
+export function normalizePositionDomain(
+  options: NormalizePositionDomainOptions,
+): ControlledDomainResult<PositionObject> {
+  return normalizeControlledDomain({
+    adapter: positionAdapter(options.dimensions),
+    boardId: options.boardId,
+    development: options.development,
+    domain: 'position',
+    input: options.input,
+    previousMetadata: options.previousMetadata,
+  });
+}

@@ -59,9 +59,10 @@ Uppercase pieces become `wP` through `wK`; lowercase pieces become `bP` through
 
 Malformed FEN throws `SyntaxError`; a valid non-8x8 dimension throws
 `RangeError`; invalid value types throw `TypeError`. These standalone utilities
-have no board identity or semantic revision. PR #10 will translate their
-failures into contextual `ChessboardError` values at the component
-normalization boundary.
+have no board identity or semantic revision. After the component validates
+dimensions at the board boundary, the controlled-position adapter translates
+their failures into contextual `ChessboardError` values without parsing
+messages.
 
 ## Object positions
 
@@ -80,10 +81,10 @@ part of the semantic contract and are discarded.
 
 Normalization is O(piece count), returns a fresh deeply frozen sparse object,
 and never mutates or retains consumer records. Source insertion order is not
-semantic and PR #10 must compare normalized snapshots independently of key
-order. Object validation uses an internal structured error code so PR #10 can
-map invalid positions, squares, and duplicate IDs to the existing contextual
-`ChessboardError` taxonomy without parsing messages.
+semantic; the controlled-position adapter compares a canonical token built from
+sorted square and exact piece tuples. Object validation uses an internal
+structured error code so invalid positions, squares, and duplicate IDs map to
+the existing contextual `ChessboardError` taxonomy without parsing messages.
 
 ## Measured board geometry
 

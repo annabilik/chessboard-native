@@ -7,21 +7,21 @@ export default function GalleryIndex() {
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.heading}>
-          <Text style={styles.eyebrow}>PHASE 0 · PACKAGE SHELL</Text>
+          <Text style={styles.eyebrow}>PHASE 1 · CONTROLLED INPUTS</Text>
           <Text style={styles.title}>chessboard-native</Text>
           <Text style={styles.description}>
-            A disabled frame proving that the Expo gallery consumes the
-            workspace package through its public export map.
+            A controlled frame proving that the Expo gallery consumes and
+            normalizes the public board contract.
           </Text>
         </View>
 
         <View style={styles.boardContainer}>
-          <Chessboard />
+          <Chessboard boardId="gallery" position="8/8/8/8/8/8/8/8" />
         </View>
 
         <Text style={styles.caption}>
-          Position, pieces, interaction, and annotations are intentionally not
-          implemented in this pull request.
+          Controlled inputs are normalized now; square, piece, interaction, and
+          annotation rendering land in later Phase 1 slices.
         </Text>
       </ScrollView>
     </SafeAreaView>
