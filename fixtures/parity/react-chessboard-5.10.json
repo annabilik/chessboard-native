@@ -892,7 +892,7 @@
         "surface": "root",
         "symbols": ["squareToBoardPoint"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-GET-RELATIVE-COORDS",
       "compatibilityNotes": "Coordinates derive from measured rectangular native board geometry, not DOM width."
     },
@@ -1066,7 +1066,7 @@
       },
       "status": "implemented",
       "contractTestId": "PARITY-EXPORT-POSITION-DATA-TYPE",
-      "compatibilityNotes": "The type becomes a deeply readonly sparse record; canonical square validation lands with Phase 1 normalization."
+      "compatibilityNotes": "The type is a deeply readonly sparse record with atomic canonical-square, piece-shape, and unique optional-ID validation."
     },
     {
       "id": "export.square-handler-args",
@@ -2784,12 +2784,16 @@
       },
       "disposition": "redesign",
       "native": {
-        "surface": "root",
-        "symbols": ["PositionInput", "parseFenPosition"]
+        "surface": "internal",
+        "symbols": [
+          "parseFenPosition",
+          "normalizePositionInput",
+          "normalizePositionObject"
+        ]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B06",
-      "compatibilityNotes": "FEN is strict and 8x8-only; variants use PositionObject and non-placement fields are intentionally discarded.",
+      "compatibilityNotes": "FEN is strict and 8x8-only; sparse object positions are atomically normalized for every supported dimension, and non-placement FEN fields are intentionally discarded.",
       "rationale": "The upstream parser accepts malformed and dimension-mismatched input, so retaining it would violate atomic validation and predictable variant behavior.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b06-fen-and-object-position-inputs"
     },
@@ -3161,7 +3165,7 @@
       "disposition": "adapt",
       "native": {
         "surface": "internal",
-        "symbols": ["BoardHitTest", "BoardLayoutRegistry"]
+        "symbols": ["hitTestBoardPoint", "BoardLayoutRegistry"]
       },
       "status": "planned",
       "contractTestId": "PARITY-BEHAVIOR-B20",
@@ -3387,7 +3391,7 @@
       "disposition": "adapt",
       "native": {
         "surface": "internal",
-        "symbols": ["BoardTapGesture", "BoardHitTest"]
+        "symbols": ["BoardTapGesture", "hitTestBoardPoint"]
       },
       "status": "planned",
       "contractTestId": "PARITY-BEHAVIOR-B28",

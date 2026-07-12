@@ -13,6 +13,7 @@ export {
   rowIndexToRank,
 } from './core/coordinates';
 export { parseFenPosition } from './core/fen';
+export { squareToBoardPoint } from './core/hit-test';
 
 export type {
   ChessboardErrorCode,
@@ -32,6 +33,8 @@ export type {
   BoardAnnotation,
   BoardDimensions,
   BoardOrientation,
+  BoardPoint,
+  BoardSize,
   BoardSquare,
   BoardTransition,
   ChessboardAccessibility,
