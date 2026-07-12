@@ -41,6 +41,7 @@ const consumers = {
       'ios',
       'metro.config.js',
       'package.json',
+      'scripts',
       'tsconfig.json',
     ],
     source: path.join(repositoryRoot, 'apps/native-harness'),

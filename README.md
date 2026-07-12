@@ -66,6 +66,8 @@ Native composition and style precedence are documented in
 [`docs/architecture/rendering-layers.md`](./docs/architecture/rendering-layers.md).
 The accessibility control and manual TalkBack/VoiceOver pass are documented in
 [`docs/accessibility.md`](./docs/accessibility.md).
+The checked-in bare harness also runs deterministic Espresso and XCUITest
+accessibility audits against the exact packed package used by native CI.
 
 ## Development
 
@@ -103,7 +105,9 @@ Root commands:
 | `pnpm example:export`                | Export Android and iOS gallery bundles        |
 | `pnpm native:start`                  | Start Metro for the bare native harness       |
 | `pnpm native:android`                | Run the native Android harness                |
+| `pnpm native:android:accessibility`  | Audit on a connected Android device           |
 | `pnpm native:ios`                    | Run the native iOS harness                    |
+| `pnpm native:ios:accessibility`      | Audit on an available iPhone simulator        |
 
 <!-- markdownlint-enable MD013 -->
 
@@ -111,14 +115,20 @@ Native release gates are platform-specific:
 
 ```sh
 pnpm native:android:release
+pnpm native:android:accessibility
 pnpm native:ios:gems
 pnpm native:ios:pods
 pnpm native:ios:release
+pnpm native:ios:accessibility
 ```
 
 The iOS commands require macOS with Xcode, Ruby, Bundler, and CocoaPods.
+The Android accessibility command requires a running device or emulator; CI
+uses the repository's Gradle-managed API 35 device through
+`pnpm native:android:accessibility:managed`.
 `pnpm verify` remains portable and does not invoke either native toolchain; CI
-runs Android and iOS Release builds as independent required jobs.
+runs each native accessibility audit inside its platform's independent required
+Release job.
 
 ## Packed artifact gate
 

@@ -32,15 +32,24 @@ harness, also run the applicable platform build:
 
 ```sh
 pnpm native:android:release
+pnpm native:android:accessibility
 pnpm native:ios:gems
 pnpm native:ios:pods
 pnpm native:ios:release
+pnpm native:ios:accessibility
 ```
 
-CI runs both native Release builds even when only one can be exercised on a
-contributor's development machine. Those required jobs install the single
-inspected npm archive into consumers outside the checkout; workspace-linked
-builds are development conveniences, not package-release evidence.
+The Android accessibility command needs a running device or emulator. The iOS
+accessibility command selects an available iPhone simulator and requires iOS
+17 or newer. CI runs both native Release builds and audits even when only one
+platform can be exercised on a contributor's development machine. Those
+required jobs install the single inspected npm archive into consumers outside
+the checkout; workspace-linked builds are development conveniences, not
+package-release evidence.
+
+Automated native audits supplement the manual TalkBack and VoiceOver checklist
+in `docs/accessibility.md`; they do not validate speech, rotor or action-menu
+discoverability, announcements, or live assistive-technology focus behavior.
 
 ## Parity ledger changes
 

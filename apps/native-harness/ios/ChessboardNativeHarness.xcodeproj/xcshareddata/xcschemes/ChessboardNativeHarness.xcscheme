@@ -20,15 +20,49 @@
                ReferencedContainer = "container:ChessboardNativeHarness.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D14A00000000000000000006"
+               BuildableName = "ChessboardNativeHarnessUITests.xctest"
+               BlueprintName = "ChessboardNativeHarnessUITests"
+               ReferencedContainer = "container:ChessboardNativeHarness.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
-      buildConfiguration = "Debug"
+      buildConfiguration = "Release"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
       <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D14A00000000000000000006"
+               BuildableName = "ChessboardNativeHarnessUITests.xctest"
+               BlueprintName = "ChessboardNativeHarnessUITests"
+               ReferencedContainer = "container:ChessboardNativeHarness.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
+      <MacroExpansion>
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
+            BuildableName = "ChessboardNativeHarness.app"
+            BlueprintName = "ChessboardNativeHarness"
+            ReferencedContainer = "container:ChessboardNativeHarness.xcodeproj">
+         </BuildableReference>
+      </MacroExpansion>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"

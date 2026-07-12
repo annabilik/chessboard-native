@@ -11,18 +11,26 @@ const isWorkspaceLink =
   packageRelativeToApp === '..' ||
   packageRelativeToApp.startsWith(`..${path.sep}`) ||
   path.isAbsolute(packageRelativeToApp);
+const workspacePnpmStore = path.resolve(
+  appRoot,
+  '..',
+  '..',
+  'node_modules',
+  '.pnpm',
+);
 
 /**
  * A packed install lives inside this app and needs only Metro's defaults. A
- * workspace install points outside the app, so watch that package alone and
- * resolve its peers from the harness. Never add the whole workspace as a
- * watch folder: the packed smoke must not see source-repository files.
+ * workspace install points outside the app, so watch that package and pnpm's
+ * dependency store while resolving peers from the harness. Never add the whole
+ * workspace as a watch folder: the packed smoke must not see source-repository
+ * files, and this branch is not used for a packed install.
  *
  * @type {import('@react-native/metro-config').MetroConfig}
  */
 const config = isWorkspaceLink
   ? {
-      watchFolders: [packageRoot],
+      watchFolders: [packageRoot, workspacePnpmStore],
       resolver: {
         nodeModulesPaths: [path.join(appRoot, 'node_modules')],
       },

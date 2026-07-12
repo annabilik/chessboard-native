@@ -1,32 +1,32 @@
 import { Chessboard } from '@vibechess/chessboard-native';
 import { defaultPieceRenderers } from '@vibechess/chessboard-native/pieces';
-import {
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
+import { StatusBar, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-export default function App() {
-  const dark = useColorScheme() === 'dark';
-  const backgroundColor = dark ? '#181715' : '#f7f3ec';
-  const textColor = dark ? '#f7f3ec' : '#282520';
+const AUDIT_BOARD_LABEL = 'Accessibility audit board, white orientation';
+const AUDIT_BOARD_HINT =
+  'Swipe up or down through squares, or use directional accessibility actions.';
 
+export default function App() {
   return (
-    <GestureHandlerRootView style={[styles.root, { backgroundColor }]}>
-      <StatusBar barStyle={dark ? 'light-content' : 'dark-content'} />
+    <GestureHandlerRootView style={styles.root}>
+      <StatusBar barStyle="dark-content" />
       <View style={styles.content}>
-        <Text style={[styles.title, { color: textColor }]}>Native harness</Text>
-        <Text style={[styles.description, { color: textColor }]}>
-          Controlled static pieces · React Native Release build
+        <Text style={styles.title}>Native accessibility audit</Text>
+        <Text style={styles.description}>
+          Packed release · one controlled accessibility surface
         </Text>
         <View style={styles.board}>
           <Chessboard
-            boardId="native-harness"
+            accessibility={{
+              boardHint: AUDIT_BOARD_HINT,
+              boardLabel: AUDIT_BOARD_LABEL,
+            }}
+            boardId="native-accessibility-audit"
             pieceRenderers={defaultPieceRenderers}
-            position="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+            position="8/8/8/8/3N4/8/8/8"
+            reduceMotion="always"
+            selection={{ selectedSquare: 'd4' }}
           />
         </View>
       </View>
@@ -36,6 +36,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   root: {
+    backgroundColor: '#f7f3ec',
     flex: 1,
   },
   content: {
@@ -45,14 +46,15 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   title: {
+    color: '#282520',
     fontSize: 24,
     fontWeight: '700',
   },
   description: {
+    color: '#5d574f',
     fontSize: 14,
     marginBottom: 24,
     marginTop: 6,
-    opacity: 0.72,
   },
   board: {
     maxWidth: 480,

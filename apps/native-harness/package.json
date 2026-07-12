@@ -4,8 +4,11 @@
   "private": true,
   "scripts": {
     "android": "react-native run-android",
+    "android:accessibility": "cd android && ./gradlew :app:connectedReleaseAndroidTest --no-daemon",
+    "android:accessibility:managed": "cd android && ./gradlew :app:accessibilityApi35ReleaseAndroidTest --no-daemon",
     "android:release": "cd android && ./gradlew :app:assembleRelease --no-daemon",
     "ios": "react-native run-ios",
+    "ios:accessibility": "node scripts/run-ios-accessibility-audit.mjs",
     "ios:gems": "bundle install",
     "ios:pods": "bundle exec pod install --project-directory=ios",
     "ios:release": "xcodebuild -workspace ios/ChessboardNativeHarness.xcworkspace -scheme ChessboardNativeHarness -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath ios/build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build",
