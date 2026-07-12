@@ -20,8 +20,9 @@ and `react-native-svg`. Its fixed back-to-front layer order is:
 2. Below-piece square and arrow annotations.
 3. Absolutely positioned animated pieces.
 4. Above-piece annotations.
-5. Provider-coordinated gesture hit testing.
-6. Single-control accessibility semantics.
+5. Decorative edge notation.
+6. Provider-coordinated gesture hit testing.
+7. Single-control accessibility semantics.
 
 SVG paths do not use document-global marker IDs. Every board owns its visual
 and animation state. Orientation changes coordinate projection only; canonical
@@ -107,8 +108,38 @@ square or piece transforms may alter paint presentation, and piece geometry-like
 fields remain in the frozen value exposed to a renderer for derivation, but none
 of them changes the shared measured coordinate system or hit-test semantics.
 
+P1.6 adds two pointerless, accessibility-hidden SVG annotation planes around the
+piece plane. Rendering consumes only the current normalized controlled
+annotation collection and preserves collection order within each layer. There
+is no persistent internal arrow list, and a prop replacement removes the prior
+collection immediately. Invalid current annotations render no annotation plane
+without hiding a valid current position.
+
+Annotation geometry uses a fixed logical view box 2048 units wide and
+`2048 * rows / columns` units high. Every logical square is therefore square,
+including on rectangular boards, and canonical square centers project through
+orientation using the same row/column mapping as the measured View layers.
+Square annotations default below pieces and to a full-cell fill; circle, dot,
+and inset border shapes are deterministic alternatives. Arrows default above
+pieces. Omitted arrow shape uses integer canonical file/rank deltas to select a
+knight path only for a one-by-two move. An explicit straight shape always wins;
+an explicit knight shape selects an L path when both axes change and otherwise
+falls back to a straight path.
+
+Arrow endpoints are shortened before the target center. Arrows with different
+sources and the same target use the stronger collision reduction, while the
+same source-target pair does not. `ArrowAnnotation.width` is an explicit stroke
+width in the fixed logical view box; omitted width derives from the square size
+and `annotationStyle.arrowWidthDenominator`. Per-arrow opacity likewise wins
+over the style default. `annotationStyle` is a complete whole-value
+configuration, and `defaultAnnotationStyle` retains the pinned ten geometry,
+opacity, and future-tool color defaults. Arrowheads are explicit SVG polygons,
+not marker references or document-global IDs, so simultaneous boards and
+duplicate consumer annotation IDs across boards cannot collide.
+
+Notation now occupies its own decorative plane above both annotation planes.
 Custom square rendering, interaction-state styling, Reanimated transitions,
-gesture handling, and SVG annotation composition remain later slices.
+gesture handling, and annotation drafts/drawing remain later slices.
 
 P1.5 promotes only the stable outer host to one adjustable accessibility
 control. It uses `pointerEvents="box-none"` so ordinary touch remains available
@@ -119,8 +150,8 @@ transient canonical virtual cursor. Reading-order and directional navigation
 project that cursor through current dimensions and orientation without using
 measurement or updating consumer-owned selection. Position and selection
 changes refresh its value; orientation retains the canonical square and host
-identity. Hit testing and annotations will use the same measured coordinate
-system in later slices.
+identity. Static annotations use the same orientation projection; gesture hit
+testing will use the measured coordinate system in a later slice.
 
 The accessibility action surface in P1.5 contains navigation only. Semantic
 activation, controlled selection clearing, move/removal intents, spare
@@ -161,8 +192,11 @@ P1.4 tests add current-prop piece rendering, default and whole-map custom
 renderers, static style precedence, instance isolation, square-before-piece
 ordering, and board-owned visual-only wrappers. P1.5 tests add virtual-cursor
 projection, single-host semantics, formatter contexts, announcement lifetimes,
-reduced-motion races, and mounted-board isolation. Later slices must verify the
-complete annotation/interaction layer order and custom square renderer behavior.
+reduced-motion races, and mounted-board isolation. P1.6 tests add controlled
+collection replacement, rectangular/oriented geometry, straight and knight
+paths, target shortening, explicit marker-free heads, below/piece/above/notation
+ordering, and multi-board isolation. Later slices must verify annotation drafts,
+interaction behavior, and custom square renderer behavior.
 
 This decision owns invariants `CBN-INV-010`, `CBN-INV-013`, `CBN-INV-014`,
 and `CBN-INV-018`.

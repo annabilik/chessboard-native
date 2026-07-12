@@ -5,6 +5,7 @@
  */
 export { Chessboard } from './Chessboard';
 export { ChessboardError } from './ChessboardError';
+export { defaultAnnotationStyle } from './annotation-style';
 export {
   columnIndexToFile,
   fileToColumnIndex,
@@ -29,6 +30,7 @@ export type {
   AnnotationDraft,
   AnnotationOperation,
   AnnotationOperationBase,
+  AnnotationStyle,
   AnnotationsProp,
   AnnotationTool,
   ArrowAnnotation,

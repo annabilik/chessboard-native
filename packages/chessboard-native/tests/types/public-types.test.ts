@@ -1,9 +1,10 @@
 import { StyleSheet } from 'react-native';
 
-import { defaultTheme } from '../../src/index';
+import { defaultAnnotationStyle, defaultTheme } from '../../src/index';
 import type {
   AnnotationDraft,
   AnnotationOperation,
+  AnnotationStyle,
   AnnotationsProp,
   ArrowAnnotation,
   BoardActionAccessibilityContext,
@@ -272,9 +273,14 @@ describe('public data contracts', () => {
       boardHint: 'Navigate the board.',
       boardLabel: 'Analysis board, black orientation',
     } satisfies ChessboardAccessibility;
+    const annotationStyle = {
+      ...defaultAnnotationStyle,
+      arrowStartOffset: 0.25,
+    } satisfies AnnotationStyle;
     const props = {
       accessibility,
       annotations: [],
+      annotationStyle,
       boardId: 'diagram',
       dimensions: { columns: 8, rows: 8 },
       orientation: 'black',
@@ -309,6 +315,7 @@ describe('public data contracts', () => {
 
     expect(props.boardId).toBe('diagram');
     expect(props.accessibility).toBe(accessibility);
+    expect(props.annotationStyle).toBe(annotationStyle);
     expect(props.orientation).toBe('black');
     expect(props.pieceRenderers).toBe(pieceRenderers);
     expect(props.reduceMotion).toBe('always');

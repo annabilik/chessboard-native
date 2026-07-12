@@ -63,6 +63,20 @@ export interface AnnotationOperationBase {
 export type AnnotationsProp = readonly BoardAnnotation[] | ControlledAnnotations;
 
 // @public
+export interface AnnotationStyle {
+    readonly activeArrowWidthMultiplier: number;
+    readonly activeOpacity: number;
+    readonly arrowLengthReducerDenominator: number;
+    readonly arrowStartOffset: number;
+    readonly arrowWidthDenominator: number;
+    readonly color: string;
+    readonly opacity: number;
+    readonly sameTargetArrowLengthReducerDenominator: number;
+    readonly secondaryColor: string;
+    readonly tertiaryColor: string;
+}
+
+// @public
 export type AnnotationTool = {
     readonly type: 'arrow';
     readonly color: string;
@@ -92,7 +106,6 @@ export interface ArrowAnnotation {
     readonly to: SquareId;
     // (undocumented)
     readonly type: 'arrow';
-    // (undocumented)
     readonly width?: number;
 }
 
@@ -257,6 +270,7 @@ export type ChessboardErrorDomain = 'board' | 'dimensions' | 'position' | 'annot
 export interface ChessboardProps {
     readonly accessibility?: ChessboardAccessibility;
     readonly annotations?: AnnotationsProp;
+    readonly annotationStyle?: AnnotationStyle;
     readonly boardId: string;
     readonly dimensions?: BoardDimensions;
     readonly onError?: OnChessboardError;
@@ -331,6 +345,9 @@ export interface ControlledSelection {
     // (undocumented)
     readonly selectedSquare: SquareId | null;
 }
+
+// @public
+export const defaultAnnotationStyle: Readonly<AnnotationStyle>;
 
 // @public
 export const defaultPieceRenderers: PieceRenderers;

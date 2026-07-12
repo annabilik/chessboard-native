@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 
 import { ReducedMotionProvider } from './accessibility/reduced-motion';
+import { defaultAnnotationStyle } from './annotation-style';
 import type { ChessboardError, OnChessboardError } from './ChessboardError';
 import {
   createBoardModelMetadata,
@@ -16,6 +17,7 @@ import { defaultPieceRenderers } from './pieces';
 import { BoardSurface } from './render/board-surface';
 import type {
   AnnotationsProp,
+  AnnotationStyle,
   BoardDimensions,
   BoardOrientation,
   ChessboardAccessibility,
@@ -50,6 +52,8 @@ export interface ChessboardProps {
   readonly pieceRenderers?: PieceRenderers;
   /** The only persistent annotation collection when supplied. */
   readonly annotations?: AnnotationsProp;
+  /** Whole-value annotation geometry and presentation configuration. */
+  readonly annotationStyle?: AnnotationStyle;
   /** Consumer-owned selection presentation when supplied. */
   readonly selection?: SelectionProp;
   /** Labels, formatters, and correlated announcements for the board control. */
@@ -116,6 +120,7 @@ export function ChessboardRuntime({
     <ReducedMotionProvider preference={props.reduceMotion ?? 'system'}>
       <BoardSurface
         accessibility={props.accessibility}
+        annotationStyle={props.annotationStyle ?? defaultAnnotationStyle}
         model={model}
         pieceRenderers={props.pieceRenderers ?? defaultPieceRenderers}
         showNotation={props.showNotation ?? true}

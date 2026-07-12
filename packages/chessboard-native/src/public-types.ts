@@ -160,6 +160,7 @@ export interface ArrowAnnotation {
   readonly from: SquareId;
   readonly to: SquareId;
   readonly color: string;
+  /** Optional stroke width in the fixed 2048-wide annotation coordinate space. */
   readonly width?: number;
   readonly opacity?: number;
   readonly shape?: 'straight' | 'knight';
@@ -187,6 +188,7 @@ export type AnnotationDraft =
       readonly from: SquareId;
       readonly to: SquareId;
       readonly color: string;
+      /** Optional stroke width in the fixed 2048-wide annotation coordinate space. */
       readonly width?: number;
       readonly opacity?: number;
       readonly shape?: 'straight' | 'knight';
@@ -250,6 +252,7 @@ export type AnnotationTool =
   | {
       readonly type: 'arrow';
       readonly color: string;
+      /** Optional stroke width in the fixed 2048-wide annotation coordinate space. */
       readonly width?: number;
       readonly opacity?: number;
     }
@@ -396,6 +399,37 @@ export type PieceRenderer = JSXElementConstructor<PieceRendererProps>;
 export type PieceRenderers = Readonly<
   Partial<Record<PieceType, PieceRenderer>>
 >;
+
+/**
+ * Whole-value annotation geometry and presentation configuration.
+ *
+ * The three colors are defaults for future annotation tools. Persistent
+ * controlled annotations always render their own required `color` value.
+ *
+ * @public
+ */
+export interface AnnotationStyle {
+  /** Default color reserved for future consumer drawing tools. */
+  readonly color: string;
+  /** Secondary color reserved for future consumer drawing tools. */
+  readonly secondaryColor: string;
+  /** Tertiary color reserved for future consumer drawing tools. */
+  readonly tertiaryColor: string;
+  /** Target inset divisor relative to one square; must be greater than zero. */
+  readonly arrowLengthReducerDenominator: number;
+  /** Shared-target inset divisor relative to one square; must be greater than zero. */
+  readonly sameTargetArrowLengthReducerDenominator: number;
+  /** Default stroke-width divisor relative to one square; must be greater than zero. */
+  readonly arrowWidthDenominator: number;
+  /** Width multiplier reserved for a future active drawing draft; must be greater than zero. */
+  readonly activeArrowWidthMultiplier: number;
+  /** Default persistent-arrow opacity, clamped to the inclusive range 0..1. */
+  readonly opacity: number;
+  /** Opacity reserved for a future active drawing draft, clamped to 0..1. */
+  readonly activeOpacity: number;
+  /** Shaft start offset as a fraction of one square; zero starts at its center. */
+  readonly arrowStartOffset: number;
+}
 
 /** Consumer preference for animation reduction. @public */
 export type ReduceMotion = 'system' | 'always' | 'never';
