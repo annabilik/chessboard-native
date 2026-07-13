@@ -449,7 +449,7 @@ describe('annotation geometry', () => {
         from: { x: 0, y: 0 },
         shape: 'knight',
         squareSize: 100,
-        style: { ...defaultAnnotationStyle, arrowStartOffset: 3 },
+        style: { ...defaultAnnotationStyle, arrowStartOffset: 2.1 },
         to: { x: 100, y: 200 },
       }),
     ).toBeNull();

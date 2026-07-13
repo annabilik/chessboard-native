@@ -262,17 +262,14 @@ export function computeArrowPath(
       startOffset,
       targetReduction,
     );
-  const knightPoints =
-    options.shape === 'knight'
-      ? createKnightPoints(
-          options.from,
-          options.to,
-          startOffset,
-          targetReduction,
-        )
-      : null;
-  const pointsToTip = knightPoints ?? straight();
-  const shape = knightPoints === null ? 'straight' : options.shape;
+  const structurallyKnight =
+    options.shape === 'knight' &&
+    Math.abs(options.to.x - options.from.x) > EPSILON &&
+    Math.abs(options.to.y - options.from.y) > EPSILON;
+  const pointsToTip = structurallyKnight
+    ? createKnightPoints(options.from, options.to, startOffset, targetReduction)
+    : straight();
+  const shape = structurallyKnight ? 'knight' : 'straight';
   if (pointsToTip === null) {
     return null;
   }
