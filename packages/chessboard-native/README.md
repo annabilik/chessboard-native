@@ -17,8 +17,9 @@ also declarative. The board is one adjustable accessibility control with an
 orientation-aware virtual cursor and decorative visual descendants. Controlled
 square and arrow annotations render in below/above-piece SVG planes. Selection
 styling, custom square rendering, semantic interaction, annotation drawing, and
-transitions are not rendered yet. Provider-level identity registration remains
-future work.
+transitions are not rendered yet. An internal pure reducer now models the
+move-intent lifecycle and its race semantics, but is not wired to this public
+component. Provider-level identity registration remains future work.
 
 ```tsx
 import { Chessboard } from '@vibechess/chessboard-native';

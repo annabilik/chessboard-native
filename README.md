@@ -7,7 +7,8 @@ A controlled, rules-free React Native chessboard component.
 > component now renders responsive, controlled static positions with default
 > or custom pieces, orientation, notation, native styles, controlled square and
 > arrow annotations, and a single-control accessibility prototype. Semantic
-> move interaction is not implemented yet.
+> move interaction is not implemented yet; an internal pure move-intent
+> lifecycle now provides the tested foundation for that later integration.
 
 ## Direction
 
@@ -59,7 +60,10 @@ straight and knight arrows default above pieces. Both orientations, rectangular
 boards, per-arrow width/opacity, same-target shortening, and whole-value
 `annotationStyle` configuration use deterministic 2048-wide geometry. Custom
 square rendering, selection styling, annotation drawing, move interaction, and
-transitions remain later work.
+transitions remain later work. The first Phase 2 foundation is an unwired pure
+interaction reducer: it models tap, drag, keyboard, and accessibility intents,
+async decisions, controlled-commit waiting, timeouts, epoch invalidation, and
+stale-effect guards without retaining or mutating semantic position state.
 
 The accepted architecture decisions and all 20 reserved invariant contracts
 are indexed in
