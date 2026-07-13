@@ -2841,9 +2841,9 @@
         "surface": "internal",
         "symbols": ["InteractionEpoch", "TransitionEpoch"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B08",
-      "compatibilityNotes": "Changes cancel interaction and transition epochs before reconciling the latest controlled input.",
+      "compatibilityNotes": "The pure reducer invalidates an interaction epoch on caller-supplied dimension, orientation, permission, and geometry changes and makes late results inert. Chessboard reconciliation and transition epochs remain future work.",
       "rationale": "Directly replacing a local position without cancelling asynchronous work allows stale gestures and timers to overwrite newer geometry.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b08-dimension-and-orientation-reconciliation"
     },
@@ -2932,9 +2932,9 @@
         "surface": "internal",
         "symbols": ["MoveIntentLifecycle"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B11",
-      "compatibilityNotes": "Pending intent presentation never changes semantics; only a new controlled position commits.",
+      "compatibilityNotes": "The pure lifecycle enters awaiting-commit after acceptance without storing position and records a commit only for a newer controlled revision with a matching intent ID. Runtime pending presentation remains future work.",
       "rationale": "Suppressing animation through internal manual-drop flags treats a gesture result as accepted state before the consumer has committed it.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b11-accepted-manual-drop-presentation"
     },
@@ -3058,9 +3058,9 @@
         "surface": "internal",
         "symbols": ["InteractionEpoch", "TransitionEpoch"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B16",
-      "compatibilityNotes": "Every update, unmount, orientation, dimension, and permission change invalidates timers and epochs.",
+      "compatibilityNotes": "The pure reducer correlates interaction effects by reducer revision, epoch, and intent and models cleanup for deterministic timeout/result races. A mounted effect executor, transition epochs, and prop/unmount wiring remain future work.",
       "rationale": "The pinned effect omits state and option dependencies and only clears the latest timeout on cleanup, allowing stale closures to settle obsolete state.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b16-stale-effects-and-timeout-cleanup"
     },
@@ -3221,9 +3221,9 @@
           "ReactChessboardOptions.onPieceDrop"
         ]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B22",
-      "compatibilityNotes": "The async intent lifecycle owns decision, cancellation, timeout, and controlled commit; compatibility maps Boolean results once.",
+      "compatibilityNotes": "The pure reducer models accepted and rejected decisions plus decision and controlled-commit timeouts as effects. Executing ChessboardProps.onMoveRequest and compatibility Boolean mapping remain future work.",
       "rationale": "The upstream callback cannot represent pending validation or correlate a true result with the later authoritative position update.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b22-on-board-boolean-drop-decision"
     },
@@ -3246,9 +3246,9 @@
         "surface": "root",
         "symbols": ["MoveIntent.targetSquare", "ChessboardProps.onMoveRequest"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B23",
-      "compatibilityNotes": "targetSquare null follows the same decision and commit lifecycle as an on-board target.",
+      "compatibilityNotes": "The pure reducer preserves targetSquare null through the same decision and controlled-commit lifecycle. Native off-board gesture policy and callback execution remain future work.",
       "rationale": "Ignoring the off-board Boolean return creates different acceptance semantics for the same callback and can falsely present a removal as accepted.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b23-off-board-drop-ignores-boolean-result"
     },
@@ -3276,9 +3276,9 @@
         "surface": "root",
         "symbols": ["ChessboardActions.cancelMove"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B24",
-      "compatibilityNotes": "Second-finger and accessibility cancel abort the active interaction epoch."
+      "compatibilityNotes": "The pure reducer models correlated user, second-finger, accessibility, and unmount cleanup across targeting, deciding, and awaiting-commit phases. Public ChessboardActions.cancelMove and gesture/accessibility wiring remain future work."
     },
     {
       "id": "behavior.b25-drag-off-board-visual-clamp",

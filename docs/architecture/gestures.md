@@ -46,6 +46,39 @@ Long-press pan, two-finger pan, and explicit two-activation annotation input all
 produce the same revisioned annotation operations. Every drag path also has a
 tap, keyboard, or accessibility alternative using the same semantic intent.
 
+## Pure interaction lifecycle foundation
+
+The internal interaction reducer models `idle`, tap or drag targeting,
+`deciding`, and `awaiting-commit` phases. Direct keyboard and accessibility
+intents use the same decision path. Each reducer instance is scoped to one
+stable board ID. Its detached immutable state contains correlation metadata and
+transient presentation data only; it never contains a position snapshot,
+annotation collection, selection, callback, timer, or abort controller.
+
+Submitting a target schedules an epoch-correlated callback and decision
+timeout. Acceptance only advances to `awaiting-commit`; it does not commit a
+move. A newer controlled position revision records a commit only when its
+`committedIntentId` matches the active intent. A newer revision with no or a
+mismatched ID is an unrelated authoritative update: it invalidates the intent
+without reporting a commit. The plain controlled tier therefore cannot express
+commit correlation or acceptance announcements. The same or a lower revision
+is never treated as a commit. A matching newer commit that arrives before the
+decision resolves still wins, clears the request, and makes the late decision
+inert.
+
+Every asynchronous result carries the interaction epoch and intent ID. Effects
+also carry the reducer revision that produced them, allowing the future runtime
+executor to reject queued stale work. The executor must key timer and abort
+resources by the effect's board ID, epoch, intent ID, and timeout stage so stale
+cleanup can release only its own resources. Position, dimensions, orientation,
+geometry, permissions, replacement, explicit cancellation, and unmount
+invalidate active work. Epoch allocation fails closed if the safe integer range
+is exhausted.
+
+This foundation is deliberately not wired to `Chessboard`. Gesture handlers,
+the effect executor, transient rendering, public callbacks, provider
+coordination, and accessibility activation remain later integration work.
+
 ## Consequences
 
 Provider coordination enables external sources without sharing game state.
