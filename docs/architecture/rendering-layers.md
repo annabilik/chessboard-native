@@ -103,10 +103,11 @@ board paint; board transforms, box sizing, and border widths are removed for the
 same reason. Consumers size, transform, or border a parent wrapper instead. Cell
 and piece top, left, width, and height are applied by board-owned wrappers after
 visual styles; inner square paint and the piece host also neutralize insets,
-min/max sizes, physical/logical margins, and pointer-event overrides. Consumer
-square or piece transforms may alter paint presentation, and piece geometry-like
-fields remain in the frozen value exposed to a renderer for derivation, but none
-of them changes the shared measured coordinate system or hit-test semantics.
+min/max sizes, physical/logical margins, transforms, and pointer-event
+overrides. Consumer square transforms may alter paint presentation. Piece
+transforms and other geometry-like fields remain in the frozen value exposed to
+a renderer for derivation, but the board-owned piece host contains them so none
+changes the shared measured coordinate system or hit-test semantics.
 
 P1.6 adds two pointerless, accessibility-hidden SVG annotation planes around the
 piece plane. Rendering consumes only the current normalized controlled
@@ -138,8 +139,25 @@ not marker references or document-global IDs, so simultaneous boards and
 duplicate consumer annotation IDs across boards cannot collide.
 
 Notation now occupies its own decorative plane above both annotation planes.
-Custom square rendering, interaction-state styling, Reanimated transitions,
-gesture handling, and annotation drafts/drawing remain later slices.
+Custom square rendering, public interaction-state styling, Reanimated
+transitions, and annotation drafts/drawing remain later slices.
+
+P2.2 adds the private layer-six board gesture plane. It is one absolute,
+accessibility-hidden native view rather than one handler per square. While the
+public move-request boundary is absent, the plane is pointerless and does not
+mount a `GestureDetector`, preserving the read-only board contract. Internal
+tests can explicitly enable the plane to compose exclusive tap and pan
+recognizers; the pan accepts exactly one pointer. Pan activation and terminal
+events cross to the board-scoped adapter; per-frame pointer movement and
+oriented target hit testing remain in shared values.
+
+The same internal presentation state projects drag lift, a source ghost, and
+decision or controlled-commit pending flags without retaining a semantic
+position. A pointerless drag-overlay primitive consumes board-local shared
+pointer coordinates with a direct animated transform, so frame updates do not
+rerender custom artwork or commit React state. These are foundations only: the
+public board does not yet mount a live overlay or pending flow, and there are no
+public transient style options in this slice.
 
 P1.5 promotes only the stable outer host to one adjustable accessibility
 control. It uses `pointerEvents="box-none"` so ordinary touch remains available
@@ -195,8 +213,12 @@ projection, single-host semantics, formatter contexts, announcement lifetimes,
 reduced-motion races, and mounted-board isolation. P1.6 tests add controlled
 collection replacement, rectangular/oriented geometry, straight and knight
 paths, target shortening, explicit marker-free heads, below/piece/above/notation
-ordering, and multi-board isolation. Later slices must verify annotation drafts,
-interaction behavior, and custom square renderer behavior.
+ordering, and multi-board isolation. Later slices must verify annotation drafts
+and custom square renderer behavior. P2.2 tests add rectangular worklet hit
+testing, tap/pan boundary correlation, zero per-frame JS signals,
+disabled-by-default mounting, reducer adapter stale-event guards, and transient
+piece presentation. Native ScrollView arbitration and frame-performance proof
+remain mandatory later evidence.
 
 This decision owns invariants `CBN-INV-010`, `CBN-INV-013`, `CBN-INV-014`,
 and `CBN-INV-018`.

@@ -17,6 +17,13 @@ import type {
 import { createBoardSurfaceLayout } from './board-layout';
 import { AnnotationLayer } from './annotation-layer';
 import { computeAnnotationGeometry } from './annotation-geometry';
+import {
+  createBoardGeometryEpochMetadata,
+  reconcileBoardGeometryEpoch,
+  type BoardGeometryEpochMapping,
+} from './board-geometry-epoch';
+import { BoardInteractionController } from './board-interaction-controller';
+import type { BoardGestureGeometry } from './board-gesture-layer';
 import { BoardNotationLayer } from './board-notation-layer';
 import { PieceLayer } from './piece-layer';
 import { SquareLayer } from './square-layer';
@@ -113,6 +120,29 @@ export function BoardSurface({
       model.orientation,
     );
   }, [activeSize, modelColumns, model.orientation, modelRows]);
+  const geometryEpochMapping =
+    useMemo<Readonly<BoardGeometryEpochMapping> | null>(() => {
+      if (layout === null) {
+        return null;
+      }
+      return Object.freeze({
+        columns: layout.dimensions.columns,
+        height: layout.size.height,
+        orientation: layout.orientation,
+        rows: layout.dimensions.rows,
+        width: layout.size.width,
+      });
+    }, [layout]);
+  const [geometryEpochMetadata, setGeometryEpochMetadata] = useState(
+    createBoardGeometryEpochMetadata,
+  );
+  const nextGeometryEpochMetadata = reconcileBoardGeometryEpoch(
+    geometryEpochMetadata,
+    geometryEpochMapping,
+  );
+  if (nextGeometryEpochMetadata !== geometryEpochMetadata) {
+    setGeometryEpochMetadata(nextGeometryEpochMetadata);
+  }
   const annotationGeometry = useMemo(() => {
     if (layout === null || model.annotations === null) {
       return null;
@@ -124,6 +154,19 @@ export function BoardSurface({
       style: annotationStyle,
     });
   }, [annotationStyle, layout, model.annotations]);
+  const gestureGeometry = useMemo<Readonly<BoardGestureGeometry> | null>(() => {
+    if (layout === null || nextGeometryEpochMetadata.revision === null) {
+      return null;
+    }
+    return Object.freeze({
+      columns: layout.dimensions.columns,
+      height: layout.size.height,
+      revision: nextGeometryEpochMetadata.revision,
+      rows: layout.dimensions.rows,
+      visualSquares: Object.freeze(layout.cells.map(({ square }) => square)),
+      width: layout.size.width,
+    });
+  }, [layout, nextGeometryEpochMetadata.revision]);
 
   return (
     <View
@@ -189,6 +232,15 @@ export function BoardSurface({
           {showNotation ? (
             <BoardNotationLayer layout={layout} styles={styles} theme={theme} />
           ) : null}
+          {gestureGeometry === null ||
+          model.boardId === null ||
+          model.position === null ? null : (
+            <BoardInteractionController
+              boardId={model.boardId}
+              geometry={gestureGeometry}
+              position={model.position}
+            />
+          )}
         </>
       )}
     </View>

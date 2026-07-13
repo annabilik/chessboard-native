@@ -184,6 +184,8 @@ describe('piece renderer resolution and composition', () => {
       position: 'relative',
       right: 999,
       top: 999,
+      transform: [{ scale: 8 }],
+      transformOrigin: 'left top',
       width: 999,
     });
     const result = await render(
@@ -230,6 +232,8 @@ describe('piece renderer resolution and composition', () => {
         position: 'absolute',
         right: undefined,
         top: 0,
+        transform: undefined,
+        transformOrigin: undefined,
         width: 100,
       }),
     );

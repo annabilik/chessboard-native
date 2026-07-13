@@ -12,6 +12,7 @@ import type {
   SquareId,
 } from '../public-types';
 import type { BoardCellRect, BoardSurfaceLayout } from './board-layout';
+import { PIECE_HOST_STRUCTURAL_RESET } from './piece-host-style';
 
 /** One current controlled piece projected into measured board-local geometry. */
 export interface BoardPieceLayout {
@@ -182,48 +183,10 @@ export const PieceLayer = memo(function PieceLayer({
             pointerEvents="none"
             style={[
               style,
-              styles.piece,
+              PIECE_HOST_STRUCTURAL_RESET,
               {
-                aspectRatio: undefined,
-                bottom: undefined,
-                boxSizing: 'border-box',
-                display: 'flex',
-                end: undefined,
-                flex: undefined,
-                flexBasis: undefined,
-                flexGrow: 0,
-                flexShrink: 0,
                 height: pieceLayout.rect.height,
-                inset: undefined,
-                insetBlock: undefined,
-                insetBlockEnd: undefined,
-                insetBlockStart: undefined,
-                insetInline: undefined,
-                insetInlineEnd: undefined,
-                insetInlineStart: undefined,
                 left: pieceLayout.rect.left,
-                margin: 0,
-                marginBlock: 0,
-                marginBlockEnd: 0,
-                marginBlockStart: 0,
-                marginBottom: 0,
-                marginEnd: 0,
-                marginHorizontal: 0,
-                marginInline: 0,
-                marginInlineEnd: 0,
-                marginInlineStart: 0,
-                marginLeft: 0,
-                marginRight: 0,
-                marginStart: 0,
-                marginTop: 0,
-                marginVertical: 0,
-                maxHeight: undefined,
-                maxWidth: undefined,
-                minHeight: undefined,
-                minWidth: undefined,
-                pointerEvents: 'none',
-                right: undefined,
-                start: undefined,
                 top: pieceLayout.rect.top,
                 width: pieceLayout.rect.width,
               },
@@ -245,8 +208,5 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     zIndex: 20,
-  },
-  piece: {
-    position: 'absolute',
   },
 });

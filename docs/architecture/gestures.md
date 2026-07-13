@@ -46,7 +46,7 @@ Long-press pan, two-finger pan, and explicit two-activation annotation input all
 produce the same revisioned annotation operations. Every drag path also has a
 tap, keyboard, or accessibility alternative using the same semantic intent.
 
-## Pure interaction lifecycle foundation
+## Pure interaction lifecycle and gesture adapter foundation
 
 The internal interaction reducer models `idle`, tap or drag targeting,
 `deciding`, and `awaiting-commit` phases. Direct keyboard and accessibility
@@ -75,9 +75,31 @@ geometry, permissions, replacement, explicit cancellation, and unmount
 invalidate active work. Epoch allocation fails closed if the safe integer range
 is exhausted.
 
-This foundation is deliberately not wired to `Chessboard`. Gesture handlers,
-the effect executor, transient rendering, public callbacks, provider
-coordination, and accessibility activation remain later integration work.
+P2.2 adds one private board-level RNGH plane and a render-agnostic adapter over
+that reducer. The plane composes exclusive tap and pan recognizers. Measured
+visual square order is captured as primitive geometry, so orientation-correct
+point-to-square hit testing can run in a worklet without parsing coordinates or
+reading React state. Pan-frame pointer and target updates write only Reanimated
+shared values. Only activation, release, cancellation, and a recognized
+same-square tap cross the JS boundary.
+
+The adapter correlates every boundary with board ID, the native recognizer's
+handler token, position revision, and geometry epoch. It reads the current
+controlled position only at a boundary to resolve the source piece, then
+retains correlation and transient targeting only. A terminal gesture returns
+an inert candidate with no intent ID, immediately invalidates targeting, and
+cannot dispatch `submit`, produce reducer effects, invoke consumer code, or
+mutate position. Geometry or position changes make a terminal event fail
+closed, while a late foreign handler token cannot cancel newer work.
+
+`Chessboard` mounts this controller behind a closed interaction gate. Without
+the future public `onMoveRequest` boundary it renders only an
+accessibility-hidden, pointerless plane: no recognizer is attached and no
+gesture lifecycle can start. Presentation projections and shared-value lift,
+source-ghost, overlay, and pending primitives are internal and deterministic;
+the live callback executor, public gesture options, provider coordination,
+accessible activation, ScrollView arbitration, and native performance evidence
+remain later integration work.
 
 ## Consequences
 

@@ -65,7 +65,8 @@
     "react-native": "0.86.x",
     "react-native-gesture-handler": "2.32.x",
     "react-native-reanimated": "4.5.x",
-    "react-native-svg": "15.15.x"
+    "react-native-svg": "15.15.x",
+    "react-native-worklets": "0.10.x"
   },
   "devDependencies": {
     "@react-native/babel-preset": "0.86.0",

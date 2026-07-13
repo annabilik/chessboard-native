@@ -2,7 +2,7 @@
 
 A controlled, rules-free React Native chessboard component.
 
-This unpublished Phase 1 package includes the controlled public contracts,
+This unpublished early Phase 2 package includes the controlled public contracts,
 platform-free position and coordinate core, measured geometry, strict FEN
 foundation, and a responsive static board renderer. `Chessboard` fills its
 parent width, derives height from board rows and columns, and renders oriented
@@ -17,9 +17,11 @@ also declarative. The board is one adjustable accessibility control with an
 orientation-aware virtual cursor and decorative visual descendants. Controlled
 square and arrow annotations render in below/above-piece SVG planes. Selection
 styling, custom square rendering, semantic interaction, annotation drawing, and
-transitions are not rendered yet. An internal pure reducer now models the
-move-intent lifecycle and its race semantics, but is not wired to this public
-component. Provider-level identity registration remains future work.
+transitions are not rendered yet. An internal pure reducer and board-level RNGH
+adapter now model the move-intent lifecycle, worklet hit testing, and transient
+presentation. The adapter is deliberately disabled in this public component
+until a move-request callback and effect executor exist, so the board remains
+read-only. Provider-level identity registration remains future work.
 
 ```tsx
 import { Chessboard } from '@vibechess/chessboard-native';
