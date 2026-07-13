@@ -1,5 +1,11 @@
 import { act, fireEvent, render } from '@testing-library/react-native';
-import { StrictMode, type ReactElement } from 'react';
+import {
+  startTransition,
+  StrictMode,
+  Suspense,
+  useState,
+  type ReactElement,
+} from 'react';
 import { View } from 'react-native';
 import { State } from 'react-native-gesture-handler';
 import {
@@ -569,6 +575,95 @@ describe('public controlled move requests', () => {
     await flushDecisions();
 
     expect(onMoveRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a pending executor live when a timeout-changing concurrent render is abandoned', async () => {
+    interface HarnessState {
+      readonly mode: 'committed' | 'suspended';
+      readonly version: number;
+    }
+
+    const boardId = 'abandoned-runtime-render';
+    const never = new Promise<never>(() => undefined);
+    const decision = new Promise<MoveDecision>(() => undefined);
+    let decisionSignal: AbortSignal | undefined;
+    let updateHarness: ((next: HarnessState) => void) | undefined;
+    const onMoveRequest: OnMoveRequest = jest.fn((_intent, { signal }) => {
+      decisionSignal = signal;
+      return decision;
+    });
+    const position = Object.freeze({
+      revision: 12,
+      value: Object.freeze({
+        a2: Object.freeze({ id: 'stable', pieceType: 'token' }),
+      }),
+    });
+
+    function SuspendForever(): ReactElement {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- React Suspense uses thrown thenables as its render protocol.
+      throw never;
+    }
+
+    function ConcurrentHarness(): ReactElement {
+      const [state, setState] = useState<HarnessState>({
+        mode: 'committed',
+        version: 0,
+      });
+      updateHarness = (next) => {
+        setState(next);
+      };
+      const shouldSuspend = state.mode === 'suspended';
+      return (
+        <Suspense fallback={<View testID="abandoned-runtime-fallback" />}>
+          <ChessboardRuntime
+            boardId={boardId}
+            development={false}
+            dimensions={{ columns: 2, rows: 2 }}
+            moveRequestTimeouts={
+              shouldSuspend
+                ? { commitMs: 50_000, decisionMs: 50_000 }
+                : { commitMs: 60_000, decisionMs: 60_000 }
+            }
+            onMoveRequest={onMoveRequest}
+            pieceRenderers={PIECE_RENDERERS}
+            position={position}
+          />
+          {shouldSuspend ? <SuspendForever /> : null}
+        </Suspense>
+      );
+    }
+
+    const result = await render(<ConcurrentHarness />);
+    await measure(rootOf(result));
+    await drag(boardId, BOTTOM_RIGHT);
+    expect(decisionSignal?.aborted).toBe(false);
+    expectOneVisual(rootOf(result), 'pending-target', 'b1');
+
+    const update = updateHarness;
+    if (update === undefined) {
+      throw new Error('Expected the concurrent harness state setter.');
+    }
+    await act(() => {
+      startTransition(() => {
+        update({ mode: 'suspended', version: 1 });
+      });
+    });
+    expect(
+      nodesByTestId(rootOf(result), 'abandoned-runtime-fallback'),
+    ).toHaveLength(0);
+    expect(decisionSignal?.aborted).toBe(false);
+
+    await act(() => {
+      update({ mode: 'committed', version: 2 });
+    });
+    await flushDecisions();
+
+    expect(decisionSignal?.aborted).toBe(false);
+    expectOneVisual(rootOf(result), 'pending-target', 'b1');
+    expect(onMoveRequest).toHaveBeenCalledTimes(1);
+
+    await result.unmount();
+    expect(decisionSignal?.aborted).toBe(true);
   });
 
   it('never reuses an intent ID when timeout reconfiguration replaces the executor', async () => {

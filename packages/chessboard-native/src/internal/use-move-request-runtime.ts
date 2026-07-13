@@ -21,14 +21,6 @@ import {
 } from './move-request-runtime';
 import type { MoveRequestTimeouts, OnMoveRequest } from '../public-types';
 
-interface RuntimeSeed {
-  readonly boardId: string;
-  readonly commitMs: number;
-  readonly decisionMs: number;
-  readonly intentIdPrefix: string;
-  readonly positionRevision: number;
-}
-
 interface RuntimeLease {
   active: boolean;
   readonly runtime: MoveRequestRuntime;
@@ -51,19 +43,15 @@ export interface MoveRequestInteraction {
 
 const NULL_SNAPSHOT = (): null => null;
 const EMPTY_SUBSCRIBE = (): (() => void) => () => undefined;
+let nextRuntimeGeneration = 0;
 
-function sameRuntimeIdentity(
-  previous: Readonly<RuntimeSeed> | null,
-  next: Readonly<RuntimeSeed> | null,
-): boolean {
-  if (previous === null || next === null) {
-    return previous === next;
+function allocateRuntimeGeneration(): number {
+  if (!Number.isSafeInteger(nextRuntimeGeneration)) {
+    throw new RangeError('Move request runtime generation exhausted.');
   }
-  return (
-    previous.boardId === next.boardId &&
-    previous.commitMs === next.commitMs &&
-    previous.decisionMs === next.decisionMs
-  );
+  const generation = nextRuntimeGeneration;
+  nextRuntimeGeneration = generation + 1;
+  return generation;
 }
 
 /** Bind one board instance to the pure move-request reducer executor. */
@@ -78,47 +66,26 @@ export function useMoveRequestRuntime({
   const commitMs = timeouts?.commitMs ?? DEFAULT_MOVE_REQUEST_TIMEOUTS.commitMs;
   const decisionMs =
     timeouts?.decisionMs ?? DEFAULT_MOVE_REQUEST_TIMEOUTS.decisionMs;
-  const seedRef = useRef<Readonly<RuntimeSeed> | null>(null);
-  const nextRuntimeGeneration = useRef(0);
-  const desiredSeed: Readonly<RuntimeSeed> | null =
-    boardId === null || position === null
-      ? null
-      : {
-          boardId,
-          commitMs,
-          decisionMs,
-          intentIdPrefix: '',
-          positionRevision: position.revision,
-        };
-  if (!sameRuntimeIdentity(seedRef.current, desiredSeed)) {
-    if (desiredSeed === null) {
-      seedRef.current = null;
-    } else {
-      const generation = nextRuntimeGeneration.current;
-      nextRuntimeGeneration.current =
-        generation === Number.MAX_SAFE_INTEGER ? 0 : generation + 1;
-      seedRef.current = Object.freeze({
-        ...desiredSeed,
-        intentIdPrefix: `move:${String(desiredSeed.boardId.length)}:${desiredSeed.boardId}:${reactInstanceId}:${String(generation)}:`,
-      });
-    }
-  }
-  const seed = seedRef.current;
+  const hasPosition = position !== null;
 
   const runtime = useMemo<MoveRequestRuntime | null>(() => {
-    if (seed === null) {
+    if (boardId === null || !hasPosition) {
       return null;
     }
+    const generation = allocateRuntimeGeneration();
     return createMoveRequestRuntime({
-      boardId: seed.boardId,
-      intentIdPrefix: seed.intentIdPrefix,
-      positionRevision: seed.positionRevision,
+      boardId,
+      intentIdPrefix: `move:${String(boardId.length)}:${boardId}:${reactInstanceId}:${String(generation)}:`,
+      // The controlled revision is synchronized in a layout effect before any
+      // committed input can reach this runtime. Keeping prop revisions out of
+      // this memo prevents ordinary controlled updates from replacing it.
+      positionRevision: 0,
       timeouts: {
-        commitMs: seed.commitMs,
-        decisionMs: seed.decisionMs,
+        commitMs,
+        decisionMs,
       },
     });
-  }, [seed]);
+  }, [boardId, commitMs, decisionMs, hasPosition, reactInstanceId]);
 
   useLayoutEffect(() => {
     runtime?.setHandlers({
