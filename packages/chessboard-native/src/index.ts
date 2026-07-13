@@ -59,6 +59,7 @@ export type {
   MoveRequestTimeouts,
   MoveSource,
   OnMoveRequest,
+  OnSquareActivate,
   PieceData,
   PieceInteractionContext,
   PieceRenderer,

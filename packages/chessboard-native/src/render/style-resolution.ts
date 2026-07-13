@@ -10,6 +10,7 @@ import type {
   ChessboardTheme,
   SquareId,
   SquareStyles,
+  SquareVisualState,
 } from '../public-types';
 import { defaultTheme } from '../theme';
 
@@ -100,11 +101,14 @@ const THEME_SLOTS = Object.freeze([
   'board',
   'darkSquare',
   'darkSquareNotation',
+  'destinationSquare',
+  'disabledSquare',
   'fileNotation',
   'lightSquare',
   'lightSquareNotation',
   'piece',
   'rankNotation',
+  'selectedSquare',
   'square',
 ] as const satisfies readonly (keyof ChessboardTheme)[]);
 
@@ -209,6 +213,9 @@ export function resolveSquareStyle(options: {
   readonly squareStyles?: SquareStyles | undefined;
   readonly styles?: ChessboardStyles | undefined;
   readonly theme?: ChessboardTheme | undefined;
+  readonly state?: Readonly<
+    Pick<SquareVisualState, 'isDestination' | 'isDisabled' | 'isSelected'>
+  >;
   readonly transientStyle?: StyleProp<ViewStyle>;
 }): Readonly<ViewStyle> {
   const tone = options.isLight ? 'lightSquare' : 'darkSquare';
@@ -221,6 +228,17 @@ export function resolveSquareStyle(options: {
     options.styles?.square,
     options.styles?.[tone],
     ownSquareStyle(options.squareStyles, options.square),
+    options.state?.isDestination ? defaultTheme.destinationSquare : undefined,
+    options.state?.isDestination ? options.theme?.destinationSquare : undefined,
+    options.state?.isDestination
+      ? options.styles?.destinationSquare
+      : undefined,
+    options.state?.isSelected ? defaultTheme.selectedSquare : undefined,
+    options.state?.isSelected ? options.theme?.selectedSquare : undefined,
+    options.state?.isSelected ? options.styles?.selectedSquare : undefined,
+    options.state?.isDisabled ? defaultTheme.disabledSquare : undefined,
+    options.state?.isDisabled ? options.theme?.disabledSquare : undefined,
+    options.state?.isDisabled ? options.styles?.disabledSquare : undefined,
     options.transientStyle,
   ]);
 }

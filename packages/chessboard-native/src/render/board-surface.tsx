@@ -12,6 +12,7 @@ import { useAccessibilityAnnouncement } from '../accessibility/announcements';
 import {
   useBoardAccessibility,
   type BoardAccessibilityMoveInteraction,
+  type BoardAccessibilitySquareInteraction,
 } from '../accessibility/board-accessibility';
 import { announceMoveOutcome } from '../accessibility/move-outcome';
 import { STANDARD_BOARD_DIMENSIONS } from '../core/dimensions';
@@ -25,7 +26,12 @@ import type {
   InteractionInvalidationReason,
   MoveIntentLifecycle,
 } from '../internal/interaction-reducer';
+import {
+  planSquareActivation,
+  type SquareActivationInput,
+} from '../internal/square-activation';
 import { useMoveRequestRuntime } from '../internal/use-move-request-runtime';
+import { useSquareActivation } from '../internal/use-square-activation';
 import type {
   AnnotationStyle,
   BoardSize,
@@ -37,7 +43,10 @@ import type {
   MoveOutcomeAccessibilityContext,
   MoveRequestTimeouts,
   OnMoveRequest,
+  OnSquareActivate,
   PieceRenderers,
+  SquareActivationIntent,
+  SquareId,
   SquareStyles,
 } from '../public-types';
 import { createBoardSurfaceLayout } from './board-layout';
@@ -68,6 +77,7 @@ interface BoardSurfaceProps {
   readonly model: NormalizedBoardModel;
   readonly moveRequestTimeouts: MoveRequestTimeouts | undefined;
   readonly onMoveRequest: OnMoveRequest | undefined;
+  readonly onSquareActivate: OnSquareActivate | undefined;
   readonly pieceRenderers: PieceRenderers;
   readonly showNotation: boolean;
   readonly squareStyles: SquareStyles | undefined;
@@ -82,6 +92,7 @@ interface InteractionInvalidationSnapshot {
   readonly geometryRevision: number | null;
   readonly orientation: NormalizedBoardModel['orientation'];
   readonly rows: number | null;
+  readonly tapEnabled: boolean;
 }
 
 type PendingMoveLifecycle = Extract<
@@ -134,7 +145,8 @@ function invalidationReason(
 ): InteractionInvalidationReason | null {
   if (
     previous.accessibilityEnabled !== current.accessibilityEnabled ||
-    previous.dragEnabled !== current.dragEnabled
+    previous.dragEnabled !== current.dragEnabled ||
+    previous.tapEnabled !== current.tapEnabled
   ) {
     return 'permissions-change';
   }
@@ -162,6 +174,7 @@ export function BoardSurface({
   model,
   moveRequestTimeouts,
   onMoveRequest,
+  onSquareActivate,
   pieceRenderers,
   showNotation,
   squareStyles,
@@ -177,9 +190,12 @@ export function BoardSurface({
     model.status === 'ready' &&
     model.boardId !== null &&
     model.position !== null;
+  const moveRequestEnabled =
+    interactionReady && typeof onMoveRequest === 'function';
   const accessibilityMoveEnabled =
     interactionReady && resolvedPermissions.accessibility;
   const dragEnabled = interactionReady && resolvedPermissions.drag;
+  const tapEnabled = interactionReady && typeof onSquareActivate === 'function';
   const [activeDragSourceSquare, setActiveDragSourceSquare] = useState<
     string | null
   >(null);
@@ -196,11 +212,51 @@ export function BoardSurface({
   );
   const moveInteraction = useMoveRequestRuntime({
     boardId: model.boardId,
-    onMoveRequest: accessibilityMoveEnabled ? onMoveRequest : undefined,
+    onMoveRequest: moveRequestEnabled ? onMoveRequest : undefined,
     onOutcome: handleMoveOutcome,
     position: model.position,
     timeouts: moveRequestTimeouts,
   });
+  const squareActivation = useSquareActivation({
+    boardId: model.boardId,
+    onSquareActivate: tapEnabled ? onSquareActivate : undefined,
+  });
+  const dispatchSquareActivation = useCallback(
+    (
+      square: SquareId,
+      input: SquareActivationInput,
+      action: SquareActivationIntent['action'] = 'activate',
+    ): boolean => {
+      const plan = planSquareActivation({
+        action,
+        activationEnabled: tapEnabled,
+        input,
+        model,
+        moveEnabled:
+          input === 'accessibility'
+            ? accessibilityMoveEnabled
+            : moveRequestEnabled,
+        square,
+      });
+      switch (plan.type) {
+        case 'request-move':
+          return moveInteraction.request(plan.request);
+        case 'emit-activation':
+          return squareActivation.emit(plan.request) !== null;
+        case 'blocked':
+        case 'fallback':
+          return false;
+      }
+    },
+    [
+      accessibilityMoveEnabled,
+      model,
+      moveRequestEnabled,
+      moveInteraction.request,
+      squareActivation.emit,
+      tapEnabled,
+    ],
+  );
   const handleDragSourceChange = useCallback(
     (sourceSquare: string | null): void => {
       setActiveDragSourceSquare((current) =>
@@ -233,10 +289,24 @@ export function BoardSurface({
       moveInteraction.request,
     ],
   );
+  const accessibilitySquareInteraction = useMemo<
+    Readonly<BoardAccessibilitySquareInteraction>
+  >(
+    () =>
+      Object.freeze({
+        activate: (square: SquareId): boolean =>
+          dispatchSquareActivation(square, 'accessibility'),
+        clearSelection: (square: SquareId): boolean =>
+          dispatchSquareActivation(square, 'accessibility', 'clear-selection'),
+        enabled: tapEnabled && activeDragSourceSquare === null,
+      }),
+    [activeDragSourceSquare, dispatchSquareActivation, tapEnabled],
+  );
   const accessibilityProps = useBoardAccessibility(
     model,
     accessibility,
     accessibilityMoveInteraction,
+    accessibilitySquareInteraction,
   );
   const fallbackDimensions = model.dimensions ?? STANDARD_BOARD_DIMENSIONS;
   const modelColumns = model.dimensions?.columns ?? null;
@@ -355,6 +425,7 @@ export function BoardSurface({
         geometryRevision: gestureGeometry?.revision ?? null,
         orientation: model.orientation,
         rows: model.dimensions?.rows ?? null,
+        tapEnabled,
       }),
     [
       accessibilityMoveEnabled,
@@ -363,6 +434,7 @@ export function BoardSurface({
       model.dimensions?.columns,
       model.dimensions?.rows,
       model.orientation,
+      tapEnabled,
     ],
   );
   const previousInvalidationSnapshot =
@@ -408,9 +480,26 @@ export function BoardSurface({
       const boardId = model.boardId;
       const position = model.position;
       const geometry = gestureGeometry;
+      if (candidate.input === 'tap') {
+        if (
+          !tapEnabled ||
+          boardId === null ||
+          position === null ||
+          geometry === null ||
+          candidate.boardId !== boardId ||
+          candidate.geometryEpoch !== geometry.revision ||
+          candidate.basePositionRevision !== position.revision ||
+          candidate.baseSelectionRevision !==
+            (model.selection?.revision ?? null) ||
+          !geometry.visualSquares.includes(candidate.square)
+        ) {
+          return;
+        }
+        dispatchSquareActivation(candidate.square, 'touch');
+        return;
+      }
       if (
         !dragEnabled ||
-        candidate.input !== 'drag' ||
         boardId === null ||
         position === null ||
         geometry === null ||
@@ -444,11 +533,14 @@ export function BoardSurface({
     },
     [
       canDragPiece,
+      dispatchSquareActivation,
       dragEnabled,
       gestureGeometry,
       model.boardId,
       model.position,
+      model.selection?.revision,
       moveInteraction.request,
+      tapEnabled,
     ],
   );
   const pendingSourceSquare =
@@ -492,6 +584,7 @@ export function BoardSurface({
         <>
           <SquareLayer
             layout={layout}
+            selection={model.selection}
             squareStyles={squareStyles}
             styles={styles}
             theme={theme}
@@ -531,18 +624,19 @@ export function BoardSurface({
               style={pieceStyle}
             />
           )}
-          {!dragEnabled || gestureGeometry === null ? null : (
+          {(!dragEnabled && !tapEnabled) || gestureGeometry === null ? null : (
             <BoardInteractionController
               boardId={model.boardId}
               {...(canDragPiece === undefined ? {} : { canDragPiece })}
-              dragEnabled
+              dragEnabled={dragEnabled}
               geometry={gestureGeometry}
               onCandidate={handleGestureCandidate}
               onDragSourceChange={handleDragSourceChange}
               pieceRenderers={pieceRenderers}
               pieceStyle={pieceStyle}
               position={model.position}
-              tapEnabled={false}
+              selectionRevision={model.selection?.revision ?? null}
+              tapEnabled={tapEnabled}
             />
           )}
         </>

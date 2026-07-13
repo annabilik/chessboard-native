@@ -27,6 +27,7 @@ import type {
   InteractionPermissions,
   MoveRequestTimeouts,
   OnMoveRequest,
+  OnSquareActivate,
   PieceRenderers,
   PositionProp,
   ReduceMotion,
@@ -60,6 +61,8 @@ export interface ChessboardProps {
   readonly annotationStyle?: AnnotationStyle;
   /** Consumer-owned selection presentation when supplied. */
   readonly selection?: SelectionProp;
+  /** Emits a controlled square activation without changing selection. */
+  readonly onSquareActivate?: OnSquareActivate;
   /**
    * Validates a move intent without committing it. Supplying this callback
    * opens the controlled move-request surface.
@@ -141,6 +144,7 @@ export function ChessboardRuntime({
         model={model}
         moveRequestTimeouts={props.moveRequestTimeouts}
         onMoveRequest={props.onMoveRequest}
+        onSquareActivate={props.onSquareActivate}
         pieceRenderers={props.pieceRenderers ?? defaultPieceRenderers}
         showNotation={props.showNotation ?? true}
         squareStyles={props.squareStyles}

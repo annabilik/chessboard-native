@@ -32,6 +32,16 @@ describe('native visual defaults', () => {
     expect(defaultTheme.lightSquare).toEqual({ backgroundColor: '#F0D9B5' });
   });
 
+  it('exports non-geometric controlled selection paint defaults', () => {
+    expect(defaultTheme.destinationSquare).toEqual({
+      boxShadow: 'inset 0 0 0 3px rgba(76, 175, 80, 0.9)',
+    });
+    expect(defaultTheme.selectedSquare).toEqual({
+      boxShadow: 'inset 0 0 0 3px rgba(255, 170, 0, 0.95)',
+    });
+    expect(defaultTheme.disabledSquare).toEqual({ opacity: 0.45 });
+  });
+
   it('[PARITY-EXPORT-DEFAULT-DARK-SQUARE-NOTATION-STYLE] exports dark-square contrast', () => {
     expect(defaultTheme.darkSquareNotation).toEqual({ color: '#F0D9B5' });
   });
@@ -159,6 +169,58 @@ describe('native style resolution', () => {
         theme: { lightSquare: { backgroundColor: '#f2e8cf' } },
       }).backgroundColor,
     ).toBe('#f2e8cf');
+  });
+
+  it('applies controlled destination, selected, and disabled paint after canonical square styles', () => {
+    const resolved = resolveSquareStyle({
+      isLight: true,
+      square: 'e4',
+      squareStyles: {
+        e4: { boxShadow: 'inset 0 0 0 1px static', opacity: 0.9 },
+      },
+      state: {
+        isDestination: true,
+        isDisabled: true,
+        isSelected: true,
+      },
+      styles: {
+        destinationSquare: { boxShadow: 'inset 0 0 0 2px destination' },
+        disabledSquare: { opacity: 0.25 },
+        selectedSquare: { boxShadow: 'inset 0 0 0 3px selected' },
+      },
+      theme: {
+        destinationSquare: { boxShadow: 'inset 0 0 0 4px theme-destination' },
+        disabledSquare: { opacity: 0.5 },
+        selectedSquare: { boxShadow: 'inset 0 0 0 5px theme-selected' },
+      },
+    });
+
+    expect(resolved).toEqual(
+      expect.objectContaining({
+        boxShadow: 'inset 0 0 0 3px selected',
+        opacity: 0.25,
+      }),
+    );
+  });
+
+  it('does not apply controlled selection slots when their flags are false', () => {
+    const resolved = resolveSquareStyle({
+      isLight: false,
+      square: 'e5',
+      state: {
+        isDestination: false,
+        isDisabled: false,
+        isSelected: false,
+      },
+      styles: {
+        destinationSquare: { opacity: 0.1 },
+        disabledSquare: { opacity: 0.2 },
+        selectedSquare: { opacity: 0.3 },
+      },
+    });
+
+    expect(resolved.opacity).toBeUndefined();
+    expect(resolved.boxShadow).toBeUndefined();
   });
 
   it('[PARITY-OPTION-DARK-SQUARE-NOTATION-STYLE] applies dark-square notation contrast', () => {

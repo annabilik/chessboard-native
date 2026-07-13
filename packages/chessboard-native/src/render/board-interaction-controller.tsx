@@ -30,6 +30,7 @@ import type {
   PieceData,
   PieceRenderers,
   PositionObject,
+  Revision,
   SquareId,
 } from '../public-types';
 import {
@@ -52,6 +53,7 @@ interface BoardInteractionControllerProps {
   readonly pieceRenderers: PieceRenderers;
   readonly pieceStyle: Readonly<ViewStyle>;
   readonly position: NormalizedControlledValue<PositionObject>;
+  readonly selectionRevision?: Revision | null;
   readonly tapEnabled?: boolean;
 }
 
@@ -66,22 +68,27 @@ function createSnapshot(options: {
   readonly boardId: string;
   readonly geometry: Readonly<BoardGestureGeometry>;
   readonly position: NormalizedControlledValue<PositionObject>;
+  readonly selectionRevision: Revision | null;
 }): Readonly<BoardGestureSnapshot> {
   return Object.freeze({
     boardId: options.boardId,
     geometryEpoch: options.geometry.revision,
     position: options.position.value,
     positionRevision: options.position.revision,
+    selectionRevision: options.selectionRevision,
   });
 }
 
 function createCorrelation(
   signal: Readonly<BoardGestureSignal>,
+  selectionRevision: Revision | null,
 ): Readonly<BoardGestureCorrelation> {
   return Object.freeze({
     boardId: signal.boardId,
     geometryEpoch: signal.geometryRevision,
     positionRevision: signal.positionRevision,
+    selectionRevision:
+      signal.type === 'tap' ? signal.selectionRevision : selectionRevision,
     token: signal.gestureToken,
   });
 }
@@ -117,14 +124,15 @@ export function BoardInteractionController({
   pieceRenderers,
   pieceStyle,
   position,
+  selectionRevision = null,
   tapEnabled = false,
 }: BoardInteractionControllerProps): ReactElement {
   const presentation = useInteractionPresentationSharedValues();
   const [activeDragVisual, setActiveDragVisual] =
     useState<Readonly<ActiveDragVisual> | null>(null);
   const snapshot = useMemo(
-    () => createSnapshot({ boardId, geometry, position }),
-    [boardId, geometry, position],
+    () => createSnapshot({ boardId, geometry, position, selectionRevision }),
+    [boardId, geometry, position, selectionRevision],
   );
   const occupiedSquares = useMemo(() => {
     const occupied = geometry.visualSquares.filter((square) =>
@@ -165,6 +173,9 @@ export function BoardInteractionController({
   const dragEnabledAtCommit = useRef(dragEnabled);
   const draggableSquaresAtCommit = useRef(draggableSquares);
   const interactionEnabledAtCommit = useRef(dragEnabled || tapEnabled);
+  const tapEnabledAtCommit = useRef(tapEnabled);
+  const onCandidateAtCommit = useRef(onCandidate);
+  const onDragSourceChangeAtCommit = useRef(onDragSourceChange);
   const snapshotAtCommit = useRef(snapshot);
 
   const applyReduction = useCallback(
@@ -190,16 +201,16 @@ export function BoardInteractionController({
             ? current
             : next,
         );
-        onDragSourceChange?.(next.sourceSquare);
+        onDragSourceChangeAtCommit.current?.(next.sourceSquare);
       } else {
         setActiveDragVisual((current) => (current === null ? current : null));
-        onDragSourceChange?.(null);
+        onDragSourceChangeAtCommit.current?.(null);
       }
       if (reduction.candidate !== null) {
-        onCandidate?.(reduction.candidate);
+        onCandidateAtCommit.current?.(reduction.candidate);
       }
     },
-    [onCandidate, onDragSourceChange, presentation],
+    [presentation],
   );
 
   const handleSignal = useCallback(
@@ -221,7 +232,10 @@ export function BoardInteractionController({
           ) {
             return;
           }
-          const correlation = createCorrelation(signal);
+          const correlation = createCorrelation(
+            signal,
+            currentSnapshot.selectionRevision,
+          );
           let reduction = reduceBoardGestureAdapter(adapter.current, {
             correlation,
             snapshot: currentSnapshot,
@@ -277,9 +291,15 @@ export function BoardInteractionController({
           return;
         }
         case 'tap': {
+          if (!tapEnabledAtCommit.current) {
+            return;
+          }
           applyReduction(
             reduceBoardGestureAdapter(adapter.current, {
-              correlation: createCorrelation(signal),
+              correlation: createCorrelation(
+                signal,
+                currentSnapshot.selectionRevision,
+              ),
               endSquare: signal.targetSquare,
               snapshot: currentSnapshot,
               startSquare: signal.sourceSquare,
@@ -293,10 +313,16 @@ export function BoardInteractionController({
   );
 
   useLayoutEffect(() => {
+    onCandidateAtCommit.current = onCandidate;
+    onDragSourceChangeAtCommit.current = onDragSourceChange;
+  }, [onCandidate, onDragSourceChange]);
+
+  useLayoutEffect(() => {
     snapshotAtCommit.current = snapshot;
     dragEnabledAtCommit.current = dragEnabled;
     draggableSquaresAtCommit.current = draggableSquares;
     interactionEnabledAtCommit.current = dragEnabled || tapEnabled;
+    tapEnabledAtCommit.current = tapEnabled;
     let reduction = reduceBoardGestureAdapter(adapter.current, {
       snapshot,
       type: 'synchronize',
@@ -329,6 +355,7 @@ export function BoardInteractionController({
       acceptingSignals.current = false;
       dragEnabledAtCommit.current = false;
       interactionEnabledAtCommit.current = false;
+      tapEnabledAtCommit.current = false;
       const correlation = adapter.current.active?.correlation;
       if (correlation !== undefined) {
         adapter.current = reduceBoardGestureAdapter(adapter.current, {
@@ -337,10 +364,10 @@ export function BoardInteractionController({
           type: 'cancel',
         }).state;
       }
-      onDragSourceChange?.(null);
+      onDragSourceChangeAtCommit.current?.(null);
       resetInteractionPresentationSharedValues(presentation);
     };
-  }, [onDragSourceChange, presentation]);
+  }, [presentation]);
 
   const renderer =
     activeDragVisual === null
@@ -358,10 +385,10 @@ export function BoardInteractionController({
         dragEnabled={dragEnabled}
         draggableSquares={draggableSquares}
         geometry={geometry}
-        occupiedSquares={occupiedSquares}
         onSignal={handleSignal}
         positionRevision={position.revision}
         presentation={presentation}
+        selectionRevision={selectionRevision}
         tapEnabled={tapEnabled}
       />
       {activeDragVisual === null || renderer === null ? null : (

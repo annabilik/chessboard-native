@@ -281,6 +281,7 @@ export interface ChessboardProps {
     readonly moveRequestTimeouts?: MoveRequestTimeouts;
     readonly onError?: OnChessboardError;
     readonly onMoveRequest?: OnMoveRequest;
+    readonly onSquareActivate?: OnSquareActivate;
     readonly orientation?: BoardOrientation;
     readonly pieceRenderers?: PieceRenderers;
     readonly position: PositionProp;
@@ -297,11 +298,14 @@ export interface ChessboardStyles {
     readonly board?: StyleProp<ViewStyle>;
     readonly darkSquare?: StyleProp<ViewStyle>;
     readonly darkSquareNotation?: StyleProp<TextStyle>;
+    readonly destinationSquare?: StyleProp<ViewStyle>;
+    readonly disabledSquare?: StyleProp<ViewStyle>;
     readonly fileNotation?: StyleProp<TextStyle>;
     readonly lightSquare?: StyleProp<ViewStyle>;
     readonly lightSquareNotation?: StyleProp<TextStyle>;
     readonly piece?: StyleProp<ViewStyle>;
     readonly rankNotation?: StyleProp<TextStyle>;
+    readonly selectedSquare?: StyleProp<ViewStyle>;
     readonly square?: StyleProp<ViewStyle>;
 }
 
@@ -310,11 +314,14 @@ export interface ChessboardTheme {
     readonly board?: StyleProp<ViewStyle>;
     readonly darkSquare?: StyleProp<ViewStyle>;
     readonly darkSquareNotation?: StyleProp<TextStyle>;
+    readonly destinationSquare?: StyleProp<ViewStyle>;
+    readonly disabledSquare?: StyleProp<ViewStyle>;
     readonly fileNotation?: StyleProp<TextStyle>;
     readonly lightSquare?: StyleProp<ViewStyle>;
     readonly lightSquareNotation?: StyleProp<TextStyle>;
     readonly piece?: StyleProp<ViewStyle>;
     readonly rankNotation?: StyleProp<TextStyle>;
+    readonly selectedSquare?: StyleProp<ViewStyle>;
     readonly square?: StyleProp<ViewStyle>;
 }
 
@@ -438,6 +445,9 @@ export type OnChessboardError = (error: ChessboardError, context: ChessboardErro
 export type OnMoveRequest = (intent: MoveIntent, context: {
     signal: AbortSignal;
 }) => MoveDecision | Promise<MoveDecision>;
+
+// @public
+export type OnSquareActivate = (intent: Readonly<SquareActivationIntent>) => void;
 
 // @public
 export function parseFenPosition(fen: string, dimensions?: BoardDimensions): PositionObject;

@@ -12,7 +12,6 @@ import {
   type InteractionEvent,
   type InteractionInvalidationReason,
   type MoveIntentLifecycle,
-  type TapInteractionState,
 } from './interaction-reducer';
 
 /** One immutable controlled board snapshot observed at a gesture boundary. */
@@ -20,6 +19,7 @@ export interface BoardGestureSnapshot {
   readonly boardId: string;
   readonly geometryEpoch: number;
   readonly positionRevision: Revision;
+  readonly selectionRevision: Revision | null;
   readonly position: PositionObject | null;
 }
 
@@ -29,6 +29,7 @@ export interface BoardGestureCorrelation {
   readonly token: number;
   readonly geometryEpoch: number;
   readonly positionRevision: Revision;
+  readonly selectionRevision: Revision | null;
 }
 
 interface ActiveBoardGesture {
@@ -52,16 +53,29 @@ export interface BoardGestureAdapterState {
  * be executed by the interaction reducer until a later runtime chooses to turn
  * it into a request.
  */
-export interface BoardGestureIntentCandidate {
+interface BoardGestureCandidateBase {
   readonly boardId: string;
   readonly token: number;
   readonly geometryEpoch: number;
   readonly basePositionRevision: Revision;
+}
+
+export interface BoardDragIntentCandidate extends BoardGestureCandidateBase {
   readonly source: Extract<MoveSource, { readonly kind: 'board' }>;
   readonly targetSquare: SquareId | null;
   readonly piece: Readonly<PieceData>;
-  readonly input: 'drag' | 'tap';
+  readonly input: 'drag';
 }
+
+export interface BoardTapActivationCandidate extends BoardGestureCandidateBase {
+  readonly baseSelectionRevision: Revision | null;
+  readonly input: 'tap';
+  readonly square: SquareId;
+}
+
+/** Terminal, still-inert candidate emitted by the native gesture adapter. */
+export type BoardGestureIntentCandidate =
+  BoardDragIntentCandidate | BoardTapActivationCandidate;
 
 export type BoardGestureAdapterEvent =
   | {
@@ -109,8 +123,6 @@ export interface CreateBoardGestureAdapterStateOptions {
   readonly positionRevision: Revision;
 }
 
-type TargetingLifecycle = DragInteractionState | TapInteractionState;
-
 function isNonNegativeSafeInteger(value: number): boolean {
   return Number.isSafeInteger(value) && value >= 0;
 }
@@ -129,6 +141,7 @@ function freezeCorrelation(
     boardId: correlation.boardId,
     geometryEpoch: correlation.geometryEpoch,
     positionRevision: correlation.positionRevision,
+    selectionRevision: correlation.selectionRevision,
     token: correlation.token,
   });
 }
@@ -204,7 +217,9 @@ function snapshotMetadataIsValid(
 ): boolean {
   return (
     isNonNegativeSafeInteger(snapshot.geometryEpoch) &&
-    isNonNegativeSafeInteger(snapshot.positionRevision)
+    isNonNegativeSafeInteger(snapshot.positionRevision) &&
+    (snapshot.selectionRevision === null ||
+      isNonNegativeSafeInteger(snapshot.selectionRevision))
   );
 }
 
@@ -250,11 +265,14 @@ function synchronizeSnapshot(
 function correlationMatchesSnapshot(
   correlation: Readonly<BoardGestureCorrelation>,
   snapshot: Readonly<BoardGestureSnapshot>,
+  includeSelectionRevision = false,
 ): boolean {
   return (
     correlation.boardId === snapshot.boardId &&
     correlation.geometryEpoch === snapshot.geometryEpoch &&
     correlation.positionRevision === snapshot.positionRevision &&
+    (!includeSelectionRevision ||
+      correlation.selectionRevision === snapshot.selectionRevision) &&
     isNonNegativeSafeInteger(correlation.token) &&
     snapshotMetadataIsValid(snapshot)
   );
@@ -294,7 +312,8 @@ function matchesActiveCorrelation(
     correlation.boardId === active.correlation.boardId &&
     correlation.token === active.correlation.token &&
     correlation.geometryEpoch === active.correlation.geometryEpoch &&
-    correlation.positionRevision === active.correlation.positionRevision
+    correlation.positionRevision === active.correlation.positionRevision &&
+    correlation.selectionRevision === active.correlation.selectionRevision
   );
 }
 
@@ -316,10 +335,10 @@ function piecesAreEqual(
   return left.pieceType === right.pieceType && left.id === right.id;
 }
 
-function createCandidate(
-  lifecycle: Readonly<TargetingLifecycle>,
+function createDragCandidate(
+  lifecycle: Readonly<DragInteractionState>,
   correlation: Readonly<BoardGestureCorrelation>,
-): Readonly<BoardGestureIntentCandidate> {
+): Readonly<BoardDragIntentCandidate> {
   if (lifecycle.context.source.kind !== 'board') {
     throw new Error('A board gesture must have a board source.');
   }
@@ -447,7 +466,7 @@ function finalizeDrag(
   if (updated.lifecycle.phase !== 'drag') {
     return result(resetActive(updated));
   }
-  const candidate = createCandidate(updated.lifecycle, event.correlation);
+  const candidate = createDragCandidate(updated.lifecycle, event.correlation);
   return result(resetActive(updated), candidate);
 }
 
@@ -455,7 +474,7 @@ function recognizeTap(
   state: Readonly<BoardGestureAdapterState>,
   event: Extract<BoardGestureAdapterEvent, { readonly type: 'tap' }>,
 ): Readonly<BoardGestureAdapterReduction> {
-  if (!correlationMatchesSnapshot(event.correlation, event.snapshot)) {
+  if (!correlationMatchesSnapshot(event.correlation, event.snapshot, true)) {
     return result(state);
   }
   const synchronized = synchronizeSnapshot(state, event.snapshot);
@@ -470,6 +489,7 @@ function recognizeTap(
     );
   }
   if (
+    event.snapshot.position === null ||
     event.startSquare === null ||
     event.endSquare === null ||
     event.startSquare !== event.endSquare
@@ -477,29 +497,17 @@ function recognizeTap(
     return result(synchronized);
   }
 
-  const piece = pieceAt(event.snapshot, event.startSquare);
-  if (piece === null) {
-    return result(synchronized);
-  }
-  const lifecycle = reduceLifecycleWithoutEffects(synchronized.lifecycle, {
-    context: {
-      basePositionRevision: event.correlation.positionRevision,
-      boardId: synchronized.boardId,
-      piece,
-      source: { kind: 'board', square: event.startSquare },
-    },
-    mode: 'tap',
-    targetSquare: event.endSquare,
-    type: 'begin',
-  });
-  if (lifecycle.phase !== 'tap') {
-    return result(synchronized);
-  }
-  const candidate = createCandidate(lifecycle, event.correlation);
-  const idle = invalidateLifecycle(lifecycle, 'user');
   return result(
-    freezeState(synchronized.boardId, synchronized.geometryEpoch, idle, null),
-    candidate,
+    synchronized,
+    Object.freeze({
+      basePositionRevision: event.correlation.positionRevision,
+      baseSelectionRevision: event.correlation.selectionRevision,
+      boardId: synchronized.boardId,
+      geometryEpoch: event.correlation.geometryEpoch,
+      input: 'tap',
+      square: event.startSquare,
+      token: event.correlation.token,
+    }),
   );
 }
 

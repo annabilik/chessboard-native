@@ -8,8 +8,9 @@ assistive technology.
 
 The Phase 1 prototype established navigation, values, labels, announcements,
 focus identity, and reduced motion. Phase 2 adds controlled source, target,
-removal, and cancellation actions without turning the cursor into semantic
-selection or creating square-level accessibility targets.
+removal, cancellation, square activation, and selection-clearing actions
+without turning the cursor into semantic selection or creating square-level
+accessibility targets.
 
 ## Virtual cursor
 
@@ -53,18 +54,33 @@ standard actions. Android receives unlabeled standard-action entries so
 TalkBack localizes them; on iOS the adjustable trait invokes them directly, so
 they are omitted from the custom rotor menu. Four custom actions provide
 directional navigation. Actions that cannot move at the current edge are
-omitted, and disabled boards expose no actions. With `onMoveRequest`, an
-occupied cursor square exposes source activation and removal. Activating a
-source stores only transient interaction context; after moving the cursor,
-activation submits the target. Removal submits the same intent with
-`targetSquare: null`, and cancellation clears source targeting or active async
-work. Controlled selection clearing, spare placement, and annotation actions
-remain later phases.
+omitted, and disabled boards expose no actions. With `onSquareActivate`, the
+current square exposes controlled activation. When `onMoveRequest` is also
+present and accessible move input is permitted, a declared enabled destination
+with a current enabled selected source routes only to that move callback; every
+other enabled square routes only to `onSquareActivate`. When a controlled
+selected square exists, a separate
+clear-selection action emits an explicit activation intent. Neither action
+changes the selection prop.
 
-`accessibility.formatActionLabel` formats both directional and available move
-actions. Labels must be non-empty and unique on a board state because iOS uses
-the displayed label to resolve a custom action. The component deterministically
-replaces an empty or duplicate result with a unique English fallback.
+When `onMoveRequest` is present and accessible move input is permitted,
+removing the piece on the current enabled square remains a direct accessibility
+`MoveIntent` with `targetSquare: null`; it does not enter the square-activation
+callback.
+
+Without `onSquareActivate`, `onMoveRequest` preserves the transient move
+fallback while accessible move input is permitted. An occupied cursor square
+exposes source activation and removal. Activating a source stores only transient
+interaction context; after moving the cursor, activation submits the target.
+Removal submits the same intent with `targetSquare: null`, and cancellation
+clears source targeting or active async work. Spare placement and annotation
+actions remain later phases.
+
+`accessibility.formatActionLabel` formats directional and every available
+interaction action. Labels must be non-empty and unique on a board state
+because iOS uses the displayed label to resolve a custom action. The component
+deterministically replaces an empty or duplicate result with a unique English
+fallback.
 
 The default board label includes the current orientation. A supplied
 `accessibility.boardLabel` is a full, verbatim override so localized consumers
@@ -86,14 +102,44 @@ override. `accessibility.boardHint` is also a full override.
 />
 ```
 
+## Controlled square activation
+
+`onSquareActivate` is the opt-in boundary for both same-square touch and
+accessibility activation. Its immutable `SquareActivationIntent` describes the
+current square and piece, selected source, destination flag, input, action, and
+base position and selection revisions. The callback is a notification only;
+its return value is ignored, and the consumer must publish any resulting
+selection update.
+
+Ordinary activation has one exclusive outcome. Touch routes a declared enabled
+destination to `onMoveRequest` whenever that callback is active and the enabled
+selected source still contains a current controlled piece. Accessibility uses
+the same route only while accessible move input is permitted. Otherwise the
+board emits one activation and no move request. An explicit `clear-selection`
+action always asks the consumer to clear the controlled selection, including
+when the selected square itself is disabled.
+
+Callback references become visible only after their render commits. A touch
+gesture captures the selection revision at start, and both touch and
+accessibility paths recheck the current normalized position and selection
+before routing. Abandoned renders, stale selections, and late gesture events
+therefore cannot invoke an obsolete callback or mutate semantic state.
+
 ## Accessible move requests
 
 Accessible move input defaults on when `onMoveRequest` is present. Set
 `interactionPermissions.drag` to `false` for an accessibility-only board.
 Setting `interactionPermissions.accessibility` to `false` also disables drag;
-the package refuses to expose a drag-only action. The accessible and drag paths
-both emit `MoveIntent`, invoke the same callback, use the same decision and
-controlled-commit timeouts, and wait for the consumer's next `position` prop.
+the package refuses to expose a drag-only action. With `onSquareActivate`,
+controlled activation remains available, but destination activation emits a
+square intent instead of entering the disabled accessible move route. Touch
+destination routing is unaffected. Without `onSquareActivate`, `onMoveRequest`
+retains source-target activation as transient accessibility state only while
+the gate is enabled. Every resulting move path emits `MoveIntent`, invokes the
+same callback, uses the same decision and controlled-commit timeouts, and waits
+for the consumer's next `position` prop. While a physical drag is active, the
+adjustable control temporarily suppresses activation and move actions so two
+input paths cannot submit overlapping work.
 
 The virtual cursor and captured source are transient. They never modify
 `selection`, infer a legal destination, or move a piece. A revisioned consumer
@@ -161,13 +207,25 @@ iOS separately:
 9. Cycle through `system`, `always`, and `never` with delayed changes; confirm
    the board remains the same focus target and cursor state is preserved.
 10. On the accessibility prototype, confirm there is no activation, move,
-    removal, or annotation action because it has no `onMoveRequest`.
-11. On the controlled move-request route, activate an occupied source, navigate
-    to a target, and activate again. Confirm one request occurs and the board
-    remains one focus target while the controlled position updates.
-12. Repeat with removal and cancellation. Confirm removal sends a null target,
-    cancellation does not update position, and neither action creates a square
-    accessibility element.
+    removal, or annotation action because it has neither `onMoveRequest` nor
+    `onSquareActivate`.
+11. On the controlled-selection route, activate an ordinary occupied or empty
+    square. Confirm exactly one activation callback occurs and the visual
+    selection changes only after the example publishes its next selection prop.
+12. With a selected source on that route, activate a declared destination.
+    Confirm exactly one move request and no square-activation callback occur,
+    then confirm the position and selection change only through controlled prop
+    updates.
+13. Select a square and invoke clear selection. Confirm one
+    `clear-selection` activation occurs and the consumer's next selection prop
+    removes the selected styling.
+14. On the controlled move-request route, which omits `onSquareActivate`,
+    activate an occupied source, navigate to a target, and activate again.
+    Confirm the transient fallback emits one request and the board remains one
+    focus target while the controlled position updates.
+15. Repeat the fallback with removal and cancellation. Confirm removal sends a
+    null target, cancellation does not update position, and neither action
+    creates a square accessibility element.
 
 The automated component and native contracts do not replace this
 assistive-technology pass.

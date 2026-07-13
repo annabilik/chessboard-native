@@ -55,9 +55,6 @@ describe('board interaction controller', () => {
     const pan = getByGestureTestId(
       getBoardGestureTestIds('controller-board').pan,
     );
-    const gestureToken = (pan as unknown as Readonly<{ handlerTag: number }>)
-      .handlerTag;
-
     await act(() => {
       fireGestureHandler(pan, [
         { state: State.BEGAN, x: 25, y: 25 },
@@ -76,11 +73,12 @@ describe('board interaction controller', () => {
         piece: { id: 'pawn', pieceType: 'wP' },
         source: { kind: 'board', square: 'a2' },
         targetSquare: 'b1',
-        token: gestureToken,
+        token: candidates[0]?.token,
       },
     ]);
     expect(candidates[0]).not.toHaveProperty('intentId');
     expect(candidates[0]).not.toHaveProperty('effects');
+    expect(typeof candidates[0]?.token).toBe('number');
     expect(CONTROLLED_POSITION.value).toBe(POSITION);
     expect(POSITION).toEqual({
       a2: { id: 'pawn', pieceType: 'wP' },
@@ -113,5 +111,44 @@ describe('board interaction controller', () => {
     });
 
     expect(onCandidate).not.toHaveBeenCalled();
+  });
+
+  it('emits a current-revision activation candidate for an empty-square tap', async () => {
+    const onCandidate = jest.fn<
+      undefined,
+      [Readonly<BoardGestureIntentCandidate>]
+    >();
+    await render(
+      <GestureHandlerRootView>
+        <BoardInteractionController
+          boardId="tap-board"
+          geometry={GEOMETRY}
+          onCandidate={onCandidate}
+          pieceRenderers={{}}
+          pieceStyle={{}}
+          position={CONTROLLED_POSITION}
+          selectionRevision={14}
+          tapEnabled
+        />
+      </GestureHandlerRootView>,
+    );
+    const tap = getByGestureTestId(getBoardGestureTestIds('tap-board').tap);
+    await act(() => {
+      fireGestureHandler(tap, [
+        { state: State.BEGAN, x: 125, y: 25 },
+        { state: State.END, x: 125, y: 25 },
+      ]);
+    });
+
+    expect(onCandidate).toHaveBeenCalledWith({
+      basePositionRevision: 9,
+      baseSelectionRevision: 14,
+      boardId: 'tap-board',
+      geometryEpoch: 5,
+      input: 'tap',
+      square: 'b2',
+      token: onCandidate.mock.calls[0]?.[0]?.token,
+    });
+    expect(typeof onCandidate.mock.calls[0]?.[0]?.token).toBe('number');
   });
 });

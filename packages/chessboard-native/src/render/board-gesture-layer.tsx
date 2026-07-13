@@ -57,6 +57,7 @@ export type BoardGestureSignal =
     })
   | (BoardGestureSignalBase & {
       readonly targetSquare: SquareId;
+      readonly selectionRevision: Revision | null;
       readonly type: 'tap';
     });
 
@@ -72,10 +73,10 @@ interface BoardGestureLayerProps {
   readonly tapEnabled?: boolean;
   readonly draggableSquares: readonly SquareId[];
   readonly geometry: Readonly<BoardGestureGeometry>;
-  readonly occupiedSquares: readonly SquareId[];
   readonly onSignal: (signal: Readonly<BoardGestureSignal>) => void;
   readonly positionRevision: Revision;
   readonly presentation: InteractionPresentationSharedValues;
+  readonly selectionRevision: Revision | null;
 }
 
 /** Stable board-owned native test identifiers for deterministic adapter tests. */
@@ -88,17 +89,17 @@ export function getBoardGestureTestIds(
   });
 }
 
-function isOccupiedGestureSquare(
+function includesGestureSquare(
   square: SquareId | null,
-  occupiedSquares: readonly SquareId[],
+  squares: readonly SquareId[],
 ): square is SquareId {
   'worklet';
 
   if (square === null) {
     return false;
   }
-  for (const occupiedSquare of occupiedSquares) {
-    if (occupiedSquare === square) {
+  for (const candidate of squares) {
+    if (candidate === square) {
       return true;
     }
   }
@@ -111,13 +112,17 @@ function createBoardGestures(options: {
   readonly dragEnabled: boolean;
   readonly draggableSquares: readonly SquareId[];
   readonly geometry: Readonly<BoardGestureGeometry>;
-  readonly occupiedSquares: readonly SquareId[];
   readonly onSignal: (signal: Readonly<BoardGestureSignal>) => void;
   readonly positionRevision: Revision;
   readonly presentation: InteractionPresentationSharedValues;
+  readonly currentSelectionRevision: { value: Revision | null };
+  readonly nextGestureToken: { value: number | null };
   readonly panActive: { value: number };
   readonly panCancelReason: { value: number };
+  readonly panGestureToken: { value: number | null };
   readonly panSourceSquare: { value: SquareId | null };
+  readonly tapGestureToken: { value: number | null };
+  readonly tapSelectionRevision: { value: Revision | null };
   readonly tapSourceSquare: { value: SquareId | null };
   readonly tapEnabled: boolean;
   readonly testIds: Readonly<BoardGestureTestIds>;
@@ -128,17 +133,31 @@ function createBoardGestures(options: {
     dragEnabled,
     draggableSquares,
     geometry,
-    occupiedSquares,
     onSignal,
+    currentSelectionRevision,
+    nextGestureToken,
     panActive,
     panCancelReason,
+    panGestureToken,
     panSourceSquare,
     positionRevision,
     presentation,
+    tapGestureToken,
+    tapSelectionRevision,
     tapSourceSquare,
     tapEnabled,
     testIds,
   } = options;
+  const allocateGestureToken = (): number | null => {
+    'worklet';
+    const token = nextGestureToken.value;
+    if (token === null) {
+      return null;
+    }
+    nextGestureToken.value =
+      token === Number.MAX_SAFE_INTEGER ? null : token + 1;
+    return token;
+  };
   const hitTest = (x: number, y: number): SquareId | null => {
     'worklet';
     return hitTestGesturePoint(
@@ -172,7 +191,7 @@ function createBoardGestures(options: {
         return;
       }
       const sourceSquare = hitTest(touch.x, touch.y);
-      const draggable = isOccupiedGestureSquare(sourceSquare, draggableSquares);
+      const draggable = includesGestureSquare(sourceSquare, draggableSquares);
       panCancelReason.value = 0;
       panSourceSquare.value = draggable ? sourceSquare : null;
       if (!draggable) {
@@ -181,15 +200,17 @@ function createBoardGestures(options: {
     })
     .onBegin((event) => {
       'worklet';
+      panGestureToken.value = allocateGestureToken();
       const sourceSquare = hitTest(event.x, event.y);
-      const draggable = isOccupiedGestureSquare(sourceSquare, draggableSquares);
+      const draggable = includesGestureSquare(sourceSquare, draggableSquares);
       panCancelReason.value = 0;
       panSourceSquare.value = draggable ? sourceSquare : null;
     })
     .onStart((event) => {
       'worklet';
       const sourceSquare = panSourceSquare.value;
-      if (sourceSquare === null) {
+      const gestureToken = panGestureToken.value;
+      if (sourceSquare === null || gestureToken === null) {
         return;
       }
 
@@ -203,7 +224,7 @@ function createBoardGestures(options: {
       scheduleOnRN(onSignal, {
         boardId,
         geometryRevision: geometry.revision,
-        gestureToken: event.handlerTag,
+        gestureToken,
         pointerX: event.x,
         pointerY: event.y,
         positionRevision,
@@ -224,7 +245,13 @@ function createBoardGestures(options: {
     .onEnd((event, success) => {
       'worklet';
       const sourceSquare = panSourceSquare.value;
-      if (!success || panActive.value !== 1 || sourceSquare === null) {
+      const gestureToken = panGestureToken.value;
+      if (
+        !success ||
+        panActive.value !== 1 ||
+        sourceSquare === null ||
+        gestureToken === null
+      ) {
         return;
       }
 
@@ -236,7 +263,7 @@ function createBoardGestures(options: {
       scheduleOnRN(onSignal, {
         boardId,
         geometryRevision: geometry.revision,
-        gestureToken: event.handlerTag,
+        gestureToken,
         pointerX: event.x,
         pointerY: event.y,
         positionRevision,
@@ -246,21 +273,27 @@ function createBoardGestures(options: {
       });
       resetInteractionPresentationSharedValues(presentation);
     })
-    .onFinalize((event) => {
+    .onFinalize(() => {
       'worklet';
       const sourceSquare = panSourceSquare.value;
-      if (panActive.value === 1 && sourceSquare !== null) {
+      const gestureToken = panGestureToken.value;
+      if (
+        panActive.value === 1 &&
+        sourceSquare !== null &&
+        gestureToken !== null
+      ) {
         panActive.value = 0;
         scheduleOnRN(onSignal, {
           boardId,
           geometryRevision: geometry.revision,
-          gestureToken: event.handlerTag,
+          gestureToken,
           positionRevision,
           reason: panCancelReason.value === 1 ? 'second-finger' : 'user',
           sourceSquare,
           type: 'drag-cancel',
         });
       }
+      panGestureToken.value = null;
       panSourceSquare.value = null;
       panCancelReason.value = 0;
       resetInteractionPresentationSharedValues(presentation);
@@ -273,22 +306,38 @@ function createBoardGestures(options: {
     .maxDistance(activationDistance)
     .shouldCancelWhenOutside(true)
     .withTestId(testIds.tap)
+    .onTouchesDown((event, stateManager) => {
+      'worklet';
+      if (event.allTouches.length !== 1) {
+        tapGestureToken.value = null;
+        tapSelectionRevision.value = null;
+        tapSourceSquare.value = null;
+        stateManager.fail();
+      }
+    })
     .onBegin((event) => {
       'worklet';
-      const sourceSquare = hitTest(event.x, event.y);
-      const occupied = isOccupiedGestureSquare(sourceSquare, occupiedSquares);
-      tapSourceSquare.value = occupied ? sourceSquare : null;
+      tapGestureToken.value = allocateGestureToken();
+      tapSourceSquare.value = hitTest(event.x, event.y);
+      tapSelectionRevision.value = currentSelectionRevision.value;
     })
     .onEnd((event, success) => {
       'worklet';
       const sourceSquare = tapSourceSquare.value;
       const targetSquare = hitTest(event.x, event.y);
-      if (success && sourceSquare !== null && targetSquare === sourceSquare) {
+      const gestureToken = tapGestureToken.value;
+      if (
+        success &&
+        sourceSquare !== null &&
+        targetSquare === sourceSquare &&
+        gestureToken !== null
+      ) {
         scheduleOnRN(onSignal, {
           boardId,
           geometryRevision: geometry.revision,
-          gestureToken: event.handlerTag,
+          gestureToken,
           positionRevision,
+          selectionRevision: tapSelectionRevision.value,
           sourceSquare,
           targetSquare,
           type: 'tap',
@@ -297,7 +346,9 @@ function createBoardGestures(options: {
     })
     .onFinalize(() => {
       'worklet';
+      tapGestureToken.value = null;
       tapSourceSquare.value = null;
+      tapSelectionRevision.value = null;
     });
 
   return Gesture.Exclusive(pan, tap);
@@ -316,15 +367,22 @@ export function BoardGestureLayer({
   dragEnabled = false,
   draggableSquares,
   geometry,
-  occupiedSquares,
   onSignal,
   positionRevision,
   presentation,
+  selectionRevision,
   tapEnabled = false,
 }: BoardGestureLayerProps): ReactElement | null {
+  const currentSelectionRevision = useSharedValue<Revision | null>(
+    selectionRevision,
+  );
+  const nextGestureToken = useSharedValue<number | null>(0);
   const panActive = useSharedValue(0);
   const panCancelReason = useSharedValue(0);
+  const panGestureToken = useSharedValue<number | null>(null);
   const panSourceSquare = useSharedValue<SquareId | null>(null);
+  const tapGestureToken = useSharedValue<number | null>(null);
+  const tapSelectionRevision = useSharedValue<Revision | null>(null);
   const tapSourceSquare = useSharedValue<SquareId | null>(null);
   const testIds = useMemo(() => getBoardGestureTestIds(boardId), [boardId]);
   const gesture = useMemo(() => {
@@ -338,13 +396,17 @@ export function BoardGestureLayer({
       dragEnabled,
       draggableSquares,
       geometry,
-      occupiedSquares,
       onSignal,
+      currentSelectionRevision,
+      nextGestureToken,
       panActive,
       panCancelReason,
+      panGestureToken,
       panSourceSquare,
       positionRevision,
       presentation,
+      tapGestureToken,
+      tapSelectionRevision,
       tapSourceSquare,
       tapEnabled,
       testIds,
@@ -355,28 +417,49 @@ export function BoardGestureLayer({
     dragEnabled,
     draggableSquares,
     geometry,
-    occupiedSquares,
     onSignal,
+    currentSelectionRevision,
+    nextGestureToken,
     panActive,
     panCancelReason,
+    panGestureToken,
     panSourceSquare,
     positionRevision,
     presentation,
+    tapGestureToken,
+    tapSelectionRevision,
     tapSourceSquare,
     tapEnabled,
     testIds,
   ]);
 
   useLayoutEffect(() => {
+    currentSelectionRevision.value = selectionRevision;
+    tapSelectionRevision.value = null;
+    tapSourceSquare.value = null;
+  }, [
+    currentSelectionRevision,
+    selectionRevision,
+    tapSelectionRevision,
+    tapSourceSquare,
+  ]);
+
+  useLayoutEffect(() => {
     panActive.value = 0;
     panCancelReason.value = 0;
+    panGestureToken.value = null;
     panSourceSquare.value = null;
+    tapGestureToken.value = null;
+    tapSelectionRevision.value = null;
     tapSourceSquare.value = null;
     resetInteractionPresentationSharedValues(presentation);
     return () => {
       panActive.value = 0;
       panCancelReason.value = 0;
+      panGestureToken.value = null;
       panSourceSquare.value = null;
+      tapGestureToken.value = null;
+      tapSelectionRevision.value = null;
       tapSourceSquare.value = null;
       resetInteractionPresentationSharedValues(presentation);
     };
@@ -385,10 +468,13 @@ export function BoardGestureLayer({
     geometry,
     panActive,
     panCancelReason,
+    panGestureToken,
     panSourceSquare,
     positionRevision,
     presentation,
     tapEnabled,
+    tapGestureToken,
+    tapSelectionRevision,
     tapSourceSquare,
   ]);
 

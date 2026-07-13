@@ -52,23 +52,25 @@ const ACTION_LABELS: Readonly<Record<DirectionalCursorAction, string>> =
     'move-cursor-up': 'Move cursor up',
   });
 
-type MoveAccessibilityAction = Extract<
+type InteractiveAccessibilityAction = Extract<
   ChessboardAccessibilityAction,
-  'activate-square' | 'cancel-move' | 'remove-piece'
+  'activate-square' | 'cancel-move' | 'clear-selection' | 'remove-piece'
 >;
 
 type LabeledAccessibilityAction =
-  DirectionalCursorAction | MoveAccessibilityAction;
+  DirectionalCursorAction | InteractiveAccessibilityAction;
 
 type NativeMoveAccessibilityAction =
-  'activate' | 'cancel-move' | 'remove-piece';
+  'activate' | 'cancel-move' | 'clear-selection' | 'remove-piece';
 
-const MOVE_ACTION_LABELS: Readonly<Record<MoveAccessibilityAction, string>> =
-  Object.freeze({
-    'activate-square': 'Activate square',
-    'cancel-move': 'Cancel move',
-    'remove-piece': 'Remove piece',
-  });
+const INTERACTIVE_ACTION_LABELS: Readonly<
+  Record<InteractiveAccessibilityAction, string>
+> = Object.freeze({
+  'activate-square': 'Activate square',
+  'cancel-move': 'Cancel move',
+  'clear-selection': 'Clear selection',
+  'remove-piece': 'Remove piece',
+});
 
 const STANDARD_PIECE_LABELS: Readonly<Record<string, string>> = Object.freeze({
   bB: 'black bishop',
@@ -100,6 +102,13 @@ export interface BoardAccessibilityMoveInteraction {
   readonly request: (draft: Omit<MoveIntent, 'intentId'>) => boolean;
   readonly cancel: () => void;
   readonly sourceResetRevision?: number;
+}
+
+/** Internal bridge from the single accessibility control to square intents. */
+export interface BoardAccessibilitySquareInteraction {
+  readonly enabled: boolean;
+  readonly activate: (square: SquareId) => boolean;
+  readonly clearSelection: (square: SquareId) => boolean;
 }
 
 interface AccessibilityCursorState {
@@ -179,6 +188,16 @@ function isCursorAction(value: string): value is AccessibilityCursorAction {
   return (ACTION_ORDER as readonly string[]).includes(value);
 }
 
+function isControlledSquareDisabled(
+  model: NormalizedBoardModel,
+  square: SquareId,
+): boolean {
+  return (
+    model.status === 'disabled' ||
+    (model.selection?.value.disabledSquares?.includes(square) ?? false)
+  );
+}
+
 function createSquareContext(
   model: NormalizedBoardModel,
   square: SquareId,
@@ -192,9 +211,7 @@ function createSquareContext(
   return Object.freeze({
     boardId: model.boardId,
     isDestination: selection?.destinationSquares?.includes(square) ?? false,
-    isDisabled:
-      model.status === 'disabled' ||
-      (selection?.disabledSquares?.includes(square) ?? false),
+    isDisabled: isControlledSquareDisabled(model, square),
     isPendingSource: pendingMove.sourceSquare === square,
     isPendingTarget: pendingMove.targetSquare === square,
     isSelected: selection?.selectedSquare === square,
@@ -207,10 +224,11 @@ function createSquareContext(
 function fallbackActionLabel(action: LabeledAccessibilityAction): string {
   if (
     action === 'activate-square' ||
+    action === 'clear-selection' ||
     action === 'cancel-move' ||
     action === 'remove-piece'
   ) {
-    return MOVE_ACTION_LABELS[action];
+    return INTERACTIVE_ACTION_LABELS[action];
   }
   return ACTION_LABELS[action];
 }
@@ -403,6 +421,7 @@ export function useBoardAccessibility(
   model: NormalizedBoardModel,
   accessibility: ChessboardAccessibility | undefined,
   moveInteraction?: BoardAccessibilityMoveInteraction,
+  squareInteraction?: BoardAccessibilitySquareInteraction,
 ): BoardAccessibilityProps {
   const [cursorState, setCursorState] = useState<AccessibilityCursorState>(
     () => ({ feedbackRevision: 0, square: initialCursorSquare(model) }),
@@ -413,6 +432,12 @@ export function useBoardAccessibility(
   useEffect(() => {
     setStoredMoveSource(null);
   }, [sourceResetRevision]);
+  const squareActivationEnabled = squareInteraction?.enabled === true;
+  useEffect(() => {
+    if (squareActivationEnabled) {
+      setStoredMoveSource(null);
+    }
+  }, [squareActivationEnabled]);
   const dimensions = model.dimensions;
   const orientation = model.orientation;
   const preferredSquare = preferredCursorSquare(model);
@@ -446,6 +471,7 @@ export function useBoardAccessibility(
 
   const moveEnabled = moveInteraction?.enabled === true;
   const activeMoveSource =
+    !squareActivationEnabled &&
     storedMoveSource !== null &&
     moveSourceIsCurrent(storedMoveSource, model, moveEnabled)
       ? storedMoveSource
@@ -476,6 +502,14 @@ export function useBoardAccessibility(
   const hasPendingLifecycle = lifecycleProjection !== null;
   const squareContext =
     cursor === null ? null : createSquareContext(model, cursor, pendingMove);
+  const controlledSelectedSquare =
+    model.selection?.value.selectedSquare ?? null;
+  const selectedSourceDisabled =
+    controlledSelectedSquare !== null &&
+    isControlledSquareDisabled(model, controlledSelectedSquare);
+  const activeMoveSourceDisabled =
+    activeMoveSource !== null &&
+    isControlledSquareDisabled(model, activeMoveSource.square);
 
   const actions = useMemo(() => {
     const activeDimensions = dimensions;
@@ -517,44 +551,110 @@ export function useBoardAccessibility(
       available.push(Object.freeze({ label, name: action }));
     }
 
-    if (moveEnabled) {
-      const nativeMoveActions: readonly Readonly<{
-        action: MoveAccessibilityAction;
+    if (squareActivationEnabled) {
+      const nativeActions: Readonly<{
+        action: InteractiveAccessibilityAction;
         name: NativeMoveAccessibilityAction;
-      }>[] = hasPendingLifecycle
-        ? Object.freeze([
+      }>[] = [];
+      if (
+        !hasPendingLifecycle &&
+        !squareContext.isDisabled &&
+        !selectedSourceDisabled
+      ) {
+        nativeActions.push(
+          Object.freeze({
+            action: 'activate-square' as const,
+            name: 'activate' as const,
+          }),
+        );
+      }
+      if (controlledSelectedSquare !== null) {
+        nativeActions.push(
+          Object.freeze({
+            action: 'clear-selection' as const,
+            name: 'clear-selection' as const,
+          }),
+        );
+      }
+      if (
+        moveEnabled &&
+        !hasPendingLifecycle &&
+        !squareContext.isDisabled &&
+        squareContext.piece !== null
+      ) {
+        nativeActions.push(
+          Object.freeze({
+            action: 'remove-piece' as const,
+            name: 'remove-piece' as const,
+          }),
+        );
+      }
+      if (hasPendingLifecycle && moveEnabled) {
+        nativeActions.push(
+          Object.freeze({
+            action: 'cancel-move' as const,
+            name: 'cancel-move' as const,
+          }),
+        );
+      }
+
+      for (const { action, name } of nativeActions) {
+        const formattedLabel = actionLabel(
+          action,
+          accessibility,
+          squareContext,
+        );
+        const label = uniqueActionLabel(formattedLabel, action, labels);
+        labels.add(label);
+        available.push(Object.freeze({ label, name }));
+      }
+    } else if (moveEnabled) {
+      const nativeMoveActions: Readonly<{
+        action: InteractiveAccessibilityAction;
+        name: NativeMoveAccessibilityAction;
+      }>[] = [];
+      if (hasPendingLifecycle) {
+        nativeMoveActions.push(
+          Object.freeze({
+            action: 'cancel-move' as const,
+            name: 'cancel-move' as const,
+          }),
+        );
+      } else if (activeMoveSource !== null) {
+        if (!squareContext.isDisabled && !activeMoveSourceDisabled) {
+          nativeMoveActions.push(
             Object.freeze({
-              action: 'cancel-move' as const,
-              name: 'cancel-move' as const,
+              action: 'activate-square' as const,
+              name: 'activate' as const,
             }),
-          ])
-        : activeMoveSource !== null
-          ? Object.freeze([
-              Object.freeze({
-                action: 'activate-square' as const,
-                name: 'activate' as const,
-              }),
-              Object.freeze({
-                action: 'remove-piece' as const,
-                name: 'remove-piece' as const,
-              }),
-              Object.freeze({
-                action: 'cancel-move' as const,
-                name: 'cancel-move' as const,
-              }),
-            ])
-          : squareContext.piece === null
-            ? Object.freeze([])
-            : Object.freeze([
-                Object.freeze({
-                  action: 'activate-square' as const,
-                  name: 'activate' as const,
-                }),
-                Object.freeze({
-                  action: 'remove-piece' as const,
-                  name: 'remove-piece' as const,
-                }),
-              ]);
+          );
+        }
+        if (!activeMoveSourceDisabled) {
+          nativeMoveActions.push(
+            Object.freeze({
+              action: 'remove-piece' as const,
+              name: 'remove-piece' as const,
+            }),
+          );
+        }
+        nativeMoveActions.push(
+          Object.freeze({
+            action: 'cancel-move' as const,
+            name: 'cancel-move' as const,
+          }),
+        );
+      } else if (!squareContext.isDisabled && squareContext.piece !== null) {
+        nativeMoveActions.push(
+          Object.freeze({
+            action: 'activate-square' as const,
+            name: 'activate' as const,
+          }),
+          Object.freeze({
+            action: 'remove-piece' as const,
+            name: 'remove-piece' as const,
+          }),
+        );
+      }
 
       for (const { action, name } of nativeMoveActions) {
         const formattedLabel = actionLabel(
@@ -570,13 +670,17 @@ export function useBoardAccessibility(
     return available.length === 0 ? EMPTY_ACTIONS : Object.freeze(available);
   }, [
     activeMoveSource,
+    activeMoveSourceDisabled,
     accessibility,
     cursor,
+    controlledSelectedSquare,
     dimensions,
     hasPendingLifecycle,
     model.status,
     moveEnabled,
     orientation,
+    selectedSourceDisabled,
+    squareActivationEnabled,
     squareContext,
   ]);
 
@@ -632,6 +736,29 @@ export function useBoardAccessibility(
       }
 
       if (!isCursorAction(actionName)) {
+        if (actionName === 'clear-selection') {
+          if (
+            squareActivationEnabled &&
+            controlledSelectedSquare !== null &&
+            squareInteraction.clearSelection(cursor)
+          ) {
+            requestExplicitFeedback();
+          }
+          return;
+        }
+
+        if (actionName === 'activate' && squareActivationEnabled) {
+          if (
+            !hasPendingLifecycle &&
+            squareContext?.isDisabled !== true &&
+            !selectedSourceDisabled &&
+            squareInteraction.activate(cursor)
+          ) {
+            requestExplicitFeedback();
+          }
+          return;
+        }
+
         if (!moveEnabled) {
           return;
         }
@@ -653,11 +780,17 @@ export function useBoardAccessibility(
 
         if (actionName === 'activate') {
           if (activeMoveSource === null) {
+            if (squareContext?.isDisabled === true) {
+              return;
+            }
             const source = createMoveSource(model, cursor);
             if (source !== null) {
               setStoredMoveSource(source);
               requestExplicitFeedback();
             }
+            return;
+          }
+          if (squareContext?.isDisabled === true || activeMoveSourceDisabled) {
             return;
           }
           if (
@@ -673,6 +806,7 @@ export function useBoardAccessibility(
           const source = activeMoveSource ?? createMoveSource(model, cursor);
           if (
             source !== null &&
+            !isControlledSquareDisabled(model, source.square) &&
             moveInteraction.request(createMoveDraft(source, null))
           ) {
             setStoredMoveSource(null);
@@ -717,7 +851,9 @@ export function useBoardAccessibility(
     },
     [
       activeMoveSource,
+      activeMoveSourceDisabled,
       cursor,
+      controlledSelectedSquare,
       dimensions,
       disabled,
       hasPendingLifecycle,
@@ -727,6 +863,10 @@ export function useBoardAccessibility(
       orientation,
       preferredSquare,
       requestExplicitFeedback,
+      selectedSourceDisabled,
+      squareActivationEnabled,
+      squareContext,
+      squareInteraction,
     ],
   );
 

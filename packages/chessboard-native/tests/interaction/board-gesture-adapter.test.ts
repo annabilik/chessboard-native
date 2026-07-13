@@ -25,12 +25,14 @@ function snapshot(
   geometryEpoch = 3,
   positionRevision = 7,
   position: PositionObject | null = DEFAULT_POSITION,
+  selectionRevision: number | null = 5,
 ): Readonly<BoardGestureSnapshot> {
   return Object.freeze({
     boardId,
     geometryEpoch,
     position,
     positionRevision,
+    selectionRevision,
   });
 }
 
@@ -42,6 +44,7 @@ function correlation(
     boardId: current.boardId,
     geometryEpoch: current.geometryEpoch,
     positionRevision: current.positionRevision,
+    selectionRevision: current.selectionRevision,
     token,
   });
 }
@@ -135,8 +138,11 @@ describe('pure board gesture adapter', () => {
     );
     expect(Object.isFrozen(finalized.state)).toBe(true);
     expect(Object.isFrozen(finalized.candidate)).toBe(true);
-    expect(Object.isFrozen(finalized.candidate?.piece)).toBe(true);
-    expect(Object.isFrozen(finalized.candidate?.source)).toBe(true);
+    if (finalized.candidate?.input !== 'drag') {
+      throw new Error('Expected a drag candidate.');
+    }
+    expect(Object.isFrozen(finalized.candidate.piece)).toBe(true);
+    expect(Object.isFrozen(finalized.candidate.source)).toBe(true);
   });
 
   it('ignores late foreign tokens but fails closed for a terminal stale geometry or position epoch', () => {
@@ -235,7 +241,7 @@ describe('pure board gesture adapter', () => {
     expect(finalized.state.lifecycle.phase).toBe('idle');
   });
 
-  it('recognizes only a same-square tap on a current occupied source', () => {
+  it('recognizes same-square activation on occupied and empty squares with controlled correlation', () => {
     const current = snapshot();
     const currentCorrelation = correlation(current, 20);
     const initial = initialState(current);
@@ -258,17 +264,31 @@ describe('pure board gesture adapter', () => {
     });
     expect(sameSquare.candidate).toEqual({
       basePositionRevision: 7,
+      baseSelectionRevision: 5,
       boardId: 'analysis',
       geometryEpoch: 3,
       input: 'tap',
-      piece: WHITE_PAWN,
-      source: { kind: 'board', square: 'e2' },
-      targetSquare: 'e2',
+      square: 'e2',
       token: 20,
     });
     expect(sameSquare.state.active).toBeNull();
     expect(sameSquare.state.lifecycle.phase).toBe('idle');
-    expect(sameSquare.state.lifecycle.nextEpoch).toBe(1);
+    expect(sameSquare.state.lifecycle.nextEpoch).toBe(0);
+
+    const emptySquare = reduceBoardGestureAdapter(initial, {
+      correlation: currentCorrelation,
+      endSquare: 'a1',
+      snapshot: current,
+      startSquare: 'a1',
+      type: 'tap',
+    });
+    expect(emptySquare.candidate).toEqual(
+      expect.objectContaining({
+        baseSelectionRevision: 5,
+        input: 'tap',
+        square: 'a1',
+      }),
+    );
 
     const offBoard = reduceBoardGestureAdapter(initial, {
       correlation: currentCorrelation,
@@ -279,9 +299,41 @@ describe('pure board gesture adapter', () => {
     });
     expect(offBoard.state).toBe(initial);
     expect(offBoard.candidate).toBeNull();
+
+    const newerSelection = snapshot('analysis', 3, 7, DEFAULT_POSITION, 6);
+    const staleSelection = reduceBoardGestureAdapter(initial, {
+      correlation: currentCorrelation,
+      endSquare: 'e2',
+      snapshot: newerSelection,
+      startSquare: 'e2',
+      type: 'tap',
+    });
+    expect(staleSelection.state).toBe(initial);
+    expect(staleSelection.candidate).toBeNull();
   });
 
-  it('rejects empty, disabled, and inherited source entries without allocating an epoch', () => {
+  it('does not make controlled selection a semantic dependency of an active drag', () => {
+    const current = snapshot();
+    const currentCorrelation = correlation(current, 21);
+    const started = startDrag(
+      initialState(current),
+      current,
+      currentCorrelation,
+    ).state;
+    const newerSelection = snapshot('analysis', 3, 7, DEFAULT_POSITION, 6);
+    const finalized = reduceBoardGestureAdapter(started, {
+      correlation: currentCorrelation,
+      snapshot: newerSelection,
+      targetSquare: 'e4',
+      type: 'drag-finalize',
+    });
+
+    expect(finalized.candidate).toEqual(
+      expect.objectContaining({ input: 'drag', targetSquare: 'e4' }),
+    );
+  });
+
+  it('allows empty-square activation but rejects disabled boards and invalid drag sources without allocating an epoch', () => {
     const empty = snapshot('analysis', 3, 7, Object.freeze({}));
     const emptyCorrelation = correlation(empty);
     const initial = initialState(empty);
@@ -297,12 +349,22 @@ describe('pure board gesture adapter', () => {
       type: 'tap',
     });
     expect(emptyTap.state).toBe(initial);
-    expect(emptyTap.candidate).toBeNull();
+    expect(emptyTap.candidate).toEqual(
+      expect.objectContaining({ input: 'tap', square: 'e2' }),
+    );
 
     const disabled = snapshot('analysis', 3, 7, null);
     expect(
       startDrag(initial, disabled, correlation(disabled), 'e2').state,
     ).toBe(initial);
+    const disabledTap = reduceBoardGestureAdapter(initial, {
+      correlation: correlation(disabled),
+      endSquare: 'e2',
+      snapshot: disabled,
+      startSquare: 'e2',
+      type: 'tap',
+    });
+    expect(disabledTap.candidate).toBeNull();
 
     const inherited = Object.create({ e2: WHITE_PAWN }) as PositionObject;
     const inheritedSnapshot = snapshot('analysis', 3, 7, inherited);

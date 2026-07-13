@@ -1,9 +1,11 @@
 import { memo, type ReactElement } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import type { NormalizedControlledValue } from '../internal/controlled-domain';
 import type {
   ChessboardStyles,
   ChessboardTheme,
+  PlainSelection,
   SquareStyles,
 } from '../public-types';
 import type { BoardSurfaceLayout } from './board-layout';
@@ -11,6 +13,9 @@ import { resolveSquareStyle } from './style-resolution';
 
 interface SquareLayerProps {
   readonly layout: Readonly<BoardSurfaceLayout>;
+  readonly selection: NormalizedControlledValue<
+    Readonly<PlainSelection>
+  > | null;
   readonly squareStyles?: SquareStyles | undefined;
   readonly styles?: ChessboardStyles | undefined;
   readonly theme?: ChessboardTheme | undefined;
@@ -19,10 +24,15 @@ interface SquareLayerProps {
 /** Measured, visual-only background and notation layer. */
 export const SquareLayer = memo(function SquareLayer({
   layout,
+  selection,
   squareStyles,
   styles,
   theme,
 }: SquareLayerProps): ReactElement {
+  const controlledSelection = selection?.value;
+  const destinationSquares = new Set(controlledSelection?.destinationSquares);
+  const disabledSquares = new Set(controlledSelection?.disabledSquares);
+
   return (
     <View
       accessibilityElementsHidden
@@ -36,6 +46,11 @@ export const SquareLayer = memo(function SquareLayer({
           isLight: cell.isLight,
           square: cell.square,
           squareStyles,
+          state: {
+            isDestination: destinationSquares.has(cell.square),
+            isDisabled: disabledSquares.has(cell.square),
+            isSelected: controlledSelection?.selectedSquare === cell.square,
+          },
           styles,
           theme,
         });
