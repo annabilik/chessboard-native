@@ -86,38 +86,60 @@ shared values. Only activation, release, cancellation, and a recognized
 same-square tap cross the JS boundary.
 
 The adapter correlates every boundary with board ID, the native recognizer's
-handler token, position revision, and geometry epoch. It reads the current
-controlled position only at a boundary to resolve the source piece, then
-retains correlation and transient targeting only. A terminal drag first returns
-an inert candidate with no intent ID and invalidates gesture targeting. The
-mounted runtime rechecks current board, geometry, position, and permissions
-before assigning an intent ID and entering the decision lifecycle. Geometry or
-position changes make the candidate fail closed, while a late foreign handler
-token cannot cancel newer work. No gesture or executor effect can mutate
-position.
+handler token, position revision, and geometry epoch. A tap also captures the
+selection revision at gesture start. It reads controlled position and selection
+only at a boundary, then retains correlation and transient targeting only. A
+terminal drag first returns an inert candidate with no intent ID and invalidates
+gesture targeting. The mounted runtime rechecks current board, geometry,
+position, selection, callbacks, and permissions before assigning an intent ID
+or emitting. Geometry, position, or selection changes make a stale candidate
+fail closed, while a late foreign handler token cannot cancel newer work. No
+gesture, callback, or executor effect can mutate position or selection.
 
-Supplying `onMoveRequest` opens the interaction gate. Accessible move input
-defaults on: the adjustable board control can capture the current occupied
-cursor square as a transient source, move its cursor to a target, submit that
-source-target request, submit removal with `targetSquare: null`, or cancel.
-These actions use the same request executor as drag and never write consumer
-selection. There is no public tap-to-move flow in this slice.
+Supplying `onSquareActivate` opts into controlled same-square touch and
+accessibility activation, including empty squares. One exclusive router handles
+ordinary activation. When `onMoveRequest` also exists, a selected enabled source
+still contains a current controlled piece, and the enabled target is a declared
+destination, touch emits only a `MoveIntent`. Accessibility does the same while
+`interactionPermissions.accessibility` permits move input; with that gate off,
+it emits the square activation instead. Every other enabled activation emits
+only an immutable `SquareActivationIntent`. The accessibility surface also
+emits an explicit `clear-selection` activation; only a new consumer selection
+prop can clear the rendered selection.
+
+Callback references become active only after their render commits. The tap's
+captured selection revision and the current normalized position and selection
+are rechecked immediately before routing, so callbacks from abandoned renders
+and stale taps are inert.
+
+Without `onSquareActivate`, the tap recognizer and controlled activation action
+are disabled. Supplying `onMoveRequest` alone retains the existing accessible
+transient source, target, removal, and cancellation flow. Those actions use the
+same request executor as drag and never write consumer selection.
 
 Board-piece drag also defaults on when the callback exists. The synchronous
 `canDragPiece` gate is evaluated against the current controlled piece and
 revision before activation; exceptions and non-true results deny the drag.
 `interactionPermissions.drag: false` leaves the accessible path available.
 Setting `interactionPermissions.accessibility: false` disables both paths, so a
-consumer cannot configure a drag-only board. Without `onMoveRequest`, the
+consumer cannot configure a drag-only board. It does not disable controlled
+square activation or touch destination routing. `onMoveRequest` enables the pan
+path, while `onSquareActivate` enables the tap path. With neither callback, the
 component renders no native hit plane and constructs no recognizer.
+
+Each native gesture cycle receives a board-local monotonic token rather than
+reusing RNGH's recognizer handler tag. Start and terminal signals therefore
+correlate within one cycle, and delayed terminal work cannot settle a newer
+cycle. Tap also fails explicitly when a second pointer appears.
 
 The drag plane and overlay remain accessibility-hidden descendants of the one
 stable board control. The active drag uses shared pointer values, source-ghost
 projection, and a pointerless overlay without retaining a position snapshot.
 Pending decision and commit phases are reducer presentation only; public
-transient style options, provider coordination, tap input, ScrollView
+pressed/dragging/pending style options, provider coordination, ScrollView
 arbitration, and native frame-performance evidence remain later integration
-work.
+work. Controlled destination, selected, and disabled square styles are already
+derived directly from the current selection prop.
 
 ## Consequences
 
@@ -126,7 +148,10 @@ Release-time measurement may briefly delay a drop, but it prevents stale bounds
 from emitting an incorrect square. The standalone mounted runtime proves
 controlled drag and accessible requests first; native ScrollView,
 provider/multi-board gesture coordination, lifecycle, and performance evidence
-remain mandatory for those later layers.
+remain mandatory for those later layers. Controlled square activation adds no
+second semantic store: its component and model tests must keep exclusive
+destination routing, accessible clearing, current-snapshot payloads, and stale
+selection rejection deterministic.
 
 This decision owns invariants `CBN-INV-003`, `CBN-INV-004`, `CBN-INV-007`,
 `CBN-INV-008`, `CBN-INV-009`, `CBN-INV-012`, `CBN-INV-014`,

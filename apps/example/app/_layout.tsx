@@ -18,6 +18,10 @@ export default function RootLayout() {
             name="move-request"
             options={{ title: 'Controlled move requests' }}
           />
+          <Stack.Screen
+            name="controlled-selection"
+            options={{ title: 'Controlled selection' }}
+          />
         </Stack>
         <StatusBar style="dark" />
       </SafeAreaProvider>

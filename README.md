@@ -6,10 +6,11 @@ A controlled, rules-free React Native chessboard component.
 > This repository is in early Phase 2 and the package is not published. The public
 > component now renders responsive, controlled static positions with default
 > or custom pieces, orientation, notation, native styles, controlled square and
-> arrow annotations, and one adjustable accessibility control. Its optional
-> controlled move-request surface supports board-piece drag plus accessible
-> source, target, removal, and cancellation actions without ever committing a
-> position internally.
+> arrow annotations, controlled selection styling, and one adjustable
+> accessibility control. Its optional interaction surface supports board-piece
+> drag, controlled touch/accessibility square activation, and accessible move,
+> removal, clearing, and cancellation without committing position or selection
+> internally.
 
 ## Direction
 
@@ -59,18 +60,29 @@ only the latest controlled annotation collection in pointerless SVG planes:
 square fills/circles/dots/borders default below pieces, while marker-free
 straight and knight arrows default above pieces. Both orientations, rectangular
 boards, per-arrow width/opacity, same-target shortening, and whole-value
-`annotationStyle` configuration use deterministic 2048-wide geometry. Custom
-square rendering, selection styling, annotation drawing, and transitions remain
-later work. Phase 2 now has a pure interaction reducer, board-level RNGH
-adapter, mounted move-request executor, and an accessible non-drag path through
-the same request lifecycle. Worklet hit testing and per-frame pointer updates
-stay in shared values; board identity, the recognizer handler token, geometry
-epoch, position revision, interaction epoch, and intent ID guard asynchronous
-boundaries. An accepted callback result only changes transient presentation.
-The consumer must still publish the next controlled position, using a newer
-revision and matching `committedIntentId` when commit correlation is required.
-Without `onMoveRequest`, the component mounts no native gesture hit plane or
-recognizer and remains move-read-only.
+`annotationStyle` configuration use deterministic 2048-wide geometry.
+Controlled destination, selected, and disabled square paint now follows
+canonical `squareStyles` without changing hit geometry. Custom square
+rendering, annotation drawing, and transitions remain later work. Phase 2 now
+has a pure interaction reducer, board-level RNGH adapter, mounted move-request
+executor, an accessible non-drag path, and controlled square activation.
+Supplying `onSquareActivate` opts into same-square touch and accessibility
+activation. When `onMoveRequest` is also supplied, an allowed destination with
+a current controlled source routes touch exclusively through it; accessibility
+uses that move route while its move permission is enabled. Every other
+activation emits one immutable `SquareActivationIntent`, including explicit
+accessible selection clearing.
+Worklet hit testing and per-frame pointer updates stay in shared values; board
+identity, recognizer token, geometry epoch, position revision, selection
+revision, interaction epoch, and intent ID guard asynchronous boundaries.
+Committed callback refs and current-snapshot rechecks make abandoned renders
+and stale taps inert. Callback results never change semantic state. Consumers
+must publish the next controlled selection or position, using a newer position
+revision and matching `committedIntentId` when move correlation is required.
+Without `onSquareActivate`, no same-square tap recognizer is enabled;
+`onMoveRequest` retains its accessible transient source-target fallback. With
+neither callback, the component mounts no native gesture hit plane and remains
+read-only.
 
 The accepted architecture decisions and all 20 reserved invariant contracts
 are indexed in

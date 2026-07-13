@@ -36,11 +36,14 @@ pointerless, accessibility-hidden board-owned wrapper and cannot become an
 alternate event surface.
 
 Static theme and style precedence is fixed as built-in defaults, `theme`,
-instance `styles`, then canonical `squareStyles`. Later layers override earlier
-layers. Future transient interaction styles will be last, but P1.4 does not
-manufacture pressed, selected, drop-target, pending, dragging, ghost, or
-transition state. Custom piece renderers receive the resolved piece value rather
-than performing a second merge.
+instance `styles`, then canonical `squareStyles`. Controlled square paint then
+applies in the fixed order destination, selected, and disabled. Within each
+state slot, the built-in default is followed by `theme` and instance `styles`
+before the next slot starts. Later layers override earlier layers. The state
+paint is derived only from the current normalized selection and cannot replace
+board-owned square geometry. Pressed, drop-target, pending, dragging, ghost,
+and transition styling remain later work. Custom piece renderers receive the
+resolved piece value rather than performing a second merge.
 
 The P1.3 static boundary consists of private `BoardSurface`, `SquareLayer`, and
 `NotationLayer` components. `BoardSurface` fills the available parent width and
@@ -87,15 +90,18 @@ piece types without teaching the board a second vocabulary. Returning `null`
 from a selected renderer is intentional and does not fall back to the default
 set.
 
-`defaultTheme` supplies board, square, light/dark square, notation, and piece
-defaults. `theme` overrides those defaults, `styles` applies instance-level
-overrides, and `squareStyles` applies the final static square override by
-canonical square ID. File/rank notation retains its measured placement while
-accepting resolved native text styles. Piece renderers receive their resolved
-native style, measured size, square, piece, board ID, and all-false static
-interaction state. The board-owned piece wrapper applies the resolved
-`ViewStyle` once; the renderer receives the same frozen value for inspection or
-derived non-View artwork and must not merge it onto the wrapper a second time.
+`defaultTheme` supplies board, square, light/dark square, controlled
+destination/selected/disabled square, notation, and piece defaults. `theme`
+overrides those defaults, `styles` applies instance-level overrides, and
+`squareStyles` applies the final static square override by canonical square ID
+before the controlled state slots. The built-in controlled styles use inset
+shadow or opacity without altering layout. File/rank notation retains its
+measured placement while accepting resolved native text styles. Piece renderers
+receive their resolved native style, measured size, square, piece, board ID,
+and all-false static interaction state. The board-owned piece wrapper applies
+the resolved `ViewStyle` once; the renderer receives the same frozen value for
+inspection or derived non-View artwork and must not merge it onto the wrapper a
+second time.
 Board-local measurement and absolute cell geometry remain owned by the renderer
 rather than custom content. Host layout fields such as display, width, height,
 aspect ratio, flex sizing, margins, insets, and padding are removed from resolved
@@ -139,18 +145,20 @@ not marker references or document-global IDs, so simultaneous boards and
 duplicate consumer annotation IDs across boards cannot collide.
 
 Notation now occupies its own decorative plane above both annotation planes.
-Custom square rendering, public interaction-state styling, Reanimated
+Custom square rendering, additional transient interaction styling, Reanimated
 transitions, and annotation drafts/drawing remain later slices.
 
 P2.2 adds the layer-six board gesture plane. When enabled by the public
-move-request boundary, it is one absolute, accessibility-hidden native view
-rather than one handler per square. Without `onMoveRequest`, the controller
-renders no native plane and constructs no recognizer, preserving both the
-read-only and single-control accessibility contracts. The internal plane can
-compose tap and pan recognizers, but this public slice enables only single-
-pointer pan for drag. Pan activation and terminal events cross to the
-board-scoped adapter; per-frame pointer movement and oriented target hit testing
-remain in shared values.
+interaction boundaries, it is one absolute, accessibility-hidden native view
+rather than one handler per square. `onMoveRequest` enables single-pointer pan
+for drag, while `onSquareActivate` enables recognized same-square tap for any
+valid square, including an empty one. The plane composes one tap and one pan
+recognizer and disables either recognizer when its callback gate is closed. With
+neither callback, the controller renders no native plane and constructs no
+recognizer, preserving both the read-only and single-control accessibility
+contracts. Pan activation and terminal events cross to the board-scoped
+adapter; tap crosses only after same-square recognition. Per-frame pointer
+movement and oriented target hit testing remain in shared values.
 
 The same internal presentation state projects drag lift, a source ghost, and
 decision or controlled-commit pending flags without retaining a semantic
@@ -158,7 +166,8 @@ position. A pointerless drag-overlay primitive consumes board-local shared
 pointer coordinates with a direct animated transform, so frame updates do not
 rerender custom artwork or commit React state. The public drag path now mounts
 that overlay and the mounted executor projects decision and controlled-commit
-pending phases. There are no public transient style options in this slice.
+pending phases. Controlled destination, selected, and disabled paint is public;
+drag, pending, pressed, ghost, and transition style slots remain future work.
 
 P1.5 promotes only the stable outer host to one adjustable accessibility
 control. It uses `pointerEvents="box-none"` so ordinary touch remains available
@@ -174,12 +183,17 @@ orientation-aware measured projection; provider and window-coordinate hit
 testing remain later work.
 
 The interaction-enabled accessibility surface retains navigation and adds
-source activation, target activation, off-board removal, and cancellation.
-Source targeting is transient interaction state and never updates controlled
-selection. Spare placement, controlled selection clearing, and annotation
-operations remain later work. Consumer announcements are correlated by ID and
-deduplicated per mounted board. The centralized reduced-motion provider follows
-`system`, `always`, or `never` without remounting this host or its cursor.
+source activation, target activation, off-board removal, cancellation, and
+controlled selection clearing. With `onSquareActivate`, activation uses the
+same exclusive current-snapshot router as touch: a declared destination can
+emit one move request while accessible move input is permitted, while other
+squares emit one immutable activation. Clear selection is an explicit
+activation request and never edits the controlled prop.
+Without that callback, `onMoveRequest` retains its transient accessible
+source-target fallback. Spare placement and annotation operations remain later
+work. Consumer announcements are correlated by ID and deduplicated per mounted
+board. The centralized reduced-motion provider follows `system`, `always`, or
+`never` without remounting this host or its cursor.
 
 React Native 0.86 suppresses Android's adjustable `TYPE_VIEW_SELECTED` feedback
 when `accessibilityValue.text` is present, and directional custom actions do not
@@ -223,8 +237,11 @@ disabled-by-default mounting, reducer adapter stale-event guards, and transient
 piece presentation. P2.3 tests add public permission gates, drag overlay
 mounting, accessible source/target/removal/cancel actions, current-snapshot
 request correlation, and decision/commit timeout races while preserving one
-accessible board control. Native ScrollView arbitration and frame-performance
-proof remain mandatory later evidence.
+accessible board control. The controlled-selection activation slice adds style
+precedence, immutable activation payload, exclusive destination routing,
+accessible clear-selection, commit-only callback lookup, and stale-selection
+correlation tests. Native ScrollView arbitration and frame-performance proof
+remain mandatory later evidence.
 
 This decision owns invariants `CBN-INV-010`, `CBN-INV-013`, `CBN-INV-014`,
 and `CBN-INV-018`.

@@ -28,6 +28,7 @@ import type {
   MoveRequestTimeouts,
   MoveSource,
   OnMoveRequest,
+  OnSquareActivate,
   PieceData,
   PieceInteractionContext,
   PieceRenderers,
@@ -48,11 +49,14 @@ describe('public data contracts', () => {
       'board',
       'darkSquare',
       'darkSquareNotation',
+      'destinationSquare',
+      'disabledSquare',
       'fileNotation',
       'lightSquare',
       'lightSquareNotation',
       'piece',
       'rankNotation',
+      'selectedSquare',
       'square',
     ]);
     expect(Object.isFrozen(defaultTheme)).toBe(true);
@@ -126,9 +130,13 @@ describe('public data contracts', () => {
       selectedSquare: 'd8',
       square: 'h4',
     } satisfies SquareActivationIntent;
+    const onSquareActivate: OnSquareActivate = (intent) => {
+      expect(intent).toBe(activation);
+    };
 
     expect(activation.input).toBe('accessibility');
     expect(activation.isDestination).toBe(true);
+    onSquareActivate(activation);
   });
 
   it('[PARITY-EXPORT-PIECE-HANDLER-ARGS] carries source and revision context', () => {
@@ -253,17 +261,23 @@ describe('public data contracts', () => {
     const nativeStyles = StyleSheet.create({
       board: { borderRadius: 8 },
       darkSquare: { backgroundColor: '#76543a' },
+      destinationSquare: { boxShadow: 'inset 0 0 0 2px green' },
+      disabledSquare: { opacity: 0.4 },
       fileNotation: { fontSize: 11 },
       piece: { opacity: 0.9 },
+      selectedSquare: { boxShadow: 'inset 0 0 0 2px orange' },
       square: { borderWidth: 1 },
     });
     const theme = {
       darkSquare: nativeStyles.darkSquare,
+      destinationSquare: nativeStyles.destinationSquare,
       piece: nativeStyles.piece,
     } satisfies ChessboardTheme;
     const styles = {
       board: [false, nativeStyles.board],
+      disabledSquare: nativeStyles.disabledSquare,
       fileNotation: nativeStyles.fileNotation,
+      selectedSquare: nativeStyles.selectedSquare,
     } satisfies ChessboardStyles;
     const squareStyles = {
       a1: [nativeStyles.square, null],
@@ -286,6 +300,7 @@ describe('public data contracts', () => {
       drag: true,
     } satisfies InteractionPermissions;
     const onMoveRequest: OnMoveRequest = () => ({ status: 'accepted' });
+    const onSquareActivate: OnSquareActivate = () => undefined;
     const props = {
       accessibility,
       annotations: [],
@@ -296,6 +311,7 @@ describe('public data contracts', () => {
       interactionPermissions,
       moveRequestTimeouts: { commitMs: 1_500, decisionMs: 10_000 },
       onMoveRequest,
+      onSquareActivate,
       orientation: 'black',
       pieceRenderers,
       position: '8/8/8/8/8/8/8/8',
@@ -332,6 +348,7 @@ describe('public data contracts', () => {
     expect(props.annotationStyle).toBe(annotationStyle);
     expect(props.interactionPermissions).toBe(interactionPermissions);
     expect(props.onMoveRequest).toBe(onMoveRequest);
+    expect(props.onSquareActivate).toBe(onSquareActivate);
     expect(props.orientation).toBe('black');
     expect(props.pieceRenderers).toBe(pieceRenderers);
     expect(props.reduceMotion).toBe('always');

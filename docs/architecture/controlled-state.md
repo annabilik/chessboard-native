@@ -42,6 +42,24 @@ committed intent ID, so they cannot report a correlated committed outcome.
 Interactive stores that need deterministic acceptance, timeout, or announcement
 semantics use the revisioned position tier.
 
+`onSquareActivate` follows the same controlled boundary. It is a synchronous
+notification carrying one detached immutable `SquareActivationIntent` with the
+current base position and selection revisions. The callback result is ignored;
+the board never turns it into a selected square or a position update. An
+explicit accessible `clear-selection` action is likewise a request for the
+consumer to publish a new selection prop, not an internal clear.
+
+Ordinary controlled-selection activation uses one exclusive router evaluated
+against the current normalized props. For touch, when `onMoveRequest` exists,
+the target is an enabled declared destination, the selected source is enabled,
+and that source still contains a controlled piece, the board sends only a
+`MoveIntent` to `onMoveRequest`. Accessibility uses that move route only while
+its move permission is enabled. Otherwise, when `onSquareActivate` exists, the
+board sends only a `SquareActivationIntent`. It never invokes both callbacks
+for one activation, never infers destinations, and never retains the captured
+piece or selection as a render source. Disabled or stale activation fails
+closed.
+
 Every annotation callback emits a delta correlated to
 `baseAnnotationRevision`. Toggle and clear operations include only IDs observed
 at that base, so reducing an operation against current consumer state cannot
@@ -91,9 +109,12 @@ recovery path.
 ## Consequences
 
 Async consumers can validate moves without granting the component ownership of
-game state. They must update controlled props after acceptance. The mounted
-move-request executor preserves this boundary through cancellation, errors, and
-timeouts; every later transition planner and provider must preserve it too.
+game state. They must update controlled position after move acceptance, and any
+selection change resulting from activation or clearing must arrive through the
+controlled selection prop. The mounted move-request executor and
+square-activation router preserve this boundary through cancellation, errors,
+timeouts, abandoned renders, and stale selection correlation; every later
+transition planner and provider must preserve it too.
 
 This decision owns invariants `CBN-INV-001`, `CBN-INV-002`, `CBN-INV-003`,
 `CBN-INV-004`, `CBN-INV-005`, `CBN-INV-008`, `CBN-INV-010`,

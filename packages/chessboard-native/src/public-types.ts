@@ -159,8 +159,9 @@ export interface InteractionPermissions {
   readonly drag?: boolean;
   /**
    * Enables the adjustable control's source, target, remove, and cancel actions.
+   * This also gates destination-to-move routing for accessibility activation.
    * Defaults to true. Drag also fails closed when this is false so the board
-   * cannot expose a drag-only move path.
+   * cannot expose a drag-only move path. Touch activation remains available.
    */
   readonly accessibility?: boolean;
 }
@@ -289,6 +290,11 @@ export interface SquareActivationIntent {
   readonly input: 'touch' | 'keyboard' | 'accessibility';
 }
 
+/** Synchronous notification for one consumer-owned square activation. @public */
+export type OnSquareActivate = (
+  intent: Readonly<SquareActivationIntent>,
+) => void;
+
 /** Derived logical square data used by visual renderers. @public */
 export interface BoardSquare {
   readonly square: SquareId;
@@ -345,6 +351,10 @@ export interface ChessboardTheme {
   readonly lightSquare?: StyleProp<ViewStyle>;
   /** Paint layered onto dark squares. */
   readonly darkSquare?: StyleProp<ViewStyle>;
+  /** Controlled destination-square paint layered after canonical square styles. */
+  readonly destinationSquare?: StyleProp<ViewStyle>;
+  /** Controlled disabled-square paint layered after selected-square paint. */
+  readonly disabledSquare?: StyleProp<ViewStyle>;
   /** Notation contrast layered onto light squares. */
   readonly lightSquareNotation?: StyleProp<TextStyle>;
   /** Notation contrast layered onto dark squares. */
@@ -355,6 +365,8 @@ export interface ChessboardTheme {
   readonly rankNotation?: StyleProp<TextStyle>;
   /** Static piece-host paint. */
   readonly piece?: StyleProp<ViewStyle>;
+  /** Controlled selected-square paint layered after destination-square paint. */
+  readonly selectedSquare?: StyleProp<ViewStyle>;
 }
 
 /** Per-instance visual overrides applied after the theme. @public */
@@ -367,6 +379,10 @@ export interface ChessboardStyles {
   readonly lightSquare?: StyleProp<ViewStyle>;
   /** Paint layered onto dark squares. */
   readonly darkSquare?: StyleProp<ViewStyle>;
+  /** Controlled destination-square paint layered after canonical square styles. */
+  readonly destinationSquare?: StyleProp<ViewStyle>;
+  /** Controlled disabled-square paint layered after selected-square paint. */
+  readonly disabledSquare?: StyleProp<ViewStyle>;
   /** Notation contrast layered onto light squares. */
   readonly lightSquareNotation?: StyleProp<TextStyle>;
   /** Notation contrast layered onto dark squares. */
@@ -377,6 +393,8 @@ export interface ChessboardStyles {
   readonly rankNotation?: StyleProp<TextStyle>;
   /** Static piece-host paint. */
   readonly piece?: StyleProp<ViewStyle>;
+  /** Controlled selected-square paint layered after destination-square paint. */
+  readonly selectedSquare?: StyleProp<ViewStyle>;
 }
 
 /** Declarative visual overrides keyed by canonical square ID. @public */
@@ -504,7 +522,7 @@ export interface ChessboardAccessibility {
   readonly boardHint?: string;
   /** Replaces the square value; empty output falls back to the default value. */
   readonly formatSquareValue?: (context: SquareAccessibilityContext) => string;
-  /** Formats directional and move actions; labels are made non-empty/unique. */
+  /** Formats directional and interactive actions; labels stay non-empty/unique. */
   readonly formatActionLabel?: (
     context: BoardActionAccessibilityContext,
   ) => string;

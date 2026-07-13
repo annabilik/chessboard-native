@@ -11,6 +11,10 @@ const square = Object.freeze({
 });
 const lightSquare = Object.freeze({ backgroundColor: '#F0D9B5' });
 const darkSquare = Object.freeze({ backgroundColor: '#B58863' });
+const destinationSquare = Object.freeze({
+  boxShadow: 'inset 0 0 0 3px rgba(76, 175, 80, 0.9)',
+});
+const disabledSquare = Object.freeze({ opacity: 0.45 });
 const lightSquareNotation = Object.freeze({ color: '#B58863' });
 const darkSquareNotation = Object.freeze({ color: '#F0D9B5' });
 const fileNotation = Object.freeze({
@@ -33,16 +37,22 @@ const piece = Object.freeze({
   alignItems: 'center' as const,
   justifyContent: 'center' as const,
 });
+const selectedSquare = Object.freeze({
+  boxShadow: 'inset 0 0 0 3px rgba(255, 170, 0, 0.95)',
+});
 
 /** Built-in native visual defaults. @public */
 export const defaultTheme: Readonly<Required<ChessboardTheme>> = Object.freeze({
   board,
   darkSquare,
   darkSquareNotation,
+  destinationSquare,
+  disabledSquare,
   fileNotation,
   lightSquare,
   lightSquareNotation,
   piece,
   rankNotation,
+  selectedSquare,
   square,
 });

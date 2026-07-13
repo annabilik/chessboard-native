@@ -180,9 +180,15 @@ export default function GalleryIndex() {
         <Text style={styles.pending}>
           The boards now expose one adjustable accessibility control while the
           visual subtree remains decorative. Annotation drawing, custom square
-          rendering, selection styling, and transitions remain later slices.
-          Controlled move requests have their own focused example.
+          rendering, and transitions remain later slices. Controlled selection
+          activation and move requests have focused examples.
         </Text>
+
+        <Link asChild href="/controlled-selection">
+          <Pressable style={styles.routeLink}>
+            <Text style={styles.routeLinkText}>Open controlled selection</Text>
+          </Pressable>
+        </Link>
 
         <Link asChild href="/move-request">
           <Pressable style={styles.routeLink}>

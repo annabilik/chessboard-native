@@ -16,12 +16,14 @@ Consumers can replace it with a visual-only renderer map keyed by the open
 also declarative. The board is one adjustable accessibility control with an
 orientation-aware virtual cursor and decorative visual descendants. Controlled
 square and arrow annotations render in below/above-piece SVG planes. Selection
-styling, custom square rendering, annotation drawing, and transitions are not
-rendered yet. Supplying `onMoveRequest` opens the controlled move-request
-surface: board-piece drag and the adjustable control's source, target, removal,
-and cancellation actions use one correlated lifecycle. A decision never
-changes the rendered position; only the next controlled `position` prop can do
-that. Provider-level identity registration remains future work.
+styling follows the controlled selection prop, and `onSquareActivate` can opt
+the board into controlled touch and accessibility activation. Supplying
+`onMoveRequest` opens the controlled move-request surface: board-piece drag and
+the adjustable control's source, target, removal, and cancellation actions use
+one correlated lifecycle. Neither gesture path nor either callback changes
+position or selection; only the consumer's next controlled props can do that.
+Custom square rendering, annotation drawing, transitions, and provider-level
+identity registration remain future work.
 
 ```tsx
 import { Chessboard } from '@vibechess/chessboard-native';
@@ -77,16 +79,20 @@ const Fairy: PieceRenderer = ({ size }) => (
 ```
 
 Resolved static styles follow built-in defaults, `theme`, instance `styles`,
-and `squareStyles` in that order. Later interaction work adds transient state
-styles after those layers. Per-square styles use canonical square IDs and do
-not rotate when orientation changes. Custom piece content receives the resolved
-piece style for inspection or derived artwork, while the board-owned wrapper
-applies that style exactly once. Renderers should not blindly apply it again.
-Renderer props contain no event or accessibility handlers, and the board keeps
-the entire visual subtree non-interactive and decorative. Only the stable outer
-host is exposed to assistive technology. Host measurement and absolute
-square/piece wrapper rectangles remain structural and cannot be replaced by
-visual styles.
+and canonical `squareStyles` in that order. Controlled state paint follows
+those layers in the fixed order destination, selected, then disabled. Each
+state slot resolves its built-in default, `theme`, and instance `styles` before
+the next slot is applied. Per-square styles and selection IDs are canonical and
+do not rotate when orientation changes. The default state paint uses inset
+shadow or opacity and never changes square geometry.
+
+Custom piece content receives the resolved piece style for inspection or
+derived artwork, while the board-owned wrapper applies that style exactly once.
+Renderers should not blindly apply it again. Renderer props contain no event or
+accessibility handlers, and the board keeps the entire visual subtree
+non-interactive and decorative. Only the stable outer host is exposed to
+assistive technology. Host measurement and absolute square/piece wrapper
+rectangles remain structural and cannot be replaced by visual styles.
 
 Board display, width, height, aspect ratio, flex sizing, margins, insets,
 padding, transforms, box sizing, border widths, and pointer-event modes are
@@ -149,6 +155,63 @@ pointerless and hidden from accessibility; the stable outer board remains the
 only accessible control. This slice renders annotations only—it does not draw,
 toggle, clear, or commit them.
 
+## Controlled selection and square activation
+
+`selection` is the only semantic selection source. Its `selectedSquare`,
+`destinationSquares`, and `disabledSquares` fields drive presentation, but the
+board never edits them. Supplying `onSquareActivate` opts into same-square touch
+and accessibility activation, including occupied and empty squares. Each
+enabled ordinary activation is routed exactly once:
+
+- For touch, when `onMoveRequest` is also present, a selected source exists,
+  that source still contains a current controlled piece, and the enabled target
+  is listed as a destination, the board emits only a `MoveIntent` to
+  `onMoveRequest`. Accessibility activation uses that route only while
+  `interactionPermissions.accessibility` permits move input.
+- Otherwise the board emits only an immutable `SquareActivationIntent` to
+  `onSquareActivate`. The intent reports the current position and selection
+  revisions, target square and piece, selected source, destination flag, input,
+  and action.
+
+Disabled targets and disabled selected sources block ordinary activation.
+Omitting `destinationSquares` therefore keeps activation declarative rather
+than inferring chess rules. The accessible `clear-selection` action is an
+explicit activation intent even when the selected square is disabled; the
+consumer clears selection by publishing a new `selection` prop.
+When `onMoveRequest` is present and accessible move input is permitted,
+accessible removal of the current enabled piece remains a direct null-target
+`MoveIntent` and never also emits a square activation.
+
+```tsx
+import {
+  Chessboard,
+  type OnSquareActivate,
+} from '@vibechess/chessboard-native';
+
+const onSquareActivate: OnSquareActivate = (intent) => {
+  selectionStore.dispatch({ intent, type: 'square-activated' });
+};
+
+<Chessboard
+  boardId="analysis"
+  onSquareActivate={onSquareActivate}
+  position={position}
+  selection={selection}
+/>;
+```
+
+Callback references become active only after their render commits. Touch
+activation captures the selection revision at gesture start and is rechecked
+against the current normalized selection and position before emission, so an
+abandoned render or stale tap is inert. A callback invocation is a notification
+only; neither it nor the recognizer mutates selection or position.
+
+Without `onSquareActivate`, no same-square tap recognizer is enabled. An
+existing `onMoveRequest` still provides its accessible transient source-target,
+removal, and cancellation flow while accessible move input is permitted. With
+neither callback, the component mounts no native gesture hit plane and remains
+read-only.
+
 ## Controlled move requests
 
 `onMoveRequest` asks the consumer to accept or reject one rules-free intent.
@@ -208,10 +271,10 @@ With a callback, accessible move input and drag both default on. Set
 `interactionPermissions.accessibility` to `false` also disables drag, so the
 component never exposes a drag-only move action. `canDragPiece` is a synchronous
 current-position gate for drag activation; throwing or returning anything other
-than `true` denies the drag. Without `onMoveRequest`, no gesture hit plane or
-recognizer is mounted and the board remains move-read-only. The default decision
-timeout is 10 seconds; after acceptance, the default controlled-commit timeout
-is 1.5 seconds.
+than `true` denies the drag. Without `onMoveRequest`, no move-request pan
+recognizer is mounted; `onSquareActivate` may still enable controlled tap input.
+The default decision timeout is 10 seconds; after acceptance, the default
+controlled-commit timeout is 1.5 seconds.
 
 ## Accessibility and reduced motion
 
@@ -231,6 +294,18 @@ with a null-target intent, or cancel pending work. Spare placement and
 annotation actions remain later slices. `formatMoveOutcome` customizes the
 correlated committed, rejected, cancelled, or timed-out announcement; returning
 `null` suppresses it.
+
+When `onSquareActivate` is present, activating the current square uses the
+exclusive controlled-selection router described above, and a selected board
+also exposes an explicit clear-selection action. The consumer must publish the
+resulting selection update. Without that callback, `onMoveRequest` preserves
+the transient accessible source-target fallback.
+
+Setting `interactionPermissions.accessibility` to `false` disables accessible
+destination-to-move routing, removal, cancellation, and the transient fallback.
+Controlled square activation remains available and therefore emits a square
+intent for a destination that cannot use the accessible move route. Touch
+destination routing remains independent of this accessibility-only gate.
 
 See the repository's
 [`docs/accessibility.md`](https://github.com/annabilik/chessboard-native/blob/main/docs/accessibility.md)

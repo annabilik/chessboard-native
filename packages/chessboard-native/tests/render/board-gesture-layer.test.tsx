@@ -43,6 +43,7 @@ interface HarnessProps {
     values: Readonly<InteractionPresentationSharedValues>,
   ) => void;
   readonly onSignal: (signal: Readonly<BoardGestureSignal>) => void;
+  readonly selectionRevision?: number | null;
 }
 
 function Harness({
@@ -52,6 +53,7 @@ function Harness({
   occupiedSquares = Object.freeze(['a2']),
   onPresentation,
   onSignal,
+  selectionRevision = 11,
 }: HarnessProps) {
   const presentation = useInteractionPresentationSharedValues();
   onPresentation?.(presentation);
@@ -62,10 +64,10 @@ function Harness({
         dragEnabled={enabled ?? false}
         draggableSquares={occupiedSquares}
         geometry={geometry}
-        occupiedSquares={occupiedSquares}
         onSignal={onSignal}
         positionRevision={7}
         presentation={presentation}
+        selectionRevision={selectionRevision}
         tapEnabled={enabled ?? false}
       />
     </GestureHandlerRootView>
@@ -80,6 +82,10 @@ function gestureConfig(gesture: unknown): Readonly<Record<string, unknown>> {
 interface GestureCallbacks {
   readonly onBegin?: (event: Readonly<Record<string, unknown>>) => void;
   readonly onFinalize?: (
+    event: Readonly<Record<string, unknown>>,
+    success: boolean,
+  ) => void;
+  readonly onEnd?: (
     event: Readonly<Record<string, unknown>>,
     success: boolean,
   ) => void;
@@ -186,17 +192,18 @@ describe('board-level native gesture plane', () => {
       expect.objectContaining({
         sourceSquare: 'a2',
         targetSquare: 'a2',
-        gestureToken: panToken,
         type: 'drag-start',
       }),
       expect.objectContaining({
         sourceSquare: 'a2',
         targetSquare: 'b1',
-        gestureToken: panToken,
         type: 'drag-end',
       }),
     ]);
     expect(signals).toHaveLength(2);
+    const firstPanToken = signals[0]?.gestureToken;
+    expect(firstPanToken).toBeDefined();
+    expect(signals[1]?.gestureToken).toBe(firstPanToken);
     const mountedPresentation = presentations.at(-1);
     if (mountedPresentation === undefined) {
       throw new Error('Expected mounted interaction presentation values.');
@@ -217,10 +224,18 @@ describe('board-level native gesture plane', () => {
         { state: State.CANCELLED, x: 40, y: 25 },
       ]);
     });
+    const secondPanToken = signals[0]?.gestureToken;
     expect(signals).toEqual([
-      expect.objectContaining({ gestureToken: panToken, type: 'drag-start' }),
-      expect.objectContaining({ gestureToken: panToken, type: 'drag-cancel' }),
+      expect.objectContaining({
+        gestureToken: secondPanToken,
+        type: 'drag-start',
+      }),
+      expect.objectContaining({
+        gestureToken: secondPanToken,
+        type: 'drag-cancel',
+      }),
     ]);
+    expect(secondPanToken).not.toBe(firstPanToken);
     expect(mountedPresentation.phase.value).toBe(
       INTERACTION_PRESENTATION_PHASE.IDLE,
     );
@@ -242,15 +257,20 @@ describe('board-level native gesture plane', () => {
       );
       callbacks.onFinalize?.({ handlerTag: panToken, x: 35, y: 30 }, false);
     });
+    const thirdPanToken = signals[0]?.gestureToken;
     expect(fail).toHaveBeenCalledTimes(1);
     expect(signals).toEqual([
-      expect.objectContaining({ gestureToken: panToken, type: 'drag-start' }),
       expect.objectContaining({
-        gestureToken: panToken,
+        gestureToken: thirdPanToken,
+        type: 'drag-start',
+      }),
+      expect.objectContaining({
+        gestureToken: thirdPanToken,
         reason: 'second-finger',
         type: 'drag-cancel',
       }),
     ]);
+    expect(thirdPanToken).not.toBe(secondPanToken);
 
     signals.length = 0;
     await act(() => {
@@ -266,7 +286,7 @@ describe('board-level native gesture plane', () => {
     ]);
   });
 
-  it('[PARITY-BEHAVIOR-B28] emits one same-square occupied tap and ignores moved, outside, cancelled, and empty-source taps in both orientations', async () => {
+  it('[PARITY-BEHAVIOR-B28] emits same-square occupied and empty activation while ignoring moved, outside, and cancelled taps in both orientations', async () => {
     for (const fixture of [
       {
         geometry: WHITE_GEOMETRY,
@@ -293,8 +313,6 @@ describe('board-level native gesture plane', () => {
       const tap = getByGestureTestId(
         getBoardGestureTestIds('gesture-board').tap,
       );
-      const tapToken = (tap as unknown as Readonly<{ handlerTag: number }>)
-        .handlerTag;
       await act(() => {
         fireGestureHandler(tap, [
           { state: State.BEGAN, ...fixture.point },
@@ -305,10 +323,11 @@ describe('board-level native gesture plane', () => {
         expect.objectContaining({
           sourceSquare: 'a2',
           targetSquare: 'a2',
-          gestureToken: tapToken,
+          selectionRevision: 11,
           type: 'tap',
         }),
       ]);
+      const firstTapToken = signals[0]?.gestureToken;
 
       await act(() => {
         fireGestureHandler(tap, [
@@ -328,8 +347,105 @@ describe('board-level native gesture plane', () => {
           { state: State.END, x: 175, y: 25 },
         ]);
       });
-      expect(signals).toHaveLength(1);
+      expect(signals).toEqual([
+        expect.objectContaining({
+          sourceSquare: 'a2',
+          selectionRevision: 11,
+          targetSquare: 'a2',
+          type: 'tap',
+        }),
+        expect.objectContaining({
+          selectionRevision: 11,
+          sourceSquare: fixture.geometry === WHITE_GEOMETRY ? 'b2' : 'a1',
+          targetSquare: fixture.geometry === WHITE_GEOMETRY ? 'b2' : 'a1',
+          type: 'tap',
+        }),
+      ]);
+      expect(signals[1]?.gestureToken).not.toBe(firstTapToken);
       await result.unmount();
     }
+  });
+
+  it('fails a tap that gains a second pointer before a retained terminal callback can emit', async () => {
+    const signals: Readonly<BoardGestureSignal>[] = [];
+    await render(
+      <Harness
+        enabled
+        onSignal={(signal) => {
+          signals.push(signal);
+        }}
+      />,
+    );
+    const tap = getByGestureTestId(getBoardGestureTestIds('gesture-board').tap);
+    const callbacks = gestureCallbacks(tap);
+    const handlerTag = (tap as unknown as Readonly<{ handlerTag: number }>)
+      .handlerTag;
+    const fail = jest.fn();
+
+    await act(() => {
+      callbacks.onBegin?.({ handlerTag, x: 25, y: 25 });
+      callbacks.onTouchesDown?.(
+        {
+          allTouches: [
+            { x: 25, y: 25 },
+            { x: 30, y: 25 },
+          ],
+        },
+        { fail },
+      );
+      callbacks.onEnd?.({ handlerTag, x: 25, y: 25 }, true);
+      callbacks.onFinalize?.({ handlerTag, x: 25, y: 25 }, false);
+    });
+
+    expect(fail).toHaveBeenCalledTimes(1);
+    expect(signals).toEqual([]);
+  });
+
+  it('captures the committed selection revision and invalidates a tap that spans a selection commit', async () => {
+    const signals: Readonly<BoardGestureSignal>[] = [];
+    const result = await render(
+      <Harness
+        enabled
+        onSignal={(signal) => {
+          signals.push(signal);
+        }}
+        selectionRevision={12}
+      />,
+    );
+    const tap = getByGestureTestId(getBoardGestureTestIds('gesture-board').tap);
+    const callbacks = gestureCallbacks(tap);
+    const tapToken = (tap as unknown as Readonly<{ handlerTag: number }>)
+      .handlerTag;
+
+    await act(() => {
+      callbacks.onBegin?.({ handlerTag: tapToken, x: 25, y: 25 });
+    });
+    await result.rerender(
+      <Harness
+        enabled
+        onSignal={(signal) => {
+          signals.push(signal);
+        }}
+        selectionRevision={13}
+      />,
+    );
+    await act(() => {
+      callbacks.onEnd?.({ handlerTag: tapToken, x: 25, y: 25 }, true);
+      callbacks.onFinalize?.({ handlerTag: tapToken, x: 25, y: 25 }, true);
+    });
+    expect(signals).toEqual([]);
+
+    const currentTap = getByGestureTestId(
+      getBoardGestureTestIds('gesture-board').tap,
+    );
+    await act(() => {
+      fireGestureHandler(currentTap, [
+        { state: State.BEGAN, x: 25, y: 25 },
+        { state: State.END, x: 25, y: 25 },
+      ]);
+    });
+    expect(signals).toEqual([
+      expect.objectContaining({ selectionRevision: 13, type: 'tap' }),
+    ]);
   });
 });

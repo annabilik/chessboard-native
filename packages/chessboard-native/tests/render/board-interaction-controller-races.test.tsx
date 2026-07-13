@@ -1,4 +1,5 @@
 import { act, render } from '@testing-library/react-native';
+import { startTransition, Suspense, useState, type ReactElement } from 'react';
 
 import type { BoardGestureIntentCandidate } from '../../src/internal/board-gesture-adapter';
 import type { NormalizedControlledValue } from '../../src/internal/controlled-domain';
@@ -52,6 +53,27 @@ function dragSignal(options: {
     sourceSquare: 'a2',
     targetSquare: options.targetSquare ?? 'a2',
     type: options.type,
+  });
+}
+
+function tapSignal(options: {
+  readonly geometryRevision?: number;
+  readonly gestureToken: number;
+  readonly positionRevision?: number;
+  readonly selectionRevision?: number | null;
+  readonly square?: 'a2' | 'b2';
+}): Readonly<BoardGestureSignal> {
+  const square = options.square ?? 'b2';
+  return Object.freeze({
+    boardId: 'race-board',
+    geometryRevision: options.geometryRevision ?? 5,
+    gestureToken: options.gestureToken,
+    positionRevision: options.positionRevision ?? 9,
+    selectionRevision:
+      options.selectionRevision === undefined ? 3 : options.selectionRevision,
+    sourceSquare: square,
+    targetSquare: square,
+    type: 'tap',
   });
 }
 
@@ -219,5 +241,192 @@ describe('board interaction controller races', () => {
     });
 
     expect(onCandidate).not.toHaveBeenCalled();
+  });
+
+  it('routes a retained signal handler to the latest committed candidate callback', async () => {
+    const first = jest.fn();
+    const second = jest.fn();
+    const result = await render(
+      <BoardInteractionController
+        boardId="race-board"
+        geometry={geometry(5)}
+        onCandidate={first}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+        selectionRevision={3}
+        tapEnabled
+      />,
+    );
+    const retainedSignal = currentSignalHandler();
+
+    await result.rerender(
+      <BoardInteractionController
+        boardId="race-board"
+        geometry={geometry(5)}
+        onCandidate={second}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+        selectionRevision={3}
+        tapEnabled
+      />,
+    );
+    await act(() => {
+      retainedSignal(tapSignal({ gestureToken: 41 }));
+    });
+
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseSelectionRevision: 3,
+        input: 'tap',
+        square: 'b2',
+        token: 41,
+      }),
+    );
+  });
+
+  it('rejects a tap correlated to a stale selection commit and accepts the current revision', async () => {
+    const onCandidate = jest.fn();
+    const result = await render(
+      <BoardInteractionController
+        boardId="race-board"
+        geometry={geometry(5)}
+        onCandidate={onCandidate}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+        selectionRevision={3}
+        tapEnabled
+      />,
+    );
+    const retainedSignal = currentSignalHandler();
+
+    await result.rerender(
+      <BoardInteractionController
+        boardId="race-board"
+        geometry={geometry(5)}
+        onCandidate={onCandidate}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+        selectionRevision={4}
+        tapEnabled
+      />,
+    );
+    await act(() => {
+      retainedSignal(tapSignal({ gestureToken: 51, selectionRevision: 3 }));
+      retainedSignal(tapSignal({ gestureToken: 52, selectionRevision: 4 }));
+    });
+
+    expect(onCandidate).toHaveBeenCalledTimes(1);
+    expect(onCandidate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseSelectionRevision: 4,
+        input: 'tap',
+        token: 52,
+      }),
+    );
+  });
+
+  it('makes a retained tap signal inert after tap is disabled while drag remains enabled', async () => {
+    const onCandidate = jest.fn();
+    const result = await render(
+      <BoardInteractionController
+        boardId="race-board"
+        dragEnabled
+        geometry={geometry(5)}
+        onCandidate={onCandidate}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+        selectionRevision={3}
+        tapEnabled
+      />,
+    );
+    const retainedSignal = currentSignalHandler();
+
+    await result.rerender(
+      <BoardInteractionController
+        boardId="race-board"
+        dragEnabled
+        geometry={geometry(5)}
+        onCandidate={onCandidate}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+        selectionRevision={3}
+        tapEnabled={false}
+      />,
+    );
+    await act(() => {
+      retainedSignal(tapSignal({ gestureToken: 55 }));
+    });
+
+    expect(onCandidate).not.toHaveBeenCalled();
+  });
+
+  it('does not install a candidate callback from an abandoned concurrent render', async () => {
+    interface HarnessState {
+      readonly mode: 'committed' | 'suspended';
+      readonly version: number;
+    }
+
+    const committed = jest.fn();
+    const abandoned = jest.fn();
+    const never = new Promise<never>(() => undefined);
+    let updateHarness: ((next: HarnessState) => void) | undefined;
+
+    function SuspendForever(): ReactElement {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- React Suspense uses thrown thenables as its render protocol.
+      throw never;
+    }
+
+    function ConcurrentHarness(): ReactElement {
+      const [state, setState] = useState<HarnessState>({
+        mode: 'committed',
+        version: 0,
+      });
+      updateHarness = setState;
+      const shouldSuspend = state.mode === 'suspended';
+      return (
+        <Suspense fallback={null}>
+          <BoardInteractionController
+            boardId="race-board"
+            geometry={geometry(5)}
+            onCandidate={shouldSuspend ? abandoned : committed}
+            pieceRenderers={{}}
+            pieceStyle={{}}
+            position={controlledPosition(9)}
+            selectionRevision={3}
+            tapEnabled
+          />
+          {shouldSuspend ? <SuspendForever /> : null}
+        </Suspense>
+      );
+    }
+
+    await render(<ConcurrentHarness />);
+    const retainedSignal = currentSignalHandler();
+    const update = updateHarness;
+    if (update === undefined) {
+      throw new Error('Expected the concurrent harness state setter.');
+    }
+
+    await act(() => {
+      startTransition(() => {
+        update({ mode: 'suspended', version: 1 });
+      });
+    });
+    await act(() => {
+      update({ mode: 'committed', version: 2 });
+    });
+    await act(() => {
+      retainedSignal(tapSignal({ gestureToken: 61 }));
+    });
+
+    expect(committed).toHaveBeenCalledTimes(1);
+    expect(abandoned).not.toHaveBeenCalled();
   });
 });
