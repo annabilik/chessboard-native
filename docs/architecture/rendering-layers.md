@@ -169,8 +169,9 @@ transient canonical virtual cursor. Reading-order and directional navigation
 project that cursor through current dimensions and orientation without using
 measurement or updating consumer-owned selection. Position and selection
 changes refresh its value; orientation retains the canonical square and host
-identity. Static annotations use the same orientation projection; gesture hit
-testing will use the measured coordinate system in a later slice.
+identity. Static annotations and board-local gesture hit testing use the same
+orientation-aware measured projection; provider and window-coordinate hit
+testing remain later work.
 
 The accessibility action surface in P1.5 contains navigation only. Semantic
 activation, controlled selection clearing, move/removal intents, spare
