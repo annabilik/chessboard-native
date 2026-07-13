@@ -16,12 +16,12 @@ Consumers can replace it with a visual-only renderer map keyed by the open
 also declarative. The board is one adjustable accessibility control with an
 orientation-aware virtual cursor and decorative visual descendants. Controlled
 square and arrow annotations render in below/above-piece SVG planes. Selection
-styling, custom square rendering, semantic interaction, annotation drawing, and
-transitions are not rendered yet. An internal pure reducer and board-level RNGH
-adapter now model the move-intent lifecycle, worklet hit testing, and transient
-presentation. The adapter is deliberately disabled in this public component
-until a move-request callback and effect executor exist, so the board remains
-read-only. Provider-level identity registration remains future work.
+styling, custom square rendering, annotation drawing, and transitions are not
+rendered yet. Supplying `onMoveRequest` opens the controlled move-request
+surface: board-piece drag and the adjustable control's source, target, removal,
+and cancellation actions use one correlated lifecycle. A decision never
+changes the rendered position; only the next controlled `position` prop can do
+that. Provider-level identity registration remains future work.
 
 ```tsx
 import { Chessboard } from '@vibechess/chessboard-native';
@@ -149,6 +149,70 @@ pointerless and hidden from accessibility; the stable outer board remains the
 only accessible control. This slice renders annotations only—it does not draw,
 toggle, clear, or commit them.
 
+## Controlled move requests
+
+`onMoveRequest` asks the consumer to accept or reject one rules-free intent.
+The callback may be synchronous or asynchronous and receives an `AbortSignal`.
+Acceptance changes only transient pending presentation. To commit, publish a
+new controlled position. The revisioned tier can correlate that update by
+incrementing `revision` and copying `intent.intentId` to `committedIntentId`:
+
+```tsx
+import {
+  Chessboard,
+  type ControlledPosition,
+  type OnMoveRequest,
+} from '@vibechess/chessboard-native';
+import { useState } from 'react';
+
+const [position, setPosition] = useState<ControlledPosition>({
+  revision: 0,
+  value: { e2: { id: 'pawn', pieceType: 'wP' } },
+});
+
+const onMoveRequest: OnMoveRequest = async (intent, { signal }) => {
+  const accepted = await validateInYourApplication(intent, signal);
+  if (!accepted || signal.aborted) {
+    return { status: 'rejected', reason: 'Move not accepted' };
+  }
+
+  setPosition((current) =>
+    current.revision !== intent.basePositionRevision
+      ? current
+      : {
+          committedIntentId: intent.intentId,
+          revision: current.revision + 1,
+          value: applyIntentInYourStore(current.value, intent),
+        },
+  );
+  return { status: 'accepted' };
+};
+
+<Chessboard
+  boardId="playground"
+  interactionPermissions={{ accessibility: true, drag: true }}
+  moveRequestTimeouts={{ commitMs: 1_500, decisionMs: 10_000 }}
+  onMoveRequest={onMoveRequest}
+  position={position}
+/>;
+```
+
+The board does not check turns, legal moves, promotion, or game state. That is
+why the example delegates both validation and position construction to the
+consumer. A matching controlled update may arrive before or after the accepted
+decision; stale results, timeouts, permission changes, unrelated position
+updates, and unmounts cannot commit or replace current props.
+
+With a callback, accessible move input and drag both default on. Set
+`interactionPermissions.drag` to `false` to keep only the non-drag path. Setting
+`interactionPermissions.accessibility` to `false` also disables drag, so the
+component never exposes a drag-only move action. `canDragPiece` is a synchronous
+current-position gate for drag activation; throwing or returning anything other
+than `true` denies the drag. Without `onMoveRequest`, no gesture hit plane or
+recognizer is mounted and the board remains move-read-only. The default decision
+timeout is 10 seconds; after acceptance, the default controlled-commit timeout
+is 1.5 seconds.
+
 ## Accessibility and reduced motion
 
 `Chessboard` owns a transient virtual cursor, never semantic selection. It
@@ -161,8 +225,12 @@ canonical square.
 Use `accessibility` for a full board label/hint override, square/action
 formatters, and `{ id, message }` announcements. Announcement IDs are spoken
 once per mounted board. `reduceMotion="system"` is the default; `always` forces
-reduced motion and `never` explicitly permits it. Semantic activation, moves,
-removal, spare placement, and annotation actions remain later slices.
+reduced motion and `never` explicitly permits it. When move interaction is
+enabled, the same control can activate a source and target, remove the source
+with a null-target intent, or cancel pending work. Spare placement and
+annotation actions remain later slices. `formatMoveOutcome` customizes the
+correlated committed, rejected, cancelled, or timed-out announcement; returning
+`null` suppresses it.
 
 See the repository's
 [`docs/accessibility.md`](https://github.com/annabilik/chessboard-native/blob/main/docs/accessibility.md)

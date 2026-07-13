@@ -28,6 +28,20 @@ The core is rules-free. It does not create a chess engine, calculate legal
 moves, decide promotions, track turns, or derive game results. It validates
 only its data and lifecycle contracts.
 
+The public move boundary follows the same rule. `onMoveRequest` receives a
+detached intent plus an abort signal and returns an accepted or rejected
+decision. Acceptance starts a bounded wait for a controlled update; it never
+edits, overlays, or substitutes for `position`. A revisioned update confirms
+that request only when it has a newer revision and a matching
+`committedIntentId`. A newer update without that correlation is still the
+authoritative position, but it cancels the pending request as unrelated.
+
+Plain positions remain valid for simple controlled rendering and can still
+replace the board after a request. Their derived revisions cannot carry a
+committed intent ID, so they cannot report a correlated committed outcome.
+Interactive stores that need deterministic acceptance, timeout, or announcement
+semantics use the revisioned position tier.
+
 Every annotation callback emits a delta correlated to
 `baseAnnotationRevision`. Toggle and clear operations include only IDs observed
 at that base, so reducing an operation against current consumer state cannot
@@ -58,11 +72,12 @@ empty grid with no pieces, while invalid dimensions or orientation render the
 neutral disabled frame without projected cells. No fallback retains a prior
 position. Invalid annotation or selection input leaves pieces from the valid
 current position visible because those domains do not own position rendering.
-Annotation, selection, and interaction presentation remain future work, so this
-slice does not claim their visual behavior.
+Invalid position input disables move requests for that render and invalidates
+active work; it never revives an older piece or pending-move snapshot.
 
-Development throws `ChessboardError`. Production plans a post-commit `onError`
-report once per domain and revision, or logs once when no handler exists.
+Development throws `ChessboardError`. Production dispatches a post-commit
+`onError` report once per domain and revision, or logs once when no handler
+exists.
 Deduplication lasts for the mounted lifetime and keys only on `(domain,
 revision)`, so Strict Mode replay or a changed handler cannot repeat a report.
 Error context contains `boardId`, a code-derived `domain`, and a nullable
@@ -76,8 +91,9 @@ recovery path.
 ## Consequences
 
 Async consumers can validate moves without granting the component ownership of
-game state. They must update controlled props after acceptance. Every reducer,
-gesture executor, transition planner, and provider must preserve this boundary.
+game state. They must update controlled props after acceptance. The mounted
+move-request executor preserves this boundary through cancellation, errors, and
+timeouts; every later transition planner and provider must preserve it too.
 
 This decision owns invariants `CBN-INV-001`, `CBN-INV-002`, `CBN-INV-003`,
 `CBN-INV-004`, `CBN-INV-005`, `CBN-INV-008`, `CBN-INV-010`,

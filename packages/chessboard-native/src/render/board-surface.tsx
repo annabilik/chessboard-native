@@ -1,16 +1,42 @@
-import { useCallback, useMemo, useState, type ReactElement } from 'react';
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
 import { useAccessibilityAnnouncement } from '../accessibility/announcements';
-import { useBoardAccessibility } from '../accessibility/board-accessibility';
+import {
+  useBoardAccessibility,
+  type BoardAccessibilityMoveInteraction,
+} from '../accessibility/board-accessibility';
+import { announceMoveOutcome } from '../accessibility/move-outcome';
 import { STANDARD_BOARD_DIMENSIONS } from '../core/dimensions';
 import type { NormalizedBoardModel } from '../internal/board-model';
+import type { BoardGestureIntentCandidate } from '../internal/board-gesture-adapter';
+import {
+  canDragCurrentPiece,
+  resolveInteractionPermissions,
+} from '../internal/interaction-permissions';
+import type {
+  InteractionInvalidationReason,
+  MoveIntentLifecycle,
+} from '../internal/interaction-reducer';
+import { useMoveRequestRuntime } from '../internal/use-move-request-runtime';
 import type {
   AnnotationStyle,
   BoardSize,
+  CanDragPiece,
   ChessboardAccessibility,
   ChessboardStyles,
   ChessboardTheme,
+  InteractionPermissions,
+  MoveOutcomeAccessibilityContext,
+  MoveRequestTimeouts,
+  OnMoveRequest,
   PieceRenderers,
   SquareStyles,
 } from '../public-types';
@@ -25,6 +51,7 @@ import {
 import { BoardInteractionController } from './board-interaction-controller';
 import type { BoardGestureGeometry } from './board-gesture-layer';
 import { BoardNotationLayer } from './board-notation-layer';
+import { PendingMoveLayer } from './pending-move-layer';
 import { PieceLayer } from './piece-layer';
 import { SquareLayer } from './square-layer';
 import { resolveBoardStyle, resolvePieceStyle } from './style-resolution';
@@ -36,7 +63,11 @@ interface MeasuredBoardSize extends BoardSize {
 interface BoardSurfaceProps {
   readonly accessibility: ChessboardAccessibility | undefined;
   readonly annotationStyle: Readonly<AnnotationStyle>;
+  readonly canDragPiece: CanDragPiece | undefined;
+  readonly interactionPermissions: InteractionPermissions | undefined;
   readonly model: NormalizedBoardModel;
+  readonly moveRequestTimeouts: MoveRequestTimeouts | undefined;
+  readonly onMoveRequest: OnMoveRequest | undefined;
   readonly pieceRenderers: PieceRenderers;
   readonly showNotation: boolean;
   readonly squareStyles: SquareStyles | undefined;
@@ -44,15 +75,93 @@ interface BoardSurfaceProps {
   readonly theme: ChessboardTheme | undefined;
 }
 
+interface InteractionInvalidationSnapshot {
+  readonly accessibilityEnabled: boolean;
+  readonly columns: number | null;
+  readonly dragEnabled: boolean;
+  readonly geometryRevision: number | null;
+  readonly orientation: NormalizedBoardModel['orientation'];
+  readonly rows: number | null;
+}
+
+type PendingMoveLifecycle = Extract<
+  MoveIntentLifecycle,
+  { readonly phase: 'deciding' | 'awaiting-commit' }
+>;
+
 function isPositiveFinite(value: number): boolean {
   return Number.isFinite(value) && value > 0;
+}
+
+function piecesMatch(
+  left: Readonly<{ readonly id?: string; readonly pieceType: string }> | null,
+  right: Readonly<{ readonly id?: string; readonly pieceType: string }>,
+): boolean {
+  return (
+    left !== null && left.id === right.id && left.pieceType === right.pieceType
+  );
+}
+
+function currentPendingLifecycle(
+  lifecycle: Readonly<MoveIntentLifecycle> | null,
+  model: NormalizedBoardModel,
+): Readonly<PendingMoveLifecycle> | null {
+  if (
+    lifecycle === null ||
+    (lifecycle.phase !== 'deciding' && lifecycle.phase !== 'awaiting-commit') ||
+    model.boardId === null ||
+    model.position === null ||
+    lifecycle.boardId !== model.boardId ||
+    lifecycle.positionRevision !== model.position.revision
+  ) {
+    return null;
+  }
+  const source = lifecycle.intent.source;
+  if (source.kind !== 'board') {
+    return lifecycle;
+  }
+  return piecesMatch(
+    model.position.value[source.square] ?? null,
+    lifecycle.intent.piece,
+  )
+    ? lifecycle
+    : null;
+}
+
+function invalidationReason(
+  previous: Readonly<InteractionInvalidationSnapshot>,
+  current: Readonly<InteractionInvalidationSnapshot>,
+): InteractionInvalidationReason | null {
+  if (
+    previous.accessibilityEnabled !== current.accessibilityEnabled ||
+    previous.dragEnabled !== current.dragEnabled
+  ) {
+    return 'permissions-change';
+  }
+  if (previous.columns !== current.columns || previous.rows !== current.rows) {
+    return 'dimensions-change';
+  }
+  if (previous.orientation !== current.orientation) {
+    return 'orientation-change';
+  }
+  if (
+    previous.geometryRevision !== null &&
+    previous.geometryRevision !== current.geometryRevision
+  ) {
+    return 'geometry-change';
+  }
+  return null;
 }
 
 /** Responsive native host for measured visual board layers. */
 export function BoardSurface({
   accessibility,
   annotationStyle,
+  canDragPiece,
+  interactionPermissions,
   model,
+  moveRequestTimeouts,
+  onMoveRequest,
   pieceRenderers,
   showNotation,
   squareStyles,
@@ -60,7 +169,75 @@ export function BoardSurface({
   theme,
 }: BoardSurfaceProps): ReactElement {
   useAccessibilityAnnouncement(accessibility?.announcement);
-  const accessibilityProps = useBoardAccessibility(model, accessibility);
+  const resolvedPermissions = useMemo(
+    () => resolveInteractionPermissions(onMoveRequest, interactionPermissions),
+    [interactionPermissions, onMoveRequest],
+  );
+  const interactionReady =
+    model.status === 'ready' &&
+    model.boardId !== null &&
+    model.position !== null;
+  const accessibilityMoveEnabled =
+    interactionReady && resolvedPermissions.accessibility;
+  const dragEnabled = interactionReady && resolvedPermissions.drag;
+  const [activeDragSourceSquare, setActiveDragSourceSquare] = useState<
+    string | null
+  >(null);
+  const [
+    accessibilitySourceResetRevision,
+    setAccessibilitySourceResetRevision,
+  ] = useState(0);
+  const formatMoveOutcome = accessibility?.formatMoveOutcome;
+  const handleMoveOutcome = useCallback(
+    (context: Readonly<MoveOutcomeAccessibilityContext>): void => {
+      announceMoveOutcome(context, formatMoveOutcome);
+    },
+    [formatMoveOutcome],
+  );
+  const moveInteraction = useMoveRequestRuntime({
+    boardId: model.boardId,
+    onMoveRequest: accessibilityMoveEnabled ? onMoveRequest : undefined,
+    onOutcome: handleMoveOutcome,
+    position: model.position,
+    timeouts: moveRequestTimeouts,
+  });
+  const handleDragSourceChange = useCallback(
+    (sourceSquare: string | null): void => {
+      setActiveDragSourceSquare((current) =>
+        current === sourceSquare ? current : sourceSquare,
+      );
+      if (sourceSquare !== null) {
+        setAccessibilitySourceResetRevision((current) => current + 1);
+        moveInteraction.invalidate('user');
+      }
+    },
+    [moveInteraction.invalidate],
+  );
+  const accessibilityMoveInteraction = useMemo<
+    Readonly<BoardAccessibilityMoveInteraction>
+  >(
+    () =>
+      Object.freeze({
+        cancel: moveInteraction.cancel,
+        enabled: accessibilityMoveEnabled && activeDragSourceSquare === null,
+        lifecycle: moveInteraction.lifecycle,
+        request: moveInteraction.request,
+        sourceResetRevision: accessibilitySourceResetRevision,
+      }),
+    [
+      accessibilityMoveEnabled,
+      accessibilitySourceResetRevision,
+      activeDragSourceSquare,
+      moveInteraction.cancel,
+      moveInteraction.lifecycle,
+      moveInteraction.request,
+    ],
+  );
+  const accessibilityProps = useBoardAccessibility(
+    model,
+    accessibility,
+    accessibilityMoveInteraction,
+  );
   const fallbackDimensions = model.dimensions ?? STANDARD_BOARD_DIMENSIONS;
   const modelColumns = model.dimensions?.columns ?? null;
   const modelRows = model.dimensions?.rows ?? null;
@@ -167,6 +344,117 @@ export function BoardSurface({
       width: layout.size.width,
     });
   }, [layout, nextGeometryEpochMetadata.revision]);
+  const invalidationSnapshot = useMemo<
+    Readonly<InteractionInvalidationSnapshot>
+  >(
+    () =>
+      Object.freeze({
+        accessibilityEnabled: accessibilityMoveEnabled,
+        columns: model.dimensions?.columns ?? null,
+        dragEnabled,
+        geometryRevision: gestureGeometry?.revision ?? null,
+        orientation: model.orientation,
+        rows: model.dimensions?.rows ?? null,
+      }),
+    [
+      accessibilityMoveEnabled,
+      dragEnabled,
+      gestureGeometry?.revision,
+      model.dimensions?.columns,
+      model.dimensions?.rows,
+      model.orientation,
+    ],
+  );
+  const previousInvalidationSnapshot =
+    useRef<Readonly<InteractionInvalidationSnapshot> | null>(null);
+  useLayoutEffect(() => {
+    const previous = previousInvalidationSnapshot.current;
+    previousInvalidationSnapshot.current = invalidationSnapshot;
+    if (previous === null) {
+      return;
+    }
+    const reason = invalidationReason(previous, invalidationSnapshot);
+    if (reason !== null) {
+      moveInteraction.invalidate(reason);
+    }
+  }, [invalidationSnapshot, moveInteraction.invalidate]);
+
+  const pendingLifecycle = currentPendingLifecycle(
+    moveInteraction.lifecycle,
+    model,
+  );
+  useLayoutEffect(() => {
+    if (
+      pendingLifecycle?.intent.input !== 'drag' ||
+      pendingLifecycle.intent.source.kind !== 'board'
+    ) {
+      return;
+    }
+    if (
+      !dragEnabled ||
+      !canDragCurrentPiece(canDragPiece, {
+        basePositionRevision: pendingLifecycle.intent.basePositionRevision,
+        boardId: pendingLifecycle.intent.boardId,
+        piece: pendingLifecycle.intent.piece,
+        source: pendingLifecycle.intent.source,
+      })
+    ) {
+      moveInteraction.invalidate('permissions-change');
+    }
+  }, [canDragPiece, dragEnabled, moveInteraction.invalidate, pendingLifecycle]);
+
+  const handleGestureCandidate = useCallback(
+    (candidate: Readonly<BoardGestureIntentCandidate>): void => {
+      const boardId = model.boardId;
+      const position = model.position;
+      const geometry = gestureGeometry;
+      if (
+        !dragEnabled ||
+        candidate.input !== 'drag' ||
+        boardId === null ||
+        position === null ||
+        geometry === null ||
+        candidate.boardId !== boardId ||
+        candidate.geometryEpoch !== geometry.revision ||
+        candidate.basePositionRevision !== position.revision ||
+        !geometry.visualSquares.includes(candidate.source.square) ||
+        (candidate.targetSquare !== null &&
+          !geometry.visualSquares.includes(candidate.targetSquare))
+      ) {
+        return;
+      }
+      const currentPiece = position.value[candidate.source.square] ?? null;
+      const context = {
+        basePositionRevision: position.revision,
+        boardId,
+        piece: candidate.piece,
+        source: candidate.source,
+      } as const;
+      if (
+        !piecesMatch(currentPiece, candidate.piece) ||
+        !canDragCurrentPiece(canDragPiece, context)
+      ) {
+        return;
+      }
+      moveInteraction.request({
+        ...context,
+        input: 'drag',
+        targetSquare: candidate.targetSquare,
+      });
+    },
+    [
+      canDragPiece,
+      dragEnabled,
+      gestureGeometry,
+      model.boardId,
+      model.position,
+      moveInteraction.request,
+    ],
+  );
+  const pendingSourceSquare =
+    pendingLifecycle?.intent.source.kind !== 'board'
+      ? null
+      : pendingLifecycle.intent.source.square;
 
   return (
     <View
@@ -217,7 +505,9 @@ export function BoardSurface({
           {model.position === null || model.boardId === null ? null : (
             <PieceLayer
               boardId={model.boardId}
+              dragSourceSquare={activeDragSourceSquare}
               layout={layout}
+              pendingSourceSquare={pendingSourceSquare}
               pieceRenderers={pieceRenderers}
               position={model.position}
               style={pieceStyle}
@@ -232,13 +522,27 @@ export function BoardSurface({
           {showNotation ? (
             <BoardNotationLayer layout={layout} styles={styles} theme={theme} />
           ) : null}
-          {gestureGeometry === null ||
-          model.boardId === null ||
-          model.position === null ? null : (
+          {pendingLifecycle === null ? null : (
+            <PendingMoveLayer
+              boardId={pendingLifecycle.boardId}
+              layout={layout}
+              lifecycle={pendingLifecycle}
+              pieceRenderers={pieceRenderers}
+              style={pieceStyle}
+            />
+          )}
+          {!dragEnabled || gestureGeometry === null ? null : (
             <BoardInteractionController
               boardId={model.boardId}
+              {...(canDragPiece === undefined ? {} : { canDragPiece })}
+              dragEnabled
               geometry={gestureGeometry}
+              onCandidate={handleGestureCandidate}
+              onDragSourceChange={handleDragSourceChange}
+              pieceRenderers={pieceRenderers}
+              pieceStyle={pieceStyle}
               position={model.position}
+              tapEnabled={false}
             />
           )}
         </>

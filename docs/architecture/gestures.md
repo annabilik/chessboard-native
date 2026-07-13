@@ -46,7 +46,7 @@ Long-press pan, two-finger pan, and explicit two-activation annotation input all
 produce the same revisioned annotation operations. Every drag path also has a
 tap, keyboard, or accessibility alternative using the same semantic intent.
 
-## Pure interaction lifecycle and gesture adapter foundation
+## Move-request lifecycle, gesture adapter, and executor
 
 The internal interaction reducer models `idle`, tap or drag targeting,
 `deciding`, and `awaiting-commit` phases. Direct keyboard and accessibility
@@ -67,13 +67,15 @@ decision resolves still wins, clears the request, and makes the late decision
 inert.
 
 Every asynchronous result carries the interaction epoch and intent ID. Effects
-also carry the reducer revision that produced them, allowing the future runtime
-executor to reject queued stale work. The executor must key timer and abort
-resources by the effect's board ID, epoch, intent ID, and timeout stage so stale
-cleanup can release only its own resources. Position, dimensions, orientation,
-geometry, permissions, replacement, explicit cancellation, and unmount
-invalidate active work. Epoch allocation fails closed if the safe integer range
-is exhausted.
+also carry the reducer revision that produced them. The mounted runtime rejects
+queued stale work and keys timer and abort resources by the effect's board ID,
+epoch, intent ID, and timeout stage, so stale cleanup can release only its own
+resources. It invokes `onMoveRequest` once with an abort signal, maps thrown or
+rejected work through the correlated decision path, and independently enforces
+the decision and controlled-commit budgets. Position, dimensions, orientation,
+geometry, permissions, request replacement, explicit cancellation, and unmount
+invalidate active work. Epoch and intent allocation fail closed rather than
+emit unsafe correlation IDs.
 
 P2.2 adds one private board-level RNGH plane and a render-agnostic adapter over
 that reducer. The plane composes exclusive tap and pan recognizers. Measured
@@ -86,27 +88,45 @@ same-square tap cross the JS boundary.
 The adapter correlates every boundary with board ID, the native recognizer's
 handler token, position revision, and geometry epoch. It reads the current
 controlled position only at a boundary to resolve the source piece, then
-retains correlation and transient targeting only. A terminal gesture returns
-an inert candidate with no intent ID, immediately invalidates targeting, and
-cannot dispatch `submit`, produce reducer effects, invoke consumer code, or
-mutate position. Geometry or position changes make a terminal event fail
-closed, while a late foreign handler token cannot cancel newer work.
+retains correlation and transient targeting only. A terminal drag first returns
+an inert candidate with no intent ID and invalidates gesture targeting. The
+mounted runtime rechecks current board, geometry, position, and permissions
+before assigning an intent ID and entering the decision lifecycle. Geometry or
+position changes make the candidate fail closed, while a late foreign handler
+token cannot cancel newer work. No gesture or executor effect can mutate
+position.
 
-`Chessboard` mounts this controller behind a closed interaction gate. Without
-the future public `onMoveRequest` boundary it renders no native hit plane and
-constructs no recognizer, so no gesture lifecycle can start or accessibility
-descendant can be introduced. Presentation projections and shared-value lift,
-source-ghost, overlay, and pending primitives are internal and deterministic;
-the live callback executor, public gesture options, provider coordination,
-accessible activation, ScrollView arbitration, and native performance evidence
-remain later integration work.
+Supplying `onMoveRequest` opens the interaction gate. Accessible move input
+defaults on: the adjustable board control can capture the current occupied
+cursor square as a transient source, move its cursor to a target, submit that
+source-target request, submit removal with `targetSquare: null`, or cancel.
+These actions use the same request executor as drag and never write consumer
+selection. There is no public tap-to-move flow in this slice.
+
+Board-piece drag also defaults on when the callback exists. The synchronous
+`canDragPiece` gate is evaluated against the current controlled piece and
+revision before activation; exceptions and non-true results deny the drag.
+`interactionPermissions.drag: false` leaves the accessible path available.
+Setting `interactionPermissions.accessibility: false` disables both paths, so a
+consumer cannot configure a drag-only board. Without `onMoveRequest`, the
+component renders no native hit plane and constructs no recognizer.
+
+The drag plane and overlay remain accessibility-hidden descendants of the one
+stable board control. The active drag uses shared pointer values, source-ghost
+projection, and a pointerless overlay without retaining a position snapshot.
+Pending decision and commit phases are reducer presentation only; public
+transient style options, provider coordination, tap input, ScrollView
+arbitration, and native frame-performance evidence remain later integration
+work.
 
 ## Consequences
 
 Provider coordination enables external sources without sharing game state.
 Release-time measurement may briefly delay a drop, but it prevents stale bounds
-from emitting an incorrect square. Reducer race tables and native ScrollView,
-multi-board, lifecycle, and accessibility tests are mandatory.
+from emitting an incorrect square. The standalone mounted runtime proves
+controlled drag and accessible requests first; native ScrollView,
+provider/multi-board gesture coordination, lifecycle, and performance evidence
+remain mandatory for those later layers.
 
 This decision owns invariants `CBN-INV-003`, `CBN-INV-004`, `CBN-INV-007`,
 `CBN-INV-008`, `CBN-INV-009`, `CBN-INV-012`, `CBN-INV-014`,

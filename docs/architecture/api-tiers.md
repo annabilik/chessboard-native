@@ -22,12 +22,16 @@ domains.
 The plain tier derives a monotonic internal revision when its normalized value
 changes. That counter is correlation metadata only: rendering always reads the
 latest prop value directly. The plain tier cannot carry a committed intent ID
-or an explicit transition hint.
+or an explicit transition hint. A plain update during a move request is still
+authoritative, but the runtime treats it as an unrelated update rather than a
+confirmed local commit.
 
 The revisioned tier carries consumer revisions. `ControlledPosition` also
 carries optional commit and presentation correlation. A matching
 `committedIntentId` confirms a local request; `transition` describes a visual
-change. These signals are independent.
+change. These signals are independent. Interactive stores should use this tier
+when they need a committed outcome: after accepting an intent, they publish a
+greater revision and copy that intent's ID into `committedIntentId`.
 
 Changing one domain between plain and revisioned tiers while its board remains
 mounted uses that domain's `*_CONTROL_TIER_CHANGED` error code. It does not
@@ -54,6 +58,13 @@ it never contains a renderable position, annotation collection, or selection.
 React integration adopts candidate metadata through a same-component render
 restart, so the candidate becomes committed only with that render. A suspended
 or otherwise abandoned concurrent render cannot advance correlation metadata.
+
+Position normalization additionally copies a valid envelope
+`committedIntentId` onto the current detached position result. This is
+non-renderable, revision-scoped correlation consumed by the interaction
+runtime. It is never retained as a fallback and never changes which pieces are
+rendered. Plain positions and the other controlled domains do not manufacture
+an equivalent signal.
 
 The first valid plain value receives derived revision `0`. An equal normalized
 value keeps its revision and a changed value increments it. Invalid input uses
@@ -99,8 +110,9 @@ state.
 ## Consequences
 
 Simple diagrams stay simple, while stores can opt into explicit correlation per
-domain. Normalization must compare plain values and enforce revision ordering,
-but neither path may use its metadata as a semantic render source.
+domain. Normalization must compare plain values, preserve explicit move
+correlation, and enforce revision ordering, but neither path may use metadata as
+a semantic render source.
 
 This decision owns invariants `CBN-INV-001`, `CBN-INV-007`, `CBN-INV-019`,
 and `CBN-INV-020`.

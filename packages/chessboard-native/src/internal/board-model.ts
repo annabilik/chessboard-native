@@ -9,7 +9,6 @@ import type {
   BoardAnnotation,
   BoardOrientation,
   PlainSelection,
-  PositionObject,
 } from '../public-types';
 import { normalizeAnnotationDomain } from './annotation-domain';
 import {
@@ -17,7 +16,10 @@ import {
   type ControlledDomainMetadata,
   type NormalizedControlledValue,
 } from './controlled-domain';
-import { normalizePositionDomain } from './position-domain';
+import {
+  normalizePositionDomain,
+  type NormalizedPositionValue,
+} from './position-domain';
 import { normalizeSelectionDomain } from './selection-domain';
 import { safeErrorMessage } from './safe-error';
 
@@ -33,7 +35,7 @@ export interface NormalizedBoardModel {
   readonly boardId: string | null;
   readonly dimensions: ValidatedBoardDimensions | null;
   readonly orientation: BoardOrientation | null;
-  readonly position: NormalizedControlledValue<PositionObject> | null;
+  readonly position: NormalizedPositionValue | null;
   readonly annotations: NormalizedControlledValue<
     readonly Readonly<BoardAnnotation>[]
   > | null;
@@ -69,7 +71,7 @@ export function createBoardModelMetadata(): BoardModelMetadata {
 }
 
 function normalizeBoardId(value: unknown): string {
-  if (typeof value !== 'string' || value.length === 0) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
     throw new TypeError('boardId must be a non-empty string.');
   }
   return value;

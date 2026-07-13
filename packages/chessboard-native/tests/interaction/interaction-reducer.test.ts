@@ -730,7 +730,7 @@ describe('pure interaction reducer', () => {
     );
   });
 
-  it('[PARITY-BEHAVIOR-B23] preserves an off-board null target through the same controlled lifecycle', () => {
+  it('preserves an off-board null target through the same controlled lifecycle', () => {
     const started = request(moveIntent('off-board', 'drag', null));
     const deciding = phase(started.state, 'deciding');
     expect(deciding.intent.targetSquare).toBeNull();

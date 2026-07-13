@@ -142,23 +142,23 @@ Notation now occupies its own decorative plane above both annotation planes.
 Custom square rendering, public interaction-state styling, Reanimated
 transitions, and annotation drafts/drawing remain later slices.
 
-P2.2 adds the private layer-six board gesture plane. When enabled, it is one
-absolute, accessibility-hidden native view rather than one handler per square.
-While the public move-request boundary is absent, the controller renders no
-native plane and constructs no recognizer, preserving both the read-only and
-single-control accessibility contracts. Internal tests can explicitly enable
-the plane to compose exclusive tap and pan
-recognizers; the pan accepts exactly one pointer. Pan activation and terminal
-events cross to the board-scoped adapter; per-frame pointer movement and
-oriented target hit testing remain in shared values.
+P2.2 adds the layer-six board gesture plane. When enabled by the public
+move-request boundary, it is one absolute, accessibility-hidden native view
+rather than one handler per square. Without `onMoveRequest`, the controller
+renders no native plane and constructs no recognizer, preserving both the
+read-only and single-control accessibility contracts. The internal plane can
+compose tap and pan recognizers, but this public slice enables only single-
+pointer pan for drag. Pan activation and terminal events cross to the
+board-scoped adapter; per-frame pointer movement and oriented target hit testing
+remain in shared values.
 
 The same internal presentation state projects drag lift, a source ghost, and
 decision or controlled-commit pending flags without retaining a semantic
 position. A pointerless drag-overlay primitive consumes board-local shared
 pointer coordinates with a direct animated transform, so frame updates do not
-rerender custom artwork or commit React state. These are foundations only: the
-public board does not yet mount a live overlay or pending flow, and there are no
-public transient style options in this slice.
+rerender custom artwork or commit React state. The public drag path now mounts
+that overlay and the mounted executor projects decision and controlled-commit
+pending phases. There are no public transient style options in this slice.
 
 P1.5 promotes only the stable outer host to one adjustable accessibility
 control. It uses `pointerEvents="box-none"` so ordinary touch remains available
@@ -173,12 +173,13 @@ identity. Static annotations and board-local gesture hit testing use the same
 orientation-aware measured projection; provider and window-coordinate hit
 testing remain later work.
 
-The accessibility action surface in P1.5 contains navigation only. Semantic
-activation, controlled selection clearing, move/removal intents, spare
-placement, and annotation operations remain with the later interaction slices.
-Consumer announcements are correlated by ID and deduplicated per mounted board.
-The centralized reduced-motion provider follows `system`, `always`, or `never`
-without remounting this host or its cursor.
+The interaction-enabled accessibility surface retains navigation and adds
+source activation, target activation, off-board removal, and cancellation.
+Source targeting is transient interaction state and never updates controlled
+selection. Spare placement, controlled selection clearing, and annotation
+operations remain later work. Consumer announcements are correlated by ID and
+deduplicated per mounted board. The centralized reduced-motion provider follows
+`system`, `always`, or `never` without remounting this host or its cursor.
 
 React Native 0.86 suppresses Android's adjustable `TYPE_VIEW_SELECTED` feedback
 when `accessibilityValue.text` is present, and directional custom actions do not
@@ -219,8 +220,11 @@ ordering, and multi-board isolation. Later slices must verify annotation drafts
 and custom square renderer behavior. P2.2 tests add rectangular worklet hit
 testing, tap/pan boundary correlation, zero per-frame JS signals,
 disabled-by-default mounting, reducer adapter stale-event guards, and transient
-piece presentation. Native ScrollView arbitration and frame-performance proof
-remain mandatory later evidence.
+piece presentation. P2.3 tests add public permission gates, drag overlay
+mounting, accessible source/target/removal/cancel actions, current-snapshot
+request correlation, and decision/commit timeout races while preserving one
+accessible board control. Native ScrollView arbitration and frame-performance
+proof remain mandatory later evidence.
 
 This decision owns invariants `CBN-INV-010`, `CBN-INV-013`, `CBN-INV-014`,
 and `CBN-INV-018`.

@@ -122,6 +122,90 @@ describe('controlled position domain', () => {
     expect(envelope.current.value).toEqual(object.current.value);
   });
 
+  it('projects commit correlation from only the current revisioned envelope', () => {
+    const first = normalizePositionDomain({
+      boardId: 'analysis',
+      development: true,
+      dimensions,
+      input: {
+        committedIntentId: 'analysis:move:3',
+        revision: 4,
+        value: { e4: { id: 'pawn', pieceType: 'wP' } },
+      },
+      previousMetadata: createControlledDomainMetadata(),
+    });
+    expect(first.ok).toBe(true);
+    if (!first.ok) {
+      throw first.error;
+    }
+    expect(first.current.committedIntentId).toBe('analysis:move:3');
+    expect(Object.isFrozen(first.current)).toBe(true);
+    expect(first.nextMetadata).not.toHaveProperty('committedIntentId');
+
+    const omitted = normalizePositionDomain({
+      boardId: 'analysis',
+      development: true,
+      dimensions,
+      input: {
+        revision: 5,
+        value: { e4: { id: 'pawn', pieceType: 'wP' } },
+      },
+      previousMetadata: first.nextMetadata,
+    });
+    expect(omitted.ok).toBe(true);
+    if (!omitted.ok) {
+      throw omitted.error;
+    }
+    expect(omitted.current).not.toHaveProperty('committedIntentId');
+
+    const plain = normalizePositionDomain({
+      boardId: 'plain',
+      development: true,
+      dimensions,
+      input: { e4: { pieceType: 'wP' } },
+      previousMetadata: createControlledDomainMetadata(),
+    });
+    expect(plain.ok).toBe(true);
+    if (!plain.ok) {
+      throw plain.error;
+    }
+    expect(plain.current).not.toHaveProperty('committedIntentId');
+  });
+
+  it('treats malformed commit correlation as a non-semantic unavailable hint', () => {
+    const correlationCause = new Error('commit getter failed');
+    const input = Object.defineProperties(
+      {},
+      {
+        committedIntentId: {
+          enumerable: true,
+          get: () => {
+            throw correlationCause;
+          },
+        },
+        revision: { enumerable: true, value: 4 },
+        value: {
+          enumerable: true,
+          value: { e4: { pieceType: 'wP' } },
+        },
+      },
+    );
+    const result = normalizePositionDomain({
+      boardId: 'analysis',
+      development: true,
+      dimensions,
+      input,
+      previousMetadata: createControlledDomainMetadata(),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw result.error;
+    }
+    expect(result.current.value).toEqual({ e4: { pieceType: 'wP' } });
+    expect(result.current).not.toHaveProperty('committedIntentId');
+  });
+
   it('uses a collision-free, insertion-order-independent position token', () => {
     const first: PositionObject = {
       a1: { id: '', pieceType: '' },

@@ -59,12 +59,14 @@ function Harness({
     <GestureHandlerRootView>
       <BoardGestureLayer
         boardId={boardId}
-        {...(enabled === undefined ? {} : { enabled })}
+        dragEnabled={enabled ?? false}
+        draggableSquares={occupiedSquares}
         geometry={geometry}
         occupiedSquares={occupiedSquares}
         onSignal={onSignal}
         positionRevision={7}
         presentation={presentation}
+        tapEnabled={enabled ?? false}
       />
     </GestureHandlerRootView>
   );
@@ -75,15 +77,45 @@ function gestureConfig(gesture: unknown): Readonly<Record<string, unknown>> {
     .config;
 }
 
+interface GestureCallbacks {
+  readonly onBegin?: (event: Readonly<Record<string, unknown>>) => void;
+  readonly onFinalize?: (
+    event: Readonly<Record<string, unknown>>,
+    success: boolean,
+  ) => void;
+  readonly onStart?: (event: Readonly<Record<string, unknown>>) => void;
+  readonly onTouchesDown?: (
+    event: Readonly<{
+      allTouches: readonly Readonly<Record<string, unknown>>[];
+    }>,
+    manager: Readonly<{ fail: () => void }>,
+  ) => void;
+}
+
+function gestureCallbacks(gesture: unknown): Readonly<GestureCallbacks> {
+  return (gesture as Readonly<{ handlers: Readonly<GestureCallbacks> }>)
+    .handlers;
+}
+
 describe('board-level native gesture plane', () => {
   it('[PARITY-BEHAVIOR-B18] configures board-level tap/pan activation, keeps updates on shared values, cancels cleanly, and is disabled by default', async () => {
     const ids = getBoardGestureTestIds('gesture-board');
     const disabledSignal = jest.fn();
     const disabled = await render(<Harness onSignal={disabledSignal} />);
+    const disabledRoot = disabled.root;
+    if (disabledRoot === null) {
+      throw new Error('Expected the disabled harness to remain mounted.');
+    }
 
     expect(
-      disabled.queryByTestId(ids.plane, { includeHiddenElements: true }),
-    ).toBeNull();
+      disabledRoot.queryAll(
+        (node) =>
+          node.props['collapsable'] === false &&
+          node.props['pointerEvents'] === 'auto' &&
+          node.props['accessibilityElementsHidden'] === true &&
+          node.props['importantForAccessibility'] === 'no-hide-descendants',
+      ),
+    ).toEqual([]);
     expect(() => getByGestureTestId(ids.pan)).toThrow();
     expect(() => getByGestureTestId(ids.tap)).toThrow();
     expect(disabledSignal).not.toHaveBeenCalled();
@@ -102,10 +134,20 @@ describe('board-level native gesture plane', () => {
         }}
       />,
     );
+    const enabledRoot = enabled.root;
+    if (enabledRoot === null) {
+      throw new Error('Expected the enabled harness to remain mounted.');
+    }
 
-    expect(
-      enabled.getByTestId(ids.plane, { includeHiddenElements: true }),
-    ).toHaveProp('pointerEvents', 'auto');
+    const planes = enabledRoot.queryAll(
+      (node) =>
+        node.props['collapsable'] === false &&
+        node.props['pointerEvents'] === 'auto' &&
+        node.props['accessibilityElementsHidden'] === true &&
+        node.props['importantForAccessibility'] === 'no-hide-descendants',
+    );
+    expect(planes).toHaveLength(1);
+    expect(planes[0]).not.toHaveProp('testID');
     const pan = getByGestureTestId(ids.pan);
     const tap = getByGestureTestId(ids.tap);
     const panToken = (pan as unknown as Readonly<{ handlerTag: number }>)
@@ -182,6 +224,46 @@ describe('board-level native gesture plane', () => {
     expect(mountedPresentation.phase.value).toBe(
       INTERACTION_PRESENTATION_PHASE.IDLE,
     );
+
+    signals.length = 0;
+    const fail = jest.fn();
+    const callbacks = gestureCallbacks(pan);
+    await act(() => {
+      callbacks.onBegin?.({ handlerTag: panToken, x: 25, y: 25 });
+      callbacks.onStart?.({ handlerTag: panToken, x: 30, y: 25 });
+      callbacks.onTouchesDown?.(
+        {
+          allTouches: [
+            { x: 30, y: 25 },
+            { x: 35, y: 30 },
+          ],
+        },
+        { fail },
+      );
+      callbacks.onFinalize?.({ handlerTag: panToken, x: 35, y: 30 }, false);
+    });
+    expect(fail).toHaveBeenCalledTimes(1);
+    expect(signals).toEqual([
+      expect.objectContaining({ gestureToken: panToken, type: 'drag-start' }),
+      expect.objectContaining({
+        gestureToken: panToken,
+        reason: 'second-finger',
+        type: 'drag-cancel',
+      }),
+    ]);
+
+    signals.length = 0;
+    await act(() => {
+      fireGestureHandler(pan, [
+        { state: State.BEGAN, x: 25, y: 25 },
+        { state: State.ACTIVE, x: 35, y: 25 },
+        { state: State.END, x: 145, y: 145 },
+      ]);
+    });
+    expect(signals).toEqual([
+      expect.objectContaining({ type: 'drag-start' }),
+      expect.objectContaining({ targetSquare: 'b1', type: 'drag-end' }),
+    ]);
   });
 
   it('[PARITY-BEHAVIOR-B28] emits one same-square occupied tap and ignores moved, outside, cancelled, and empty-source taps in both orientations', async () => {

@@ -181,6 +181,9 @@ export interface BoardTransition {
 }
 
 // @public
+export type CanDragPiece = (context: Readonly<PieceInteractionContext>) => boolean;
+
+// @public
 export function Chessboard(props: ChessboardProps): ReactElement;
 
 // @public
@@ -272,8 +275,12 @@ export interface ChessboardProps {
     readonly annotations?: AnnotationsProp;
     readonly annotationStyle?: AnnotationStyle;
     readonly boardId: string;
+    readonly canDragPiece?: CanDragPiece;
     readonly dimensions?: BoardDimensions;
+    readonly interactionPermissions?: InteractionPermissions;
+    readonly moveRequestTimeouts?: MoveRequestTimeouts;
     readonly onError?: OnChessboardError;
+    readonly onMoveRequest?: OnMoveRequest;
     readonly orientation?: BoardOrientation;
     readonly pieceRenderers?: PieceRenderers;
     readonly position: PositionProp;
@@ -363,6 +370,12 @@ export function fileToColumnIndex(file: string, columns: number, orientation: Bo
 
 // @public
 export function generateBoardGeometry(dimensions: BoardDimensions, orientation: BoardOrientation): readonly (readonly BoardSquare[])[];
+
+// @public
+export interface InteractionPermissions {
+    readonly accessibility?: boolean;
+    readonly drag?: boolean;
+}
 
 // @public
 export type MoveDecision = {

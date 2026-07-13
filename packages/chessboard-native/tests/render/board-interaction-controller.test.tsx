@@ -41,11 +41,13 @@ describe('board interaction controller', () => {
       <GestureHandlerRootView>
         <BoardInteractionController
           boardId="controller-board"
-          enabled
+          dragEnabled
           geometry={GEOMETRY}
           onCandidate={(candidate) => {
             candidates.push(candidate);
           }}
+          pieceRenderers={{}}
+          pieceStyle={{}}
           position={CONTROLLED_POSITION}
         />
       </GestureHandlerRootView>,
@@ -91,9 +93,11 @@ describe('board interaction controller', () => {
       <GestureHandlerRootView>
         <BoardInteractionController
           boardId="cancel-board"
-          enabled
+          dragEnabled
           geometry={GEOMETRY}
           onCandidate={onCandidate}
+          pieceRenderers={{}}
+          pieceStyle={{}}
           position={CONTROLLED_POSITION}
         />
       </GestureHandlerRootView>,

@@ -20,9 +20,13 @@ import type {
   AnnotationStyle,
   BoardDimensions,
   BoardOrientation,
+  CanDragPiece,
   ChessboardAccessibility,
   ChessboardStyles,
   ChessboardTheme,
+  InteractionPermissions,
+  MoveRequestTimeouts,
+  OnMoveRequest,
   PieceRenderers,
   PositionProp,
   ReduceMotion,
@@ -56,6 +60,17 @@ export interface ChessboardProps {
   readonly annotationStyle?: AnnotationStyle;
   /** Consumer-owned selection presentation when supplied. */
   readonly selection?: SelectionProp;
+  /**
+   * Validates a move intent without committing it. Supplying this callback
+   * opens the controlled move-request surface.
+   */
+  readonly onMoveRequest?: OnMoveRequest;
+  /** Declarative input gates; no callback always means read-only. */
+  readonly interactionPermissions?: InteractionPermissions;
+  /** Synchronous current-snapshot gate for board-piece drag activation. */
+  readonly canDragPiece?: CanDragPiece;
+  /** Decision and controlled-commit budgets; defaults are 10s and 1.5s. */
+  readonly moveRequestTimeouts?: MoveRequestTimeouts;
   /** Labels, formatters, and correlated announcements for the board control. */
   readonly accessibility?: ChessboardAccessibility;
   /** Animation-reduction policy; defaults to the operating-system preference. */
@@ -121,7 +136,11 @@ export function ChessboardRuntime({
       <BoardSurface
         accessibility={props.accessibility}
         annotationStyle={props.annotationStyle ?? defaultAnnotationStyle}
+        canDragPiece={props.canDragPiece}
+        interactionPermissions={props.interactionPermissions}
         model={model}
+        moveRequestTimeouts={props.moveRequestTimeouts}
+        onMoveRequest={props.onMoveRequest}
         pieceRenderers={props.pieceRenderers ?? defaultPieceRenderers}
         showNotation={props.showNotation ?? true}
         squareStyles={props.squareStyles}
@@ -137,8 +156,8 @@ export function ChessboardRuntime({
  *
  * The responsive static surface renders the latest controlled position with
  * measured squares, notation, visual-only default or custom pieces, and one
- * adjustable accessibility control. Semantic interaction remains controlled
- * by later APIs.
+ * adjustable accessibility control. Move requests are optional, cancellable,
+ * rules-free, and never replace the consumer-controlled position.
  *
  * @public
  */
