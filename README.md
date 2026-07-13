@@ -5,8 +5,9 @@ A controlled, rules-free React Native chessboard component.
 > [!NOTE]
 > This repository is in Phase 1 and the package is not published. The public
 > component now renders responsive, controlled static positions with default
-> or custom pieces, orientation, notation, native styles, and a single-control
-> accessibility prototype. Semantic move interaction is not implemented yet.
+> or custom pieces, orientation, notation, native styles, controlled square and
+> arrow annotations, and a single-control accessibility prototype. Semantic
+> move interaction is not implemented yet.
 
 ## Direction
 
@@ -48,12 +49,17 @@ for the twelve standard chess pieces, also available from the focused `/pieces`
 export; a supplied `pieceRenderers` map replaces that set as a whole and
 supports any open `pieceType`. Theme, instance, and canonical per-square styles
 use one documented precedence chain. Consumers set an explicit width by
-constraining the parent. Custom square rendering,
-annotations, selection styling, interaction, and transitions remain later
-work. The P1.5 accessibility prototype adds an orientation-aware virtual cursor,
-native adjustable/directional navigation, current controlled square values,
-correlated announcements, and the centralized reduced-motion policy without
-owning semantic selection or moves.
+constraining the parent. The P1.5 accessibility prototype adds an
+orientation-aware virtual cursor, native adjustable/directional navigation,
+current controlled square values, correlated announcements, and the centralized
+reduced-motion policy without owning semantic selection or moves. P1.6 renders
+only the latest controlled annotation collection in pointerless SVG planes:
+square fills/circles/dots/borders default below pieces, while marker-free
+straight and knight arrows default above pieces. Both orientations, rectangular
+boards, per-arrow width/opacity, same-target shortening, and whole-value
+`annotationStyle` configuration use deterministic 2048-wide geometry. Custom
+square rendering, selection styling, annotation drawing, move interaction, and
+transitions remain later work.
 
 The accepted architecture decisions and all 20 reserved invariant contracts
 are indexed in

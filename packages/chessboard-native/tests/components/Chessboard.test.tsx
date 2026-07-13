@@ -113,7 +113,7 @@ describe('Chessboard controlled boundary', () => {
     const visualLayers = root.queryAll(
       (node) => node.props['accessibilityElementsHidden'] === true,
     );
-    expect(visualLayers).toHaveLength(2);
+    expect(visualLayers).toHaveLength(3);
     const visualLayer = requiredNode(visualLayers, 0);
     expect(visualLayer).toHaveProp('accessible', false);
     expect(visualLayer).toHaveProp(

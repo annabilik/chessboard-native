@@ -6,6 +6,7 @@ import { useBoardAccessibility } from '../accessibility/board-accessibility';
 import { STANDARD_BOARD_DIMENSIONS } from '../core/dimensions';
 import type { NormalizedBoardModel } from '../internal/board-model';
 import type {
+  AnnotationStyle,
   BoardSize,
   ChessboardAccessibility,
   ChessboardStyles,
@@ -14,6 +15,9 @@ import type {
   SquareStyles,
 } from '../public-types';
 import { createBoardSurfaceLayout } from './board-layout';
+import { AnnotationLayer } from './annotation-layer';
+import { computeAnnotationGeometry } from './annotation-geometry';
+import { BoardNotationLayer } from './board-notation-layer';
 import { PieceLayer } from './piece-layer';
 import { SquareLayer } from './square-layer';
 import { resolveBoardStyle, resolvePieceStyle } from './style-resolution';
@@ -24,6 +28,7 @@ interface MeasuredBoardSize extends BoardSize {
 
 interface BoardSurfaceProps {
   readonly accessibility: ChessboardAccessibility | undefined;
+  readonly annotationStyle: Readonly<AnnotationStyle>;
   readonly model: NormalizedBoardModel;
   readonly pieceRenderers: PieceRenderers;
   readonly showNotation: boolean;
@@ -39,6 +44,7 @@ function isPositiveFinite(value: number): boolean {
 /** Responsive native host for measured visual board layers. */
 export function BoardSurface({
   accessibility,
+  annotationStyle,
   model,
   pieceRenderers,
   showNotation,
@@ -107,6 +113,17 @@ export function BoardSurface({
       model.orientation,
     );
   }, [activeSize, modelColumns, model.orientation, modelRows]);
+  const annotationGeometry = useMemo(() => {
+    if (layout === null || model.annotations === null) {
+      return null;
+    }
+    return computeAnnotationGeometry({
+      annotations: model.annotations.value,
+      dimensions: layout.dimensions,
+      orientation: layout.orientation,
+      style: annotationStyle,
+    });
+  }, [annotationStyle, layout, model.annotations]);
 
   return (
     <View
@@ -144,11 +161,16 @@ export function BoardSurface({
         <>
           <SquareLayer
             layout={layout}
-            showNotation={showNotation}
             squareStyles={squareStyles}
             styles={styles}
             theme={theme}
           />
+          {annotationGeometry === null ? null : (
+            <AnnotationLayer
+              geometry={annotationGeometry}
+              layer="belowPieces"
+            />
+          )}
           {model.position === null || model.boardId === null ? null : (
             <PieceLayer
               boardId={model.boardId}
@@ -158,6 +180,15 @@ export function BoardSurface({
               style={pieceStyle}
             />
           )}
+          {annotationGeometry === null ? null : (
+            <AnnotationLayer
+              geometry={annotationGeometry}
+              layer="abovePieces"
+            />
+          )}
+          {showNotation ? (
+            <BoardNotationLayer layout={layout} styles={styles} theme={theme} />
+          ) : null}
         </>
       )}
     </View>

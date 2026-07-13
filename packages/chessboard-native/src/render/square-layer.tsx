@@ -1,4 +1,4 @@
-import { Fragment, memo, type ReactElement } from 'react';
+import { memo, type ReactElement } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import type {
@@ -7,12 +7,10 @@ import type {
   SquareStyles,
 } from '../public-types';
 import type { BoardSurfaceLayout } from './board-layout';
-import { NotationLayer } from './notation-layer';
 import { resolveSquareStyle } from './style-resolution';
 
 interface SquareLayerProps {
   readonly layout: Readonly<BoardSurfaceLayout>;
-  readonly showNotation: boolean;
   readonly squareStyles?: SquareStyles | undefined;
   readonly styles?: ChessboardStyles | undefined;
   readonly theme?: ChessboardTheme | undefined;
@@ -21,7 +19,6 @@ interface SquareLayerProps {
 /** Measured, visual-only background and notation layer. */
 export const SquareLayer = memo(function SquareLayer({
   layout,
-  showNotation,
   squareStyles,
   styles,
   theme,
@@ -44,40 +41,20 @@ export const SquareLayer = memo(function SquareLayer({
         });
 
         return (
-          <Fragment key={cell.square}>
+          <View
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
+            key={cell.square}
+            pointerEvents="none"
+            style={[internalStyles.squareFrame, cell.rect]}
+          >
             <View
               accessible={false}
               importantForAccessibility="no-hide-descendants"
               pointerEvents="none"
-              style={[internalStyles.squareFrame, cell.rect]}
-            >
-              <View
-                accessible={false}
-                importantForAccessibility="no-hide-descendants"
-                pointerEvents="none"
-                style={[squareStyle, internalStyles.squarePaint]}
-              />
-            </View>
-            {showNotation &&
-            (cell.fileLabel !== null || cell.rankLabel !== null) ? (
-              <View
-                accessible={false}
-                importantForAccessibility="no-hide-descendants"
-                pointerEvents="none"
-                style={[internalStyles.notationCell, cell.rect]}
-              >
-                <NotationLayer
-                  cellHeight={layout.cellHeight}
-                  cellWidth={layout.cellWidth}
-                  fileLabel={cell.fileLabel}
-                  isLight={cell.isLight}
-                  rankLabel={cell.rankLabel}
-                  styles={styles}
-                  theme={theme}
-                />
-              </View>
-            ) : null}
-          </Fragment>
+              style={[squareStyle, internalStyles.squarePaint]}
+            />
+          </View>
         );
       })}
     </View>
@@ -85,9 +62,6 @@ export const SquareLayer = memo(function SquareLayer({
 });
 
 const internalStyles = StyleSheet.create({
-  notationCell: {
-    position: 'absolute',
-  },
   squareFrame: {
     position: 'absolute',
   },

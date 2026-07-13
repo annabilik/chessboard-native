@@ -7,14 +7,16 @@ platform-free position and coordinate core, measured geometry, strict FEN
 foundation, and a responsive static board renderer. `Chessboard` fills its
 parent width, derives height from board rows and columns, and renders oriented
 square backgrounds, optional edge notation, and the current controlled
-position. Constrain the parent to set an explicit width.
+position and annotation collection. Constrain the parent to set an explicit
+width.
 
 The default set contains twelve original interim geometric chess pieces.
 Consumers can replace it with a visual-only renderer map keyed by the open
 `pieceType` vocabulary. Theme, instance, and canonical per-square styles are
 also declarative. The board is one adjustable accessibility control with an
-orientation-aware virtual cursor and decorative visual descendants. Annotations,
-selection styling, custom square rendering, semantic interaction, and
+orientation-aware virtual cursor and decorative visual descendants. Controlled
+square and arrow annotations render in below/above-piece SVG planes. Selection
+styling, custom square rendering, semantic interaction, annotation drawing, and
 transitions are not rendered yet. Provider-level identity registration remains
 future work.
 
@@ -88,6 +90,61 @@ padding, transforms, box sizing, border widths, and pointer-event modes are
 ignored in `theme.board` and `styles.board`; use a parent wrapper for those
 concerns. Square and piece geometry-like styles can inform paint or renderer
 derivation but cannot replace canonical measured placement.
+
+## Controlled annotations
+
+`annotations` is the only persistent square/arrow collection. Replacing that
+prop replaces the rendered collection immediately; the board never merges it
+with an internal arrow list. Array order is same-layer paint order. Arrows
+default above pieces, while square annotations default below pieces.
+
+```tsx
+import {
+  Chessboard,
+  defaultAnnotationStyle,
+} from '@vibechess/chessboard-native';
+
+<Chessboard
+  annotations={[
+    {
+      id: 'candidate',
+      type: 'arrow',
+      from: 'b1',
+      to: 'c3',
+      color: '#246bc2',
+    },
+    {
+      id: 'focus',
+      type: 'square',
+      square: 'd4',
+      shape: 'circle',
+      color: 'rgba(228, 111, 24, 0.45)',
+    },
+  ]}
+  annotationStyle={{
+    ...defaultAnnotationStyle,
+    arrowStartOffset: 0.25,
+  }}
+  boardId="analysis"
+  position="8/8/8/8/8/8/8/8"
+/>;
+```
+
+Omitted arrow shape automatically selects an L path only for an integer
+one-by-two canonical move. `shape="straight"` always overrides that choice;
+`shape="knight"` selects an L path when both axes change and otherwise falls
+back to a straight path. Multiple sources aimed at one target shorten further
+to keep heads distinct. `width` is an optional stroke width in the fixed
+2048-wide logical annotation space, and per-arrow `opacity` overrides the style
+default.
+`annotationStyle` is a complete whole-value configuration, not a partial merge.
+Its three colors are reserved for future annotation tools; every persistent
+annotation continues to render its own required `color`.
+
+Square shapes are `fill`, `circle`, `dot`, and `border`. All SVG descendants are
+pointerless and hidden from accessibility; the stable outer board remains the
+only accessible control. This slice renders annotations only—it does not draw,
+toggle, clear, or commit them.
 
 ## Accessibility and reduced motion
 

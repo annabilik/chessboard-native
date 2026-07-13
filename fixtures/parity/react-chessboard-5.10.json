@@ -596,7 +596,7 @@
         "surface": "root",
         "symbols": ["defaultAnnotationStyle"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-DEFAULT-ARROW-OPTIONS",
       "compatibilityNotes": "All ten geometry and opacity defaults are retained in native annotation styling."
     },
@@ -2096,9 +2096,9 @@
         "surface": "root",
         "symbols": ["ChessboardProps.annotations"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ARROWS",
-      "compatibilityNotes": "Arrows become ID-bearing controlled annotations, with at most one transient draft.",
+      "compatibilityNotes": "Arrows are ID-bearing controlled annotations; transient draft composition remains a separate in-progress behavior.",
       "rationale": "Combining external arrows with a persistent internal list creates dual ownership and cannot safely reconcile concurrent store updates.",
       "documentation": "docs/parity/react-chessboard-5.10.md#option-arrows"
     },
@@ -2130,7 +2130,7 @@
         "surface": "root",
         "symbols": ["ChessboardProps.annotationStyle"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ARROW-OPTIONS",
       "compatibilityNotes": "All ten geometry/style controls map to native SVG annotation options; the object remains whole-value replacement."
     },
@@ -3791,7 +3791,7 @@
         "surface": "internal",
         "symbols": ["computeAnnotationGeometry"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B41",
       "compatibilityNotes": "Pure 2048-wide geometry scales height by rows/columns and handles both orientations."
     },
@@ -3814,7 +3814,7 @@
         "surface": "internal",
         "symbols": ["computeArrowPath"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B42",
       "compatibilityNotes": "Both shapes remain, but knight detection uses integer file/rank deltas rather than exact floating hypot."
     },
@@ -3842,9 +3842,9 @@
         "surface": "internal",
         "symbols": ["computeArrowPath"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B43",
-      "compatibilityNotes": "Endpoint and same-target shortening remain, and the active draft stays exempt."
+      "compatibilityNotes": "Endpoint and same-target shortening are implemented. Active-draft exemption is covered by the pure geometry helper but awaits runtime draft composition."
     },
     {
       "id": "behavior.b44-arrow-width-opacity-offset-layers-and-marker-ids",
@@ -3875,7 +3875,7 @@
         "surface": "internal",
         "symbols": ["computeArrowPath", "AnnotationLayer"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B44",
       "compatibilityNotes": "RN SVG draws deterministic paths/heads in below/above layers without global marker IDs."
     },
