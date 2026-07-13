@@ -25,8 +25,10 @@ export interface BoardPieceLayout {
 
 interface PieceLayerProps {
   readonly boardId: string;
+  readonly dragSourceSquare?: SquareId | null;
   readonly layout: Readonly<BoardSurfaceLayout>;
   readonly pieceRenderers: PieceRenderers;
+  readonly pendingSourceSquare?: SquareId | null;
   readonly position: NormalizedControlledValue<PositionObject> | null;
   readonly style: Readonly<ViewStyle>;
 }
@@ -37,6 +39,22 @@ const EMPTY_PIECE_LAYOUTS: readonly Readonly<BoardPieceLayout>[] =
 const STATIC_PIECE_STATE: Readonly<PieceVisualState> = Object.freeze({
   isDragging: false,
   isGhost: false,
+  isPending: false,
+  isPressed: false,
+  isTransitioning: false,
+});
+
+const PENDING_SOURCE_STATE: Readonly<PieceVisualState> = Object.freeze({
+  isDragging: false,
+  isGhost: true,
+  isPending: true,
+  isPressed: false,
+  isTransitioning: false,
+});
+
+const DRAG_SOURCE_STATE: Readonly<PieceVisualState> = Object.freeze({
+  isDragging: false,
+  isGhost: true,
   isPending: false,
   isPressed: false,
   isTransitioning: false,
@@ -131,8 +149,10 @@ function pieceLayerPropsAreEqual(
 ): boolean {
   return (
     previous.boardId === next.boardId &&
+    previous.dragSourceSquare === next.dragSourceSquare &&
     previous.layout === next.layout &&
     previous.pieceRenderers === next.pieceRenderers &&
+    previous.pendingSourceSquare === next.pendingSourceSquare &&
     previous.style === next.style &&
     samePositionRevision(previous.position, next.position)
   );
@@ -141,8 +161,10 @@ function pieceLayerPropsAreEqual(
 /** Board-owned decorative piece plane above squares and below annotations. */
 export const PieceLayer = memo(function PieceLayer({
   boardId,
+  dragSourceSquare = null,
   layout,
   pieceRenderers,
+  pendingSourceSquare = null,
   position,
   style,
 }: PieceLayerProps): ReactElement {
@@ -165,12 +187,18 @@ export const PieceLayer = memo(function PieceLayer({
           return null;
         }
 
+        const isDragSource = pieceLayout.square === dragSourceSquare;
+        const isPendingSource = pieceLayout.square === pendingSourceSquare;
         const rendererProps: PieceRendererProps = {
           boardId,
           piece: pieceLayout.piece,
           size: pieceLayout.size,
           square: pieceLayout.square,
-          state: STATIC_PIECE_STATE,
+          state: isDragSource
+            ? DRAG_SOURCE_STATE
+            : isPendingSource
+              ? PENDING_SOURCE_STATE
+              : STATIC_PIECE_STATE,
           style,
         };
 
@@ -190,6 +218,7 @@ export const PieceLayer = memo(function PieceLayer({
                 top: pieceLayout.rect.top,
                 width: pieceLayout.rect.width,
               },
+              isDragSource || isPendingSource ? styles.sourceGhost : undefined,
             ]}
           >
             <Renderer {...rendererProps} />
@@ -208,5 +237,8 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     zIndex: 20,
+  },
+  sourceGhost: {
+    opacity: 0.45,
   },
 });

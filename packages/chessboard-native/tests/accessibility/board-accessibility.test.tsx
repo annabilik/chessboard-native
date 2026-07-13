@@ -8,8 +8,24 @@ import {
   type ChessboardAccessibilityAction,
   type ChessboardError,
   type ChessboardErrorContext,
+  type MoveIntent,
+  type PositionObject,
 } from '../../src/index';
 import { ChessboardRuntime } from '../../src/Chessboard';
+import {
+  useBoardAccessibility,
+  type BoardAccessibilityMoveInteraction,
+} from '../../src/accessibility/board-accessibility';
+import {
+  createBoardModelMetadata,
+  prepareBoardModel,
+  type NormalizedBoardModel,
+} from '../../src/internal/board-model';
+import {
+  createInteractionState,
+  reduceInteraction,
+  type MoveIntentLifecycle,
+} from '../../src/internal/interaction-reducer';
 
 function rootOf(result: Awaited<ReturnType<typeof render>>): TestInstance {
   if (result.root === null) {
@@ -39,6 +55,84 @@ async function accessibilityAction(
   await fireEvent(root, 'accessibilityAction', {
     nativeEvent: { actionName },
   });
+}
+
+interface MoveAccessibilityHarnessProps {
+  readonly interaction: BoardAccessibilityMoveInteraction;
+  readonly model: NormalizedBoardModel;
+}
+
+function MoveAccessibilityHarness({
+  interaction,
+  model,
+}: MoveAccessibilityHarnessProps) {
+  const props = useBoardAccessibility(model, undefined, interaction);
+  return (
+    <View
+      accessibilityActions={props.accessibilityActions}
+      accessibilityHint={props.accessibilityHint}
+      accessibilityLabel={props.accessibilityLabel}
+      accessibilityValue={props.accessibilityValue}
+      accessible
+      onAccessibilityAction={props.onAccessibilityAction}
+    />
+  );
+}
+
+function accessibilityModel(options: {
+  readonly boardId?: string;
+  readonly dimensions?: Readonly<{ columns: number; rows: number }>;
+  readonly orientation?: 'black' | 'white';
+  readonly position: PositionObject;
+  readonly revision: number;
+}): NormalizedBoardModel {
+  const prepared = prepareBoardModel({
+    boardId: options.boardId ?? 'accessible-move-board',
+    development: false,
+    dimensions: options.dimensions ?? { columns: 2, rows: 2 },
+    orientation: options.orientation,
+    position: { revision: options.revision, value: options.position },
+    previousMetadata: createBoardModelMetadata(),
+  });
+  const error = prepared.errors[0];
+  if (error !== undefined) {
+    throw error;
+  }
+  return prepared.model;
+}
+
+function moveInteraction(options: {
+  readonly cancel?: () => void;
+  readonly lifecycle?: Readonly<MoveIntentLifecycle> | null;
+  readonly request: (draft: Omit<MoveIntent, 'intentId'>) => boolean;
+}): BoardAccessibilityMoveInteraction {
+  return {
+    cancel: options.cancel ?? (() => undefined),
+    enabled: true,
+    lifecycle: options.lifecycle ?? null,
+    request: options.request,
+  };
+}
+
+function decidingAccessibilityMove(
+  targetSquare: 'a2' | 'b2' | null = 'b2',
+): Readonly<MoveIntentLifecycle> {
+  const initial = createInteractionState({
+    boardId: 'accessible-move-board',
+    positionRevision: 1,
+  });
+  return reduceInteraction(initial, {
+    intent: {
+      basePositionRevision: 1,
+      boardId: 'accessible-move-board',
+      input: 'accessibility',
+      intentId: 'accessible-intent-1',
+      piece: { id: 'pawn', pieceType: 'wP' },
+      source: { kind: 'board', square: 'a2' },
+      targetSquare,
+    },
+    type: 'request',
+  }).state;
 }
 
 describe('single-control board accessibility', () => {
@@ -107,11 +201,15 @@ describe('single-control board accessibility', () => {
     const announce = jest
       .spyOn(AccessibilityInfo, 'announceForAccessibility')
       .mockImplementation(() => undefined);
+    const request = jest.fn(() => true);
+    const model = accessibilityModel({
+      position: { a2: { id: 'pawn', pieceType: 'wP' } },
+      revision: 1,
+    });
     const result = await render(
-      <Chessboard
-        boardId="talkback-feedback"
-        position="8/8/8/8/8/8/8/8"
-        reduceMotion="never"
+      <MoveAccessibilityHarness
+        interaction={moveInteraction({ request })}
+        model={model}
       />,
     );
     const root = rootOf(result);
@@ -119,14 +217,298 @@ describe('single-control board accessibility', () => {
     expect(actionNames(root)).toContain('increment');
 
     await accessibilityAction(root, 'increment');
-    expect(announce).toHaveBeenLastCalledWith('b8, empty');
+    expect(announce).toHaveBeenLastCalledWith('b2, empty');
 
-    await accessibilityAction(rootOf(result), 'move-cursor-right');
-    expect(announce).toHaveBeenLastCalledWith('c8, empty');
+    await accessibilityAction(rootOf(result), 'move-cursor-left');
+    expect(announce).toHaveBeenLastCalledWith('a2, white pawn');
     expect(announce).toHaveBeenCalledTimes(2);
 
     await accessibilityAction(rootOf(result), 'activate');
-    expect(announce).toHaveBeenCalledTimes(2);
+    expect(announce).toHaveBeenLastCalledWith(
+      'a2, white pawn; pending move source',
+    );
+    await accessibilityAction(rootOf(result), 'move-cursor-right');
+    expect(announce).toHaveBeenLastCalledWith('b2, empty; pending move target');
+    await accessibilityAction(rootOf(result), 'activate');
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(announce).toHaveBeenLastCalledWith('b2, empty');
+
+    await accessibilityAction(rootOf(result), 'move-cursor-left');
+    await accessibilityAction(rootOf(result), 'activate');
+    await accessibilityAction(rootOf(result), 'cancel-move');
+    expect(announce).toHaveBeenLastCalledWith('a2, white pawn');
+
+    const announceCount = announce.mock.calls.length;
+    const cancelPending = jest.fn(() => {
+      AccessibilityInfo.announceForAccessibility('Move cancelled.');
+    });
+    await result.rerender(
+      <MoveAccessibilityHarness
+        interaction={moveInteraction({
+          cancel: cancelPending,
+          lifecycle: decidingAccessibilityMove(),
+          request,
+        })}
+        model={model}
+      />,
+    );
+    await accessibilityAction(rootOf(result), 'cancel-move');
+    expect(cancelPending).toHaveBeenCalledTimes(1);
+    expect(announce).toHaveBeenCalledTimes(announceCount + 1);
+    expect(announce).toHaveBeenLastCalledWith('Move cancelled.');
+  });
+
+  it('[CBN-CONTRACT-018-NONDRAG-ALTERNATIVE] targets a source and requests the same controlled move without mutating position', async () => {
+    const inputPosition = Object.freeze({
+      a2: Object.freeze({ id: 'pawn', pieceType: 'wP' }),
+    });
+    const request = jest.fn<boolean, [Omit<MoveIntent, 'intentId'>]>(
+      () => true,
+    );
+    const model = accessibilityModel({
+      position: inputPosition,
+      revision: 1,
+    });
+    const result = await render(
+      <MoveAccessibilityHarness
+        interaction={moveInteraction({ request })}
+        model={model}
+      />,
+    );
+
+    expect(actionNames(rootOf(result))).toEqual([
+      ...(Platform.OS === 'android' ? ['increment'] : []),
+      'move-cursor-right',
+      'move-cursor-down',
+      'activate',
+      'remove-piece',
+    ]);
+    expect(actionLabels(rootOf(result))).toEqual([
+      'Move cursor right',
+      'Move cursor down',
+      'Activate square',
+      'Remove piece',
+    ]);
+
+    await accessibilityAction(rootOf(result), 'activate');
+    expect(request).not.toHaveBeenCalled();
+    expect(rootOf(result).props['accessibilityValue']).toEqual(
+      expect.objectContaining({
+        now: 0,
+        text: 'a2, white pawn; pending move source',
+      }),
+    );
+    expect(actionNames(rootOf(result))).toContain('cancel-move');
+
+    await accessibilityAction(rootOf(result), 'move-cursor-right');
+    expect(rootOf(result).props['accessibilityValue']).toEqual(
+      expect.objectContaining({
+        now: 1,
+        text: 'b2, empty; pending move target',
+      }),
+    );
+    await accessibilityAction(rootOf(result), 'activate');
+
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith({
+      basePositionRevision: 1,
+      boardId: 'accessible-move-board',
+      input: 'accessibility',
+      piece: { id: 'pawn', pieceType: 'wP' },
+      source: { kind: 'board', square: 'a2' },
+      targetSquare: 'b2',
+    });
+    expect(request.mock.calls[0]?.[0]).not.toHaveProperty('intentId');
+    expect(inputPosition).toEqual({
+      a2: { id: 'pawn', pieceType: 'wP' },
+    });
+    expect(model.position?.value).toEqual({
+      a2: { id: 'pawn', pieceType: 'wP' },
+    });
+    expect(rootOf(result).props['accessibilityValue']).toEqual(
+      expect.objectContaining({ text: 'b2, empty' }),
+    );
+  });
+
+  it('requests an off-board null target through remove-piece', async () => {
+    const request = jest.fn<boolean, [Omit<MoveIntent, 'intentId'>]>(
+      () => true,
+    );
+    const result = await render(
+      <MoveAccessibilityHarness
+        interaction={moveInteraction({ request })}
+        model={accessibilityModel({
+          position: { a2: { id: 'pawn', pieceType: 'wP' } },
+          revision: 4,
+        })}
+      />,
+    );
+
+    await accessibilityAction(rootOf(result), 'remove-piece');
+
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        basePositionRevision: 4,
+        input: 'accessibility',
+        source: { kind: 'board', square: 'a2' },
+        targetSquare: null,
+      }),
+    );
+  });
+
+  it('clears local targeting and delegates cancellation of a pending runtime', async () => {
+    const cancel = jest.fn();
+    const request = jest.fn(() => true);
+    const model = accessibilityModel({
+      position: { a2: { id: 'pawn', pieceType: 'wP' } },
+      revision: 1,
+    });
+    const result = await render(
+      <MoveAccessibilityHarness
+        interaction={moveInteraction({ cancel, request })}
+        model={model}
+      />,
+    );
+
+    await accessibilityAction(rootOf(result), 'activate');
+    await accessibilityAction(rootOf(result), 'cancel-move');
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(request).not.toHaveBeenCalled();
+    expect(rootOf(result).props['accessibilityValue']).toEqual(
+      expect.objectContaining({ text: 'a2, white pawn' }),
+    );
+    expect(actionNames(rootOf(result))).not.toContain('cancel-move');
+
+    await result.rerender(
+      <MoveAccessibilityHarness
+        interaction={moveInteraction({
+          cancel,
+          lifecycle: decidingAccessibilityMove(),
+          request,
+        })}
+        model={model}
+      />,
+    );
+    expect(rootOf(result).props['accessibilityValue']).toEqual(
+      expect.objectContaining({
+        text: 'a2, white pawn; pending move source',
+      }),
+    );
+    expect(actionNames(rootOf(result))).toContain('cancel-move');
+    expect(actionNames(rootOf(result))).not.toContain('activate');
+
+    await accessibilityAction(rootOf(result), 'move-cursor-right');
+    expect(rootOf(result).props['accessibilityValue']).toEqual(
+      expect.objectContaining({ text: 'b2, empty; pending move target' }),
+    );
+    await accessibilityAction(rootOf(result), 'cancel-move');
+    expect(cancel).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears an accessibility source on orientation, dimensions, controlled revision, piece, and board changes', async () => {
+    const request = jest.fn(() => true);
+    const first = accessibilityModel({
+      position: { a2: { id: 'pawn', pieceType: 'wP' } },
+      revision: 1,
+    });
+    const result = await render(
+      <MoveAccessibilityHarness
+        interaction={moveInteraction({ request })}
+        model={first}
+      />,
+    );
+
+    await accessibilityAction(rootOf(result), 'activate');
+    expect(rootOf(result).props['accessibilityValue']).toEqual(
+      expect.objectContaining({
+        text: 'a2, white pawn; pending move source',
+      }),
+    );
+
+    const orientationChanged = accessibilityModel({
+      orientation: 'black',
+      position: { a2: { id: 'pawn', pieceType: 'wP' } },
+      revision: 1,
+    });
+    await result.rerender(
+      <MoveAccessibilityHarness
+        interaction={moveInteraction({ request })}
+        model={orientationChanged}
+      />,
+    );
+    expect(rootOf(result).props['accessibilityValue']).toEqual(
+      expect.objectContaining({ text: 'a2, white pawn' }),
+    );
+    await accessibilityAction(rootOf(result), 'activate');
+
+    const dimensionsChanged = accessibilityModel({
+      dimensions: { columns: 3, rows: 2 },
+      orientation: 'black',
+      position: { a2: { id: 'pawn', pieceType: 'wP' } },
+      revision: 1,
+    });
+    await result.rerender(
+      <MoveAccessibilityHarness
+        interaction={moveInteraction({ request })}
+        model={dimensionsChanged}
+      />,
+    );
+    expect(rootOf(result).props['accessibilityValue']).toEqual(
+      expect.objectContaining({ text: 'a2, white pawn' }),
+    );
+    await accessibilityAction(rootOf(result), 'activate');
+
+    const revisionChanged = accessibilityModel({
+      dimensions: { columns: 3, rows: 2 },
+      orientation: 'black',
+      position: { a2: { id: 'pawn', pieceType: 'wP' } },
+      revision: 2,
+    });
+    await result.rerender(
+      <MoveAccessibilityHarness
+        interaction={moveInteraction({ request })}
+        model={revisionChanged}
+      />,
+    );
+    expect(rootOf(result).props['accessibilityValue']).toEqual(
+      expect.objectContaining({ text: 'a2, white pawn' }),
+    );
+    await accessibilityAction(rootOf(result), 'activate');
+
+    const pieceChanged = accessibilityModel({
+      dimensions: { columns: 3, rows: 2 },
+      orientation: 'black',
+      position: { a2: { id: 'knight', pieceType: 'bN' } },
+      revision: 2,
+    });
+    await result.rerender(
+      <MoveAccessibilityHarness
+        interaction={moveInteraction({ request })}
+        model={pieceChanged}
+      />,
+    );
+    expect(rootOf(result).props['accessibilityValue']).toEqual(
+      expect.objectContaining({ text: 'a2, black knight' }),
+    );
+    await accessibilityAction(rootOf(result), 'activate');
+
+    await result.rerender(
+      <MoveAccessibilityHarness
+        interaction={moveInteraction({ request })}
+        model={accessibilityModel({
+          boardId: 'replacement-board',
+          dimensions: { columns: 3, rows: 2 },
+          orientation: 'black',
+          position: { a2: { id: 'knight', pieceType: 'bN' } },
+          revision: 2,
+        })}
+      />,
+    );
+    expect(rootOf(result).props['accessibilityValue']).toEqual(
+      expect.objectContaining({ text: 'a2, black knight' }),
+    );
+    expect(request).not.toHaveBeenCalled();
   });
 
   it('keeps the canonical cursor while current position, selection, and orientation refresh its value', async () => {

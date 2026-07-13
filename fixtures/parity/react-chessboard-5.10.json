@@ -1924,9 +1924,9 @@
           "ChessboardProps.interactionPermissions"
         ]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ALLOW-DRAGGING",
-      "compatibilityNotes": "The primary board is move-read-only without onMoveRequest; permissions gate eligible inputs."
+      "compatibilityNotes": "The board mounts native drag input only with onMoveRequest, while interactionPermissions gates drag and preserves the required accessible alternative."
     },
     {
       "id": "option.allow-drag-off-board",
@@ -2235,9 +2235,9 @@
         "surface": "root",
         "symbols": ["ChessboardProps.canDragPiece"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-CAN-DRAG-PIECE",
-      "compatibilityNotes": "Retained as a synchronous permission callback with typed board/spare source context."
+      "compatibilityNotes": "A synchronous current-snapshot callback gates board-piece drag activation and fails closed; provider spare composition remains future work."
     },
     {
       "id": "option.on-arrows-change",
@@ -2439,9 +2439,9 @@
           "ReactChessboardOptions.onPieceDrop"
         ]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-OPTION-ON-PIECE-DROP",
-      "compatibilityNotes": "The primary callback is async/cancellable; compatibility maps Boolean true/false exactly once.",
+      "compatibilityNotes": "The primary onMoveRequest callback is async, cancellable, timeout-bounded, and live; the future compatibility adapter must still map Boolean results exactly once.",
       "rationale": "A synchronous Boolean result cannot correlate acceptance with a later controlled commit, cancel stale promises, or handle timeouts deterministically.",
       "documentation": "docs/parity/react-chessboard-5.10.md#option-on-piece-drop"
     },
@@ -2934,7 +2934,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B11",
-      "compatibilityNotes": "The pure lifecycle enters awaiting-commit after acceptance without storing position and records a commit only for a newer controlled revision with a matching intent ID. Runtime pending presentation remains future work.",
+      "compatibilityNotes": "The mounted lifecycle enters awaiting-commit after acceptance without storing position and records a commit only for a newer controlled revision with a matching intent ID. Transition styling remains future work.",
       "rationale": "Suppressing animation through internal manual-drop flags treats a gesture result as accepted state before the consumer has committed it.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b11-accepted-manual-drop-presentation"
     },
@@ -3060,7 +3060,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B16",
-      "compatibilityNotes": "The pure reducer correlates interaction effects by reducer revision, epoch, and intent and models cleanup for deterministic timeout/result races. A mounted effect executor, transition epochs, and prop/unmount wiring remain future work.",
+      "compatibilityNotes": "The mounted interaction executor keys requests and timers by reducer revision, board, epoch, intent, and stage, and makes stale prop, permission, timeout, and unmount work inert. Transition epochs remain future work.",
       "rationale": "The pinned effect omits state and option dependencies and only clears the latest timeout on cleanup, allowing stale closures to settle obsolete state.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b16-stale-effects-and-timeout-cleanup"
     },
@@ -3091,9 +3091,9 @@
           "ChessboardProps.canDragPiece"
         ]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B17",
-      "compatibilityNotes": "Direct permissions remain; without onMoveRequest the primary board is move-read-only."
+      "compatibilityNotes": "Without onMoveRequest the board is move-read-only; public permissions and the synchronous current-piece gate fail closed before drag activation."
     },
     {
       "id": "behavior.b18-browser-sensors-and-activation-distance",
@@ -3121,7 +3121,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B18",
-      "compatibilityNotes": "An internal RNGH board plane, omitted entirely from the disabled public component, composes tap and single-pointer pan recognition with worklet-only continuous updates and a native activation threshold. Public gesture options, accessibility input, second-finger policy, and native arbitration evidence remain future work."
+      "compatibilityNotes": "The public callback gate enables one accessibility-hidden single-pointer RNGH pan plane with worklet-only continuous updates, while the adjustable control supplies non-drag input. A second pointer cancels the active drag and leaves the next drag usable. Public gesture options and native arbitration evidence remain future work."
     },
     {
       "id": "behavior.b19-automatic-scroll-during-drag",
@@ -3223,7 +3223,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B22",
-      "compatibilityNotes": "The pure reducer models accepted and rejected decisions plus decision and controlled-commit timeouts as effects. Executing ChessboardProps.onMoveRequest and compatibility Boolean mapping remain future work.",
+      "compatibilityNotes": "The mounted runtime executes onMoveRequest and correlates acceptance, rejection, errors, decision timeout, and controlled-commit timeout. Compatibility Boolean mapping remains future work.",
       "rationale": "The upstream callback cannot represent pending validation or correlate a true result with the later authoritative position update.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b22-on-board-boolean-drop-decision"
     },
@@ -3246,9 +3246,9 @@
         "surface": "root",
         "symbols": ["MoveIntent.targetSquare", "ChessboardProps.onMoveRequest"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B23",
-      "compatibilityNotes": "The pure reducer preserves targetSquare null through the same decision and controlled-commit lifecycle. Native off-board gesture policy and callback execution remain future work.",
+      "compatibilityNotes": "Drag release outside the board and the accessible removal action preserve targetSquare null through the same callback, decision, timeout, and controlled-commit lifecycle.",
       "rationale": "Ignoring the off-board Boolean return creates different acceptance semantics for the same callback and can falsely present a removal as accepted.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b23-off-board-drop-ignores-boolean-result"
     },
@@ -3278,7 +3278,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B24",
-      "compatibilityNotes": "The pure reducer models correlated user, second-finger, accessibility, and unmount cleanup across targeting, deciding, and awaiting-commit phases. Public ChessboardActions.cancelMove and gesture/accessibility wiring remain future work."
+      "compatibilityNotes": "Gesture cancellation, including a second pointer, plus accessibility, permission, position, and unmount cancellation are correlated across targeting, deciding, and awaiting-commit phases. Public ChessboardActions remain future work."
     },
     {
       "id": "behavior.b25-drag-off-board-visual-clamp",
@@ -3334,7 +3334,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B26",
-      "compatibilityNotes": "Internal shared-value presentation projects drag lift, source ghost, and decision/commit pending states without retaining a position snapshot, with pointerless piece primitives for the overlay. Public styles, provider overlay mounting, and the live decision flow remain future work."
+      "compatibilityNotes": "The live drag path projects lift, source ghost, a pointerless overlay, and decision/commit pending state without retaining a position snapshot. Public transient styles and provider overlay coordination remain future work."
     },
     {
       "id": "behavior.b27-piece-and-square-click-bubbling",
@@ -3395,7 +3395,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B28",
-      "compatibilityNotes": "The internal board-level tap recognizer uses measured oriented hit testing and emits only one same-square occupied-source candidate. Public semantic activation remains gated until the move-request runtime exists."
+      "compatibilityNotes": "The internal same-square tap recognizer remains private; the public non-drag move path uses explicit adjustable-control source and target actions rather than treating a same-square tap as a move."
     },
     {
       "id": "behavior.b29-hover-in-and-out-transitions",
@@ -3552,9 +3552,9 @@
         "surface": "root",
         "symbols": ["MoveIntent", "SquareActivationIntent"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B33",
-      "compatibilityNotes": "Callback payloads come from the current normalized controlled snapshot and include its revision.",
+      "compatibilityNotes": "MoveIntent payloads now come from the current normalized controlled snapshot and include its revision; general square activation remains future work.",
       "rationale": "Reading callback pieces from a mutable mirror can report data from a stale animation snapshot instead of the consumer's authoritative position.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b33-callback-lookup-from-shadow-position"
     },
@@ -4010,9 +4010,9 @@
         "surface": "root",
         "symbols": ["Chessboard"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B49",
-      "compatibilityNotes": "The board remains rules-free: consumers own legality, promotion decisions, premoves, selection, history, and game state."
+      "compatibilityNotes": "The move-request runtime forwards coordinate intents without enforcing chess legality; consumers own promotion, premoves, selection, history, and game state."
     },
     {
       "id": "behavior.b50-dom-css-dnd-kit-and-accessibility-absence",
@@ -4050,7 +4050,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B50",
-      "compatibilityNotes": "View, RNGH, Reanimated, and RN SVG replace browser primitives; one adjustable board control and reduced motion are first-class.",
+      "compatibilityNotes": "View, RNGH, Reanimated, and RN SVG replace browser primitives; one adjustable board control now covers navigation and controlled non-drag move requests while visual and gesture descendants stay hidden.",
       "rationale": "Copying DOM, CSS, dnd-kit sensors, and absent accessibility semantics would not produce a native component or satisfy TalkBack and VoiceOver contracts.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b50-dom-css-dnd-kit-and-accessibility-absence"
     }

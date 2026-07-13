@@ -60,6 +60,42 @@ class ChessboardAccessibilityAuditTest {
         }
 
         performActionAndAwait(
+            actionLabel = "Activate square",
+            description = "$INITIAL_DESCRIPTION; pending move source",
+            index = INITIAL_INDEX,
+        )
+        performActionAndAwait(
+            actionLabel = "Move cursor right",
+            description = "e4, empty; pending move target",
+            index = 36,
+        )
+        performActionAndAwait(
+            actionLabel = "Activate square",
+            description = "e4, empty",
+            index = 36,
+        )
+        performActionAndAwait(
+            actionLabel = "Move cursor left",
+            description = INITIAL_DESCRIPTION,
+            index = INITIAL_INDEX,
+        )
+        performActionAndAwait(
+            actionLabel = "Activate square",
+            description = "$INITIAL_DESCRIPTION; pending move source",
+            index = INITIAL_INDEX,
+        )
+        performActionAndAwait(
+            actionLabel = "Cancel move",
+            description = INITIAL_DESCRIPTION,
+            index = INITIAL_INDEX,
+        )
+        performActionAndAwait(
+            actionLabel = "Remove piece",
+            description = INITIAL_DESCRIPTION,
+            index = INITIAL_INDEX,
+        )
+
+        performActionAndAwait(
             actionId = AccessibilityNodeInfo.ACTION_SCROLL_FORWARD,
             description = "e4, empty",
             index = 36,
@@ -113,7 +149,7 @@ class ChessboardAccessibilityAuditTest {
             actions.mapNotNull { action ->
                 action.label?.toString()?.takeIf(String::isNotEmpty)
             }.toSet()
-        assertEquals(DIRECTIONAL_ACTION_LABELS, labels)
+        assertEquals(INITIAL_ACTION_LABELS, labels)
 
         assertTrue("board host must contain rendered visual layers", board is ViewGroup)
         val boardGroup = board as ViewGroup
@@ -125,6 +161,22 @@ class ChessboardAccessibilityAuditTest {
                 boardGroup.getChildAt(index).importantForAccessibility,
             )
         }
+        val gesturePlanes =
+            (0 until boardGroup.childCount)
+                .map(boardGroup::getChildAt)
+                .filterIsInstance<ViewGroup>()
+                .filter { child ->
+                    child.childCount == 0 &&
+                        child.importantForAccessibility ==
+                            View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS &&
+                        child.width == boardGroup.width &&
+                        child.height == boardGroup.height
+                }
+        assertEquals(
+            "exactly one identifier-free full-board gesture plane",
+            1,
+            gesturePlanes.size,
+        )
     }
 
     private fun performActionAndAwait(
@@ -250,8 +302,10 @@ class ChessboardAccessibilityAuditTest {
         const val BOARD_TIMEOUT_MS = 30_000L
         const val POLL_INTERVAL_MS = 50L
 
-        val DIRECTIONAL_ACTION_LABELS =
+        val INITIAL_ACTION_LABELS =
             setOf(
+                "Activate square",
+                "Remove piece",
                 "Move cursor left",
                 "Move cursor right",
                 "Move cursor up",

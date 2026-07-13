@@ -153,6 +153,18 @@ export interface MoveRequestTimeouts {
   readonly commitMs: number;
 }
 
+/** Input gates for the public controlled move-request surface. @public */
+export interface InteractionPermissions {
+  /** Enables board-piece drag input; defaults to true when a callback exists. */
+  readonly drag?: boolean;
+  /**
+   * Enables the adjustable control's source, target, remove, and cancel actions.
+   * Defaults to true. Drag also fails closed when this is false so the board
+   * cannot expose a drag-only move path.
+   */
+  readonly accessibility?: boolean;
+}
+
 /** Consumer-owned arrow annotation. @public */
 export interface ArrowAnnotation {
   readonly id: string;
@@ -297,6 +309,11 @@ export type PieceInteractionContext =
       readonly source: { readonly kind: 'spare'; readonly spareId: string };
       readonly piece: PieceData;
     };
+
+/** Synchronous board-piece drag permission evaluated from current props. @public */
+export type CanDragPiece = (
+  context: Readonly<PieceInteractionContext>,
+) => boolean;
 
 /** Visual interaction flags for a square renderer. @public */
 export interface SquareVisualState {
@@ -487,7 +504,7 @@ export interface ChessboardAccessibility {
   readonly boardHint?: string;
   /** Replaces the square value; empty output falls back to the default value. */
   readonly formatSquareValue?: (context: SquareAccessibilityContext) => string;
-  /** Formats directional actions; labels are trimmed and made non-empty/unique. */
+  /** Formats directional and move actions; labels are made non-empty/unique. */
   readonly formatActionLabel?: (
     context: BoardActionAccessibilityContext,
   ) => string;

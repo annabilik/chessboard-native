@@ -11,8 +11,23 @@ import {
   type ControlledDomainAdapter,
   type ControlledDomainMetadata,
   type ControlledDomainResult,
+  type NormalizedControlledValue,
 } from './controlled-domain';
 import { safeErrorMessage } from './safe-error';
+
+/** Current-render position plus optional envelope-only commit correlation. */
+export interface NormalizedPositionValue extends NormalizedControlledValue<PositionObject> {
+  readonly committedIntentId?: string;
+}
+
+export type NormalizedPositionDomainResult =
+  | {
+      readonly ok: true;
+      readonly current: NormalizedPositionValue;
+      readonly error: null;
+      readonly nextMetadata: ControlledDomainMetadata;
+    }
+  | Extract<ControlledDomainResult<PositionObject>, { readonly ok: false }>;
 
 function classifyPositionProp(input: unknown): ClassifiedControlledValue {
   if (
@@ -140,10 +155,33 @@ export interface NormalizePositionDomainOptions {
   readonly development: boolean;
 }
 
+function currentCommittedIntentId(
+  input: unknown,
+  current: NormalizedControlledValue<PositionObject>,
+): string | undefined {
+  if (current.tier !== 'envelope') {
+    return undefined;
+  }
+
+  try {
+    if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+      return undefined;
+    }
+    const value = (input as Readonly<Record<string, unknown>>)[
+      'committedIntentId'
+    ];
+    return typeof value === 'string' ? value : undefined;
+  } catch {
+    // Commit correlation is a non-semantic hint. Hostile or malformed access
+    // cannot invalidate an otherwise valid current position.
+    return undefined;
+  }
+}
+
 export function normalizePositionDomain(
   options: NormalizePositionDomainOptions,
-): ControlledDomainResult<PositionObject> {
-  return normalizeControlledDomain({
+): NormalizedPositionDomainResult {
+  const result = normalizeControlledDomain({
     adapter: positionAdapter(options.dimensions),
     boardId: options.boardId,
     development: options.development,
@@ -151,4 +189,18 @@ export function normalizePositionDomain(
     input: options.input,
     previousMetadata: options.previousMetadata,
   });
+
+  if (!result.ok) {
+    return result;
+  }
+
+  const committedIntentId = currentCommittedIntentId(
+    options.input,
+    result.current,
+  );
+  const current: NormalizedPositionValue = Object.freeze({
+    ...result.current,
+    ...(committedIntentId === undefined ? {} : { committedIntentId }),
+  });
+  return Object.freeze({ ...result, current });
 }

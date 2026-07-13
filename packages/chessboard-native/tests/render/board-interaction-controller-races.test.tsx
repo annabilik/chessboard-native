@@ -71,11 +71,13 @@ describe('board interaction controller races', () => {
     await render(
       <BoardInteractionController
         boardId="race-board"
-        enabled
+        dragEnabled
         geometry={geometry(5)}
         onCandidate={(candidate) => {
           candidates.push(candidate);
         }}
+        pieceRenderers={{}}
+        pieceStyle={{}}
         position={controlledPosition(9)}
       />,
     );
@@ -113,9 +115,11 @@ describe('board interaction controller races', () => {
     const result = await render(
       <BoardInteractionController
         boardId="race-board"
-        enabled
+        dragEnabled
         geometry={geometry(5)}
         onCandidate={onCandidate}
+        pieceRenderers={{}}
+        pieceStyle={{}}
         position={controlledPosition(9)}
       />,
     );
@@ -127,9 +131,11 @@ describe('board interaction controller races', () => {
     await result.rerender(
       <BoardInteractionController
         boardId="race-board"
-        enabled={false}
+        dragEnabled={false}
         geometry={geometry(5)}
         onCandidate={onCandidate}
+        pieceRenderers={{}}
+        pieceStyle={{}}
         position={controlledPosition(9)}
       />,
     );
@@ -146,9 +152,11 @@ describe('board interaction controller races', () => {
     await result.rerender(
       <BoardInteractionController
         boardId="race-board"
-        enabled
+        dragEnabled
         geometry={geometry(5)}
         onCandidate={onCandidate}
+        pieceRenderers={{}}
+        pieceStyle={{}}
         position={controlledPosition(9)}
       />,
     );
@@ -159,9 +167,11 @@ describe('board interaction controller races', () => {
     await result.rerender(
       <BoardInteractionController
         boardId="race-board"
-        enabled
+        dragEnabled
         geometry={geometry(6)}
         onCandidate={onCandidate}
+        pieceRenderers={{}}
+        pieceStyle={{}}
         position={controlledPosition(9)}
       />,
     );
@@ -188,9 +198,11 @@ describe('board interaction controller races', () => {
     await result.rerender(
       <BoardInteractionController
         boardId="race-board"
-        enabled
+        dragEnabled
         geometry={geometry(6)}
         onCandidate={onCandidate}
+        pieceRenderers={{}}
+        pieceStyle={{}}
         position={controlledPosition(10)}
       />,
     );

@@ -9,6 +9,8 @@ jest.mock('../../src/render/board-interaction-controller', () => ({
   BoardInteractionController: jest.fn(() => null),
 }));
 
+const rejectMove = () => ({ status: 'rejected' as const });
+
 function rootOf(result: Awaited<ReturnType<typeof render>>): TestInstance {
   if (result.root === null) {
     throw new Error('Expected Chessboard to render one native root.');
@@ -40,6 +42,7 @@ describe('Chessboard geometry epoch integration', () => {
       <Chessboard
         boardId="geometry-epoch"
         dimensions={{ columns: 2, rows: 2 }}
+        onMoveRequest={rejectMove}
         position={{ a1: { pieceType: 'wK' } }}
       />,
     );
@@ -58,6 +61,7 @@ describe('Chessboard geometry epoch integration', () => {
       <Chessboard
         boardId="geometry-epoch"
         dimensions={{ columns: 2, rows: 2 }}
+        onMoveRequest={rejectMove}
         position={{ a1: { pieceType: 'wK' } }}
       />,
     );
@@ -67,6 +71,7 @@ describe('Chessboard geometry epoch integration', () => {
       <Chessboard
         boardId="geometry-epoch"
         dimensions={{ columns: 2, rows: 2 }}
+        onMoveRequest={rejectMove}
         orientation="black"
         position={{ a1: { pieceType: 'wK' } }}
       />,
@@ -79,6 +84,7 @@ describe('Chessboard geometry epoch integration', () => {
       <Chessboard
         boardId="geometry-epoch"
         dimensions={{ columns: 4, rows: 4 }}
+        onMoveRequest={rejectMove}
         orientation="black"
         position={{ a1: { pieceType: 'wK' } }}
       />,

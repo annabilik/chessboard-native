@@ -14,6 +14,10 @@ export default function RootLayout() {
             name="accessibility"
             options={{ title: 'Accessibility prototype' }}
           />
+          <Stack.Screen
+            name="move-request"
+            options={{ title: 'Controlled move requests' }}
+          />
         </Stack>
         <StatusBar style="dark" />
       </SafeAreaProvider>

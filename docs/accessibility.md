@@ -1,4 +1,4 @@
-# Accessibility prototype
+# Accessibility contract
 
 `Chessboard` exposes one adjustable accessibility element for the whole board.
 The 64-square alternative creates small, repetitive focus targets and makes it
@@ -6,9 +6,10 @@ hard to preserve context during controlled updates. Every rendered square,
 piece, and notation label therefore remains decorative and hidden from
 assistive technology.
 
-This Phase 1 prototype is intentionally narrower than the final interaction
-surface. It validates navigation, values, labels, announcements, focus
-identity, and reduced motion before move gestures or callbacks are added.
+The Phase 1 prototype established navigation, values, labels, announcements,
+focus identity, and reduced motion. Phase 2 adds controlled source, target,
+removal, and cancellation actions without turning the cursor into semantic
+selection or creating square-level accessibility targets.
 
 ## Virtual cursor
 
@@ -41,26 +42,29 @@ f3, white knight; possible destination
 ```
 
 The default value describes the canonical square, standard or custom piece, and
-controlled selected/destination/disabled flags. The public formatter context
-reserves pending source and target fields for later interaction phases; both are
-always false in this prototype. `accessibility.formatSquareValue` can replace
-the complete text. An empty or whitespace-only formatter result falls back to
-the complete default rather than removing the spoken value.
+controlled selected/destination/disabled flags. When move interaction is
+enabled, `isPendingSource` and `isPendingTarget` identify the transient request
+projection at the cursor. `accessibility.formatSquareValue` can replace the
+complete text. An empty or whitespace-only formatter result falls back to the
+complete default rather than removing the spoken value.
 
 Increment and decrement provide reading-order navigation through native
 standard actions. Android receives unlabeled standard-action entries so
 TalkBack localizes them; on iOS the adjustable trait invokes them directly, so
 they are omitted from the custom rotor menu. Four custom actions provide
 directional navigation. Actions that cannot move at the current edge are
-omitted, and disabled boards expose no actions. Move activation, selection
-clearing, removal, spare placement, and annotation actions are reserved public
-names but are not exposed by this prototype; their semantic intent APIs land in
-later phases.
+omitted, and disabled boards expose no actions. With `onMoveRequest`, an
+occupied cursor square exposes source activation and removal. Activating a
+source stores only transient interaction context; after moving the cursor,
+activation submits the target. Removal submits the same intent with
+`targetSquare: null`, and cancellation clears source targeting or active async
+work. Controlled selection clearing, spare placement, and annotation actions
+remain later phases.
 
-`accessibility.formatActionLabel` currently formats directional actions. Labels
-must be non-empty and unique on a board state because iOS uses the displayed
-label to resolve a custom action. The component deterministically replaces an
-empty or duplicate result with a unique English fallback.
+`accessibility.formatActionLabel` formats both directional and available move
+actions. Labels must be non-empty and unique on a board state because iOS uses
+the displayed label to resolve a custom action. The component deterministically
+replaces an empty or duplicate result with a unique English fallback.
 
 The default board label includes the current orientation. A supplied
 `accessibility.boardLabel` is a full, verbatim override so localized consumers
@@ -81,6 +85,26 @@ override. `accessibility.boardHint` is also a full override.
   position={{ e4: { pieceType: 'wP' } }}
 />
 ```
+
+## Accessible move requests
+
+Accessible move input defaults on when `onMoveRequest` is present. Set
+`interactionPermissions.drag` to `false` for an accessibility-only board.
+Setting `interactionPermissions.accessibility` to `false` also disables drag;
+the package refuses to expose a drag-only action. The accessible and drag paths
+both emit `MoveIntent`, invoke the same callback, use the same decision and
+controlled-commit timeouts, and wait for the consumer's next `position` prop.
+
+The virtual cursor and captured source are transient. They never modify
+`selection`, infer a legal destination, or move a piece. A revisioned consumer
+confirms an accepted request with a newer position revision and the matching
+`committedIntentId`. Position, orientation, dimension, permission, or unmount
+changes cancel obsolete work; late callback and timer results are inert.
+
+Terminal committed, rejected, cancelled, and timed-out outcomes use one
+reducer-correlated announcement. `accessibility.formatMoveOutcome` can return a
+localized replacement, return `null` to suppress it, or fall back to the
+built-in English message when it returns empty text or throws.
 
 ## Correlated announcements
 
@@ -111,15 +135,14 @@ A newer native change event wins over an older query, stale events after
 cleanup are ignored, and re-entering system mode starts safely reduced again.
 Explicit modes do not subscribe to the native preference.
 
-The policy is centralized now for later transition, lift, snapback, press, and
-annotation animation paths. This prototype does not add an animation merely to
-demonstrate the policy. Semantic callbacks and timeout budgets will never depend
-on reduced motion.
+The policy is centralized for transition, lift, snapback, press, and annotation
+animation paths. Callback and timeout semantics never depend on reduced motion.
 
 ## Manual TalkBack and VoiceOver pass
 
-Run the Expo gallery and open **Accessibility prototype**. Test Android and iOS
-separately:
+Run the Expo gallery and test **Accessibility prototype** first, then repeat the
+interaction-specific steps on **Controlled move requests**. Test Android and
+iOS separately:
 
 1. Enable TalkBack or VoiceOver and focus the board.
 2. Confirm the board is one focus target and visual squares are not separate
@@ -137,24 +160,32 @@ separately:
    twice and does not double-speak either ID.
 9. Cycle through `system`, `always`, and `never` with delayed changes; confirm
    the board remains the same focus target and cursor state is preserved.
-10. Confirm there is no activation, move, removal, or annotation action in this
-    Phase 1 prototype.
+10. On the accessibility prototype, confirm there is no activation, move,
+    removal, or annotation action because it has no `onMoveRequest`.
+11. On the controlled move-request route, activate an occupied source, navigate
+    to a target, and activate again. Confirm one request occurs and the board
+    remains one focus target while the controlled position updates.
+12. Repeat with removal and cancellation. Confirm removal sends a null target,
+    cancellation does not update position, and neither action creates a square
+    accessibility element.
 
 The automated component and native contracts do not replace this
 assistive-technology pass.
 
 ## Automated native audits
 
-The checked-in bare React Native harness provides deterministic native audits
-for the static accessibility projection:
+The checked-in bare React Native harness provides a deterministic native audit
+for the interaction-enabled projection; component tests separately retain the
+read-only contract:
 
 - Android runs Espresso Accessibility Test Framework checks from the full
   screen root, verifies that exactly one board host exposes the adjustable
-  range and expected navigation actions, exercises all six actions, and checks
-  that the visual layers hide their descendants.
+  range and expected navigation/move actions, exercises them, and checks that
+  the gesture plane and visual layers hide their descendants.
 - iOS locates exactly one aggregated board element, verifies its current value
-  and enabled state, checks that it has no accessible descendants, and runs
-  `XCUIApplication.performAccessibilityAudit()` without broad suppressions.
+  and enabled state in the enabled path, checks that it has no accessible
+  descendants, and runs `XCUIApplication.performAccessibilityAudit()` without
+  broad suppressions.
 
 Both targets use a Release fixture with embedded JavaScript. CI installs the
 single inspected npm archive into a fresh copy of the harness before running

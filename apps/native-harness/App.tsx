@@ -1,4 +1,4 @@
-import { Chessboard } from '@vibechess/chessboard-native';
+import { Chessboard, type OnMoveRequest } from '@vibechess/chessboard-native';
 import { defaultPieceRenderers } from '@vibechess/chessboard-native/pieces';
 import { StatusBar, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -6,6 +6,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 const AUDIT_BOARD_LABEL = 'Accessibility audit board, white orientation';
 const AUDIT_BOARD_HINT =
   'Swipe up or down through squares, or use directional accessibility actions.';
+const rejectAuditMove: OnMoveRequest = () => ({
+  reason: 'Native audit fixture never commits moves.',
+  status: 'rejected',
+});
 
 export default function App() {
   return (
@@ -23,8 +27,13 @@ export default function App() {
               boardLabel: AUDIT_BOARD_LABEL,
             }}
             boardId="native-accessibility-audit"
+            interactionPermissions={{ accessibility: true, drag: true }}
+            onMoveRequest={rejectAuditMove}
             pieceRenderers={defaultPieceRenderers}
-            position="8/8/8/8/3N4/8/8/8"
+            position={{
+              revision: 0,
+              value: { d4: { pieceType: 'wN' } },
+            }}
             reduceMotion="always"
             selection={{ selectedSquare: 'd4' }}
           />

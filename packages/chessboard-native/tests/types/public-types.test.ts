@@ -12,6 +12,7 @@ import type {
   BoardDimensions,
   BoardSquare,
   BoardTransition,
+  CanDragPiece,
   ChessboardAccessibility,
   ChessboardProps,
   ChessboardStyles,
@@ -20,6 +21,7 @@ import type {
   ControlledPosition,
   ControlledSelection,
   FenPieceCode,
+  InteractionPermissions,
   MoveDecision,
   MoveIntent,
   MoveOutcomeAccessibilityContext,
@@ -277,12 +279,23 @@ describe('public data contracts', () => {
       ...defaultAnnotationStyle,
       arrowStartOffset: 0.25,
     } satisfies AnnotationStyle;
+    const canDragPiece: CanDragPiece = (context) =>
+      context.piece.pieceType === 'wK';
+    const interactionPermissions = {
+      accessibility: true,
+      drag: true,
+    } satisfies InteractionPermissions;
+    const onMoveRequest: OnMoveRequest = () => ({ status: 'accepted' });
     const props = {
       accessibility,
       annotations: [],
       annotationStyle,
       boardId: 'diagram',
+      canDragPiece,
       dimensions: { columns: 8, rows: 8 },
+      interactionPermissions,
+      moveRequestTimeouts: { commitMs: 1_500, decisionMs: 10_000 },
+      onMoveRequest,
       orientation: 'black',
       pieceRenderers,
       position: '8/8/8/8/8/8/8/8',
@@ -314,8 +327,11 @@ describe('public data contracts', () => {
     };
 
     expect(props.boardId).toBe('diagram');
+    expect(props.canDragPiece).toBe(canDragPiece);
     expect(props.accessibility).toBe(accessibility);
     expect(props.annotationStyle).toBe(annotationStyle);
+    expect(props.interactionPermissions).toBe(interactionPermissions);
+    expect(props.onMoveRequest).toBe(onMoveRequest);
     expect(props.orientation).toBe('black');
     expect(props.pieceRenderers).toBe(pieceRenderers);
     expect(props.reduceMotion).toBe('always');

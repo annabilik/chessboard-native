@@ -186,6 +186,45 @@ describe('normalized board model', () => {
     expect(changed.nextMetadata).toBe(first.nextMetadata);
   });
 
+  it('preserves only current-render position commit correlation', () => {
+    const first = prepare({
+      boardId: 'analysis',
+      position: {
+        committedIntentId: 'analysis:move:1',
+        revision: 1,
+        value: { e4: { pieceType: 'wP' } },
+      },
+    });
+    expect(first.model.position).toEqual(
+      expect.objectContaining({ committedIntentId: 'analysis:move:1' }),
+    );
+    expect(first.nextMetadata.position).not.toHaveProperty('committedIntentId');
+
+    const omitted = prepare(
+      {
+        boardId: 'analysis',
+        position: {
+          revision: 2,
+          value: { e4: { pieceType: 'wP' } },
+        },
+      },
+      first.nextMetadata,
+    );
+    expect(omitted.model.position).not.toHaveProperty('committedIntentId');
+  });
+
+  it('rejects whitespace-only board identity before interaction setup', () => {
+    const production = prepare({ boardId: '   ', position: {} });
+    expect(production.model.status).toBe('disabled');
+    expect(production.errors[0]).toEqual(
+      expect.objectContaining({ code: 'INVALID_BOARD_ID' }),
+    );
+
+    expect(() =>
+      prepare({ boardId: '\t', position: {} }, undefined, true),
+    ).toThrow(ChessboardError);
+  });
+
   it('does not establish optional domain tiers while their props are omitted', () => {
     const omitted = prepare({ boardId: 'analysis', position: {} });
     expect(omitted.model.annotations).toBeNull();

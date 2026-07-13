@@ -6,10 +6,10 @@ A controlled, rules-free React Native chessboard component.
 > This repository is in early Phase 2 and the package is not published. The public
 > component now renders responsive, controlled static positions with default
 > or custom pieces, orientation, notation, native styles, controlled square and
-> arrow annotations, and a single-control accessibility prototype. Semantic
-> move interaction is not public yet; an internal, disabled-by-default native
-> gesture adapter and pure move-intent lifecycle provide the tested foundation
-> for that later integration.
+> arrow annotations, and one adjustable accessibility control. Its optional
+> controlled move-request surface supports board-piece drag plus accessible
+> source, target, removal, and cancellation actions without ever committing a
+> position internally.
 
 ## Direction
 
@@ -23,7 +23,7 @@ The central contract is:
 - The component may own transient gesture, measurement, focus, and animation
   state.
 - The package does not contain chess rules, legal-move validation, application
-  state, or VibeChess protocol code.
+  state, or product protocol code.
 
 The initial compatibility target is `react-chessboard@5.10.0`, commit
 `b74704a`. Android and iOS are the first-class platforms; React Native Web is
@@ -60,15 +60,17 @@ square fills/circles/dots/borders default below pieces, while marker-free
 straight and knight arrows default above pieces. Both orientations, rectangular
 boards, per-arrow width/opacity, same-target shortening, and whole-value
 `annotationStyle` configuration use deterministic 2048-wide geometry. Custom
-square rendering, selection styling, annotation drawing, move interaction, and
-transitions remain later work. Phase 2 now has a pure interaction reducer plus
-an internal board-level RNGH adapter. Worklet hit testing and per-frame pointer
-updates stay in shared values; board identity, the recognizer handler token,
-geometry epoch, and position revision guard JS boundaries; lift, source-ghost,
-overlay, and pending presentation are modeled without retaining or mutating
-semantic position state. The public component mounts neither a native hit plane
-nor a recognizer until the future move-request callback and effect executor can
-handle a terminal candidate honestly.
+square rendering, selection styling, annotation drawing, and transitions remain
+later work. Phase 2 now has a pure interaction reducer, board-level RNGH
+adapter, mounted move-request executor, and an accessible non-drag path through
+the same request lifecycle. Worklet hit testing and per-frame pointer updates
+stay in shared values; board identity, the recognizer handler token, geometry
+epoch, position revision, interaction epoch, and intent ID guard asynchronous
+boundaries. An accepted callback result only changes transient presentation.
+The consumer must still publish the next controlled position, using a newer
+revision and matching `committedIntentId` when commit correlation is required.
+Without `onMoveRequest`, the component mounts no native gesture hit plane or
+recognizer and remains move-read-only.
 
 The accepted architecture decisions and all 20 reserved invariant contracts
 are indexed in
@@ -77,6 +79,8 @@ The pure-core semantics are documented in
 [`docs/architecture/coordinates-and-fen.md`](./docs/architecture/coordinates-and-fen.md).
 Controlled tier and error semantics are documented in
 [`docs/architecture/api-tiers.md`](./docs/architecture/api-tiers.md).
+Move-request correlation, permissions, and cancellation are documented in
+[`docs/architecture/gestures.md`](./docs/architecture/gestures.md).
 Native composition and style precedence are documented in
 [`docs/architecture/rendering-layers.md`](./docs/architecture/rendering-layers.md).
 The accessibility control and manual TalkBack/VoiceOver pass are documented in

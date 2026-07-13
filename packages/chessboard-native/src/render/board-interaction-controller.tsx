@@ -3,10 +3,13 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
   type ReactElement,
 } from 'react';
+import type { ViewStyle } from 'react-native';
 
 import type { NormalizedControlledValue } from '../internal/controlled-domain';
+import { canDragCurrentPiece } from '../internal/interaction-permissions';
 import {
   createBoardGestureAdapterState,
   reduceBoardGestureAdapter,
@@ -22,24 +25,42 @@ import {
   syncInteractionPresentationSharedValues,
   useInteractionPresentationSharedValues,
 } from '../internal/interaction-presentation';
-import type { PositionObject, SquareId } from '../public-types';
+import type {
+  CanDragPiece,
+  PieceData,
+  PieceRenderers,
+  PositionObject,
+  SquareId,
+} from '../public-types';
 import {
   BoardGestureLayer,
   type BoardGestureGeometry,
   type BoardGestureSignal,
 } from './board-gesture-layer';
+import { DragOverlay } from './drag-overlay';
+import { resolvePieceRenderer } from './piece-layer';
 
 interface BoardInteractionControllerProps {
   readonly boardId: string;
-  readonly enabled?: boolean;
+  readonly canDragPiece?: CanDragPiece;
+  readonly dragEnabled?: boolean;
   readonly geometry: Readonly<BoardGestureGeometry>;
   readonly onCandidate?: (
     candidate: Readonly<BoardGestureIntentCandidate>,
   ) => void;
+  readonly onDragSourceChange?: (sourceSquare: SquareId | null) => void;
+  readonly pieceRenderers: PieceRenderers;
+  readonly pieceStyle: Readonly<ViewStyle>;
   readonly position: NormalizedControlledValue<PositionObject>;
+  readonly tapEnabled?: boolean;
 }
 
 const EMPTY_OCCUPIED_SQUARES: readonly SquareId[] = Object.freeze([]);
+
+interface ActiveDragVisual {
+  readonly piece: Readonly<PieceData>;
+  readonly sourceSquare: SquareId;
+}
 
 function createSnapshot(options: {
   readonly boardId: string;
@@ -88,12 +109,19 @@ function signalMatchesActive(
  */
 export function BoardInteractionController({
   boardId,
-  enabled = false,
+  canDragPiece,
+  dragEnabled = false,
   geometry,
   onCandidate,
+  onDragSourceChange,
+  pieceRenderers,
+  pieceStyle,
   position,
+  tapEnabled = false,
 }: BoardInteractionControllerProps): ReactElement {
   const presentation = useInteractionPresentationSharedValues();
+  const [activeDragVisual, setActiveDragVisual] =
+    useState<Readonly<ActiveDragVisual> | null>(null);
   const snapshot = useMemo(
     () => createSnapshot({ boardId, geometry, position }),
     [boardId, geometry, position],
@@ -106,6 +134,26 @@ export function BoardInteractionController({
       ? EMPTY_OCCUPIED_SQUARES
       : Object.freeze(occupied);
   }, [geometry.visualSquares, position]);
+  const draggableSquares = useMemo(() => {
+    if (!dragEnabled) {
+      return EMPTY_OCCUPIED_SQUARES;
+    }
+    const draggable = occupiedSquares.filter((square) => {
+      const piece = position.value[square];
+      return (
+        piece !== undefined &&
+        canDragCurrentPiece(canDragPiece, {
+          basePositionRevision: position.revision,
+          boardId,
+          piece,
+          source: { kind: 'board', square },
+        })
+      );
+    });
+    return draggable.length === 0
+      ? EMPTY_OCCUPIED_SQUARES
+      : Object.freeze(draggable);
+  }, [boardId, canDragPiece, dragEnabled, occupiedSquares, position]);
   const adapter = useRef<Readonly<BoardGestureAdapterState>>(
     createBoardGestureAdapterState({
       boardId,
@@ -114,7 +162,9 @@ export function BoardInteractionController({
     }),
   );
   const acceptingSignals = useRef(true);
-  const enabledAtCommit = useRef(enabled);
+  const dragEnabledAtCommit = useRef(dragEnabled);
+  const draggableSquaresAtCommit = useRef(draggableSquares);
+  const interactionEnabledAtCommit = useRef(dragEnabled || tapEnabled);
   const snapshotAtCommit = useRef(snapshot);
 
   const applyReduction = useCallback(
@@ -124,18 +174,39 @@ export function BoardInteractionController({
         presentation,
         projectInteractionPresentation(reduction.state.lifecycle),
       );
+      const lifecycle = reduction.state.lifecycle;
+      if (
+        lifecycle.phase === 'drag' &&
+        lifecycle.context.source.kind === 'board'
+      ) {
+        const next = Object.freeze({
+          piece: lifecycle.context.piece,
+          sourceSquare: lifecycle.context.source.square,
+        });
+        setActiveDragVisual((current) =>
+          current?.sourceSquare === next.sourceSquare &&
+          current.piece.id === next.piece.id &&
+          current.piece.pieceType === next.piece.pieceType
+            ? current
+            : next,
+        );
+        onDragSourceChange?.(next.sourceSquare);
+      } else {
+        setActiveDragVisual((current) => (current === null ? current : null));
+        onDragSourceChange?.(null);
+      }
       if (reduction.candidate !== null) {
         onCandidate?.(reduction.candidate);
       }
     },
-    [onCandidate, presentation],
+    [onCandidate, onDragSourceChange, presentation],
   );
 
   const handleSignal = useCallback(
     (signal: Readonly<BoardGestureSignal>): void => {
       if (
         !acceptingSignals.current ||
-        !enabledAtCommit.current ||
+        !interactionEnabledAtCommit.current ||
         signal.boardId !== boardId
       ) {
         return;
@@ -144,6 +215,12 @@ export function BoardInteractionController({
 
       switch (signal.type) {
         case 'drag-start': {
+          if (
+            !dragEnabledAtCommit.current ||
+            !draggableSquaresAtCommit.current.includes(signal.sourceSquare)
+          ) {
+            return;
+          }
           const correlation = createCorrelation(signal);
           let reduction = reduceBoardGestureAdapter(adapter.current, {
             correlation,
@@ -193,7 +270,7 @@ export function BoardInteractionController({
           applyReduction(
             reduceBoardGestureAdapter(adapter.current, {
               correlation,
-              reason: 'user',
+              reason: signal.reason,
               type: 'cancel',
             }),
           );
@@ -217,13 +294,26 @@ export function BoardInteractionController({
 
   useLayoutEffect(() => {
     snapshotAtCommit.current = snapshot;
-    enabledAtCommit.current = enabled;
+    dragEnabledAtCommit.current = dragEnabled;
+    draggableSquaresAtCommit.current = draggableSquares;
+    interactionEnabledAtCommit.current = dragEnabled || tapEnabled;
     let reduction = reduceBoardGestureAdapter(adapter.current, {
       snapshot,
       type: 'synchronize',
     });
     const activeCorrelation = reduction.state.active?.correlation;
-    if (!enabled && activeCorrelation !== undefined) {
+    const activeSource = reduction.state.active?.sourceSquare;
+    const activeInput = reduction.state.lifecycle.phase;
+    const activeInputAllowed =
+      activeInput === 'drag'
+        ? activeSource !== undefined && draggableSquares.includes(activeSource)
+        : activeInput === 'tap'
+          ? tapEnabled
+          : true;
+    if (
+      activeCorrelation !== undefined &&
+      (!(dragEnabled || tapEnabled) || !activeInputAllowed)
+    ) {
       reduction = reduceBoardGestureAdapter(reduction.state, {
         correlation: activeCorrelation,
         reason: 'permissions-change',
@@ -231,13 +321,14 @@ export function BoardInteractionController({
       });
     }
     applyReduction(reduction);
-  }, [applyReduction, enabled, snapshot]);
+  }, [applyReduction, dragEnabled, draggableSquares, snapshot, tapEnabled]);
 
   useLayoutEffect(() => {
     acceptingSignals.current = true;
     return () => {
       acceptingSignals.current = false;
-      enabledAtCommit.current = false;
+      dragEnabledAtCommit.current = false;
+      interactionEnabledAtCommit.current = false;
       const correlation = adapter.current.active?.correlation;
       if (correlation !== undefined) {
         adapter.current = reduceBoardGestureAdapter(adapter.current, {
@@ -246,19 +337,44 @@ export function BoardInteractionController({
           type: 'cancel',
         }).state;
       }
+      onDragSourceChange?.(null);
       resetInteractionPresentationSharedValues(presentation);
     };
-  }, [presentation]);
+  }, [onDragSourceChange, presentation]);
+
+  const renderer =
+    activeDragVisual === null
+      ? null
+      : resolvePieceRenderer(pieceRenderers, activeDragVisual.piece.pieceType);
+  const pieceSize = Math.min(
+    geometry.width / geometry.columns,
+    geometry.height / geometry.rows,
+  );
 
   return (
-    <BoardGestureLayer
-      boardId={boardId}
-      enabled={enabled}
-      geometry={geometry}
-      occupiedSquares={occupiedSquares}
-      onSignal={handleSignal}
-      positionRevision={position.revision}
-      presentation={presentation}
-    />
+    <>
+      <BoardGestureLayer
+        boardId={boardId}
+        dragEnabled={dragEnabled}
+        draggableSquares={draggableSquares}
+        geometry={geometry}
+        occupiedSquares={occupiedSquares}
+        onSignal={handleSignal}
+        positionRevision={position.revision}
+        presentation={presentation}
+        tapEnabled={tapEnabled}
+      />
+      {activeDragVisual === null || renderer === null ? null : (
+        <DragOverlay
+          boardId={boardId}
+          piece={activeDragVisual.piece}
+          presentation={presentation}
+          renderer={renderer}
+          size={pieceSize}
+          sourceSquare={activeDragVisual.sourceSquare}
+          style={pieceStyle}
+        />
+      )}
+    </>
   );
 }
