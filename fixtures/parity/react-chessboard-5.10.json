@@ -3119,9 +3119,9 @@
         "surface": "root",
         "symbols": ["ChessboardProps.gesture", "ChessboardAccessibility"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B18",
-      "compatibilityNotes": "RNGH handles touch/tap/drag; keyboard/accessibility input and second-finger cancel are first-class."
+      "compatibilityNotes": "An internal RNGH board plane, omitted entirely from the disabled public component, composes tap and single-pointer pan recognition with worklet-only continuous updates and a native activation threshold. Public gesture options, accessibility input, second-finger policy, and native arbitration evidence remain future work."
     },
     {
       "id": "behavior.b19-automatic-scroll-during-drag",
@@ -3167,9 +3167,9 @@
         "surface": "internal",
         "symbols": ["hitTestBoardPoint", "BoardLayoutRegistry"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B20",
-      "compatibilityNotes": "One board-level coordinate hit test and epoch-correlated remeasurement replace DOM collision detection."
+      "compatibilityNotes": "A worklet-safe board-local point hit test resolves flat measured visual cells in either orientation, and the gesture adapter rejects stale geometry epochs. A provider registry and release-time native remeasurement remain future work."
     },
     {
       "id": "behavior.b21-drag-start-callback-and-overlay-state",
@@ -3332,9 +3332,9 @@
         "surface": "internal",
         "symbols": ["DragOverlay", "PendingMovePresentation"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B26",
-      "compatibilityNotes": "Native overlay, source ghost, and pending styles preserve the useful visual states."
+      "compatibilityNotes": "Internal shared-value presentation projects drag lift, source ghost, and decision/commit pending states without retaining a position snapshot, with pointerless piece primitives for the overlay. Public styles, provider overlay mounting, and the live decision flow remain future work."
     },
     {
       "id": "behavior.b27-piece-and-square-click-bubbling",
@@ -3393,9 +3393,9 @@
         "surface": "internal",
         "symbols": ["BoardTapGesture", "hitTestBoardPoint"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B28",
-      "compatibilityNotes": "A board-level tap recognizer uses measured coordinates instead of document lookup."
+      "compatibilityNotes": "The internal board-level tap recognizer uses measured oriented hit testing and emits only one same-square occupied-source candidate. Public semantic activation remains gated until the move-request runtime exists."
     },
     {
       "id": "behavior.b29-hover-in-and-out-transitions",

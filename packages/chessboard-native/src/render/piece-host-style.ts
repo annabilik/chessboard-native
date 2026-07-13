@@ -1,0 +1,55 @@
+import type { ViewStyle } from 'react-native';
+
+/**
+ * Structural containment shared by static and transient piece hosts.
+ *
+ * Consumer piece style remains available to renderers, but cannot replace the
+ * board-owned host rectangle or the drag overlay's outer animated transform.
+ */
+export const PIECE_HOST_STRUCTURAL_RESET: Readonly<ViewStyle> = Object.freeze({
+  aspectRatio: undefined,
+  bottom: undefined,
+  boxSizing: 'border-box',
+  display: 'flex',
+  end: undefined,
+  flex: undefined,
+  flexBasis: undefined,
+  flexGrow: 0,
+  flexShrink: 0,
+  height: undefined,
+  inset: undefined,
+  insetBlock: undefined,
+  insetBlockEnd: undefined,
+  insetBlockStart: undefined,
+  insetInline: undefined,
+  insetInlineEnd: undefined,
+  insetInlineStart: undefined,
+  left: undefined,
+  margin: 0,
+  marginBlock: 0,
+  marginBlockEnd: 0,
+  marginBlockStart: 0,
+  marginBottom: 0,
+  marginEnd: 0,
+  marginHorizontal: 0,
+  marginInline: 0,
+  marginInlineEnd: 0,
+  marginInlineStart: 0,
+  marginLeft: 0,
+  marginRight: 0,
+  marginStart: 0,
+  marginTop: 0,
+  marginVertical: 0,
+  maxHeight: undefined,
+  maxWidth: undefined,
+  minHeight: undefined,
+  minWidth: undefined,
+  pointerEvents: 'none',
+  position: 'absolute',
+  right: undefined,
+  start: undefined,
+  top: undefined,
+  transform: undefined,
+  transformOrigin: undefined,
+  width: undefined,
+});
