@@ -274,7 +274,8 @@ function createBoardGestures(options: {
 }
 
 /**
- * One accessibility-hidden native hit plane for the entire measured board.
+ * When enabled, one accessibility-hidden native hit plane covers the measured
+ * board. Disabled mode mounts no native plane and creates no recognizers.
  *
  * Only activation and terminal events cross to JS. Per-frame pan hit testing,
  * target updates, and pointer transforms stay in shared values.
@@ -288,28 +289,17 @@ export function BoardGestureLayer({
   onSignal,
   positionRevision,
   presentation,
-}: BoardGestureLayerProps): ReactElement {
+}: BoardGestureLayerProps): ReactElement | null {
   const panActive = useSharedValue(0);
   const panSourceSquare = useSharedValue<SquareId | null>(null);
   const tapSourceSquare = useSharedValue<SquareId | null>(null);
   const testIds = useMemo(() => getBoardGestureTestIds(boardId), [boardId]);
-  const gesture = useMemo(
-    () =>
-      createBoardGestures({
-        activationDistance,
-        boardId,
-        enabled,
-        geometry,
-        occupiedSquares,
-        onSignal,
-        panActive,
-        panSourceSquare,
-        positionRevision,
-        presentation,
-        tapSourceSquare,
-        testIds,
-      }),
-    [
+  const gesture = useMemo(() => {
+    if (!enabled) {
+      return null;
+    }
+
+    return createBoardGestures({
       activationDistance,
       boardId,
       enabled,
@@ -322,8 +312,21 @@ export function BoardGestureLayer({
       presentation,
       tapSourceSquare,
       testIds,
-    ],
-  );
+    });
+  }, [
+    activationDistance,
+    boardId,
+    enabled,
+    geometry,
+    occupiedSquares,
+    onSignal,
+    panActive,
+    panSourceSquare,
+    positionRevision,
+    presentation,
+    tapSourceSquare,
+    testIds,
+  ]);
 
   useLayoutEffect(() => {
     panActive.value = 0;
@@ -346,23 +349,23 @@ export function BoardGestureLayer({
     tapSourceSquare,
   ]);
 
+  if (gesture === null) {
+    return null;
+  }
+
   const plane = (
     <View
       accessibilityElementsHidden
       accessible={false}
       collapsable={false}
       importantForAccessibility="no-hide-descendants"
-      pointerEvents={enabled ? 'auto' : 'none'}
+      pointerEvents="auto"
       style={styles.plane}
       testID={testIds.plane}
     />
   );
 
-  return enabled ? (
-    <GestureDetector gesture={gesture}>{plane}</GestureDetector>
-  ) : (
-    plane
-  );
+  return <GestureDetector gesture={gesture}>{plane}</GestureDetector>;
 }
 
 const styles = StyleSheet.create({

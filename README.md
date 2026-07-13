@@ -66,9 +66,9 @@ an internal board-level RNGH adapter. Worklet hit testing and per-frame pointer
 updates stay in shared values; board identity, the recognizer handler token,
 geometry epoch, and position revision guard JS boundaries; lift, source-ghost,
 overlay, and pending presentation are modeled without retaining or mutating
-semantic position state. The public plane
-remains pointerless and attaches no recognizer until the future move-request
-callback and effect executor can handle a terminal candidate honestly.
+semantic position state. The public component mounts neither a native hit plane
+nor a recognizer until the future move-request callback and effect executor can
+handle a terminal candidate honestly.
 
 The accepted architecture decisions and all 20 reserved invariant contracts
 are indexed in

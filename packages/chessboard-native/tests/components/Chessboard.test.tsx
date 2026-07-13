@@ -22,7 +22,6 @@ import {
   type ChessboardErrorContext,
 } from '../../src/index';
 import { ChessboardRuntime } from '../../src/Chessboard';
-import { getBoardGestureTestIds } from '../../src/render/board-gesture-layer';
 
 const SQUARE_COLORS = new Set(['#B58863', '#F0D9B5']);
 
@@ -114,19 +113,13 @@ describe('Chessboard controlled boundary', () => {
     const visualLayers = root.queryAll(
       (node) => node.props['accessibilityElementsHidden'] === true,
     );
-    expect(visualLayers).toHaveLength(4);
+    expect(visualLayers).toHaveLength(3);
     const visualLayer = requiredNode(visualLayers, 0);
     expect(visualLayer).toHaveProp('accessible', false);
     expect(visualLayer).toHaveProp(
       'importantForAccessibility',
       'no-hide-descendants',
     );
-    const gesturePlane = root.queryAll(
-      (node) =>
-        node.props['testID'] === getBoardGestureTestIds('diagram').plane,
-    );
-    expect(gesturePlane).toHaveLength(1);
-    expect(requiredNode(gesturePlane, 0)).toHaveProp('pointerEvents', 'none');
   });
 
   it('[PARITY-OPTION-CHESSBOARD-ROWS] renders supported row counts with width-derived height', async () => {

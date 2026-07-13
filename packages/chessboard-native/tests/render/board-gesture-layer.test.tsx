@@ -82,8 +82,8 @@ describe('board-level native gesture plane', () => {
     const disabled = await render(<Harness onSignal={disabledSignal} />);
 
     expect(
-      disabled.getByTestId(ids.plane, { includeHiddenElements: true }),
-    ).toHaveProp('pointerEvents', 'none');
+      disabled.queryByTestId(ids.plane, { includeHiddenElements: true }),
+    ).toBeNull();
     expect(() => getByGestureTestId(ids.pan)).toThrow();
     expect(() => getByGestureTestId(ids.tap)).toThrow();
     expect(disabledSignal).not.toHaveBeenCalled();

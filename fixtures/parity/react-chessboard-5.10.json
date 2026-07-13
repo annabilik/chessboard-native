@@ -3121,7 +3121,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B18",
-      "compatibilityNotes": "An internal, public-disabled RNGH board plane composes tap and single-pointer pan recognition with worklet-only continuous updates and a native activation threshold. Public gesture options, accessibility input, second-finger policy, and native arbitration evidence remain future work."
+      "compatibilityNotes": "An internal RNGH board plane, omitted entirely from the disabled public component, composes tap and single-pointer pan recognition with worklet-only continuous updates and a native activation threshold. Public gesture options, accessibility input, second-finger policy, and native arbitration evidence remain future work."
     },
     {
       "id": "behavior.b19-automatic-scroll-during-drag",

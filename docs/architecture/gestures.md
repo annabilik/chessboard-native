@@ -93,9 +93,9 @@ mutate position. Geometry or position changes make a terminal event fail
 closed, while a late foreign handler token cannot cancel newer work.
 
 `Chessboard` mounts this controller behind a closed interaction gate. Without
-the future public `onMoveRequest` boundary it renders only an
-accessibility-hidden, pointerless plane: no recognizer is attached and no
-gesture lifecycle can start. Presentation projections and shared-value lift,
+the future public `onMoveRequest` boundary it renders no native hit plane and
+constructs no recognizer, so no gesture lifecycle can start or accessibility
+descendant can be introduced. Presentation projections and shared-value lift,
 source-ghost, overlay, and pending primitives are internal and deterministic;
 the live callback executor, public gesture options, provider coordination,
 accessible activation, ScrollView arbitration, and native performance evidence

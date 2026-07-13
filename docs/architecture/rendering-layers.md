@@ -142,11 +142,12 @@ Notation now occupies its own decorative plane above both annotation planes.
 Custom square rendering, public interaction-state styling, Reanimated
 transitions, and annotation drafts/drawing remain later slices.
 
-P2.2 adds the private layer-six board gesture plane. It is one absolute,
-accessibility-hidden native view rather than one handler per square. While the
-public move-request boundary is absent, the plane is pointerless and does not
-mount a `GestureDetector`, preserving the read-only board contract. Internal
-tests can explicitly enable the plane to compose exclusive tap and pan
+P2.2 adds the private layer-six board gesture plane. When enabled, it is one
+absolute, accessibility-hidden native view rather than one handler per square.
+While the public move-request boundary is absent, the controller renders no
+native plane and constructs no recognizer, preserving both the read-only and
+single-control accessibility contracts. Internal tests can explicitly enable
+the plane to compose exclusive tap and pan
 recognizers; the pan accepts exactly one pointer. Pan activation and terminal
 events cross to the board-scoped adapter; per-frame pointer movement and
 oriented target hit testing remain in shared values.
