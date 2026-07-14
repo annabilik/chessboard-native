@@ -174,7 +174,7 @@ jobs:
     needs:
       - baseline
       - package-artifact
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 75
 
     steps:
@@ -227,7 +227,8 @@ jobs:
           retry_log="$RUNNER_TEMP/android-accessibility-audit-retry.log"
           audit_args=(
             -PreactNativeArchitectures=x86_64
-            -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect
+            # Current emulators reject the removed swiftshader_indirect mode.
+            -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader
           )
 
           if npm run android:accessibility:managed -- "${audit_args[@]}" 2>&1 | tee "$audit_log"; then
