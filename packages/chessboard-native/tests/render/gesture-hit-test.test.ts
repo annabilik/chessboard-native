@@ -106,7 +106,7 @@ describe('worklet-safe gesture hit testing', () => {
     expect(hitTestGesturePoint(0, 0, 300, 160, 1, 1, [''])).toBeNull();
   });
 
-  it('[PARITY-BEHAVIOR-B20] matches the validated core hit test at cells, boundaries, and off-board points in both orientations', () => {
+  it('matches the validated core hit test at cells, boundaries, and off-board points in both orientations', () => {
     const parityDimensions = Object.freeze({ columns: 5, rows: 3 });
     const paritySize = Object.freeze({ height: 210.5, width: 403.25 });
     const points: readonly BoardPoint[] = Object.freeze([

@@ -24,6 +24,14 @@ and `react-native-svg`. Its fixed back-to-front layer order is:
 6. Provider-coordinated gesture hit testing.
 7. Single-control accessibility semantics.
 
+The nearest `ChessboardProvider` supplies one active overlay lease shared by
+every registered board in that provider scope. The owning board host projects
+that lease as one pointerless overlay plane. It is not another semantic board
+layer: it renders only the active provider epoch's detached piece visual and
+pointer transform, remains hidden from accessibility, and disappears on
+cancellation or replacement. A standalone board creates a private provider, so
+the same composition applies without requiring an explicit wrapper.
+
 SVG paths do not use document-global marker IDs. Every board owns its visual
 and animation state. Orientation changes coordinate projection only; canonical
 square IDs and consumer data remain unchanged.
@@ -162,12 +170,14 @@ movement and oriented target hit testing remain in shared values.
 
 The same internal presentation state projects drag lift, a source ghost, and
 decision or controlled-commit pending flags without retaining a semantic
-position. A pointerless drag-overlay primitive consumes board-local shared
-pointer coordinates with a direct animated transform, so frame updates do not
-rerender custom artwork or commit React state. The public drag path now mounts
-that overlay and the mounted executor projects decision and controlled-commit
-pending phases. Controlled destination, selected, and disabled paint is public;
-drag, pending, pressed, ghost, and transition style slots remain future work.
+position. The board publishes the active drag visual and shared pointer values
+to its nearest provider. The owning board host renders the provider's leased
+overlay with a direct animated transform, so frame updates do not rerender
+custom artwork or commit React state. Exactly one overlay can be active in a
+provider even when multiple boards are registered; source ghost and pending
+projection remain routed to the owning board ID and mount token. Controlled
+destination, selected, and disabled paint is public; drag, pending, pressed,
+ghost, and transition style slots remain future work.
 
 P1.5 promotes only the stable outer host to one adjustable accessibility
 control. It uses `pointerEvents="box-none"` so ordinary touch remains available
@@ -179,8 +189,15 @@ project that cursor through current dimensions and orientation without using
 measurement or updating consumer-owned selection. Position and selection
 changes refresh its value; orientation retains the canonical square and host
 identity. Static annotations and board-local gesture hit testing use the same
-orientation-aware measured projection; provider and window-coordinate hit
-testing remain later work.
+orientation-aware measured projection. Provider release verification translates
+fresh window bounds into that local projection and rejects stale registration,
+board-geometry, provider-geometry, or interaction epochs.
+
+`ChessboardProvider` itself adds no accessibility target. Its overlay is
+pointerless and uses `no-hide-descendants`; this hides only overlay artwork, not
+the provider's board children. Two registered boards therefore remain two
+independent adjustable controls, and a private provider does not change the
+single-board accessibility tree.
 
 The interaction-enabled accessibility surface retains navigation and adds
 source activation, target activation, off-board removal, cancellation, and
@@ -240,8 +257,11 @@ request correlation, and decision/commit timeout races while preserving one
 accessible board control. The controlled-selection activation slice adds style
 precedence, immutable activation payload, exclusive destination routing,
 accessible clear-selection, commit-only callback lookup, and stale-selection
-correlation tests. Native ScrollView arbitration and frame-performance proof
-remain mandatory later evidence.
+correlation tests. P2.5 tests add private-versus-explicit provider composition,
+provider-scoped identity enforcement, token-safe registration cleanup,
+multi-board isolation, one shared overlay, and fresh release-measurement race
+coverage. Native ScrollView arbitration and frame-performance proof remain
+mandatory later evidence.
 
 This decision owns invariants `CBN-INV-010`, `CBN-INV-013`, `CBN-INV-014`,
 and `CBN-INV-018`.

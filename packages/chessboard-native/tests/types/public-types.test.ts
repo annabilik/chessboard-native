@@ -15,6 +15,7 @@ import type {
   CanDragPiece,
   ChessboardAccessibility,
   ChessboardProps,
+  ChessboardProviderProps,
   ChessboardStyles,
   ChessboardTheme,
   ControlledAnnotations,
@@ -436,6 +437,15 @@ describe('public data contracts', () => {
     expect(dimensions.rows).toBe(8);
     expect(reduceMotion).toBe('system');
     expect(accessibility.formatActionLabel).toEqual(expect.any(Function));
+  });
+
+  it('exposes a layout-neutral controlled provider contract', () => {
+    const provider = {
+      children: null,
+      geometryRevision: 4,
+    } satisfies ChessboardProviderProps;
+
+    expect(provider.geometryRevision).toBe(4);
   });
 
   it('rejects contradictory, mutable, and event-owning contract shapes at compile time', () => {

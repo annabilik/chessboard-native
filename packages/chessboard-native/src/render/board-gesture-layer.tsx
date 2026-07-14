@@ -170,6 +170,22 @@ function createBoardGestures(options: {
       geometry.visualSquares,
     );
   };
+  const updatePointer = (
+    x: number,
+    y: number,
+    absoluteX: number,
+    absoluteY: number,
+  ): void => {
+    'worklet';
+    presentation.pointerX.value = x;
+    presentation.pointerY.value = y;
+    presentation.pointerWindowX.value = Number.isFinite(absoluteX)
+      ? absoluteX
+      : x;
+    presentation.pointerWindowY.value = Number.isFinite(absoluteY)
+      ? absoluteY
+      : y;
+  };
 
   const pan = Gesture.Pan()
     .enabled(dragEnabled)
@@ -219,8 +235,7 @@ function createBoardGestures(options: {
       presentation.phase.value = INTERACTION_PRESENTATION_PHASE.DRAG;
       presentation.sourceSquare.value = sourceSquare;
       presentation.targetSquare.value = targetSquare;
-      presentation.pointerX.value = event.x;
-      presentation.pointerY.value = event.y;
+      updatePointer(event.x, event.y, event.absoluteX, event.absoluteY);
       scheduleOnRN(onSignal, {
         boardId,
         geometryRevision: geometry.revision,
@@ -238,8 +253,7 @@ function createBoardGestures(options: {
       if (panActive.value !== 1) {
         return;
       }
-      presentation.pointerX.value = event.x;
-      presentation.pointerY.value = event.y;
+      updatePointer(event.x, event.y, event.absoluteX, event.absoluteY);
       presentation.targetSquare.value = hitTest(event.x, event.y);
     })
     .onEnd((event, success) => {
@@ -256,8 +270,7 @@ function createBoardGestures(options: {
       }
 
       const targetSquare = hitTest(event.x, event.y);
-      presentation.pointerX.value = event.x;
-      presentation.pointerY.value = event.y;
+      updatePointer(event.x, event.y, event.absoluteX, event.absoluteY);
       presentation.targetSquare.value = targetSquare;
       panActive.value = 0;
       scheduleOnRN(onSignal, {

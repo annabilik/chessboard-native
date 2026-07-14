@@ -107,8 +107,9 @@ change waits for the corresponding native resize measurement. No global
 Cell rectangles use cumulative fractional edges rather than rounded square
 sizes. That makes the rendered surface share the same half-open boundary model
 as hit testing even when the measured width is not divisible by the column
-count. The static surface does not yet translate window coordinates or register
-provider bounds.
+count. A committed board publishes this local mapping and its native measurement
+capability to the nearest provider under a mount token. Cached window bounds
+are detached hover hints; they never replace the board's local layout.
 
 P1.4 reuses those exact cell rectangles for pieces. Position keys remain
 canonical, and the current orientation selects only which measured rectangle a
@@ -123,7 +124,12 @@ for a finite point outside the board. Board coverage is half-open:
 and bottom edges are outside, and an exact internal boundary belongs to the row
 or column after it. This gives every point at most one owner.
 
-Window-coordinate translation, provider registration, cross-component
-measurement epochs, and gesture lifecycle remain later integration work.
+For a provider-coordinated release, fresh native bounds containing `x`, `y`,
+`width`, and `height` translate a window point to
+`{ x: point.x - x, y: point.y - y }`. That local point uses the same half-open
+rule above. Provider resolution accepts the result only while the board mount
+token, board geometry epoch, provider geometry revision, and active drop epoch
+still match; stale or invalid measurements produce no resolution. Cached bounds
+are never accepted as release evidence.
 Non-finite point or size components throw `TypeError`; non-positive measured
 sizes throw `RangeError`.

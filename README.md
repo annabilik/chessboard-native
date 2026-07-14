@@ -10,7 +10,9 @@ A controlled, rules-free React Native chessboard component.
 > accessibility control. Its optional interaction surface supports board-piece
 > drag, controlled touch/accessibility square activation, and accessible move,
 > removal, clearing, and cancellation without committing position or selection
-> internally.
+> internally. `ChessboardProvider` now supplies provider-scoped board identity,
+> one shared transient overlay, and stale-safe external-drop measurement
+> infrastructure for single- and multi-board composition.
 
 ## Direction
 
@@ -82,7 +84,15 @@ revision and matching `committedIntentId` when move correlation is required.
 Without `onSquareActivate`, no same-square tap recognizer is enabled;
 `onMoveRequest` retains its accessible transient source-target fallback. With
 neither callback, the component mounts no native gesture hit plane and remains
-read-only.
+read-only. Boards register by a required, mount-stable `boardId` in their
+nearest `ChessboardProvider`; standalone boards create a private provider.
+Provider identity is token-safe across duplicates, remounts, Strict Mode, and
+abandoned renders. One pointerless shared overlay serves a provider scope, and
+cached window bounds are hover hints only. External release resolution always
+remeasures its named target and accepts the result only while registration,
+board geometry, provider geometry, and interaction epochs remain current. The
+public `SparePiece` source that consumes this infrastructure remains the next
+Phase 2 slice.
 
 The accepted architecture decisions and all 20 reserved invariant contracts
 are indexed in

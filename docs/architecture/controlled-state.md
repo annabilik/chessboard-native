@@ -21,8 +21,18 @@ selection change; only a new controlled prop can do so.
 The board may retain measured geometry, finger coordinates, a drag offset,
 pressed state, one visibly distinct annotation draft, one pending move epoch,
 visual transition snapshots, focus, and a virtual accessibility cursor. A
-provider may additionally retain one active cross-component drag and one
-selected spare source. None of these values is a semantic render source.
+provider may additionally retain tokenized board registrations, cached window
+bounds, one active cross-component drag, its shared visual overlay, a transient
+drop-verification epoch, and one selected spare source. None of these values is
+a semantic render source.
+
+A provider registration contains only routing and measurement capability. It
+does not copy a board position, annotations, or semantic selection into provider
+state. A drop resolver reads the destination board's current committed runtime
+only after a fresh release measurement succeeds. Cached bounds can influence a
+hover hint, never a move intent or controlled render. Provider
+`geometryRevision` changes invalidate transient coordination without becoming a
+board semantic revision.
 
 The core is rules-free. It does not create a chess engine, calculate legal
 moves, decide promotions, track turns, or derive game results. It validates
@@ -112,9 +122,10 @@ Async consumers can validate moves without granting the component ownership of
 game state. They must update controlled position after move acceptance, and any
 selection change resulting from activation or clearing must arrive through the
 controlled selection prop. The mounted move-request executor and
-square-activation router preserve this boundary through cancellation, errors,
-timeouts, abandoned renders, and stale selection correlation; every later
-transition planner and provider must preserve it too.
+square-activation router and provider registry preserve this boundary through
+cancellation, errors, timeouts, abandoned renders, stale selection correlation,
+duplicate identity, and late native measurements. Every later transition
+planner and external source must preserve it too.
 
 This decision owns invariants `CBN-INV-001`, `CBN-INV-002`, `CBN-INV-003`,
 `CBN-INV-004`, `CBN-INV-005`, `CBN-INV-008`, `CBN-INV-010`,

@@ -181,8 +181,15 @@ export default function GalleryIndex() {
           The boards now expose one adjustable accessibility control while the
           visual subtree remains decorative. Annotation drawing, custom square
           rendering, and transitions remain later slices. Controlled selection
-          activation and move requests have focused examples.
+          activation, move requests, and provider coordination have focused
+          examples.
         </Text>
+
+        <Link asChild href="/provider-coordination">
+          <Pressable style={styles.routeLink}>
+            <Text style={styles.routeLinkText}>Open provider coordination</Text>
+          </Pressable>
+        </Link>
 
         <Link asChild href="/controlled-selection">
           <Pressable style={styles.routeLink}>

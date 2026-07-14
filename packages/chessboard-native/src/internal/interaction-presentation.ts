@@ -30,6 +30,8 @@ export interface InteractionPresentationSharedValues {
   readonly targetSquare: SharedValue<SquareId | null>;
   readonly pointerX: SharedValue<number>;
   readonly pointerY: SharedValue<number>;
+  readonly pointerWindowX: SharedValue<number>;
+  readonly pointerWindowY: SharedValue<number>;
 }
 
 /** Detached React-side projection used to choose transient piece visuals. */
@@ -118,6 +120,8 @@ export function useInteractionPresentationSharedValues(): Readonly<InteractionPr
   const targetSquare = useSharedValue<SquareId | null>(null);
   const pointerX = useSharedValue(0);
   const pointerY = useSharedValue(0);
+  const pointerWindowX = useSharedValue(0);
+  const pointerWindowY = useSharedValue(0);
 
   return useMemo(
     () =>
@@ -126,10 +130,21 @@ export function useInteractionPresentationSharedValues(): Readonly<InteractionPr
         phase,
         pointerX,
         pointerY,
+        pointerWindowX,
+        pointerWindowY,
         sourceSquare,
         targetSquare,
       }),
-    [epoch, phase, pointerX, pointerY, sourceSquare, targetSquare],
+    [
+      epoch,
+      phase,
+      pointerWindowX,
+      pointerWindowY,
+      pointerX,
+      pointerY,
+      sourceSquare,
+      targetSquare,
+    ],
   );
 }
 
@@ -143,6 +158,8 @@ export function resetInteractionPresentationSharedValues(
   values.targetSquare.value = null;
   values.pointerX.value = 0;
   values.pointerY.value = 0;
+  values.pointerWindowX.value = 0;
+  values.pointerWindowY.value = 0;
   values.phase.value = INTERACTION_PRESENTATION_PHASE.IDLE;
 }
 
@@ -168,11 +185,20 @@ export function updateInteractionPresentationPointer(
   values: Readonly<InteractionPresentationSharedValues>,
   x: number,
   y: number,
+  windowX: number = x,
+  windowY: number = y,
 ): void {
   'worklet';
-  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+  if (
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(windowX) ||
+    !Number.isFinite(windowY)
+  ) {
     return;
   }
   values.pointerX.value = x;
   values.pointerY.value = y;
+  values.pointerWindowX.value = windowX;
+  values.pointerWindowY.value = windowY;
 }

@@ -216,9 +216,9 @@
         "surface": "root",
         "symbols": ["ChessboardProvider"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-CHESSBOARD-PROVIDER",
-      "compatibilityNotes": "The provider remains compositional but owns only cross-board gesture, layout, and overlay coordination."
+      "compatibilityNotes": "The compositional native provider owns a token-safe board registry, one shared transient overlay, and external-drop measurement coordination without owning semantic board state."
     },
     {
       "id": "export.use-chessboard-context",
@@ -1242,9 +1242,9 @@
         "surface": "root",
         "symbols": ["ChessboardProps.boardId"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ID",
-      "compatibilityNotes": "Renamed to required, non-empty, provider-unique boardId."
+      "compatibilityNotes": "Renamed to required, non-empty, mount-stable boardId with uniqueness enforced within the nearest provider."
     },
     {
       "id": "option.pieces",
@@ -2630,9 +2630,9 @@
         "surface": "root",
         "symbols": ["Chessboard", "ChessboardProvider"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B01",
-      "compatibilityNotes": "A standalone board creates a private native provider; an existing provider is reused."
+      "compatibilityNotes": "A standalone board creates one private native provider, while a board already under an explicit provider reuses that nearest provider."
     },
     {
       "id": "behavior.b02-provider-context-ownership",
@@ -2658,9 +2658,9 @@
         "surface": "root",
         "symbols": ["ChessboardProvider"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B02",
-      "compatibilityNotes": "The native provider owns only gesture coordination, layout registration, and a shared overlay.",
+      "compatibilityNotes": "The native provider owns only tokenized gesture coordination, measured layout registration, release verification, and one shared overlay; it owns no position, annotations, or semantic selection.",
       "rationale": "The upstream context exposes canonical-looking position and arrow state plus browser implementation details, which would recreate dual ownership.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b02-provider-context-ownership"
     },
@@ -2721,9 +2721,9 @@
         "surface": "root",
         "symbols": ["ChessboardProps.boardId"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B04",
-      "compatibilityNotes": "Required stable boardId drives a provider registry; no DOM IDs are generated."
+      "compatibilityNotes": "Required non-empty, mount-stable boardId values drive the nearest provider registry; duplicates fail without replacing the original registration and no DOM IDs are generated."
     },
     {
       "id": "behavior.b05-dimensions-orientation-and-grid",
@@ -3167,9 +3167,9 @@
         "surface": "internal",
         "symbols": ["hitTestBoardPoint", "BoardLayoutRegistry"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B20",
-      "compatibilityNotes": "A worklet-safe board-local point hit test resolves flat measured visual cells in either orientation, and the gesture adapter rejects stale geometry epochs. A provider registry and release-time native remeasurement remain future work."
+      "compatibilityNotes": "Worklet-safe local hit testing and a tokenized provider registry use cached window bounds only for hover; release remeasures the target and rejects stale registration, geometry, and provider epochs before resolving a square."
     },
     {
       "id": "behavior.b21-drag-start-callback-and-overlay-state",
@@ -3195,9 +3195,9 @@
         "surface": "root",
         "symbols": ["ChessboardProps.onPieceDragStart", "ChessboardProvider"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B21",
-      "compatibilityNotes": "A single interaction epoch drives the shared native drag overlay."
+      "compatibilityNotes": "One provider interaction epoch drives the shared native overlay across registered boards; the public onPieceDragStart callback remains future work."
     },
     {
       "id": "behavior.b22-on-board-boolean-drop-decision",
@@ -3304,9 +3304,9 @@
         "surface": "internal",
         "symbols": ["DragOverlayBounds", "BoardLayoutRegistry"]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B25",
-      "compatibilityNotes": "Native overlay policy and final remeasurement replace DOM transform clamping."
+      "compatibilityNotes": "The provider registry verifies fresh native bounds and resolves an out-of-bounds release to a null target. Public external-source wiring and allowDragOffBoard visual clamping remain future work."
     },
     {
       "id": "behavior.b26-clone-and-ghost-drag-presentation",
@@ -3334,7 +3334,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B26",
-      "compatibilityNotes": "The live drag path projects lift, source ghost, a pointerless overlay, and decision/commit pending state without retaining a position snapshot. Public transient styles and provider overlay coordination remain future work."
+      "compatibilityNotes": "The live drag path projects lift, source ghost, one provider-shared pointerless overlay, and decision/commit pending state without retaining a position snapshot. Public transient styles remain future work."
     },
     {
       "id": "behavior.b27-piece-and-square-click-bubbling",

@@ -22,6 +22,10 @@ export default function RootLayout() {
             name="controlled-selection"
             options={{ title: 'Controlled selection' }}
           />
+          <Stack.Screen
+            name="provider-coordination"
+            options={{ title: 'Provider coordination' }}
+          />
         </Stack>
         <StatusBar style="dark" />
       </SafeAreaProvider>

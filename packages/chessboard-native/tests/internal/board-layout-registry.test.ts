@@ -1,0 +1,864 @@
+import type { Revision } from '../../src/public-types';
+import {
+  createBoardLayoutOwnerToken,
+  createBoardLayoutRegistry,
+  type BoardDropVerificationResult,
+  type BoardLayoutGeometry,
+  type BoardLayoutOwnerToken,
+  type BoardLayoutRegistration,
+  type BoardWindowBounds,
+  type MeasureBoardInWindow,
+} from '../../src/internal/board-layout-registry';
+
+type MeasurementCallback = Parameters<MeasureBoardInWindow>[0];
+
+function deferredMeasurement() {
+  const callbacks: MeasurementCallback[] = [];
+  const measureInWindow: jest.MockedFunction<MeasureBoardInWindow> = jest.fn(
+    (callback) => {
+      callbacks.push(callback);
+    },
+  );
+
+  return {
+    callbacks,
+    measureInWindow,
+    respond(index: number, bounds: BoardWindowBounds): void {
+      const callback = callbacks[index];
+      if (callback === undefined) {
+        throw new Error(`Missing measurement callback ${String(index)}.`);
+      }
+      callback(bounds.x, bounds.y, bounds.width, bounds.height);
+    },
+  };
+}
+
+function geometry(
+  overrides: Partial<BoardLayoutGeometry> = {},
+): BoardLayoutGeometry {
+  return {
+    dimensions: { columns: 8, rows: 8 },
+    geometryEpoch: 3,
+    layoutRevision: 5,
+    orientation: 'white',
+    ...overrides,
+  };
+}
+
+function registration(options: {
+  readonly available?: boolean;
+  readonly boardId?: string;
+  readonly geometry?: BoardLayoutGeometry;
+  readonly measureInWindow: MeasureBoardInWindow;
+  readonly owner: BoardLayoutOwnerToken;
+  readonly readPositionRevision?: () => Revision | null;
+}): BoardLayoutRegistration {
+  return {
+    available: options.available ?? true,
+    boardId: options.boardId ?? 'analysis',
+    geometry: options.geometry ?? geometry(),
+    measureInWindow: options.measureInWindow,
+    owner: options.owner,
+    readPositionRevision: options.readPositionRevision ?? (() => 11),
+  };
+}
+
+function expectCancelled(
+  result: Readonly<BoardDropVerificationResult>,
+  reason: Extract<
+    BoardDropVerificationResult,
+    { status: 'cancelled' }
+  >['reason'],
+): void {
+  expect(result).toEqual(
+    expect.objectContaining({ reason, status: 'cancelled' }),
+  );
+}
+
+describe('board layout registry', () => {
+  it('keeps registration and unregistration owner-token safe', () => {
+    const registry = createBoardLayoutRegistry();
+    const firstOwner = createBoardLayoutOwnerToken();
+    const duplicateOwner = createBoardLayoutOwnerToken();
+    const firstMeasure = deferredMeasurement();
+    const duplicateMeasure = deferredMeasurement();
+
+    expect(
+      registry.register(
+        registration({
+          measureInWindow: firstMeasure.measureInWindow,
+          owner: firstOwner,
+        }),
+      ),
+    ).toEqual({ boardId: 'analysis', status: 'registered' });
+    expect(
+      registry.register(
+        registration({
+          geometry: geometry({ geometryEpoch: 99 }),
+          measureInWindow: duplicateMeasure.measureInWindow,
+          owner: duplicateOwner,
+        }),
+      ),
+    ).toEqual({ boardId: 'analysis', status: 'duplicate' });
+
+    expect(
+      registry.update('analysis', duplicateOwner, {
+        geometry: geometry({ geometryEpoch: 100 }),
+      }),
+    ).toBe(false);
+    expect(registry.unregister('analysis', duplicateOwner)).toBe(false);
+    expect(registry.getBoardSnapshot('analysis')?.geometry.geometryEpoch).toBe(
+      3,
+    );
+
+    expect(registry.unregister('analysis', firstOwner)).toBe(true);
+    expect(
+      registry.register(
+        registration({
+          geometry: geometry({ geometryEpoch: 99 }),
+          measureInWindow: duplicateMeasure.measureInWindow,
+          owner: duplicateOwner,
+        }),
+      ),
+    ).toEqual({ boardId: 'analysis', status: 'registered' });
+    expect(registry.getBoardSnapshot('analysis')?.geometry.geometryEpoch).toBe(
+      99,
+    );
+  });
+
+  it('does not let one owner register under two board IDs', () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    registry.register(
+      registration({ measureInWindow: measurement.measureInWindow, owner }),
+    );
+
+    expect(
+      registry.register(
+        registration({
+          boardId: 'other',
+          measureInWindow: measurement.measureInWindow,
+          owner,
+        }),
+      ),
+    ).toEqual({
+      boardId: 'other',
+      registeredBoardId: 'analysis',
+      status: 'owner-conflict',
+    });
+    expect(registry.getBoardSnapshot('other')).toBeNull();
+  });
+
+  it('reserves an unavailable board identity without authorizing hover or release', async () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    registry.register(
+      registration({
+        available: false,
+        measureInWindow: measurement.measureInWindow,
+        owner,
+      }),
+    );
+
+    expect(registry.getBoardSnapshot('analysis')?.available).toBe(false);
+    await expect(
+      registry.refreshCachedBounds('analysis', owner),
+    ).resolves.toBeNull();
+    const unavailableSession = registry.beginDropSession({
+      dropEpoch: 1,
+      targetBoardId: 'analysis',
+    });
+    expectCancelled(
+      await registry.verifyDrop(unavailableSession, { x: 5, y: 5 }),
+      'board-missing',
+    );
+    expect(measurement.measureInWindow).not.toHaveBeenCalled();
+
+    expect(registry.update('analysis', owner, { available: true })).toBe(true);
+    expect(registry.getBoardSnapshot('analysis')?.available).toBe(true);
+    const availableSession = registry.beginDropSession({
+      dropEpoch: 2,
+      targetBoardId: 'analysis',
+    });
+    const pending = registry.verifyDrop(availableSession, { x: 5, y: 5 });
+    expect(measurement.measureInWindow).toHaveBeenCalledTimes(1);
+
+    expect(registry.update('analysis', owner, { available: false })).toBe(true);
+    expectCancelled(await pending, 'stale');
+    measurement.respond(0, { height: 80, width: 80, x: 0, y: 0 });
+    expect(registry.getBoardSnapshot('analysis')?.available).toBe(false);
+    expect(registry.getBoardSnapshot('analysis')?.cachedBounds).toBeNull();
+  });
+
+  it('exposes only detached immutable layout diagnostics', async () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    const readPositionRevision = jest.fn(() => 4);
+    registry.register(
+      registration({
+        measureInWindow: measurement.measureInWindow,
+        owner,
+        readPositionRevision,
+      }),
+    );
+
+    const refresh = registry.refreshCachedBounds('analysis', owner);
+    measurement.respond(0, { height: 80, width: 80, x: 10, y: 20 });
+    await expect(refresh).resolves.toEqual({
+      height: 80,
+      width: 80,
+      x: 10,
+      y: 20,
+    });
+
+    const snapshot = registry.getBoardSnapshot('analysis');
+    expect(snapshot).not.toBeNull();
+    expect(Object.keys(snapshot ?? {}).sort()).toEqual([
+      'available',
+      'boardId',
+      'cachedBounds',
+      'geometry',
+    ]);
+    expect(snapshot).not.toHaveProperty('position');
+    expect(snapshot).not.toHaveProperty('selection');
+    expect(snapshot).not.toHaveProperty('annotations');
+    expect(snapshot?.available).toBe(true);
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(Object.isFrozen(snapshot?.geometry)).toBe(true);
+    expect(Object.isFrozen(snapshot?.geometry.dimensions)).toBe(true);
+    expect(Object.isFrozen(snapshot?.cachedBounds)).toBe(true);
+    expect(readPositionRevision).not.toHaveBeenCalled();
+  });
+
+  it('keeps only the newest correlated cached-bounds measurement', async () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    registry.register(
+      registration({ measureInWindow: measurement.measureInWindow, owner }),
+    );
+
+    const staleRefresh = registry.refreshCachedBounds('analysis', owner);
+    const currentRefresh = registry.refreshCachedBounds('analysis', owner);
+    await expect(staleRefresh).resolves.toBeNull();
+    measurement.respond(0, { height: 80, width: 80, x: 0, y: 0 });
+    expect(registry.getBoardSnapshot('analysis')?.cachedBounds).toBeNull();
+    measurement.respond(1, { height: 80, width: 80, x: 100, y: 200 });
+    await expect(currentRefresh).resolves.toEqual({
+      height: 80,
+      width: 80,
+      x: 100,
+      y: 200,
+    });
+    expect(registry.getBoardSnapshot('analysis')?.cachedBounds).toEqual({
+      height: 80,
+      width: 80,
+      x: 100,
+      y: 200,
+    });
+  });
+
+  it.each([
+    {
+      expectedBottomRight: 'd1',
+      expectedTopLeft: 'a2',
+      orientation: 'white' as const,
+    },
+    {
+      expectedBottomRight: 'a2',
+      expectedTopLeft: 'd1',
+      orientation: 'black' as const,
+    },
+  ])(
+    'maps cached rectangular $orientation hover with half-open bounds',
+    async ({ expectedBottomRight, expectedTopLeft, orientation }) => {
+      const registry = createBoardLayoutRegistry();
+      const owner = createBoardLayoutOwnerToken();
+      const measurement = deferredMeasurement();
+      registry.register(
+        registration({
+          geometry: geometry({
+            dimensions: { columns: 4, rows: 2 },
+            orientation,
+          }),
+          measureInWindow: measurement.measureInWindow,
+          owner,
+        }),
+      );
+      const refresh = registry.refreshCachedBounds('analysis', owner);
+      measurement.respond(0, {
+        height: 200,
+        width: 400,
+        x: 100,
+        y: 200,
+      });
+      await refresh;
+      const session = registry.beginDropSession({
+        dropEpoch: 7,
+        targetBoardId: 'analysis',
+      });
+
+      expect(
+        registry.getCachedHover(session, { x: 100, y: 200 })?.targetSquare,
+      ).toBe(expectedTopLeft);
+      expect(
+        registry.getCachedHover(session, { x: 499.999, y: 399.999 })
+          ?.targetSquare,
+      ).toBe(expectedBottomRight);
+      expect(
+        registry.getCachedHover(session, { x: 200, y: 200 })?.targetSquare,
+      ).toBe(orientation === 'white' ? 'b2' : 'c1');
+      expect(registry.getCachedHover(session, { x: 500, y: 200 })).toBeNull();
+      expect(registry.getCachedHover(session, { x: 100, y: 400 })).toBeNull();
+    },
+  );
+
+  it('isolates an active target from unrelated board updates and unmounts', async () => {
+    const registry = createBoardLayoutRegistry();
+    const targetOwner = createBoardLayoutOwnerToken();
+    const otherOwner = createBoardLayoutOwnerToken();
+    const targetMeasurement = deferredMeasurement();
+    const otherMeasurement = deferredMeasurement();
+    registry.register(
+      registration({
+        measureInWindow: targetMeasurement.measureInWindow,
+        owner: targetOwner,
+      }),
+    );
+    registry.register(
+      registration({
+        boardId: 'other',
+        measureInWindow: otherMeasurement.measureInWindow,
+        owner: otherOwner,
+      }),
+    );
+    const session = registry.beginDropSession({
+      dropEpoch: 9,
+      targetBoardId: 'analysis',
+    });
+    const verification = registry.verifyDrop(session, { x: 10, y: 10 });
+
+    expect(
+      registry.update('other', otherOwner, {
+        geometry: geometry({ layoutRevision: 6 }),
+      }),
+    ).toBe(true);
+    expect(registry.unregister('other', otherOwner)).toBe(true);
+    targetMeasurement.respond(0, {
+      height: 80,
+      width: 80,
+      x: 0,
+      y: 0,
+    });
+    await expect(verification).resolves.toEqual(
+      expect.objectContaining({
+        boardId: 'analysis',
+        dropEpoch: 9,
+        status: 'accepted',
+      }),
+    );
+  });
+
+  it('[PARITY-BEHAVIOR-B20] always uses a fresh release measurement and reads the revision last', async () => {
+    const registry = createBoardLayoutRegistry({
+      providerGeometryRevision: 13,
+    });
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    const readPositionRevision = jest.fn(() => 21);
+    registry.register(
+      registration({
+        measureInWindow: measurement.measureInWindow,
+        owner,
+        readPositionRevision,
+      }),
+    );
+
+    const refresh = registry.refreshCachedBounds('analysis', owner);
+    measurement.respond(0, { height: 80, width: 80, x: 0, y: 0 });
+    await refresh;
+    const session = registry.beginDropSession({
+      dropEpoch: 8,
+      targetBoardId: 'analysis',
+    });
+    const verification = registry.verifyDrop(session, { x: 110, y: 110 });
+
+    expect(measurement.measureInWindow).toHaveBeenCalledTimes(2);
+    expect(readPositionRevision).not.toHaveBeenCalled();
+    measurement.respond(1, { height: 80, width: 80, x: 100, y: 100 });
+    await expect(verification).resolves.toEqual({
+      boardId: 'analysis',
+      bounds: { height: 80, width: 80, x: 100, y: 100 },
+      dropEpoch: 8,
+      geometryEpoch: 3,
+      layoutRevision: 5,
+      positionRevision: 21,
+      providerGeometryRevision: 13,
+      status: 'accepted',
+      targetSquare: 'b7',
+    });
+    expect(readPositionRevision).toHaveBeenCalledTimes(1);
+
+    const result = await verification;
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.isFrozen(result.status === 'accepted' && result.bounds)).toBe(
+      true,
+    );
+  });
+
+  it('snapshots release coordinates before asynchronous native measurement', async () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    registry.register(
+      registration({ measureInWindow: measurement.measureInWindow, owner }),
+    );
+    const session = registry.beginDropSession({
+      dropEpoch: 1,
+      targetBoardId: 'analysis',
+    });
+    const point = { x: 5, y: 5 };
+    const verification = registry.verifyDrop(session, point);
+
+    point.x = 75;
+    point.y = 75;
+    measurement.respond(0, { height: 80, width: 80, x: 0, y: 0 });
+
+    await expect(verification).resolves.toEqual(
+      expect.objectContaining({ status: 'accepted', targetSquare: 'a8' }),
+    );
+  });
+
+  it.each([
+    { expected: 'a2', orientation: 'white' as const },
+    { expected: 'd1', orientation: 'black' as const },
+  ])(
+    'freshly maps a synchronous rectangular $orientation release',
+    async ({ expected, orientation }) => {
+      const registry = createBoardLayoutRegistry();
+      const owner = createBoardLayoutOwnerToken();
+      const measureInWindow = jest.fn<undefined, [MeasurementCallback]>(
+        (callback) => {
+          callback(100, 200, 400, 200);
+        },
+      );
+      registry.register(
+        registration({
+          geometry: geometry({
+            dimensions: { columns: 4, rows: 2 },
+            orientation,
+          }),
+          measureInWindow,
+          owner,
+        }),
+      );
+      const session = registry.beginDropSession({
+        dropEpoch: 12,
+        targetBoardId: 'analysis',
+      });
+
+      await expect(
+        registry.verifyDrop(session, { x: 150, y: 250 }),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          status: 'accepted',
+          targetSquare: expected,
+        }),
+      );
+      expect(measureInWindow).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('accepts a freshly measured off-board point as a null target', async () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    registry.register(
+      registration({ measureInWindow: measurement.measureInWindow, owner }),
+    );
+    const session = registry.beginDropSession({
+      dropEpoch: 1,
+      targetBoardId: 'analysis',
+    });
+    const verification = registry.verifyDrop(session, { x: 90, y: 40 });
+    measurement.respond(0, { height: 80, width: 80, x: 100, y: 20 });
+
+    await expect(verification).resolves.toEqual(
+      expect.objectContaining({ status: 'accepted', targetSquare: null }),
+    );
+  });
+
+  it('fails closed for invalid points, bounds, and position revisions', async () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    const readPositionRevision = jest.fn<Revision | null, []>(() => null);
+    registry.register(
+      registration({
+        measureInWindow: measurement.measureInWindow,
+        owner,
+        readPositionRevision,
+      }),
+    );
+
+    const invalidPointSession = registry.beginDropSession({
+      dropEpoch: 1,
+      targetBoardId: 'analysis',
+    });
+    const invalidPoint = registry.verifyDrop(invalidPointSession, {
+      x: Number.NaN,
+      y: 10,
+    });
+    expectCancelled(await invalidPoint, 'invalid-point');
+    expect(measurement.measureInWindow).not.toHaveBeenCalled();
+    expect(readPositionRevision).not.toHaveBeenCalled();
+
+    const invalidBoundsSession = registry.beginDropSession({
+      dropEpoch: 2,
+      targetBoardId: 'analysis',
+    });
+    const invalidBounds = registry.verifyDrop(invalidBoundsSession, {
+      x: 10,
+      y: 10,
+    });
+    measurement.respond(0, { height: 80, width: 0, x: 0, y: 0 });
+    expectCancelled(await invalidBounds, 'measurement-failed');
+    expect(readPositionRevision).not.toHaveBeenCalled();
+
+    const invalidRevisionSession = registry.beginDropSession({
+      dropEpoch: 3,
+      targetBoardId: 'analysis',
+    });
+    const invalidRevision = registry.verifyDrop(invalidRevisionSession, {
+      x: 10,
+      y: 10,
+    });
+    measurement.respond(1, { height: 80, width: 80, x: 0, y: 0 });
+    expectCancelled(await invalidRevision, 'position-unavailable');
+    expect(readPositionRevision).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the commit-current revision accessor after measurement verification', async () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    const staleReader = jest.fn(() => 1);
+    const currentReader = jest.fn(() => 9);
+    registry.register(
+      registration({
+        measureInWindow: measurement.measureInWindow,
+        owner,
+        readPositionRevision: staleReader,
+      }),
+    );
+    const session = registry.beginDropSession({
+      dropEpoch: 4,
+      targetBoardId: 'analysis',
+    });
+    const verification = registry.verifyDrop(session, { x: 10, y: 10 });
+    expect(
+      registry.update('analysis', owner, {
+        readPositionRevision: currentReader,
+      }),
+    ).toBe(true);
+    measurement.respond(0, { height: 80, width: 80, x: 0, y: 0 });
+
+    await expect(verification).resolves.toEqual(
+      expect.objectContaining({ positionRevision: 9, status: 'accepted' }),
+    );
+    expect(staleReader).not.toHaveBeenCalled();
+    expect(currentReader).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    {
+      invalidate: (
+        registry: ReturnType<typeof createBoardLayoutRegistry>,
+        owner: BoardLayoutOwnerToken,
+      ) =>
+        registry.update('analysis', owner, {
+          geometry: geometry({ geometryEpoch: 4 }),
+        }),
+      name: 'board geometry epoch',
+    },
+    {
+      invalidate: (
+        registry: ReturnType<typeof createBoardLayoutRegistry>,
+        owner: BoardLayoutOwnerToken,
+      ) =>
+        registry.update('analysis', owner, {
+          geometry: geometry({ layoutRevision: 6 }),
+        }),
+      name: 'layout revision',
+    },
+    {
+      invalidate: (
+        registry: ReturnType<typeof createBoardLayoutRegistry>,
+        owner: BoardLayoutOwnerToken,
+      ) => {
+        void owner;
+        registry.setProviderGeometryRevision(1);
+      },
+      name: 'provider geometry revision',
+    },
+  ])(
+    'makes a late callback inert after $name changes',
+    async ({ invalidate }) => {
+      const registry = createBoardLayoutRegistry();
+      const owner = createBoardLayoutOwnerToken();
+      const measurement = deferredMeasurement();
+      const readPositionRevision = jest.fn(() => 3);
+      registry.register(
+        registration({
+          measureInWindow: measurement.measureInWindow,
+          owner,
+          readPositionRevision,
+        }),
+      );
+      const session = registry.beginDropSession({
+        dropEpoch: 2,
+        targetBoardId: 'analysis',
+      });
+      const verification = registry.verifyDrop(session, { x: 10, y: 10 });
+
+      invalidate(registry, owner);
+      expectCancelled(await verification, 'stale');
+      measurement.respond(0, { height: 80, width: 80, x: 0, y: 0 });
+      expect(readPositionRevision).not.toHaveBeenCalled();
+    },
+  );
+
+  it('invalidates an old drop epoch and ignores its late measurement', async () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    const readPositionRevision = jest.fn(() => 6);
+    registry.register(
+      registration({
+        measureInWindow: measurement.measureInWindow,
+        owner,
+        readPositionRevision,
+      }),
+    );
+    const firstSession = registry.beginDropSession({
+      dropEpoch: 1,
+      targetBoardId: 'analysis',
+    });
+    const first = registry.verifyDrop(firstSession, { x: 10, y: 10 });
+    const secondSession = registry.beginDropSession({
+      dropEpoch: 2,
+      targetBoardId: 'analysis',
+    });
+
+    expectCancelled(await first, 'stale');
+    measurement.respond(0, { height: 80, width: 80, x: 0, y: 0 });
+    expect(readPositionRevision).not.toHaveBeenCalled();
+
+    const second = registry.verifyDrop(secondSession, { x: 10, y: 10 });
+    measurement.respond(1, { height: 80, width: 80, x: 0, y: 0 });
+    await expect(second).resolves.toEqual(
+      expect.objectContaining({ dropEpoch: 2, status: 'accepted' }),
+    );
+  });
+
+  it('does not revive a verification when the same board ID remounts', async () => {
+    const registry = createBoardLayoutRegistry();
+    const firstOwner = createBoardLayoutOwnerToken();
+    const nextOwner = createBoardLayoutOwnerToken();
+    const firstMeasurement = deferredMeasurement();
+    const nextMeasurement = deferredMeasurement();
+    const nextReader = jest.fn(() => 8);
+    registry.register(
+      registration({
+        measureInWindow: firstMeasurement.measureInWindow,
+        owner: firstOwner,
+      }),
+    );
+    const session = registry.beginDropSession({
+      dropEpoch: 5,
+      targetBoardId: 'analysis',
+    });
+    const verification = registry.verifyDrop(session, { x: 10, y: 10 });
+
+    registry.unregister('analysis', firstOwner);
+    registry.register(
+      registration({
+        measureInWindow: nextMeasurement.measureInWindow,
+        owner: nextOwner,
+        readPositionRevision: nextReader,
+      }),
+    );
+    expectCancelled(await verification, 'stale');
+    firstMeasurement.respond(0, { height: 80, width: 80, x: 0, y: 0 });
+    expect(nextReader).not.toHaveBeenCalled();
+    expect(registry.getCachedHover(session, { x: 10, y: 10 })).toBeNull();
+  });
+
+  it('correlates multiple release measurements within one session', async () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    const readPositionRevision = jest.fn(() => 2);
+    registry.register(
+      registration({
+        measureInWindow: measurement.measureInWindow,
+        owner,
+        readPositionRevision,
+      }),
+    );
+    const session = registry.beginDropSession({
+      dropEpoch: 3,
+      targetBoardId: 'analysis',
+    });
+    const first = registry.verifyDrop(session, { x: 10, y: 10 });
+    const second = registry.verifyDrop(session, { x: 20, y: 20 });
+
+    expectCancelled(await first, 'stale');
+    measurement.respond(0, { height: 80, width: 80, x: 0, y: 0 });
+    expect(readPositionRevision).not.toHaveBeenCalled();
+    measurement.respond(1, { height: 80, width: 80, x: 0, y: 0 });
+    await expect(second).resolves.toEqual(
+      expect.objectContaining({ status: 'accepted', targetSquare: 'c6' }),
+    );
+    expect(readPositionRevision).toHaveBeenCalledTimes(1);
+  });
+
+  it('times out verification and leaves a late callback inert', async () => {
+    jest.useFakeTimers();
+    try {
+      const registry = createBoardLayoutRegistry({
+        verificationTimeoutMs: 20,
+      });
+      const owner = createBoardLayoutOwnerToken();
+      const measurement = deferredMeasurement();
+      const readPositionRevision = jest.fn(() => 1);
+      registry.register(
+        registration({
+          measureInWindow: measurement.measureInWindow,
+          owner,
+          readPositionRevision,
+        }),
+      );
+      const session = registry.beginDropSession({
+        dropEpoch: 1,
+        targetBoardId: 'analysis',
+      });
+      const verification = registry.verifyDrop(session, { x: 10, y: 10 });
+
+      jest.advanceTimersByTime(20);
+      expectCancelled(await verification, 'measurement-timeout');
+      measurement.respond(0, { height: 80, width: 80, x: 0, y: 0 });
+      expect(readPositionRevision).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('fails closed after measurement-token exhaustion', async () => {
+    const registry = createBoardLayoutRegistry({
+      initialMeasurementToken: Number.MAX_SAFE_INTEGER,
+    });
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    registry.register(
+      registration({ measureInWindow: measurement.measureInWindow, owner }),
+    );
+    const session = registry.beginDropSession({
+      dropEpoch: 1,
+      targetBoardId: 'analysis',
+    });
+    const first = registry.verifyDrop(session, { x: 10, y: 10 });
+    measurement.respond(0, { height: 80, width: 80, x: 0, y: 0 });
+    await expect(first).resolves.toEqual(
+      expect.objectContaining({ status: 'accepted' }),
+    );
+
+    expectCancelled(
+      await registry.verifyDrop(session, { x: 10, y: 10 }),
+      'token-exhausted',
+    );
+    expect(measurement.measureInWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed when measurement throws or the target is absent', async () => {
+    const registry = createBoardLayoutRegistry();
+    const missingSession = registry.beginDropSession({
+      dropEpoch: 1,
+      targetBoardId: 'missing',
+    });
+    expectCancelled(
+      await registry.verifyDrop(missingSession, { x: 1, y: 1 }),
+      'board-missing',
+    );
+
+    const owner = createBoardLayoutOwnerToken();
+    const throwingMeasure: MeasureBoardInWindow = () => {
+      throw new Error('native host unavailable');
+    };
+    registry.register(
+      registration({ measureInWindow: throwingMeasure, owner }),
+    );
+    const throwingSession = registry.beginDropSession({
+      dropEpoch: 2,
+      targetBoardId: 'analysis',
+    });
+    expectCancelled(
+      await registry.verifyDrop(throwingSession, { x: 1, y: 1 }),
+      'measurement-failed',
+    );
+  });
+
+  it('cancels pending work and rejects new registration after disposal', async () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    const readPositionRevision = jest.fn(() => 1);
+    const entry = registration({
+      measureInWindow: measurement.measureInWindow,
+      owner,
+      readPositionRevision,
+    });
+    registry.register(entry);
+    const session = registry.beginDropSession({
+      dropEpoch: 1,
+      targetBoardId: 'analysis',
+    });
+    const verification = registry.verifyDrop(session, { x: 1, y: 1 });
+
+    registry.dispose();
+    expectCancelled(await verification, 'disposed');
+    measurement.respond(0, { height: 80, width: 80, x: 0, y: 0 });
+    expect(readPositionRevision).not.toHaveBeenCalled();
+    expect(() => registry.register(entry)).toThrow('disposed');
+  });
+
+  it('deactivates transient work without preventing a later registration', async () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const replacementOwner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    registry.register(
+      registration({ measureInWindow: measurement.measureInWindow, owner }),
+    );
+    const session = registry.beginDropSession({
+      dropEpoch: 1,
+      targetBoardId: 'analysis',
+    });
+    const verification = registry.verifyDrop(session, { x: 1, y: 1 });
+
+    registry.deactivate();
+    expectCancelled(await verification, 'stale');
+    expect(registry.getBoardSnapshot('analysis')).toBeNull();
+    expect(
+      registry.register(
+        registration({
+          measureInWindow: measurement.measureInWindow,
+          owner: replacementOwner,
+        }),
+      ),
+    ).toEqual({ boardId: 'analysis', status: 'registered' });
+  });
+});

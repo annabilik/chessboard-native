@@ -97,6 +97,8 @@ function testPresentationSharedValues(): Readonly<InteractionPresentationSharedV
     ),
     pointerX: testSharedValue(120),
     pointerY: testSharedValue(80),
+    pointerWindowX: testSharedValue(220),
+    pointerWindowY: testSharedValue(180),
     sourceSquare: testSharedValue<string | null>('e2'),
     targetSquare: testSharedValue<string | null>('e4'),
   });

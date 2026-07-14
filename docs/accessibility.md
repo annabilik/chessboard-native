@@ -12,6 +12,14 @@ removal, cancellation, square activation, and selection-clearing actions
 without turning the cursor into semantic selection or creating square-level
 accessibility targets.
 
+`ChessboardProvider` is compositional coordination, not an accessibility
+control. It contributes no focus target, while its shared drag overlay is
+pointerless and hides all overlay artwork from the accessibility tree. Each
+registered board keeps its own adjustable host and virtual cursor. Multiple
+boards under one provider therefore remain independently focusable without
+sharing cursor, selection, pending, or announcement state; a standalone board's
+private provider is likewise invisible.
+
 ## Virtual cursor
 
 The component owns one transient virtual cursor. It is presentation state, not
@@ -187,8 +195,8 @@ animation paths. Callback and timeout semantics never depend on reduced motion.
 ## Manual TalkBack and VoiceOver pass
 
 Run the Expo gallery and test **Accessibility prototype** first, then repeat the
-interaction-specific steps on **Controlled move requests**. Test Android and
-iOS separately:
+interaction-specific steps on **Controlled move requests** and **Provider
+coordination**. Test Android and iOS separately:
 
 1. Enable TalkBack or VoiceOver and focus the board.
 2. Confirm the board is one focus target and visual squares are not separate
@@ -226,6 +234,10 @@ iOS separately:
 15. Repeat the fallback with removal and cancellation. Confirm removal sends a
     null target, cancellation does not update position, and neither action
     creates a square accessibility element.
+16. On the provider-coordination route, move between the two boards. Confirm
+    each board is one distinct adjustable target, each retains its own cursor
+    and value, and the provider and shared drag overlay never become focus
+    targets.
 
 The automated component and native contracts do not replace this
 assistive-technology pass.

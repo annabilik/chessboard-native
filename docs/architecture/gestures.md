@@ -18,22 +18,52 @@ values and transforms. Gesture code emits reducer events; a separate effect
 executor invokes callbacks, timers, aborts, and announcements only after
 checking the active epoch.
 
-`ChessboardProvider` owns one transient gesture coordinator, board layout
-registry, drag overlay, and at most one active drag. It owns no position,
-annotations, or semantic board selection. Standalone boards create a private
-provider.
+`ChessboardProvider` owns one transient gesture coordinator, tokenized board
+layout registry, shared drag overlay, and at most one active drag. It owns no
+position, annotations, or semantic board selection. A standalone `Chessboard`
+creates a private provider only when no provider exists; a board under an
+explicit provider reuses the nearest provider.
 
 Every board ID is required, non-empty, unique within its nearest provider, and
 stable for the mount lifetime. Duplicate or changed IDs take the typed board
-error path and never create a conflicting registration. All provider state is
-routed by that ID.
+error path and never create a conflicting registration. Registration and
+cleanup also carry an opaque mount token, so a rejected duplicate or late
+cleanup cannot update or unregister the accepted board. Nested providers form
+independent identity scopes. All shared state is routed by board ID and mount
+token.
+
+The registry retains measured geometry, cached window bounds, native
+measurement capability, and commit-safe accessors required to route transient
+work. It never retains a position, annotation collection, semantic selection,
+or a renderable fallback snapshot. Abandoned renders never register. Strict
+Mode effect replay unregisters and re-registers token-safely without leaving a
+stale reservation because boards publish and remove entries only at committed
+lifecycle boundaries. Registration reserves identity separately from drop
+availability: a board becomes a target only after publishing a current positive
+projected layout, and becomes unavailable again whenever that layout is absent.
+Suspense and Offscreen effect deactivations clear transient registry work
+without permanently poisoning the preserved provider runtime.
 
 An external spare names exactly one target board. Cached window bounds are
-hover hints only. On release the provider remeasures the target synchronously
-where supported or enters an epoch-correlated verifying state while
-`measureInWindow` resolves. It emits only when the target remains registered,
-the measurement epoch and controlled `geometryRevision` remain current, and
-the destination revision is read at emission.
+hover hints only. On release the provider always requests a fresh measurement:
+it resolves synchronously where supported or enters an epoch-correlated
+verification session while `measureInWindow` completes. A future external
+source can keep its provider overlay visible while that session is pending.
+Fresh window coordinates are translated into the target's local measured
+coordinate system and use the same
+half-open, orientation-aware hit test as an on-board gesture. An out-of-bounds
+point resolves to `targetSquare: null`; an invalid or failed measurement
+cancels.
+
+A release resolves only while the target still has the same mount token and
+geometry epoch, the provider's controlled `geometryRevision` is unchanged, and
+the release remains the active provider interaction. Target unmount/remount,
+layout, dimensions, orientation, explicit geometry invalidation, or a newer
+drag therefore makes late measurement work inert. Position changes alone do
+not make geometry stale: the destination board's current position revision is
+read through a commit-current adapter only after measurement succeeds. P2.5
+installs this private resolution boundary; `SparePiece` consumes it in P2.6 and
+performs the final current-handler lookup.
 
 Once a drag activates it is exclusive with registered ancestor ScrollViews.
 The package does not programmatically auto-scroll an arbitrary ancestor.
@@ -132,23 +162,27 @@ reusing RNGH's recognizer handler tag. Start and terminal signals therefore
 correlate within one cycle, and delayed terminal work cannot settle a newer
 cycle. Tap also fails explicitly when a second pointer appears.
 
-The drag plane and overlay remain accessibility-hidden descendants of the one
-stable board control. The active drag uses shared pointer values, source-ghost
-projection, and a pointerless overlay without retaining a position snapshot.
-Pending decision and commit phases are reducer presentation only; public
-pressed/dragging/pending style options, provider coordination, ScrollView
-arbitration, and native frame-performance evidence remain later integration
-work. Controlled destination, selected, and disabled square styles are already
-derived directly from the current selection prop.
+The board drag plane remains an accessibility-hidden descendant of the stable
+board control. Its active drag publishes shared pointer values and visual
+source data to the nearest provider, which grants exactly one overlay lease
+across all registered boards. The owning board host renders that lease as a
+pointerless, accessibility-hidden overlay; the source ghost also stays
+board-local. Replacing or cancelling the active epoch removes the prior overlay
+without retaining a position snapshot. Pending decision and commit phases are
+reducer presentation only; public pressed/dragging/pending style options,
+ScrollView arbitration, and native frame-performance evidence remain later
+integration work. Controlled destination, selected, and disabled square styles
+are already derived directly from the current selection prop.
 
 ## Consequences
 
 Provider coordination enables external sources without sharing game state.
 Release-time measurement may briefly delay a drop, but it prevents stale bounds
-from emitting an incorrect square. The standalone mounted runtime proves
-controlled drag and accessible requests first; native ScrollView,
-provider/multi-board gesture coordination, lifecycle, and performance evidence
-remain mandatory for those later layers. Controlled square activation adds no
+from resolving an incorrect square. Provider and multi-board contracts cover
+registration ownership, shared-overlay exclusivity, release verification, and
+stale native callbacks before the public external source is added. Native
+ScrollView arbitration, full lifecycle automation, and frame-performance
+evidence remain mandatory later layers. Controlled square activation adds no
 second semantic store: its component and model tests must keep exclusive
 destination routing, accessible clearing, current-snapshot payloads, and stale
 selection rejection deterministic.
