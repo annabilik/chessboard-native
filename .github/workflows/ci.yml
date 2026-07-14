@@ -199,6 +199,11 @@ jobs:
       - name: Install pinned Android SDK packages
         run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006" "emulator" "system-images;android-35;aosp_atd;x86_64"
 
+      - name: Install pinned emulator runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes libpulse0
+
       - name: Pin Android emulator 36.3.10 for managed devices
         env:
           EMULATOR_BUILD_ID: '14472402'
