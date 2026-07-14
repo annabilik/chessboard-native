@@ -174,7 +174,7 @@ jobs:
     needs:
       - baseline
       - package-artifact
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     timeout-minutes: 75
 
     steps:
@@ -239,7 +239,7 @@ jobs:
           fi
 
           echo "::warning::Managed Android emulator snapshot setup failed; cleaning the device and retrying once."
-          adb kill-server || true
+          "$ANDROID_HOME/platform-tools/adb" kill-server || true
           (
             cd android
             ./gradlew :app:cleanManagedDevices --no-daemon
