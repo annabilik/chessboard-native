@@ -218,7 +218,12 @@ jobs:
             "$ANDROID_HOME/emulator/package.xml"
           grep -q '<revision><major>36</major><minor>3</minor><micro>10</micro></revision>' "$ANDROID_HOME/emulator/package.xml"
 
-          emulator_version=$("$ANDROID_HOME/emulator/emulator" -version 2>&1)
+          emulator_version_file="$RUNNER_TEMP/emulator-version.txt"
+          if ! "$ANDROID_HOME/emulator/emulator" -version >"$emulator_version_file" 2>&1; then
+            cat "$emulator_version_file"
+            exit 1
+          fi
+          emulator_version=$(cat "$emulator_version_file")
           echo "$emulator_version"
           grep -Fq 'Android emulator version 36.3.10.0' <<<"$emulator_version"
           grep -Fq "(build_id $EMULATOR_BUILD_ID)" <<<"$emulator_version"
