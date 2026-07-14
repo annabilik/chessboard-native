@@ -221,7 +221,30 @@ jobs:
 
       - name: Run Android accessibility audit
         working-directory: ${{ runner.temp }}/packed-native
-        run: npm run android:accessibility:managed -- -PreactNativeArchitectures=x86_64 -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect
+        shell: bash
+        run: |
+          audit_log="$RUNNER_TEMP/android-accessibility-audit.log"
+          retry_log="$RUNNER_TEMP/android-accessibility-audit-retry.log"
+          audit_args=(
+            -PreactNativeArchitectures=x86_64
+            -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect
+          )
+
+          if npm run android:accessibility:managed -- "${audit_args[@]}" 2>&1 | tee "$audit_log"; then
+            exit 0
+          fi
+
+          if ! grep -q 'EmulatorSnapshotCannotCreatedException' "$audit_log"; then
+            exit 1
+          fi
+
+          echo "::warning::Managed Android emulator snapshot setup failed; cleaning the device and retrying once."
+          adb kill-server || true
+          (
+            cd android
+            ./gradlew :app:cleanManagedDevices --no-daemon
+          )
+          npm run android:accessibility:managed -- "${audit_args[@]}" 2>&1 | tee "$retry_log"
 
       - name: Upload Android accessibility audit results
         if: ${{ always() }}
@@ -229,6 +252,8 @@ jobs:
         with:
           name: android-accessibility-audit
           path: |
+            ${{ runner.temp }}/android-accessibility-audit.log
+            ${{ runner.temp }}/android-accessibility-audit-retry.log
             ${{ runner.temp }}/packed-native/android/app/build/reports/androidTests
             ${{ runner.temp }}/packed-native/android/app/build/outputs/androidTest-results
           if-no-files-found: ignore
