@@ -181,9 +181,15 @@ export default function GalleryIndex() {
           The boards now expose one adjustable accessibility control while the
           visual subtree remains decorative. Annotation drawing, custom square
           rendering, and transitions remain later slices. Controlled selection
-          activation, move requests, and provider coordination have focused
-          examples.
+          activation, move requests, provider coordination, and external spare
+          placement have focused examples.
         </Text>
+
+        <Link asChild href="/spare-pieces">
+          <Pressable style={styles.routeLink}>
+            <Text style={styles.routeLinkText}>Open spare-piece editor</Text>
+          </Pressable>
+        </Link>
 
         <Link asChild href="/provider-coordination">
           <Pressable style={styles.routeLink}>

@@ -2,12 +2,16 @@ import type { Revision } from '../../src/public-types';
 import {
   createBoardLayoutOwnerToken,
   createBoardLayoutRegistry,
+  type AcceptedBoardDropVerification,
   type BoardDropVerificationResult,
   type BoardLayoutGeometry,
   type BoardLayoutOwnerToken,
   type BoardLayoutRegistration,
   type BoardWindowBounds,
+  type CanStartProviderSpareDrag,
   type MeasureBoardInWindow,
+  type ProviderSpareMove,
+  type RequestProviderSpareMove,
 } from '../../src/internal/board-layout-registry';
 
 type MeasurementCallback = Parameters<MeasureBoardInWindow>[0];
@@ -51,7 +55,9 @@ function registration(options: {
   readonly geometry?: BoardLayoutGeometry;
   readonly measureInWindow: MeasureBoardInWindow;
   readonly owner: BoardLayoutOwnerToken;
+  readonly readMoveRequest?: () => RequestProviderSpareMove | null;
   readonly readPositionRevision?: () => Revision | null;
+  readonly readSpareDragPermission?: () => CanStartProviderSpareDrag | null;
 }): BoardLayoutRegistration {
   return {
     available: options.available ?? true,
@@ -59,7 +65,37 @@ function registration(options: {
     geometry: options.geometry ?? geometry(),
     measureInWindow: options.measureInWindow,
     owner: options.owner,
+    readMoveRequest: options.readMoveRequest ?? (() => null),
     readPositionRevision: options.readPositionRevision ?? (() => 11),
+    readSpareDragPermission: options.readSpareDragPermission ?? (() => null),
+  };
+}
+
+const spareSource = Object.freeze({
+  kind: 'spare' as const,
+  spareId: 'white-queen',
+});
+const sparePiece = Object.freeze({ id: 'palette-queen', pieceType: 'wQ' });
+
+function providerSpareMove(
+  overrides: Partial<ProviderSpareMove> = {},
+): Readonly<ProviderSpareMove> {
+  return {
+    input: 'drag',
+    piece: sparePiece,
+    source: spareSource,
+    targetSquare: 'a8',
+    ...overrides,
+  };
+}
+
+function providerSpareRequest(
+  input: 'accessibility' | 'drag' = 'drag',
+): Omit<ProviderSpareMove, 'targetSquare'> {
+  return {
+    input,
+    piece: sparePiece,
+    source: spareSource,
   };
 }
 
@@ -73,6 +109,15 @@ function expectCancelled(
   expect(result).toEqual(
     expect.objectContaining({ reason, status: 'cancelled' }),
   );
+}
+
+function expectAccepted(
+  result: Readonly<BoardDropVerificationResult>,
+): asserts result is Readonly<AcceptedBoardDropVerification> {
+  expect(result.status).toBe('accepted');
+  if (result.status !== 'accepted') {
+    throw new Error(`Expected an accepted result, received ${result.status}.`);
+  }
 }
 
 describe('board layout registry', () => {
@@ -571,6 +616,365 @@ describe('board layout registry', () => {
     );
     expect(staleReader).not.toHaveBeenCalled();
     expect(currentReader).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses commit-current target authority when preflighting a spare drag', () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    const stalePermission = jest.fn<
+      ReturnType<CanStartProviderSpareDrag>,
+      Parameters<CanStartProviderSpareDrag>
+    >(() => false);
+    const currentPermission = jest.fn<
+      ReturnType<CanStartProviderSpareDrag>,
+      Parameters<CanStartProviderSpareDrag>
+    >(() => true);
+    const staleReader = jest.fn(() => stalePermission);
+    const currentReader = jest.fn(() => currentPermission);
+    registry.register(
+      registration({
+        measureInWindow: measurement.measureInWindow,
+        owner,
+        readSpareDragPermission: staleReader,
+      }),
+    );
+
+    expect(
+      registry.update('analysis', owner, {
+        readSpareDragPermission: currentReader,
+      }),
+    ).toBe(true);
+    expect(
+      registry.canStartSpareDrag('analysis', spareSource, sparePiece),
+    ).toBe(true);
+    expect(staleReader).not.toHaveBeenCalled();
+    expect(stalePermission).not.toHaveBeenCalled();
+    expect(currentReader).toHaveBeenCalledTimes(1);
+    expect(currentPermission).toHaveBeenCalledWith(spareSource, sparePiece);
+  });
+
+  it('fails spare-drag preflight closed for missing authority and exceptions', () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    const throwingReader = jest.fn((): CanStartProviderSpareDrag | null => {
+      throw new Error('permission accessor failed');
+    });
+    const throwingPermission: CanStartProviderSpareDrag = () => {
+      throw new Error('permission failed');
+    };
+    registry.register(
+      registration({
+        measureInWindow: measurement.measureInWindow,
+        owner,
+        readSpareDragPermission: throwingReader,
+      }),
+    );
+
+    expect(
+      registry.canStartSpareDrag('analysis', spareSource, sparePiece),
+    ).toBe(false);
+    expect(throwingReader).toHaveBeenCalledTimes(1);
+
+    expect(
+      registry.update('analysis', owner, {
+        readSpareDragPermission: () => throwingPermission,
+      }),
+    ).toBe(true);
+    expect(
+      registry.canStartSpareDrag('analysis', spareSource, sparePiece),
+    ).toBe(false);
+
+    expect(
+      registry.update('analysis', owner, {
+        readSpareDragPermission: () => null,
+      }),
+    ).toBe(true);
+    expect(
+      registry.canStartSpareDrag('analysis', spareSource, sparePiece),
+    ).toBe(false);
+    expect(registry.canStartSpareDrag('missing', spareSource, sparePiece)).toBe(
+      false,
+    );
+
+    expect(registry.update('analysis', owner, { available: false })).toBe(true);
+    expect(
+      registry.canStartSpareDrag('analysis', spareSource, sparePiece),
+    ).toBe(false);
+  });
+
+  it('invokes the commit-current target adapter after a successful verification', async () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    const staleRequest = jest.fn(() => true);
+    const currentRequest: jest.MockedFunction<RequestProviderSpareMove> =
+      jest.fn((move) => {
+        void move;
+        return true;
+      });
+    const staleReader = jest.fn(() => staleRequest);
+    const currentReader = jest.fn(() => currentRequest);
+    registry.register(
+      registration({
+        measureInWindow: measurement.measureInWindow,
+        owner,
+        readMoveRequest: staleReader,
+      }),
+    );
+    const session = registry.beginDropSession({
+      dropEpoch: 20,
+      targetBoardId: 'analysis',
+    });
+    const pending = registry.verifyDrop(session, { x: 5, y: 5 });
+    measurement.respond(0, { height: 80, width: 80, x: 0, y: 0 });
+    const verification = await pending;
+    expectAccepted(verification);
+
+    expect(
+      registry.update('analysis', owner, { readMoveRequest: currentReader }),
+    ).toBe(true);
+    expect(
+      registry.requestVerifiedDrop(
+        session,
+        verification,
+        providerSpareRequest(),
+      ),
+    ).toBe(true);
+    expect(staleReader).not.toHaveBeenCalled();
+    expect(staleRequest).not.toHaveBeenCalled();
+    expect(currentReader).toHaveBeenCalledTimes(1);
+    expect(currentRequest).toHaveBeenCalledWith({
+      input: 'drag',
+      piece: { id: 'palette-queen', pieceType: 'wQ' },
+      source: { kind: 'spare', spareId: 'white-queen' },
+      targetSquare: 'a8',
+    });
+    const emitted = currentRequest.mock.calls[0]?.[0];
+    expect(Object.isFrozen(emitted)).toBe(true);
+    expect(Object.isFrozen(emitted?.piece)).toBe(true);
+    expect(Object.isFrozen(emitted?.source)).toBe(true);
+  });
+
+  it('requires the exact session and verification capability and consumes it once', async () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const request: jest.MockedFunction<RequestProviderSpareMove> = jest.fn(
+      (move) => {
+        void move;
+        return true;
+      },
+    );
+    const measureInWindow: MeasureBoardInWindow = (callback) => {
+      callback(0, 0, 80, 80);
+    };
+    registry.register(
+      registration({
+        measureInWindow,
+        owner,
+        readMoveRequest: () => request,
+      }),
+    );
+    const oldSession = registry.beginDropSession({
+      dropEpoch: 19,
+      targetBoardId: 'analysis',
+    });
+    const session = registry.beginDropSession({
+      dropEpoch: 20,
+      targetBoardId: 'analysis',
+    });
+    const verification = await registry.verifyDrop(session, { x: 5, y: 5 });
+    expectAccepted(verification);
+    const lookalike = Object.freeze({
+      ...verification,
+    }) as Readonly<AcceptedBoardDropVerification>;
+
+    expect(
+      registry.requestVerifiedDrop(
+        oldSession,
+        verification,
+        providerSpareRequest(),
+      ),
+    ).toBe(false);
+    expect(
+      registry.requestVerifiedDrop(session, lookalike, providerSpareRequest()),
+    ).toBe(false);
+    expect(request).not.toHaveBeenCalled();
+
+    expect(
+      registry.requestVerifiedDrop(
+        session,
+        verification,
+        providerSpareRequest(),
+      ),
+    ).toBe(true);
+    expect(
+      registry.requestVerifiedDrop(
+        session,
+        verification,
+        providerSpareRequest(),
+      ),
+    ).toBe(false);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an accepted verification after target layout authority becomes stale', async () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const request: jest.MockedFunction<RequestProviderSpareMove> = jest.fn(
+      (move) => {
+        void move;
+        return true;
+      },
+    );
+    const measureInWindow: MeasureBoardInWindow = (callback) => {
+      callback(0, 0, 80, 80);
+    };
+    registry.register(
+      registration({
+        measureInWindow,
+        owner,
+        readMoveRequest: () => request,
+      }),
+    );
+    const session = registry.beginDropSession({
+      dropEpoch: 21,
+      targetBoardId: 'analysis',
+    });
+    const verification = await registry.verifyDrop(session, { x: 5, y: 5 });
+    expectAccepted(verification);
+
+    expect(
+      registry.update('analysis', owner, {
+        geometry: geometry({ layoutRevision: 6 }),
+      }),
+    ).toBe(true);
+    expect(
+      registry.requestVerifiedDrop(
+        session,
+        verification,
+        providerSpareRequest(),
+      ),
+    ).toBe(false);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('passes a freshly verified off-board null target to the move adapter', async () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    const request: jest.MockedFunction<RequestProviderSpareMove> = jest.fn(
+      (move) => {
+        void move;
+        return true;
+      },
+    );
+    registry.register(
+      registration({
+        measureInWindow: measurement.measureInWindow,
+        owner,
+        readMoveRequest: () => request,
+      }),
+    );
+    const session = registry.beginDropSession({
+      dropEpoch: 22,
+      targetBoardId: 'analysis',
+    });
+    const pending = registry.verifyDrop(session, { x: 90, y: 40 });
+    measurement.respond(0, { height: 80, width: 80, x: 100, y: 20 });
+    const verification = await pending;
+    expectAccepted(verification);
+    expect(verification.targetSquare).toBeNull();
+
+    expect(
+      registry.requestVerifiedDrop(
+        session,
+        verification,
+        providerSpareRequest(),
+      ),
+    ).toBe(true);
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({ input: 'drag', targetSquare: null }),
+    );
+  });
+
+  it('routes an accessible spare through the commit-current adapter', () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    const readPositionRevision = jest.fn(() => 12);
+    const staleRequest = jest.fn(() => true);
+    const currentRequest: jest.MockedFunction<RequestProviderSpareMove> =
+      jest.fn((move) => {
+        void move;
+        return true;
+      });
+    const staleReader = jest.fn(() => staleRequest);
+    const currentReader = jest.fn(() => currentRequest);
+    registry.register(
+      registration({
+        measureInWindow: measurement.measureInWindow,
+        owner,
+        readMoveRequest: staleReader,
+        readPositionRevision,
+      }),
+    );
+
+    expect(
+      registry.update('analysis', owner, { readMoveRequest: currentReader }),
+    ).toBe(true);
+    const move = providerSpareMove({
+      input: 'accessibility',
+      targetSquare: 'h1',
+    });
+    expect(registry.requestAccessibleSpare('analysis', move)).toBe(true);
+    expect(staleReader).not.toHaveBeenCalled();
+    expect(staleRequest).not.toHaveBeenCalled();
+    expect(currentReader).toHaveBeenCalledTimes(1);
+    expect(currentRequest).toHaveBeenCalledWith({
+      input: 'accessibility',
+      piece: { id: 'palette-queen', pieceType: 'wQ' },
+      source: { kind: 'spare', spareId: 'white-queen' },
+      targetSquare: 'h1',
+    });
+    expect(readPositionRevision).not.toHaveBeenCalled();
+    expect(registry.requestAccessibleSpare('missing', move)).toBe(false);
+  });
+
+  it('fails accessible spare routing closed when current adapter access throws', () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    registry.register(
+      registration({
+        measureInWindow: measurement.measureInWindow,
+        owner,
+        readMoveRequest: () => {
+          throw new Error('adapter accessor failed');
+        },
+      }),
+    );
+
+    expect(
+      registry.requestAccessibleSpare(
+        'analysis',
+        providerSpareMove({ input: 'accessibility' }),
+      ),
+    ).toBe(false);
+    expect(
+      registry.update('analysis', owner, {
+        readMoveRequest: () => () => {
+          throw new Error('adapter failed');
+        },
+      }),
+    ).toBe(true);
+    expect(
+      registry.requestAccessibleSpare(
+        'analysis',
+        providerSpareMove({ input: 'accessibility' }),
+      ),
+    ).toBe(false);
   });
 
   it.each([

@@ -86,7 +86,11 @@ function measuredPieceHost(node: TestInstance): TestInstance {
 }
 
 function pieceProbe(props: PieceRendererProps): ReactElement {
-  return <View testID={`piece:${props.square}:${props.piece.pieceType}`} />;
+  return (
+    <View
+      testID={`piece:${props.square ?? 'spare'}:${props.piece.pieceType}`}
+    />
+  );
 }
 
 const tokenRenderers = Object.freeze({

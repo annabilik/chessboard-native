@@ -11,7 +11,7 @@ import {
 } from '../../src/index';
 
 const Token: PieceRenderer = ({ square }) => (
-  <View testID={`piece:${square}`} />
+  <View testID={`piece:${square ?? 'spare'}`} />
 );
 
 const tokenRenderers = Object.freeze({ token: Token }) satisfies PieceRenderers;

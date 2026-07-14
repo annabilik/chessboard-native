@@ -7,9 +7,9 @@
 import type { JSXElementConstructor } from 'react';
 import { ReactElement } from 'react';
 import { ReactNode } from 'react';
-import type { StyleProp } from 'react-native';
+import { StyleProp } from 'react-native';
 import type { TextStyle } from 'react-native';
-import type { ViewStyle } from 'react-native';
+import { ViewStyle } from 'react-native';
 
 // @public
 export type AnnotationDraft = {
@@ -491,20 +491,23 @@ export type PieceInteractionContext = {
 export type PieceRenderer = JSXElementConstructor<PieceRendererProps>;
 
 // @public
-export interface PieceRendererProps {
-    // (undocumented)
+export type PieceRendererProps = {
     readonly boardId: string;
-    // (undocumented)
     readonly piece: PieceData;
-    // (undocumented)
     readonly size: number;
-    // (undocumented)
-    readonly square: SquareId;
-    // (undocumented)
     readonly state: PieceVisualState;
-    // (undocumented)
     readonly style: Readonly<ViewStyle>;
-}
+} & ({
+    readonly source: Extract<MoveSource, {
+        readonly kind: 'board';
+    }>;
+    readonly square: SquareId;
+} | {
+    readonly source: Extract<MoveSource, {
+        readonly kind: 'spare';
+    }>;
+    readonly square: SquareId | null;
+});
 
 // @public
 export type PieceRenderers = Readonly<Partial<Record<PieceType, PieceRenderer>>>;
@@ -560,6 +563,22 @@ export function rowIndexToRank(rowIndex: number, rows: number, orientation: Boar
 
 // @public
 export type SelectionProp = PlainSelection | ControlledSelection;
+
+// @public
+export function SparePiece(input: SparePieceProps): ReactElement;
+
+// @public
+export interface SparePieceProps {
+    readonly accessibilityHint?: string;
+    readonly accessibilityLabel?: string;
+    readonly disabled?: boolean;
+    readonly piece: Readonly<PieceData>;
+    readonly pieceRenderers?: PieceRenderers;
+    readonly size?: number;
+    readonly spareId: string;
+    readonly style?: StyleProp<ViewStyle>;
+    readonly targetBoardId: string;
+}
 
 // @public
 export interface SquareAccessibilityContext {

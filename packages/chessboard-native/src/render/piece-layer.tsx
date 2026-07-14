@@ -193,6 +193,10 @@ export const PieceLayer = memo(function PieceLayer({
           boardId,
           piece: pieceLayout.piece,
           size: pieceLayout.size,
+          source: Object.freeze({
+            kind: 'board' as const,
+            square: pieceLayout.square,
+          }),
           square: pieceLayout.square,
           state: isDragSource
             ? DRAG_SOURCE_STATE

@@ -8,11 +8,12 @@ A controlled, rules-free React Native chessboard component.
 > or custom pieces, orientation, notation, native styles, controlled square and
 > arrow annotations, controlled selection styling, and one adjustable
 > accessibility control. Its optional interaction surface supports board-piece
-> drag, controlled touch/accessibility square activation, and accessible move,
-> removal, clearing, and cancellation without committing position or selection
-> internally. `ChessboardProvider` now supplies provider-scoped board identity,
-> one shared transient overlay, and stale-safe external-drop measurement
-> infrastructure for single- and multi-board composition.
+> drag, controlled touch/accessibility square activation, public spare-piece
+> drag and accessible placement, and accessible move, removal, clearing, and
+> cancellation without committing position or selection internally.
+> `ChessboardProvider` supplies provider-scoped board identity, one shared
+> transient overlay, and stale-safe external-drop measurement for single- and
+> multi-board composition.
 
 ## Direction
 
@@ -87,12 +88,16 @@ neither callback, the component mounts no native gesture hit plane and remains
 read-only. Boards register by a required, mount-stable `boardId` in their
 nearest `ChessboardProvider`; standalone boards create a private provider.
 Provider identity is token-safe across duplicates, remounts, Strict Mode, and
-abandoned renders. One pointerless shared overlay serves a provider scope, and
-cached window bounds are hover hints only. External release resolution always
-remeasures its named target and accepts the result only while registration,
-board geometry, provider geometry, and interaction epochs remain current. The
-public `SparePiece` source that consumes this infrastructure remains the next
-Phase 2 slice.
+abandoned renders. Public `SparePiece` sources require an explicit provider and
+name exactly one `targetBoardId`. Drag release remeasures that current target;
+accessible activation selects one transient provider-scoped spare for placement
+from the matching board control. Both paths emit an ordinary `MoveIntent` with
+`source: { kind: 'spare', spareId }` against the target board's current
+controlled revision. They never edit a position or semantic selection. The
+active source host renders the provider's one pointerless overlay through
+asynchronous release verification. Native ScrollView arbitration, lifecycle
+stress flows, and render/callback instrumentation remain the P2.7 hardening
+slice.
 
 The accepted architecture decisions and all 20 reserved invariant contracts
 are indexed in

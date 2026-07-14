@@ -62,6 +62,7 @@ function rendererProps(pieceType: string): PieceRendererProps {
     boardId: 'artwork',
     piece: Object.freeze({ pieceType }),
     size: 40,
+    source: Object.freeze({ kind: 'board', square: 'a1' }),
     square: 'a1',
     state: STATIC_STATE,
     style: Object.freeze({ opacity: 0.75 }),

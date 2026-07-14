@@ -5,22 +5,38 @@ import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useReducedMotion } from '../accessibility/reduced-motion';
 import type { InteractionPresentationSharedValues } from '../internal/interaction-presentation';
 import { INTERACTION_PRESENTATION_PHASE } from '../internal/interaction-presentation';
-import type { PieceData, PieceRenderer, SquareId } from '../public-types';
-import { InteractionPieceVisual } from './interaction-piece-visual';
+import type {
+  MoveSource,
+  PieceData,
+  PieceRenderer,
+  SquareId,
+} from '../public-types';
+import {
+  InteractionPieceVisual,
+  resolveBoardVisualSquare,
+} from './interaction-piece-visual';
 
 /** Fixed presentation-only lift; public drag styling remains a later API. */
 export const DRAG_OVERLAY_LIFT_SCALE = 1.08;
 
-interface DragOverlayProps {
+type DragOverlayProps = {
   readonly boardId: string;
   readonly piece: Readonly<PieceData>;
   readonly presentation: Readonly<InteractionPresentationSharedValues>;
   readonly renderer: PieceRenderer;
   readonly size: number;
-  readonly sourceSquare: SquareId;
   readonly style: Readonly<ViewStyle>;
   readonly testID?: string;
-}
+} & (
+  | {
+      readonly source: Extract<MoveSource, { readonly kind: 'board' }>;
+      readonly square: SquareId;
+    }
+  | {
+      readonly source: Extract<MoveSource, { readonly kind: 'spare' }>;
+      readonly square: SquareId | null;
+    }
+);
 
 /**
  * Resolve the exact style used by the overlay worklet. Keeping this function
@@ -55,7 +71,8 @@ export function DragOverlay({
   presentation,
   renderer,
   size,
-  sourceSquare,
+  source,
+  square,
   style,
   testID,
 }: DragOverlayProps): ReactElement {
@@ -78,16 +95,31 @@ export function DragOverlay({
       ]}
       testID={testID}
     >
-      <InteractionPieceVisual
-        boardId={boardId}
-        containerStyle={internalStyles.piece}
-        kind="drag-overlay"
-        piece={piece}
-        renderer={renderer}
-        size={size}
-        square={sourceSquare}
-        style={style}
-      />
+      {source.kind === 'board' ? (
+        <InteractionPieceVisual
+          boardId={boardId}
+          containerStyle={internalStyles.piece}
+          kind="drag-overlay"
+          piece={piece}
+          renderer={renderer}
+          size={size}
+          source={source}
+          square={resolveBoardVisualSquare(square)}
+          style={style}
+        />
+      ) : (
+        <InteractionPieceVisual
+          boardId={boardId}
+          containerStyle={internalStyles.piece}
+          kind="drag-overlay"
+          piece={piece}
+          renderer={renderer}
+          size={size}
+          source={source}
+          square={square}
+          style={style}
+        />
+      )}
     </Animated.View>
   );
 }

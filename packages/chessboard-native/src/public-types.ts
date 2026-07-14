@@ -115,7 +115,7 @@ export type PositionProp = PositionInput | ControlledPosition;
 /** Selection prop accepted by the plain and revisioned API tiers. @public */
 export type SelectionProp = PlainSelection | ControlledSelection;
 
-/** Board or provider spare source for a move intent. @public */
+/** Board or provider spare source for move intents and piece visuals. @public */
 export type MoveSource =
   | { readonly kind: 'board'; readonly square: SquareId }
   | { readonly kind: 'spare'; readonly spareId: string };
@@ -155,7 +155,7 @@ export interface MoveRequestTimeouts {
 
 /** Input gates for the public controlled move-request surface. @public */
 export interface InteractionPermissions {
-  /** Enables board-piece drag input; defaults to true when a callback exists. */
+  /** Enables board and targeted spare drag input; defaults to true with a callback. */
   readonly drag?: boolean;
   /**
    * Enables the adjustable control's source, target, remove, and cancel actions.
@@ -316,7 +316,7 @@ export type PieceInteractionContext =
       readonly piece: PieceData;
     };
 
-/** Synchronous board-piece drag permission evaluated from current props. @public */
+/** Synchronous board or spare drag permission evaluated from current props. @public */
 export type CanDragPiece = (
   context: Readonly<PieceInteractionContext>,
 ) => boolean;
@@ -413,14 +413,27 @@ export interface SquareRendererProps {
 }
 
 /** Visual-only piece renderer input; it intentionally exposes no handlers. @public */
-export interface PieceRendererProps {
+export type PieceRendererProps = {
+  /** Owning board, or the named target board for a spare-source visual. */
   readonly boardId: string;
-  readonly square: SquareId;
   readonly piece: PieceData;
   readonly size: number;
   readonly state: PieceVisualState;
   readonly style: Readonly<ViewStyle>;
-}
+} & (
+  | {
+      /** Board source for a controlled piece visual. */
+      readonly source: Extract<MoveSource, { readonly kind: 'board' }>;
+      /** Current canonical board square for this visual. */
+      readonly square: SquareId;
+    }
+  | {
+      /** Provider spare source for an external or board-target visual. */
+      readonly source: Extract<MoveSource, { readonly kind: 'spare' }>;
+      /** Null outside a board; the current target square once projected on one. */
+      readonly square: SquareId | null;
+    }
+);
 
 /** Custom visual square renderer. @public */
 export type SquareRenderer = (

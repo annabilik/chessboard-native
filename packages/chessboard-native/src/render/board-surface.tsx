@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactElement,
 } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
@@ -12,6 +13,7 @@ import { useAccessibilityAnnouncement } from '../accessibility/announcements';
 import {
   useBoardAccessibility,
   type BoardAccessibilityMoveInteraction,
+  type BoardAccessibilitySpareInteraction,
   type BoardAccessibilitySquareInteraction,
 } from '../accessibility/board-accessibility';
 import { announceMoveOutcome } from '../accessibility/move-outcome';
@@ -34,6 +36,13 @@ import { useMoveRequestRuntime } from '../internal/use-move-request-runtime';
 import { useSquareActivation } from '../internal/use-square-activation';
 import type { ProviderBoardRegistration } from '../internal/provider-board-registration';
 import type {
+  CanStartProviderSpareDrag,
+  ProviderSpareMove,
+  RequestProviderSpareMove,
+} from '../internal/board-layout-registry';
+import { useChessboardProvider } from '../internal/provider-context';
+import type { ProviderSpareSelectionDescriptor } from '../internal/provider-spare-selection';
+import type {
   AnnotationStyle,
   BoardSize,
   CanDragPiece,
@@ -41,6 +50,7 @@ import type {
   ChessboardStyles,
   ChessboardTheme,
   InteractionPermissions,
+  MoveIntent,
   MoveOutcomeAccessibilityContext,
   MoveRequestTimeouts,
   OnMoveRequest,
@@ -98,6 +108,15 @@ interface InteractionInvalidationSnapshot {
   readonly providerGeometryRevision: Revision;
   readonly rows: number | null;
   readonly tapEnabled: boolean;
+}
+
+interface ExternalMoveCommitSnapshot {
+  readonly accessibilityEnabled: boolean;
+  readonly boardId: string;
+  readonly canDragPiece: CanDragPiece | undefined;
+  readonly dragEnabled: boolean;
+  readonly positionRevision: Revision;
+  readonly request: (draft: Readonly<Omit<MoveIntent, 'intentId'>>) => boolean;
 }
 
 type PendingMoveLifecycle = Extract<
@@ -192,6 +211,12 @@ export function BoardSurface({
   theme,
 }: BoardSurfaceProps): ReactElement {
   useAccessibilityAnnouncement(accessibility?.announcement);
+  const { runtime: providerRuntime } = useChessboardProvider();
+  const spareSelectionSnapshot = useSyncExternalStore(
+    providerRuntime.spareSelection.subscribe,
+    providerRuntime.spareSelection.getSnapshot,
+    providerRuntime.spareSelection.getSnapshot,
+  );
   const resolvedPermissions = useMemo(
     () => resolveInteractionPermissions(onMoveRequest, interactionPermissions),
     [interactionPermissions, onMoveRequest],
@@ -229,6 +254,111 @@ export function BoardSurface({
     position: model.position,
     timeouts: moveRequestTimeouts,
   });
+  const externalMoveAtCommit =
+    useRef<Readonly<ExternalMoveCommitSnapshot> | null>(null);
+  const requestProviderSpareMove = useCallback<RequestProviderSpareMove>(
+    (move: Readonly<ProviderSpareMove>): boolean => {
+      const current = externalMoveAtCommit.current;
+      if (current === null) {
+        return false;
+      }
+      if (
+        (move.input === 'drag' && !current.dragEnabled) ||
+        (move.input === 'accessibility' && !current.accessibilityEnabled)
+      ) {
+        return false;
+      }
+      const context = Object.freeze({
+        basePositionRevision: current.positionRevision,
+        boardId: current.boardId,
+        piece: move.piece,
+        source: move.source,
+      });
+      if (
+        move.input === 'drag' &&
+        !canDragCurrentPiece(current.canDragPiece, context)
+      ) {
+        return false;
+      }
+      return current.request({
+        ...context,
+        input: move.input,
+        targetSquare: move.targetSquare,
+      });
+    },
+    [],
+  );
+  const readProviderSpareMove = useCallback(
+    (): RequestProviderSpareMove | null =>
+      externalMoveAtCommit.current === null ? null : requestProviderSpareMove,
+    [requestProviderSpareMove],
+  );
+  const canStartProviderSpareDrag = useCallback<CanStartProviderSpareDrag>(
+    (source, piece): boolean => {
+      const current = externalMoveAtCommit.current;
+      return (
+        current !== null &&
+        current.dragEnabled &&
+        canDragCurrentPiece(current.canDragPiece, {
+          basePositionRevision: current.positionRevision,
+          boardId: current.boardId,
+          piece,
+          source,
+        })
+      );
+    },
+    [],
+  );
+  const readSpareDragPermission = useCallback(
+    (): CanStartProviderSpareDrag | null =>
+      externalMoveAtCommit.current === null ? null : canStartProviderSpareDrag,
+    [canStartProviderSpareDrag],
+  );
+  useLayoutEffect(() => {
+    if (
+      model.boardId === null ||
+      model.position === null ||
+      !moveRequestEnabled
+    ) {
+      externalMoveAtCommit.current = null;
+      return;
+    }
+    const snapshot: Readonly<ExternalMoveCommitSnapshot> = Object.freeze({
+      accessibilityEnabled: accessibilityMoveEnabled,
+      boardId: model.boardId,
+      canDragPiece,
+      dragEnabled,
+      positionRevision: model.position.revision,
+      request: moveInteraction.request,
+    });
+    externalMoveAtCommit.current = snapshot;
+    return () => {
+      if (externalMoveAtCommit.current === snapshot) {
+        externalMoveAtCommit.current = null;
+      }
+    };
+  }, [
+    accessibilityMoveEnabled,
+    canDragPiece,
+    dragEnabled,
+    model.boardId,
+    model.position,
+    moveInteraction.request,
+    moveRequestEnabled,
+  ]);
+  useLayoutEffect(() => {
+    if (providerRegistration?.registered !== true) {
+      return;
+    }
+    providerRegistration.registry.update(
+      providerRegistration.boardId,
+      providerRegistration.owner,
+      {
+        readMoveRequest: readProviderSpareMove,
+        readSpareDragPermission,
+      },
+    );
+  }, [providerRegistration, readProviderSpareMove, readSpareDragPermission]);
   const squareActivation = useSquareActivation({
     boardId: model.boardId,
     onSquareActivate: tapEnabled ? onSquareActivate : undefined,
@@ -314,11 +444,74 @@ export function BoardSurface({
       }),
     [activeDragSourceSquare, dispatchSquareActivation, tapEnabled],
   );
+  const selectedSpare: Readonly<ProviderSpareSelectionDescriptor> | null =
+    providerRegistered &&
+    model.boardId !== null &&
+    spareSelectionSnapshot.active?.targetBoardId === model.boardId
+      ? spareSelectionSnapshot.active
+      : null;
+  const cancelSelectedSpare = useCallback((): void => {
+    const current = providerRuntime.spareSelection.getSnapshot().active;
+    if (current !== null && current.targetBoardId === model.boardId) {
+      providerRuntime.spareSelection.clearOwner(
+        current.owner,
+        current.selectionToken,
+      );
+    }
+  }, [model.boardId, providerRuntime.spareSelection]);
+  const placeSelectedSpare = useCallback(
+    (square: SquareId): boolean => {
+      const boardId = model.boardId;
+      const current = providerRuntime.spareSelection.getSnapshot().active;
+      if (boardId === null || current?.targetBoardId !== boardId) {
+        return false;
+      }
+      const requested = providerRuntime.registry.requestAccessibleSpare(
+        boardId,
+        Object.freeze({
+          input: 'accessibility',
+          piece: current.piece,
+          source: Object.freeze({
+            kind: 'spare' as const,
+            spareId: current.spareId,
+          }),
+          targetSquare: square,
+        }),
+      );
+      if (requested) {
+        providerRuntime.spareSelection.clearOwner(
+          current.owner,
+          current.selectionToken,
+        );
+      }
+      return requested;
+    },
+    [model.boardId, providerRuntime],
+  );
+  const accessibilitySpareInteraction = useMemo<
+    Readonly<BoardAccessibilitySpareInteraction>
+  >(
+    () =>
+      Object.freeze({
+        cancel: cancelSelectedSpare,
+        enabled: accessibilityMoveEnabled && activeDragSourceSquare === null,
+        place: placeSelectedSpare,
+        selection: selectedSpare,
+      }),
+    [
+      accessibilityMoveEnabled,
+      activeDragSourceSquare,
+      cancelSelectedSpare,
+      placeSelectedSpare,
+      selectedSpare,
+    ],
+  );
   const accessibilityProps = useBoardAccessibility(
     model,
     accessibility,
     accessibilityMoveInteraction,
     accessibilitySquareInteraction,
+    accessibilitySpareInteraction,
   );
   const fallbackDimensions = model.dimensions ?? STANDARD_BOARD_DIMENSIONS;
   const modelColumns = model.dimensions?.columns ?? null;
@@ -554,24 +747,41 @@ export function BoardSurface({
     model,
   );
   useLayoutEffect(() => {
-    if (
-      pendingLifecycle?.intent.input !== 'drag' ||
-      pendingLifecycle.intent.source.kind !== 'board'
-    ) {
+    if (pendingLifecycle === null) {
       return;
     }
-    if (
-      !dragEnabled ||
-      !canDragCurrentPiece(canDragPiece, {
-        basePositionRevision: pendingLifecycle.intent.basePositionRevision,
-        boardId: pendingLifecycle.intent.boardId,
-        piece: pendingLifecycle.intent.piece,
-        source: pendingLifecycle.intent.source,
-      })
-    ) {
+    const intent = pendingLifecycle.intent;
+    const inputDisabled =
+      (intent.input === 'drag' && !dragEnabled) ||
+      (intent.input === 'accessibility' && !accessibilityMoveEnabled);
+    const dragDenied =
+      intent.input === 'drag' &&
+      !canDragCurrentPiece(
+        canDragPiece,
+        intent.source.kind === 'board'
+          ? {
+              basePositionRevision: intent.basePositionRevision,
+              boardId: intent.boardId,
+              piece: intent.piece,
+              source: intent.source,
+            }
+          : {
+              basePositionRevision: intent.basePositionRevision,
+              boardId: intent.boardId,
+              piece: intent.piece,
+              source: intent.source,
+            },
+      );
+    if (inputDisabled || dragDenied) {
       moveInteraction.invalidate('permissions-change');
     }
-  }, [canDragPiece, dragEnabled, moveInteraction.invalidate, pendingLifecycle]);
+  }, [
+    accessibilityMoveEnabled,
+    canDragPiece,
+    dragEnabled,
+    moveInteraction.invalidate,
+    pendingLifecycle,
+  ]);
 
   const handleGestureCandidate = useCallback(
     (candidate: Readonly<BoardGestureIntentCandidate>): void => {

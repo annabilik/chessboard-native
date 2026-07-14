@@ -26,6 +26,10 @@ export default function RootLayout() {
             name="provider-coordination"
             options={{ title: 'Provider coordination' }}
           />
+          <Stack.Screen
+            name="spare-pieces"
+            options={{ title: 'Spare pieces' }}
+          />
         </Stack>
         <StatusBar style="dark" />
       </SafeAreaProvider>

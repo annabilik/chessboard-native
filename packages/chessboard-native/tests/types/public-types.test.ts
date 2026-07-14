@@ -32,6 +32,7 @@ import type {
   OnSquareActivate,
   PieceData,
   PieceInteractionContext,
+  PieceRendererProps,
   PieceRenderers,
   PositionObject,
   PositionProp,
@@ -199,6 +200,58 @@ describe('public data contracts', () => {
 
     expect(renderers.wP()).toBeNull();
     expect(renderers.redDragon()).toBeNull();
+  });
+
+  it('discriminates board and spare piece renderer locations without pseudo-squares', () => {
+    const visualState = {
+      isDragging: false,
+      isGhost: false,
+      isPending: false,
+      isPressed: false,
+      isTransitioning: false,
+    } as const;
+    const board = {
+      boardId: 'editor',
+      piece: { pieceType: 'wQ' },
+      size: 48,
+      source: { kind: 'board', square: 'd4' },
+      square: 'd4',
+      state: visualState,
+      style: {},
+    } satisfies PieceRendererProps;
+    const spare = {
+      boardId: 'editor',
+      piece: { pieceType: 'wQ' },
+      size: 48,
+      source: { kind: 'spare', spareId: 'white-queen' },
+      square: null,
+      state: visualState,
+      style: {},
+    } satisfies PieceRendererProps;
+    const projectedSpare = {
+      ...spare,
+      square: 'e4',
+    } satisfies PieceRendererProps;
+    const visualLocation = (props: PieceRendererProps): string =>
+      props.square ??
+      (props.source.kind === 'spare' ? props.source.spareId : 'unavailable');
+
+    // @ts-expect-error Board visuals always have a canonical board square.
+    const invalidBoard: PieceRendererProps = { ...board, square: null };
+    const invalidSpare: PieceRendererProps = {
+      ...spare,
+      // @ts-expect-error Spare source identity requires an explicit spare ID.
+      source: { kind: 'spare' },
+      square: null,
+    };
+
+    expect(board.source.kind).toBe('board');
+    expect(spare.square).toBeNull();
+    expect(projectedSpare.square).toBe('e4');
+    expect(visualLocation(board)).toBe('d4');
+    expect(visualLocation(spare)).toBe('white-queen');
+    expect(invalidBoard.square).toBeNull();
+    expect(invalidSpare.source.kind).toBe('spare');
   });
 
   it('[PARITY-EXPORT-FEN-PIECE-STRING] keeps all twelve standard FEN piece codes', () => {

@@ -202,6 +202,7 @@ describe('interaction presentation foundation', () => {
         piece={context.piece}
         renderer={Renderer}
         size={48}
+        source={{ kind: 'board', square: 'e2' }}
         square="e2"
         style={style}
         testID="source-ghost"
@@ -409,7 +410,8 @@ describe('interaction presentation foundation', () => {
             presentation={presentation}
             renderer={Renderer}
             size={48}
-            sourceSquare="e2"
+            source={{ kind: 'board', square: 'e2' }}
+            square="e2"
             style={Object.freeze({})}
             testID="drag-overlay"
           />
@@ -483,7 +485,8 @@ describe('interaction presentation foundation', () => {
             presentation={presentation}
             renderer={Renderer}
             size={40}
-            sourceSquare="b1"
+            source={{ kind: 'board', square: 'b1' }}
+            square="b1"
             style={{ transform: [{ scale: 50 }] }}
             testID={`overlay-${preference}`}
           />

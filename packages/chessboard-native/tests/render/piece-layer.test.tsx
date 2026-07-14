@@ -114,7 +114,7 @@ describe('piece renderer resolution and composition', () => {
     const calls: PieceRendererProps[] = [];
     const CustomPawn: PieceRenderer = (props) => {
       calls.push(props);
-      return <View testID={`custom-${props.square}`} />;
+      return <View testID={`custom-${props.square ?? 'spare'}`} />;
     };
     const inheritedKing: PieceRenderer = () => <View testID="inherited-king" />;
     const renderers = Object.assign(
@@ -152,7 +152,7 @@ describe('piece renderer resolution and composition', () => {
     function HookRenderer(props: PieceRendererProps): ReactElement {
       const [mountToken] = useState('mounted');
       calls.push(props);
-      return <View testID={`${mountToken}-${props.square}`} />;
+      return <View testID={`${mountToken}-${props.square ?? 'spare'}`} />;
     }
     const renderers = Object.create(null) as Record<string, PieceRenderer>;
     Object.defineProperty(renderers, '__proto__', {
@@ -268,12 +268,12 @@ describe('piece renderer resolution and composition', () => {
     const MemoPiece = memo(function MemoPiece({
       square,
     }: PieceRendererProps): ReactElement {
-      return <View testID={`memo-${square}`} />;
+      return <View testID={`memo-${square ?? 'spare'}`} />;
     });
     const ForwardedPiece = forwardRef<unknown, PieceRendererProps>(
       function ForwardedPiece({ square }, ref): ReactElement {
         void ref;
-        return <View testID={`forwarded-${square}`} />;
+        return <View testID={`forwarded-${square ?? 'spare'}`} />;
       },
     );
     const renderers = Object.freeze({
@@ -336,6 +336,9 @@ describe('piece renderer resolution and composition', () => {
   it('memoizes semantic no-ops but clears and renders the latest revision', async () => {
     const calls: string[] = [];
     const Renderer: PieceRenderer = ({ square }) => {
+      if (square === null) {
+        return null;
+      }
       calls.push(square);
       return <View testID={`latest-${square}`} />;
     };

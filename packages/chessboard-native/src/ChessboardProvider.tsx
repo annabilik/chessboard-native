@@ -14,7 +14,7 @@ import type { Revision } from './public-types';
 
 /** Shared coordination boundary for boards and external drag sources. @public */
 export interface ChessboardProviderProps {
-  /** Boards and, in a future release, external piece sources in this scope. */
+  /** Boards and external piece sources coordinated in this scope. */
   readonly children: ReactNode;
   /**
    * Consumer-controlled invalidation for programmatic ancestor movement that

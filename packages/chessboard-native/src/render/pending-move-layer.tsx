@@ -54,16 +54,31 @@ export function PendingMoveLayer({
       pointerEvents="none"
       style={styles.layer}
     >
-      <InteractionPieceVisual
-        boardId={boardId}
-        containerStyle={{ height: size, left, top, width: size }}
-        kind="pending"
-        piece={lifecycle.intent.piece}
-        renderer={renderer}
-        size={size}
-        square={lifecycle.intent.targetSquare}
-        style={style}
-      />
+      {lifecycle.intent.source.kind === 'board' ? (
+        <InteractionPieceVisual
+          boardId={boardId}
+          containerStyle={{ height: size, left, top, width: size }}
+          kind="pending"
+          piece={lifecycle.intent.piece}
+          renderer={renderer}
+          size={size}
+          source={lifecycle.intent.source}
+          square={lifecycle.intent.targetSquare}
+          style={style}
+        />
+      ) : (
+        <InteractionPieceVisual
+          boardId={boardId}
+          containerStyle={{ height: size, left, top, width: size }}
+          kind="pending"
+          piece={lifecycle.intent.piece}
+          renderer={renderer}
+          size={size}
+          source={lifecycle.intent.source}
+          square={lifecycle.intent.targetSquare}
+          style={style}
+        />
+      )}
     </View>
   );
 }

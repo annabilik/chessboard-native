@@ -106,7 +106,7 @@ async function beginDrag(boardId: string): Promise<Readonly<PanCallbacks>> {
 function providerPiece(props: PieceRendererProps): ReactElement {
   return (
     <View
-      testID={`provider-piece:${props.boardId}:${props.square}:${props.state.isDragging ? 'dragging' : 'resting'}`}
+      testID={`provider-piece:${props.boardId}:${props.square ?? 'spare'}:${props.state.isDragging ? 'dragging' : 'resting'}`}
     />
   );
 }
@@ -308,6 +308,7 @@ describe('ChessboardProvider', () => {
       'registry',
       'release',
       'retain',
+      'spareSelection',
     ]);
     expect(committedRuntime.getGeometryRevision()).toBe(4);
     expect(committedRuntime.drag.getSnapshot().active).toBeNull();

@@ -215,7 +215,11 @@ function BoardInteractionControllerContent({
               presentation,
               renderer: resolvePieceRenderer(pieceRenderers, piece.pieceType),
               size: pieceSize,
-              sourceSquare,
+              source: Object.freeze({
+                kind: 'board' as const,
+                square: sourceSquare,
+              }),
+              square: sourceSquare,
               style: pieceStyle,
             }),
           );

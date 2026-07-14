@@ -87,7 +87,7 @@ export interface ChessboardProps {
   readonly onMoveRequest?: OnMoveRequest;
   /** Declarative input gates; no callback always means read-only. */
   readonly interactionPermissions?: InteractionPermissions;
-  /** Synchronous current-snapshot gate for board-piece drag activation. */
+  /** Synchronous current-snapshot gate for board and targeted spare dragging. */
   readonly canDragPiece?: CanDragPiece;
   /** Decision and controlled-commit budgets; defaults are 10s and 1.5s. */
   readonly moveRequestTimeouts?: MoveRequestTimeouts;
@@ -184,6 +184,8 @@ function useProviderBoardRegistration(options: {
     () => positionRevisionAtCommit.current,
     [],
   );
+  const readMoveRequest = useCallback(() => null, []);
+  const readSpareDragPermission = useCallback(() => null, []);
   const cancelActiveDrag = useCallback((): void => {
     const boardId = options.boardId;
     const active = provider.runtime.drag.getSnapshot().active;
@@ -216,7 +218,9 @@ function useProviderBoardRegistration(options: {
       },
       measureInWindow,
       owner,
+      readMoveRequest,
       readPositionRevision,
+      readSpareDragPermission,
     });
     if (result.status === 'registered') {
       // A preserved Suspense/Offscreen tree can replay layout effects without
@@ -258,14 +262,18 @@ function useProviderBoardRegistration(options: {
     }
 
     return () => {
-      provider.runtime.registry.unregister(boardId, owner);
+      if (provider.runtime.registry.unregister(boardId, owner)) {
+        provider.runtime.spareSelection.clearTarget(boardId);
+      }
     };
   }, [
     measureInWindow,
     options.boardId,
     owner,
     provider.runtime,
+    readMoveRequest,
     readPositionRevision,
+    readSpareDragPermission,
   ]);
 
   const currentState =
