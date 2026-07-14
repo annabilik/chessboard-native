@@ -199,8 +199,35 @@ jobs:
       - name: Install pinned Android SDK packages
         run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006" "emulator" "system-images;android-35;aosp_atd;x86_64"
 
+      - name: Pin Android emulator 36.3.10 for managed devices
+        env:
+          EMULATOR_BUILD_ID: '14472402'
+          EMULATOR_SHA256: c8ab9ffbc4c2d11c02e06e81a9d9f81970177dc5ab599e3a30eb08a4a5496a67
+        run: |
+          archive="$RUNNER_TEMP/emulator-linux_x64-$EMULATOR_BUILD_ID.zip"
+          curl --fail --location --retry 3 \
+            --output "$archive" \
+            "https://redirector.gvt1.com/edgedl/android/repository/emulator-linux_x64-$EMULATOR_BUILD_ID.zip"
+          echo "$EMULATOR_SHA256  $archive" | sha256sum --check
+
+          mv "$ANDROID_HOME/emulator" "$RUNNER_TEMP/emulator-current"
+          unzip -q "$archive" -d "$ANDROID_HOME"
+          cp "$RUNNER_TEMP/emulator-current/package.xml" "$ANDROID_HOME/emulator/package.xml"
+          sed -E -i \
+            's#<revision><major>[0-9]+</major><minor>[0-9]+</minor><micro>[0-9]+</micro></revision>#<revision><major>36</major><minor>3</minor><micro>10</micro></revision>#' \
+            "$ANDROID_HOME/emulator/package.xml"
+          grep -q '<revision><major>36</major><minor>3</minor><micro>10</micro></revision>' "$ANDROID_HOME/emulator/package.xml"
+
+          emulator_version=$("$ANDROID_HOME/emulator/emulator" -version 2>&1)
+          echo "$emulator_version"
+          grep -Fq 'Android emulator version 36.3.10.0' <<<"$emulator_version"
+          grep -Fq "(build_id $EMULATOR_BUILD_ID)" <<<"$emulator_version"
+
       - name: Enable KVM for the managed accessibility device
         run: sudo chmod 666 /dev/kvm
+
+      - name: Verify Android emulator acceleration
+        run: $ANDROID_HOME/emulator/emulator -accel-check
 
       - name: Download inspected package
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -227,8 +254,7 @@ jobs:
           retry_log="$RUNNER_TEMP/android-accessibility-audit-retry.log"
           audit_args=(
             -PreactNativeArchitectures=x86_64
-            # Current emulators reject the removed swiftshader_indirect mode.
-            -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader
+            -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect
           )
 
           if npm run android:accessibility:managed -- "${audit_args[@]}" 2>&1 | tee "$audit_log"; then
