@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 export { Chessboard } from './Chessboard';
+export { ChessboardProvider } from './ChessboardProvider';
 export { ChessboardError } from './ChessboardError';
 export { defaultAnnotationStyle } from './annotation-style';
 export {
@@ -19,6 +20,7 @@ export { defaultPieceRenderers } from './pieces';
 export { defaultTheme } from './theme';
 
 export type { ChessboardProps } from './Chessboard';
+export type { ChessboardProviderProps } from './ChessboardProvider';
 export type {
   ChessboardErrorCode,
   ChessboardErrorContext,

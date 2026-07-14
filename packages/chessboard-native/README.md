@@ -22,8 +22,10 @@ the board into controlled touch and accessibility activation. Supplying
 the adjustable control's source, target, removal, and cancellation actions use
 one correlated lifecycle. Neither gesture path nor either callback changes
 position or selection; only the consumer's next controlled props can do that.
-Custom square rendering, annotation drawing, transitions, and provider-level
-identity registration remain future work.
+`ChessboardProvider` adds provider-scoped board identity, one shared transient
+overlay, and stale-safe external-drop measurement infrastructure. Custom square
+rendering, annotation drawing, transitions, and the public external
+`SparePiece` source remain future work.
 
 ```tsx
 import { Chessboard } from '@vibechess/chessboard-native';
@@ -34,6 +36,45 @@ import { Chessboard } from '@vibechess/chessboard-native';
   position="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
 />;
 ```
+
+## Providers and multiple boards
+
+`boardId` is required, non-empty, stable for the mounted lifetime, and unique
+within the nearest provider. A standalone board creates a private provider. Use
+an explicit `ChessboardProvider` when boards need one coordination scope:
+
+```tsx
+import { Chessboard, ChessboardProvider } from '@vibechess/chessboard-native';
+
+<ChessboardProvider geometryRevision={workspaceGeometryRevision}>
+  <Chessboard boardId="analysis-main" position={mainPosition} />
+  <Chessboard boardId="analysis-variation" position={variationPosition} />
+</ChessboardProvider>;
+```
+
+The provider is compositional and owns no position, annotations, or semantic
+selection. Each board remains an independent adjustable accessibility control
+and keeps its own controlled callbacks and revisions. A duplicate ID takes the
+typed `DUPLICATE_BOARD_ID` error path without replacing the original board's
+registration. Nested providers create independent identity scopes.
+
+`geometryRevision` defaults to `0`, must remain monotonic while the provider is
+mounted, and cannot be negative. Increment it after a programmatic ancestor
+scroll, transform, or other layout mutation that React Native cannot report to
+the registered boards. A changed value cancels the active provider drag/drop
+verification and pending board move interactions in that scope; it never
+changes board state.
+
+The provider caches measured window bounds for hover presentation only. An
+external release always remeasures its named target, translates the fresh
+window point into board-local coordinates, and verifies the board mount token,
+board geometry, provider geometry, and interaction epoch before resolving a
+square. A committed board reserves its ID immediately but cannot become a drop
+target until it has a current positive layout. Its shared overlay remains
+pointerless and hidden from accessibility
+while active. `SparePiece` will keep that overlay through asynchronous
+verification and expose this internal path in the next Phase 2 slice; there is
+no public external source in this release.
 
 ## Pieces and styles
 

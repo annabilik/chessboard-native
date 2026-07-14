@@ -6,6 +6,7 @@
 
 import type { JSXElementConstructor } from 'react';
 import { ReactElement } from 'react';
+import { ReactNode } from 'react';
 import type { StyleProp } from 'react-native';
 import type { TextStyle } from 'react-native';
 import type { ViewStyle } from 'react-native';
@@ -291,6 +292,15 @@ export interface ChessboardProps {
     readonly squareStyles?: SquareStyles;
     readonly styles?: ChessboardStyles;
     readonly theme?: ChessboardTheme;
+}
+
+// @public
+export function ChessboardProvider(input: ChessboardProviderProps): ReactElement;
+
+// @public
+export interface ChessboardProviderProps {
+    readonly children: ReactNode;
+    readonly geometryRevision?: Revision;
 }
 
 // @public

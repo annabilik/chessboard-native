@@ -3,11 +3,11 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState,
   type ReactElement,
 } from 'react';
 import type { ViewStyle } from 'react-native';
 
+import { ChessboardProvider } from '../ChessboardProvider';
 import type { NormalizedControlledValue } from '../internal/controlled-domain';
 import { canDragCurrentPiece } from '../internal/interaction-permissions';
 import {
@@ -25,9 +25,16 @@ import {
   syncInteractionPresentationSharedValues,
   useInteractionPresentationSharedValues,
 } from '../internal/interaction-presentation';
+import {
+  useChessboardProvider,
+  useOptionalChessboardProvider,
+} from '../internal/provider-context';
+import type {
+  ProviderDragCancellationReason,
+  ProviderDragOwner,
+} from '../internal/provider-drag-coordinator';
 import type {
   CanDragPiece,
-  PieceData,
   PieceRenderers,
   PositionObject,
   Revision,
@@ -38,8 +45,8 @@ import {
   type BoardGestureGeometry,
   type BoardGestureSignal,
 } from './board-gesture-layer';
-import { DragOverlay } from './drag-overlay';
 import { resolvePieceRenderer } from './piece-layer';
+import { ProviderDragOverlay } from './provider-drag-overlay';
 
 interface BoardInteractionControllerProps {
   readonly boardId: string;
@@ -58,11 +65,6 @@ interface BoardInteractionControllerProps {
 }
 
 const EMPTY_OCCUPIED_SQUARES: readonly SquareId[] = Object.freeze([]);
-
-interface ActiveDragVisual {
-  readonly piece: Readonly<PieceData>;
-  readonly sourceSquare: SquareId;
-}
 
 function createSnapshot(options: {
   readonly boardId: string;
@@ -111,10 +113,10 @@ function signalMatchesActive(
 /**
  * Board-private glue between native gesture boundaries and the pure lifecycle.
  *
- * It can produce an inert candidate for tests and the future P2.3 executor,
- * but cannot submit a reducer intent, invoke consumer code, or mutate position.
+ * It emits correlated candidates to the current controlled interaction
+ * executor, but cannot mutate position or retain a semantic snapshot.
  */
-export function BoardInteractionController({
+function BoardInteractionControllerContent({
   boardId,
   canDragPiece,
   dragEnabled = false,
@@ -127,9 +129,12 @@ export function BoardInteractionController({
   selectionRevision = null,
   tapEnabled = false,
 }: BoardInteractionControllerProps): ReactElement {
+  const { runtime: providerRuntime } = useChessboardProvider();
   const presentation = useInteractionPresentationSharedValues();
-  const [activeDragVisual, setActiveDragVisual] =
-    useState<Readonly<ActiveDragVisual> | null>(null);
+  const providerOwner = useRef<ProviderDragOwner>({});
+  const cancelFromProviderAtCommit = useRef<
+    (reason: ProviderDragCancellationReason) => void
+  >(() => undefined);
   const snapshot = useMemo(
     () => createSnapshot({ boardId, geometry, position, selectionRevision }),
     [boardId, geometry, position, selectionRevision],
@@ -177,6 +182,10 @@ export function BoardInteractionController({
   const onCandidateAtCommit = useRef(onCandidate);
   const onDragSourceChangeAtCommit = useRef(onDragSourceChange);
   const snapshotAtCommit = useRef(snapshot);
+  const pieceSize = Math.min(
+    geometry.width / geometry.columns,
+    geometry.height / geometry.rows,
+  );
 
   const applyReduction = useCallback(
     (reduction: Readonly<BoardGestureAdapterReduction>): void => {
@@ -190,27 +199,72 @@ export function BoardInteractionController({
         lifecycle.phase === 'drag' &&
         lifecycle.context.source.kind === 'board'
       ) {
-        const next = Object.freeze({
-          piece: lifecycle.context.piece,
-          sourceSquare: lifecycle.context.source.square,
-        });
-        setActiveDragVisual((current) =>
-          current?.sourceSquare === next.sourceSquare &&
-          current.piece.id === next.piece.id &&
-          current.piece.pieceType === next.piece.pieceType
-            ? current
-            : next,
-        );
-        onDragSourceChangeAtCommit.current?.(next.sourceSquare);
+        const active = reduction.state.active;
+        if (active !== null) {
+          const piece = lifecycle.context.piece;
+          const sourceSquare = lifecycle.context.source.square;
+          providerRuntime.drag.claim(
+            Object.freeze({
+              boardId,
+              gestureToken: active.correlation.token,
+              onCancel: (reason: ProviderDragCancellationReason): void => {
+                cancelFromProviderAtCommit.current(reason);
+              },
+              owner: providerOwner.current,
+              piece,
+              presentation,
+              renderer: resolvePieceRenderer(pieceRenderers, piece.pieceType),
+              size: pieceSize,
+              sourceSquare,
+              style: pieceStyle,
+            }),
+          );
+          onDragSourceChangeAtCommit.current?.(sourceSquare);
+        }
       } else {
-        setActiveDragVisual((current) => (current === null ? current : null));
+        const active = providerRuntime.drag.getSnapshot().active;
+        if (active?.owner === providerOwner.current) {
+          providerRuntime.drag.release(
+            providerOwner.current,
+            active.gestureToken,
+          );
+        }
         onDragSourceChangeAtCommit.current?.(null);
       }
       if (reduction.candidate !== null) {
         onCandidateAtCommit.current?.(reduction.candidate);
       }
     },
-    [presentation],
+    [
+      boardId,
+      pieceRenderers,
+      pieceSize,
+      pieceStyle,
+      presentation,
+      providerRuntime,
+    ],
+  );
+
+  const cancelFromProvider = useCallback(
+    (reason: ProviderDragCancellationReason): void => {
+      const correlation = adapter.current.active?.correlation;
+      if (correlation === undefined) {
+        return;
+      }
+      applyReduction(
+        reduceBoardGestureAdapter(adapter.current, {
+          correlation,
+          reason:
+            reason === 'geometry-change'
+              ? 'geometry-change'
+              : reason === 'unmount'
+                ? 'unmount'
+                : 'user',
+          type: 'cancel',
+        }),
+      );
+    },
+    [applyReduction],
   );
 
   const handleSignal = useCallback(
@@ -313,9 +367,10 @@ export function BoardInteractionController({
   );
 
   useLayoutEffect(() => {
+    cancelFromProviderAtCommit.current = cancelFromProvider;
     onCandidateAtCommit.current = onCandidate;
     onDragSourceChangeAtCommit.current = onDragSourceChange;
-  }, [onCandidate, onDragSourceChange]);
+  }, [cancelFromProvider, onCandidate, onDragSourceChange]);
 
   useLayoutEffect(() => {
     snapshotAtCommit.current = snapshot;
@@ -364,19 +419,17 @@ export function BoardInteractionController({
           type: 'cancel',
         }).state;
       }
+      const active = providerRuntime.drag.getSnapshot().active;
+      if (active?.owner === providerOwner.current) {
+        providerRuntime.drag.release(
+          providerOwner.current,
+          active.gestureToken,
+        );
+      }
       onDragSourceChangeAtCommit.current?.(null);
       resetInteractionPresentationSharedValues(presentation);
     };
-  }, [presentation]);
-
-  const renderer =
-    activeDragVisual === null
-      ? null
-      : resolvePieceRenderer(pieceRenderers, activeDragVisual.piece.pieceType);
-  const pieceSize = Math.min(
-    geometry.width / geometry.columns,
-    geometry.height / geometry.rows,
-  );
+  }, [presentation, providerRuntime]);
 
   return (
     <>
@@ -391,17 +444,21 @@ export function BoardInteractionController({
         selectionRevision={selectionRevision}
         tapEnabled={tapEnabled}
       />
-      {activeDragVisual === null || renderer === null ? null : (
-        <DragOverlay
-          boardId={boardId}
-          piece={activeDragVisual.piece}
-          presentation={presentation}
-          renderer={renderer}
-          size={pieceSize}
-          sourceSquare={activeDragVisual.sourceSquare}
-          style={pieceStyle}
-        />
-      )}
+      <ProviderDragOverlay owner={providerOwner.current} />
     </>
   );
+}
+
+export function BoardInteractionController(
+  props: BoardInteractionControllerProps,
+): ReactElement {
+  const provider = useOptionalChessboardProvider();
+  if (provider === null) {
+    return (
+      <ChessboardProvider>
+        <BoardInteractionControllerContent {...props} />
+      </ChessboardProvider>
+    );
+  }
+  return <BoardInteractionControllerContent {...props} />;
 }

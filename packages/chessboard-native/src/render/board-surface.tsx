@@ -32,6 +32,7 @@ import {
 } from '../internal/square-activation';
 import { useMoveRequestRuntime } from '../internal/use-move-request-runtime';
 import { useSquareActivation } from '../internal/use-square-activation';
+import type { ProviderBoardRegistration } from '../internal/provider-board-registration';
 import type {
   AnnotationStyle,
   BoardSize,
@@ -48,6 +49,7 @@ import type {
   SquareActivationIntent,
   SquareId,
   SquareStyles,
+  Revision,
 } from '../public-types';
 import { createBoardSurfaceLayout } from './board-layout';
 import { AnnotationLayer } from './annotation-layer';
@@ -79,6 +81,8 @@ interface BoardSurfaceProps {
   readonly onMoveRequest: OnMoveRequest | undefined;
   readonly onSquareActivate: OnSquareActivate | undefined;
   readonly pieceRenderers: PieceRenderers;
+  readonly providerGeometryRevision: Revision;
+  readonly providerRegistration: Readonly<ProviderBoardRegistration> | null;
   readonly showNotation: boolean;
   readonly squareStyles: SquareStyles | undefined;
   readonly styles: ChessboardStyles | undefined;
@@ -91,6 +95,7 @@ interface InteractionInvalidationSnapshot {
   readonly dragEnabled: boolean;
   readonly geometryRevision: number | null;
   readonly orientation: NormalizedBoardModel['orientation'];
+  readonly providerGeometryRevision: Revision;
   readonly rows: number | null;
   readonly tapEnabled: boolean;
 }
@@ -162,6 +167,9 @@ function invalidationReason(
   ) {
     return 'geometry-change';
   }
+  if (previous.providerGeometryRevision !== current.providerGeometryRevision) {
+    return 'geometry-change';
+  }
   return null;
 }
 
@@ -176,6 +184,8 @@ export function BoardSurface({
   onMoveRequest,
   onSquareActivate,
   pieceRenderers,
+  providerGeometryRevision,
+  providerRegistration,
   showNotation,
   squareStyles,
   styles,
@@ -186,7 +196,9 @@ export function BoardSurface({
     () => resolveInteractionPermissions(onMoveRequest, interactionPermissions),
     [interactionPermissions, onMoveRequest],
   );
+  const providerRegistered = providerRegistration?.registered === true;
   const interactionReady =
+    providerRegistered &&
     model.status === 'ready' &&
     model.boardId !== null &&
     model.position !== null;
@@ -315,6 +327,8 @@ export function BoardSurface({
     fallbackDimensions.columns / fallbackDimensions.rows;
   const [measuredSize, setMeasuredSize] =
     useState<Readonly<MeasuredBoardSize> | null>(null);
+  const [providerLayoutRevision, setProviderLayoutRevision] = useState(0);
+  const providerLayoutRevisionRef = useRef(0);
   const boardStyle = useMemo(
     () => resolveBoardStyle(theme, styles),
     [styles, theme],
@@ -327,7 +341,41 @@ export function BoardSurface({
   const handleLayout = useCallback(
     (event: LayoutChangeEvent): void => {
       const { height, width } = event.nativeEvent.layout;
-      if (!isPositiveFinite(width) || !isPositiveFinite(height)) {
+      const hasPositiveSize =
+        isPositiveFinite(width) && isPositiveFinite(height);
+      const nextLayoutRevision =
+        providerLayoutRevisionRef.current === Number.MAX_SAFE_INTEGER
+          ? Number.MAX_SAFE_INTEGER
+          : providerLayoutRevisionRef.current + 1;
+      providerLayoutRevisionRef.current = nextLayoutRevision;
+      if (providerRegistration?.registered === true) {
+        providerRegistration.cancelActiveDrag();
+        const snapshot = providerRegistration.registry.getBoardSnapshot(
+          providerRegistration.boardId,
+        );
+        if (snapshot !== null) {
+          providerRegistration.registry.update(
+            providerRegistration.boardId,
+            providerRegistration.owner,
+            hasPositiveSize
+              ? {
+                  geometry: {
+                    ...snapshot.geometry,
+                    layoutRevision: nextLayoutRevision,
+                  },
+                }
+              : {
+                  available: false,
+                  geometry: {
+                    ...snapshot.geometry,
+                    layoutRevision: nextLayoutRevision,
+                  },
+                },
+          );
+        }
+      }
+      setProviderLayoutRevision(nextLayoutRevision);
+      if (!hasPositiveSize) {
         setMeasuredSize((previous) => (previous === null ? previous : null));
         return;
       }
@@ -347,7 +395,7 @@ export function BoardSurface({
         });
       });
     },
-    [currentAspectRatio],
+    [currentAspectRatio, providerRegistration],
   );
 
   const activeSize =
@@ -414,6 +462,54 @@ export function BoardSurface({
       width: layout.size.width,
     });
   }, [layout, nextGeometryEpochMetadata.revision]);
+  const providerDropAvailable =
+    layout !== null &&
+    model.status === 'ready' &&
+    model.position !== null &&
+    model.dimensions !== null &&
+    model.orientation !== null &&
+    nextGeometryEpochMetadata.revision !== null;
+  useLayoutEffect(() => {
+    if (providerRegistration?.registered !== true) {
+      return;
+    }
+    if (!providerDropAvailable) {
+      providerRegistration.cancelActiveDrag();
+      providerRegistration.registry.update(
+        providerRegistration.boardId,
+        providerRegistration.owner,
+        { available: false },
+      );
+      return;
+    }
+    const updated = providerRegistration.registry.update(
+      providerRegistration.boardId,
+      providerRegistration.owner,
+      {
+        available: true,
+        geometry: {
+          dimensions: model.dimensions,
+          geometryEpoch: nextGeometryEpochMetadata.revision,
+          layoutRevision: providerLayoutRevision,
+          orientation: model.orientation,
+        },
+      },
+    );
+    if (updated) {
+      void providerRegistration.registry.refreshCachedBounds(
+        providerRegistration.boardId,
+        providerRegistration.owner,
+      );
+    }
+  }, [
+    layout,
+    model.dimensions,
+    model.orientation,
+    nextGeometryEpochMetadata.revision,
+    providerDropAvailable,
+    providerLayoutRevision,
+    providerRegistration,
+  ]);
   const invalidationSnapshot = useMemo<
     Readonly<InteractionInvalidationSnapshot>
   >(
@@ -424,6 +520,7 @@ export function BoardSurface({
         dragEnabled,
         geometryRevision: gestureGeometry?.revision ?? null,
         orientation: model.orientation,
+        providerGeometryRevision,
         rows: model.dimensions?.rows ?? null,
         tapEnabled,
       }),
@@ -434,6 +531,7 @@ export function BoardSurface({
       model.dimensions?.columns,
       model.dimensions?.rows,
       model.orientation,
+      providerGeometryRevision,
       tapEnabled,
     ],
   );
@@ -554,7 +652,9 @@ export function BoardSurface({
       accessibilityHint={accessibilityProps.accessibilityHint}
       accessibilityLabel={accessibilityProps.accessibilityLabel}
       accessibilityRole="adjustable"
-      accessibilityState={{ disabled: model.status === 'disabled' }}
+      accessibilityState={{
+        disabled: !providerRegistered || model.status === 'disabled',
+      }}
       accessibilityValue={accessibilityProps.accessibilityValue}
       accessible
       collapsable={false}
@@ -562,6 +662,7 @@ export function BoardSurface({
       onLayout={handleLayout}
       onAccessibilityAction={accessibilityProps.onAccessibilityAction}
       pointerEvents="box-none"
+      ref={providerRegistration?.hostRef}
       style={[
         internalStyles.host,
         boardStyle,
