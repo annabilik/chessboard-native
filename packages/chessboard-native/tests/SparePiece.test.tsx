@@ -101,11 +101,17 @@ async function beginSpareDrag(
   spareId: string,
 ): Promise<Readonly<PanCallbacks>> {
   const callbacks = sparePanCallbacks(spareId);
+  await startSpareDrag(callbacks);
+  return callbacks;
+}
+
+async function startSpareDrag(
+  callbacks: Readonly<PanCallbacks>,
+): Promise<void> {
   await act(() => {
     callbacks.onBegin?.({ absoluteX: 24, absoluteY: 24, x: 24, y: 24 });
     callbacks.onStart?.({ absoluteX: 36, absoluteY: 24, x: 36, y: 24 });
   });
-  return callbacks;
 }
 
 async function releaseSpareDrag(
@@ -399,6 +405,46 @@ describe('SparePiece', () => {
         includeHiddenElements: true,
       }),
     ).toEqual([]);
+  });
+
+  it('rejects retained UI-thread gesture signals after the spare source unmounts', async () => {
+    mockBoardWindowBounds();
+    const onMoveRequest = moveRequestMock({ status: 'accepted' });
+    const result = await render(
+      renderTarget({ onMoveRequest, showSpare: true }),
+    );
+    await measureBoard(boardByLabel(result, 'target board'));
+    const retainedCallbacks = sparePanCallbacks('reserve');
+
+    await result.rerender(renderTarget({ onMoveRequest, showSpare: false }));
+    await startSpareDrag(retainedCallbacks);
+    await releaseSpareDrag(retainedCallbacks, { x: 125, y: 225 });
+
+    expect(onMoveRequest).not.toHaveBeenCalled();
+  });
+
+  it('rejects retained UI-thread gesture signals after disable and identity commits', async () => {
+    mockBoardWindowBounds();
+    const onMoveRequest = moveRequestMock({ status: 'accepted' });
+    const result = await render(renderTarget({ onMoveRequest }));
+    await measureBoard(boardByLabel(result, 'target board'));
+    const enabledCallbacks = sparePanCallbacks('reserve');
+
+    await result.rerender(renderTarget({ disabled: true, onMoveRequest }));
+    await startSpareDrag(enabledCallbacks);
+    await releaseSpareDrag(enabledCallbacks, { x: 125, y: 225 });
+
+    await result.rerender(
+      renderTarget({ onMoveRequest, spareId: 'identity-before' }),
+    );
+    const identityCallbacks = sparePanCallbacks('identity-before');
+    await result.rerender(
+      renderTarget({ onMoveRequest, spareId: 'identity-after' }),
+    );
+    await startSpareDrag(identityCallbacks);
+    await releaseSpareDrag(identityCallbacks, { x: 125, y: 225 });
+
+    expect(onMoveRequest).not.toHaveBeenCalled();
   });
 
   it.each([

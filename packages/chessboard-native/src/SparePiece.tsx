@@ -174,6 +174,19 @@ export function SparePiece({
   const presentation = useInteractionPresentationSharedValues();
   const owner = useRef<ProviderDragOwner>({});
   const activeDrag = useRef<Readonly<ActiveSpareDrag> | null>(null);
+  const acceptingSignalGeneration = useRef<object | null>(null);
+  const signalGeneration = useMemo(
+    () => Object.freeze({}),
+    [
+      disabled,
+      piece.id,
+      piece.pieceType,
+      provider.runtime,
+      size,
+      spareId,
+      targetBoardId,
+    ],
+  );
   const selectionSnapshot = useSyncExternalStore(
     provider.runtime.spareSelection.subscribe,
     provider.runtime.spareSelection.getSnapshot,
@@ -218,6 +231,13 @@ export function SparePiece({
 
   const handleGestureSignal = useCallback(
     (signal: Readonly<SparePieceGestureSignal>): void => {
+      // UI-thread work may already have queued this callback when React
+      // disables, retargets, replaces, or unmounts the source. Only the
+      // generation installed by the latest committed layout effect may
+      // create or finish provider coordination.
+      if (acceptingSignalGeneration.current !== signalGeneration) {
+        return;
+      }
       if (signal.type === 'start') {
         const previous = activeDrag.current;
         if (previous !== null) {
@@ -310,6 +330,7 @@ export function SparePiece({
       provider.runtime,
       renderer,
       size,
+      signalGeneration,
       source,
       targetBoardId,
       visualStyle,
@@ -356,21 +377,17 @@ export function SparePiece({
   ]);
 
   useLayoutEffect(() => {
+    acceptingSignalGeneration.current = signalGeneration;
     return () => {
+      if (acceptingSignalGeneration.current === signalGeneration) {
+        acceptingSignalGeneration.current = null;
+      }
       const drag = activeDrag.current;
       if (drag !== null) {
         finishDrag(drag, true);
       }
     };
-  }, [
-    disabled,
-    finishDrag,
-    piece.id,
-    piece.pieceType,
-    size,
-    spareId,
-    targetBoardId,
-  ]);
+  }, [finishDrag, signalGeneration]);
 
   const renderPiece = useCallback(
     (pressed: boolean): ReactElement | null => {
