@@ -265,13 +265,19 @@ jobs:
           adb="$ANDROID_HOME/platform-tools/adb"
           audit_log="$RUNNER_TEMP/android-accessibility-audit.log"
           emulator_log="$RUNNER_TEMP/android-emulator.log"
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/android-avd"
           export ANDROID_SERIAL="emulator-5554"
+          mkdir -p "$ANDROID_AVD_HOME"
 
           printf 'no\n' | "$avdmanager" create avd \
             --force \
             --name "$avd_name" \
             --package "system-images;android-35;aosp_atd;x86_64" \
             --device "pixel_2"
+
+          available_avds=$("$ANDROID_HOME/emulator/emulator" -list-avds)
+          printf '%s\n' "$available_avds"
+          grep -Fxq "$avd_name" <<<"$available_avds"
 
           "$adb" start-server
           "$ANDROID_HOME/emulator/emulator" \
