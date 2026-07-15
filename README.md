@@ -170,8 +170,9 @@ pnpm native:ios:accessibility
 
 The iOS commands require macOS with Xcode, Ruby, Bundler, and CocoaPods.
 The Android accessibility command requires a running device or emulator; CI
-uses the repository's Gradle-managed API 35 device through
-`pnpm native:android:accessibility:managed`.
+cold-boots a pinned, snapshot-disabled API 35 `aosp_atd` emulator and runs the
+connected Release audit. `pnpm native:android:accessibility:managed` remains
+available as a locally provisioned Gradle-managed alternative.
 `pnpm verify` remains portable and does not invoke either native toolchain; CI
 runs each native accessibility audit inside its platform's independent required
 Release job.

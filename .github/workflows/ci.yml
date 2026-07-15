@@ -204,7 +204,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends --yes libpulse0
 
-      - name: Pin Android emulator 36.3.10 for managed devices
+      - name: Pin Android emulator 36.3.10 for accessibility audit
         env:
           EMULATOR_BUILD_ID: '14472402'
           EMULATOR_SHA256: c8ab9ffbc4c2d11c02e06e81a9d9f81970177dc5ab599e3a30eb08a4a5496a67
@@ -233,7 +233,7 @@ jobs:
           grep -Fq 'Android emulator version 36.3.10.0' <<<"$emulator_version"
           grep -Fq "(build_id $EMULATOR_BUILD_ID)" <<<"$emulator_version"
 
-      - name: Enable KVM for the managed accessibility device
+      - name: Enable KVM for the Android accessibility emulator
         run: sudo chmod 666 /dev/kvm
 
       - name: Verify Android emulator acceleration
@@ -260,28 +260,68 @@ jobs:
         working-directory: ${{ runner.temp }}/packed-native
         shell: bash
         run: |
+          avd_name="chessboard_api35"
+          avdmanager="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+          adb="$ANDROID_HOME/platform-tools/adb"
           audit_log="$RUNNER_TEMP/android-accessibility-audit.log"
-          retry_log="$RUNNER_TEMP/android-accessibility-audit-retry.log"
-          audit_args=(
-            -PreactNativeArchitectures=x86_64
-            -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect
-          )
+          emulator_log="$RUNNER_TEMP/android-emulator.log"
+          export ANDROID_SERIAL="emulator-5554"
 
-          if npm run android:accessibility:managed -- "${audit_args[@]}" 2>&1 | tee "$audit_log"; then
-            exit 0
-          fi
+          printf 'no\n' | "$avdmanager" create avd \
+            --force \
+            --name "$avd_name" \
+            --package "system-images;android-35;aosp_atd;x86_64" \
+            --device "pixel_2"
 
-          if ! grep -q 'EmulatorSnapshotCannotCreatedException' "$audit_log"; then
+          "$adb" start-server
+          "$ANDROID_HOME/emulator/emulator" \
+            -avd "$avd_name" \
+            -port 5554 \
+            -no-window \
+            -no-audio \
+            -no-boot-anim \
+            -no-snapshot \
+            -gpu swiftshader_indirect \
+            -accel on \
+            >"$emulator_log" 2>&1 &
+          emulator_pid=$!
+
+          cleanup_emulator() {
+            set +e
+            "$adb" -s "$ANDROID_SERIAL" emu kill >/dev/null 2>&1
+            kill "$emulator_pid" >/dev/null 2>&1
+            wait "$emulator_pid" >/dev/null 2>&1
+          }
+          trap cleanup_emulator EXIT
+
+          boot_deadline=$((SECONDS + 300))
+          boot_completed=""
+          while (( SECONDS < boot_deadline )); do
+            if ! kill -0 "$emulator_pid" 2>/dev/null; then
+              echo "Android emulator exited before completing boot."
+              cat "$emulator_log"
+              exit 1
+            fi
+            boot_completed=$("$adb" -s "$ANDROID_SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
+            if [[ "$boot_completed" == "1" ]]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [[ "$boot_completed" != "1" ]]; then
+            echo "Android emulator did not complete boot within 300 seconds."
+            cat "$emulator_log"
             exit 1
           fi
 
-          echo "::warning::Managed Android emulator snapshot setup failed; cleaning the device and retrying once."
-          "$ANDROID_HOME/platform-tools/adb" kill-server || true
-          (
-            cd android
-            ./gradlew :app:cleanManagedDevices --no-daemon
-          )
-          npm run android:accessibility:managed -- "${audit_args[@]}" 2>&1 | tee "$retry_log"
+          "$adb" -s "$ANDROID_SERIAL" shell settings put global window_animation_scale 0
+          "$adb" -s "$ANDROID_SERIAL" shell settings put global transition_animation_scale 0
+          "$adb" -s "$ANDROID_SERIAL" shell settings put global animator_duration_scale 0
+          "$adb" -s "$ANDROID_SERIAL" shell cmd package list packages >/dev/null
+          "$adb" devices -l
+
+          npm run android:accessibility -- -PreactNativeArchitectures=x86_64 2>&1 | tee "$audit_log"
 
       - name: Upload Android accessibility audit results
         if: ${{ always() }}
@@ -289,8 +329,8 @@ jobs:
         with:
           name: android-accessibility-audit
           path: |
+            ${{ runner.temp }}/android-emulator.log
             ${{ runner.temp }}/android-accessibility-audit.log
-            ${{ runner.temp }}/android-accessibility-audit-retry.log
             ${{ runner.temp }}/packed-native/android/app/build/reports/androidTests
             ${{ runner.temp }}/packed-native/android/app/build/outputs/androidTest-results
           if-no-files-found: ignore

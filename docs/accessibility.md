@@ -310,10 +310,11 @@ pnpm native:android:accessibility
 pnpm native:ios:accessibility
 ```
 
-The Android command expects a running device or emulator. CI uses the
-Gradle-managed API 35 target through
-`pnpm native:android:accessibility:managed`. The iOS command requires Xcode and
-an available iPhone simulator running iOS 17 or newer.
+The Android command expects a running device or emulator. CI cold-boots a
+pinned, snapshot-disabled API 35 `aosp_atd` emulator and runs that connected
+Release audit. `pnpm native:android:accessibility:managed` remains available as
+a locally provisioned Gradle-managed alternative. The iOS command requires
+Xcode and an available iPhone simulator running iOS 17 or newer.
 
 The P2.6 component suite covers the spare button, decorative visual subtree,
 selection, place/cancel action exposure, and controlled move payload. Native
