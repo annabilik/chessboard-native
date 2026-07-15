@@ -233,6 +233,8 @@ jobs:
           grep -Fq 'Android emulator version 36.3.10.0' <<<"$emulator_version"
           grep -Fq "(build_id $EMULATOR_BUILD_ID)" <<<"$emulator_version"
 
+          rm -rf "$RUNNER_TEMP/emulator-current" "$archive"
+
       - name: Enable KVM for the Android accessibility emulator
         run: sudo chmod 666 /dev/kvm
 
@@ -282,6 +284,16 @@ jobs:
           rm "$avd_config.bak"
           grep -Fxq 'disk.dataPartition.size=2G' "$avd_config"
           [[ "$(grep -c '^disk\.dataPartition\.size=' "$avd_config")" -eq 1 ]]
+
+          # API 35 otherwise gets a 6 GiB fresh-userdata floor. Seed a valid,
+          # sparse filesystem so the hosted runner is not rejected by that gate.
+          userdata_image="$ANDROID_AVD_HOME/$avd_name.avd/userdata-qemu.img"
+          truncate -s 2G "$userdata_image"
+          "$ANDROID_HOME/emulator/bin64/mkfs.ext4" \
+            -F \
+            -L data \
+            "$userdata_image"
+          [[ "$(stat -c '%s' "$userdata_image")" -eq 2147483648 ]]
 
           available_avds=$("$ANDROID_HOME/emulator/emulator" -list-avds)
           printf '%s\n' "$available_avds"
