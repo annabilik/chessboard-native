@@ -275,6 +275,14 @@ jobs:
             --package "system-images;android-35;aosp_atd;x86_64" \
             --device "pixel_2"
 
+          avd_config="$ANDROID_AVD_HOME/$avd_name.avd/config.ini"
+          sed -E -i.bak \
+            's/^disk\.dataPartition\.size=.*/disk.dataPartition.size=2G/' \
+            "$avd_config"
+          rm "$avd_config.bak"
+          grep -Fxq 'disk.dataPartition.size=2G' "$avd_config"
+          [[ "$(grep -c '^disk\.dataPartition\.size=' "$avd_config")" -eq 1 ]]
+
           available_avds=$("$ANDROID_HOME/emulator/emulator" -list-avds)
           printf '%s\n' "$available_avds"
           grep -Fxq "$avd_name" <<<"$available_avds"
@@ -287,7 +295,6 @@ jobs:
             -no-audio \
             -no-boot-anim \
             -no-snapshot \
-            -partition-size 2048 \
             -gpu swiftshader_indirect \
             -accel on \
             >"$emulator_log" 2>&1 &
