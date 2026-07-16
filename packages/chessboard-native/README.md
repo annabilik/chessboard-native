@@ -2,13 +2,13 @@
 
 A controlled, rules-free React Native chessboard component.
 
-This unpublished early Phase 2 package includes the controlled public contracts,
+This unpublished package includes the controlled public contracts,
 platform-free position and coordinate core, measured geometry, strict FEN
-foundation, and a responsive static board renderer. `Chessboard` fills its
-parent width, derives height from board rows and columns, and renders oriented
-square backgrounds, optional edge notation, and the current controlled
-position and annotation collection. Constrain the parent to set an explicit
-width.
+foundation, a responsive board renderer, and the completed Phase 2 interaction
+surface. `Chessboard` fills its parent width, derives height from board rows and
+columns, and renders oriented square backgrounds, optional edge notation, and
+the current controlled position and annotation collection. Constrain the
+parent to set an explicit width.
 
 The default set contains twelve original interim geometric chess pieces.
 Consumers can replace it with a visual-only renderer map keyed by the open
@@ -27,7 +27,11 @@ that.
 overlay, and stale-safe external-drop measurement. Its public `SparePiece`
 source supports drag and accessible placement on one named board while that
 board's controlled move callback remains the only position authority. Custom
-square rendering, annotation drawing, and transitions remain future work.
+square rendering, annotation gesture drawing, and mounted transition animation
+remain future work. Internally, pure controlled-position transition planning
+now validates exact-revision hints, prefers stable piece IDs, treats ambiguous
+anonymous matches as exits and enters, and returns detached epoch-correlated
+plans without retaining a second position source.
 
 ```tsx
 import { Chessboard } from '@vibechess/chessboard-native';

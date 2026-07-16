@@ -206,6 +206,110 @@ describe('controlled position domain', () => {
     expect(result.current).not.toHaveProperty('committedIntentId');
   });
 
+  it('snapshots a detached transition candidate only from the current revisioned envelope', () => {
+    const rookMove = { from: 'h1', to: 'f1' };
+    const transition = {
+      capturedSquare: 'd5',
+      from: 'e5',
+      fromRevision: 4,
+      rookMove,
+      to: 'd6',
+      toRevision: 5,
+    };
+    const result = normalizePositionDomain({
+      boardId: 'analysis',
+      development: true,
+      dimensions,
+      input: {
+        revision: 5,
+        transition,
+        value: {
+          d6: { id: 'pawn', pieceType: 'wP' },
+          f1: { id: 'rook', pieceType: 'wR' },
+        },
+      },
+      previousMetadata: createControlledDomainMetadata(),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw result.error;
+    }
+    expect(result.current.transition).toEqual(transition);
+    expect(result.current.transition).not.toBe(transition);
+    expect(result.current.transition?.rookMove).not.toBe(rookMove);
+    expect(Object.isFrozen(result.current.transition)).toBe(true);
+    expect(Object.isFrozen(result.current.transition?.rookMove)).toBe(true);
+    expect(result.current).not.toHaveProperty('transitionWarning');
+    expect(result.nextMetadata).not.toHaveProperty('transition');
+  });
+
+  it('keeps malformed or hostile transition hints warning-only and preserves the valid position', () => {
+    const malformed = normalizePositionDomain({
+      boardId: 'analysis',
+      development: true,
+      dimensions,
+      input: {
+        revision: 5,
+        transition: {
+          from: 'E5',
+          fromRevision: 4,
+          to: 'd6',
+          toRevision: 5,
+        },
+        value: { d6: { pieceType: 'wP' } },
+      },
+      previousMetadata: createControlledDomainMetadata(),
+    });
+    expect(malformed.ok).toBe(true);
+    if (!malformed.ok) {
+      throw malformed.error;
+    }
+    expect(malformed.current.value).toEqual({ d6: { pieceType: 'wP' } });
+    expect(malformed.current).not.toHaveProperty('transition');
+    expect(malformed.current.transitionWarning).toEqual(
+      expect.objectContaining({ code: 'malformed' }),
+    );
+
+    let reads = 0;
+    const hostile = Object.defineProperties(
+      {},
+      {
+        revision: { enumerable: true, value: 6 },
+        transition: {
+          enumerable: true,
+          get: () => {
+            reads += 1;
+            throw new Error('transition getter failed');
+          },
+        },
+        value: {
+          enumerable: true,
+          value: { e7: { pieceType: 'wP' } },
+        },
+      },
+    );
+    const hostileResult = normalizePositionDomain({
+      boardId: 'analysis',
+      development: true,
+      dimensions,
+      input: hostile,
+      previousMetadata: malformed.nextMetadata,
+    });
+    expect(hostileResult.ok).toBe(true);
+    if (!hostileResult.ok) {
+      throw hostileResult.error;
+    }
+    expect(reads).toBe(1);
+    expect(hostileResult.current.value).toEqual({
+      e7: { pieceType: 'wP' },
+    });
+    expect(hostileResult.current.transitionWarning).toEqual({
+      code: 'malformed',
+      message: 'Board transition could not be read.',
+    });
+  });
+
   it('uses a collision-free, insertion-order-independent position token', () => {
     const first: PositionObject = {
       a1: { id: '', pieceType: '' },

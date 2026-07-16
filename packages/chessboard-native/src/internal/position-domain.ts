@@ -1,5 +1,9 @@
 import { ChessboardError } from '../ChessboardError';
-import type { PositionObject, Revision } from '../public-types';
+import type {
+  BoardTransition,
+  PositionObject,
+  Revision,
+} from '../public-types';
 import type { ValidatedBoardDimensions } from '../core/dimensions';
 import {
   normalizePositionInput,
@@ -14,10 +18,16 @@ import {
   type NormalizedControlledValue,
 } from './controlled-domain';
 import { safeErrorMessage } from './safe-error';
+import {
+  snapshotTransitionHint,
+  type TransitionHintWarning,
+} from './transition-hint';
 
 /** Current-render position plus optional envelope-only commit correlation. */
 export interface NormalizedPositionValue extends NormalizedControlledValue<PositionObject> {
   readonly committedIntentId?: string;
+  readonly transition?: Readonly<BoardTransition>;
+  readonly transitionWarning?: Readonly<TransitionHintWarning>;
 }
 
 export type NormalizedPositionDomainResult =
@@ -178,6 +188,36 @@ function currentCommittedIntentId(
   }
 }
 
+function currentTransitionHint(
+  input: unknown,
+  current: NormalizedControlledValue<PositionObject>,
+  dimensions: ValidatedBoardDimensions,
+): Readonly<{
+  hint: Readonly<BoardTransition> | null;
+  warning: Readonly<TransitionHintWarning> | null;
+}> {
+  if (current.tier !== 'envelope') {
+    return Object.freeze({ hint: null, warning: null });
+  }
+
+  let rawTransition: unknown;
+  try {
+    if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+      return Object.freeze({ hint: null, warning: null });
+    }
+    rawTransition = (input as Readonly<Record<string, unknown>>)['transition'];
+  } catch {
+    return Object.freeze({
+      hint: null,
+      warning: Object.freeze({
+        code: 'malformed' as const,
+        message: 'Board transition could not be read.',
+      }),
+    });
+  }
+  return snapshotTransitionHint(rawTransition, dimensions);
+}
+
 export function normalizePositionDomain(
   options: NormalizePositionDomainOptions,
 ): NormalizedPositionDomainResult {
@@ -198,9 +238,18 @@ export function normalizePositionDomain(
     options.input,
     result.current,
   );
+  const transition = currentTransitionHint(
+    options.input,
+    result.current,
+    options.dimensions,
+  );
   const current: NormalizedPositionValue = Object.freeze({
     ...result.current,
     ...(committedIntentId === undefined ? {} : { committedIntentId }),
+    ...(transition.hint === null ? {} : { transition: transition.hint }),
+    ...(transition.warning === null
+      ? {}
+      : { transitionWarning: transition.warning }),
   });
   return Object.freeze({ ...result, current });
 }
