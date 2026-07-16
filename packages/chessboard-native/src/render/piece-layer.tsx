@@ -48,17 +48,28 @@ export type PieceTransitionVisual =
       translateX: number;
       translateY: number;
     }>
+  | Readonly<{
+      kind: 'replace-enter' | 'replace-exit';
+      translateX: number;
+      translateY: number;
+    }>
   | Readonly<{ kind: 'enter' | 'exit' }>;
+
+export interface DetachedReplacementLayout extends BoardPieceLayout {
+  readonly transition: Readonly<PieceTransitionVisual>;
+}
 
 export interface PieceTransitionProjection {
   readonly current: ReadonlyMap<SquareId, Readonly<PieceTransitionVisual>>;
   readonly exits: readonly Readonly<BoardPieceLayout>[];
+  readonly replacements: readonly Readonly<DetachedReplacementLayout>[];
 }
 
 const EMPTY_TRANSITION_PROJECTION: Readonly<PieceTransitionProjection> =
   Object.freeze({
     current: new Map(),
     exits: EMPTY_PIECE_LAYOUTS,
+    replacements: Object.freeze([]),
   });
 
 const STATIC_PIECE_STATE: Readonly<PieceVisualState> = Object.freeze({
@@ -180,8 +191,8 @@ function boardPieceLayoutAtSquare(
 /**
  * Project detached plan operations into the current measured coordinate plane.
  *
- * Replacements deliberately snap in P3.2; promotion and special-move
- * presentation remain P3.3 work.
+ * Current semantic actors always come from the latest position. A detached
+ * replacement-before actor may accompany them for presentation only.
  */
 export function createPieceTransitionProjection(
   layout: Readonly<BoardSurfaceLayout>,
@@ -216,6 +227,41 @@ export function createPieceTransitionProjection(
     }
   }
 
+  const replacements: Readonly<DetachedReplacementLayout>[] = [];
+  for (const replacement of transition.plan.replacements) {
+    const from = cellsBySquare.get(replacement.from);
+    const to = cellsBySquare.get(replacement.to);
+    if (from === undefined || to === undefined) {
+      continue;
+    }
+    current.set(
+      replacement.to,
+      Object.freeze({
+        kind: 'replace-enter' as const,
+        translateX: from.rect.left - to.rect.left,
+        translateY: from.rect.top - to.rect.top,
+      }),
+    );
+    const projected = boardPieceLayoutAtSquare(
+      layout,
+      replacement.from,
+      replacement.before,
+      `transition-replace:${String(transition.plan.epoch)}:${replacement.from}:${replacement.to}:${replacement.before.id ?? replacement.before.pieceType}`,
+    );
+    if (projected !== null) {
+      replacements.push(
+        Object.freeze({
+          ...projected,
+          transition: Object.freeze({
+            kind: 'replace-exit' as const,
+            translateX: to.rect.left - from.rect.left,
+            translateY: to.rect.top - from.rect.top,
+          }),
+        }),
+      );
+    }
+  }
+
   const exits: Readonly<BoardPieceLayout>[] = [];
   for (const exit of transition.plan.exits) {
     const projected = boardPieceLayoutAtSquare(
@@ -232,6 +278,7 @@ export function createPieceTransitionProjection(
   return Object.freeze({
     current,
     exits: exits.length === 0 ? EMPTY_PIECE_LAYOUTS : Object.freeze(exits),
+    replacements: Object.freeze(replacements),
   });
 }
 
@@ -322,6 +369,22 @@ export function resolvePieceTransitionAnimatedStyle(
         transform: [
           { translateX: transition.translateX * (1 - amount) },
           { translateY: transition.translateY * (1 - amount) },
+        ],
+      };
+    case 'replace-enter':
+      return {
+        opacity: baseOpacity * amount,
+        transform: [
+          { translateX: transition.translateX * (1 - amount) },
+          { translateY: transition.translateY * (1 - amount) },
+        ],
+      };
+    case 'replace-exit':
+      return {
+        opacity: baseOpacity * (1 - amount),
+        transform: [
+          { translateX: transition.translateX * amount },
+          { translateY: transition.translateY * amount },
         ],
       };
     case 'enter':
@@ -469,6 +532,25 @@ export const PieceLayer = memo(function PieceLayer({
             renderer={Renderer}
             style={style}
             transition={Object.freeze({ kind: 'exit' as const })}
+          />
+        );
+      })}
+      {transitionProjection.replacements.map((pieceLayout) => {
+        const Renderer = resolvePieceRenderer(
+          pieceRenderers,
+          pieceLayout.piece.pieceType,
+        );
+        return Renderer === null ? null : (
+          <BoardPieceHost
+            boardId={boardId}
+            isDragSource={false}
+            isPendingSource={false}
+            key={pieceLayout.key}
+            layout={pieceLayout}
+            progress={transition?.progress ?? null}
+            renderer={Renderer}
+            style={style}
+            transition={pieceLayout.transition}
           />
         );
       })}

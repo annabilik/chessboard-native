@@ -1,4 +1,5 @@
 import {
+  type BoardTransition,
   Chessboard,
   type PositionObject,
   type ReduceMotion,
@@ -10,7 +11,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 interface DemoPosition {
   readonly revision: number;
   readonly value: PositionObject;
+  readonly transition?: BoardTransition;
 }
+
+type DemoTransition = Omit<BoardTransition, 'fromRevision' | 'toRevision'>;
 
 const MAIN_STEPS: readonly PositionObject[] = Object.freeze([
   Object.freeze({
@@ -55,6 +59,45 @@ function nextPosition(
   };
 }
 
+function nextHintedPosition(
+  current: DemoPosition,
+  value: PositionObject,
+  transition: DemoTransition,
+): DemoPosition {
+  const nextRevision = current.revision + 1;
+  return {
+    revision: nextRevision,
+    transition: {
+      ...transition,
+      fromRevision: current.revision,
+      toRevision: nextRevision,
+    },
+    value,
+  };
+}
+
+const PROMOTION_START: PositionObject = Object.freeze({
+  g7: Object.freeze({ id: 'promoting-pawn', pieceType: 'wP' }),
+});
+const PROMOTION_END: PositionObject = Object.freeze({
+  h8: Object.freeze({ id: 'promoting-pawn', pieceType: 'wQ' }),
+});
+const CASTLING_START: PositionObject = Object.freeze({
+  e1: Object.freeze({ id: 'castle-king', pieceType: 'wK' }),
+  h1: Object.freeze({ id: 'castle-rook', pieceType: 'wR' }),
+});
+const CASTLING_END: PositionObject = Object.freeze({
+  f1: Object.freeze({ id: 'castle-rook', pieceType: 'wR' }),
+  g1: Object.freeze({ id: 'castle-king', pieceType: 'wK' }),
+});
+const EN_PASSANT_START: PositionObject = Object.freeze({
+  d5: Object.freeze({ id: 'en-passant-victim', pieceType: 'bP' }),
+  e5: Object.freeze({ id: 'en-passant-pawn', pieceType: 'wP' }),
+});
+const EN_PASSANT_END: PositionObject = Object.freeze({
+  d6: Object.freeze({ id: 'en-passant-pawn', pieceType: 'wP' }),
+});
+
 export default function TransitionsRoute() {
   const [durationMs, setDurationMs] = useState(600);
   const [reduceMotion, setReduceMotion] = useState<ReduceMotion>('never');
@@ -67,6 +110,21 @@ export default function TransitionsRoute() {
   const [ambiguousPosition, setAmbiguousPosition] = useState<DemoPosition>({
     revision: 1,
     value: AMBIGUOUS_STEPS[0] ?? Object.freeze({}),
+  });
+  const [promotionForward, setPromotionForward] = useState(true);
+  const [promotionPosition, setPromotionPosition] = useState<DemoPosition>({
+    revision: 1,
+    value: PROMOTION_START,
+  });
+  const [castlingForward, setCastlingForward] = useState(true);
+  const [castlingPosition, setCastlingPosition] = useState<DemoPosition>({
+    revision: 1,
+    value: CASTLING_START,
+  });
+  const [enPassantForward, setEnPassantForward] = useState(true);
+  const [enPassantPosition, setEnPassantPosition] = useState<DemoPosition>({
+    revision: 1,
+    value: EN_PASSANT_START,
   });
 
   return (
@@ -176,10 +234,123 @@ export default function TransitionsRoute() {
           </Text>
         </Pressable>
 
+        <Text style={styles.sectionTitle}>Explicit promotion</Text>
+        <View style={styles.boardCard}>
+          <Chessboard
+            boardId="transition-promotion"
+            position={promotionPosition}
+            reduceMotion={reduceMotion}
+            transitionDurationMs={durationMs}
+          />
+        </View>
+        <Text style={styles.caption}>
+          The old pawn and authoritative promoted piece share one path and
+          crossfade without a shadow position. The reverse demonstrates replay
+          choreography.
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            setPromotionPosition((current) =>
+              current.value.g7 !== undefined
+                ? nextHintedPosition(current, PROMOTION_END, {
+                    from: 'g7',
+                    promotion: 'wQ',
+                    to: 'h8',
+                  })
+                : nextHintedPosition(current, PROMOTION_START, {
+                    from: 'h8',
+                    promotion: 'wP',
+                    to: 'g7',
+                  }),
+            );
+            setPromotionForward((current) => !current);
+          }}
+          style={styles.primaryButton}
+        >
+          <Text style={styles.primaryButtonText}>
+            {promotionForward ? 'Promote pawn' : 'Replay in reverse'}
+          </Text>
+        </Pressable>
+
+        <Text style={styles.sectionTitle}>Coordinated castling</Text>
+        <View style={styles.boardCard}>
+          <Chessboard
+            boardId="transition-castling"
+            position={castlingPosition}
+            reduceMotion={reduceMotion}
+            transitionDurationMs={durationMs}
+          />
+        </View>
+        <Text style={styles.caption}>
+          The king move and explicit rookMove are detached actors on the same
+          board-local clock. No intermediate semantic position is created.
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            setCastlingPosition((current) =>
+              current.value.e1 !== undefined
+                ? nextHintedPosition(current, CASTLING_END, {
+                    from: 'e1',
+                    rookMove: { from: 'h1', to: 'f1' },
+                    to: 'g1',
+                  })
+                : nextHintedPosition(current, CASTLING_START, {
+                    from: 'g1',
+                    rookMove: { from: 'f1', to: 'h1' },
+                    to: 'e1',
+                  }),
+            );
+            setCastlingForward((current) => !current);
+          }}
+          style={styles.primaryButton}
+        >
+          <Text style={styles.primaryButtonText}>
+            {castlingForward ? 'Castle kingside' : 'Reset with both actors'}
+          </Text>
+        </Pressable>
+
+        <Text style={styles.sectionTitle}>Off-target capture (en passant)</Text>
+        <View style={styles.boardCard}>
+          <Chessboard
+            boardId="transition-en-passant"
+            position={enPassantPosition}
+            reduceMotion={reduceMotion}
+            transitionDurationMs={durationMs}
+          />
+        </View>
+        <Text style={styles.caption}>
+          capturedSquare identifies d5 even though the moving pawn finishes on
+          d6, so the exact victim fades beneath the mover.
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            setEnPassantPosition((current) =>
+              current.value.d5 !== undefined
+                ? nextHintedPosition(current, EN_PASSANT_END, {
+                    capturedSquare: 'd5',
+                    from: 'e5',
+                    to: 'd6',
+                  })
+                : {
+                    revision: current.revision + 1,
+                    value: EN_PASSANT_START,
+                  },
+            );
+            setEnPassantForward((current) => !current);
+          }}
+          style={styles.primaryButton}
+        >
+          <Text style={styles.primaryButtonText}>
+            {enPassantForward ? 'Capture en passant' : 'Reset position'}
+          </Text>
+        </Pressable>
+
         <Text style={styles.note}>
-          Type-changing replacements, promotion, castling, en passant, smooth
-          in-flight replanning, and pending-to-commit handoff remain later Phase
-          3 packages.
+          Smooth in-flight A-B-C replanning and pending-to-commit handoff remain
+          the next Phase 3 transition package.
         </Text>
       </ScrollView>
     </SafeAreaView>

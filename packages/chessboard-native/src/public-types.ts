@@ -73,14 +73,27 @@ export interface BoardSize {
 /** White-at-bottom or black-at-bottom presentation. @public */
 export type BoardOrientation = 'white' | 'black';
 
-/** Presentation-only transition hint for one exact revision pair. @public */
+/**
+ * Presentation-only actor correlation for one exact controlled revision pair.
+ * The hint never changes position state or asks the board to validate chess
+ * rules.
+ *
+ * @public
+ */
 export interface BoardTransition {
+  /** Exact previous controlled position revision. */
   readonly fromRevision: Revision;
+  /** Exact enclosing controlled position revision. */
   readonly toRevision: Revision;
+  /** Primary actor square in `fromRevision`. */
   readonly from: SquareId;
+  /** Primary actor square in `toRevision`. */
   readonly to: SquareId;
+  /** Required target type when the primary actor changes type; omit otherwise. */
   readonly promotion?: PieceType;
+  /** Actor square removed or replaced from `fromRevision`, including off-target captures. */
   readonly capturedSquare?: SquareId;
+  /** Optional second continuing actor, used for coordinated moves such as castling. */
   readonly rookMove?: Readonly<{ from: SquareId; to: SquareId }>;
 }
 

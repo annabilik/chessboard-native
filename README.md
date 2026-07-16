@@ -112,9 +112,11 @@ deterministic exits and enters, and produces detached epoch/revision-correlated
 plans. P3.2 mounts those detached operations in one board-local Reanimated
 clock: current target actors translate or fade in, removed/captured actors fade
 out underneath them, reduced motion and zero duration snap, and newer props or
-geometry changes cancel stale work. Replacements still snap; promotion,
-castling, en passant, continuity-preserving interruption, and pending-to-commit
-handoff remain later transition packages.
+geometry changes cancel stale work. P3.3 consumes explicit capture, promotion,
+and second-actor hints: castling actors share one clock, off-target captures
+fade the exact reserved victim, and type-changing artwork crossfades along one
+path without shadow state. Continuity-preserving interruption, geometry
+replanning, and pending-to-commit handoff remain P3.4 work.
 
 The accepted architecture decisions and all 20 reserved invariant contracts
 are indexed in

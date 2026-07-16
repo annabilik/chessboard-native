@@ -450,8 +450,10 @@ Reanimated clock:
 - added and ambiguous new actors fade in;
 - removed, captured, and ambiguous old actors fade out underneath current
   pieces;
-- type-changing replacements snap in this phase; promotion, castling, and en
-  passant choreography remain later work.
+- type-changing replacements travel once while old and new artwork crossfade;
+- an accepted `rookMove` coordinates a second actor on the same clock;
+- an accepted `capturedSquare` identifies the exact fading victim, including an
+  off-target en passant capture.
 
 The visual operation never becomes a logical position. Custom renderers for a
 moving or entering current actor receive its current target `square` and
@@ -479,6 +481,82 @@ authority.
 Revisioned positions may supply a `transition` hint for exact actor identity.
 Malformed, stale, or contradictory hints are warning-only in development and
 never invalidate an otherwise valid position.
+
+Each example below is an independent previous/current revision pair:
+
+```tsx
+const promotionBefore = {
+  revision: 11,
+  value: { g7: { id: 'pawn-1', pieceType: 'wP' } },
+};
+const promotionAfter = {
+  revision: 12,
+  value: { h8: { id: 'pawn-1', pieceType: 'wQ' } },
+  transition: {
+    from: 'g7',
+    fromRevision: 11,
+    promotion: 'wQ',
+    to: 'h8',
+    toRevision: 12,
+  },
+};
+
+const castlingBefore = {
+  revision: 20,
+  value: {
+    e1: { id: 'king-1', pieceType: 'wK' },
+    h1: { id: 'rook-1', pieceType: 'wR' },
+  },
+};
+const castlingAfter = {
+  revision: 21,
+  value: {
+    f1: { id: 'rook-1', pieceType: 'wR' },
+    g1: { id: 'king-1', pieceType: 'wK' },
+  },
+  transition: {
+    from: 'e1',
+    fromRevision: 20,
+    rookMove: { from: 'h1', to: 'f1' },
+    to: 'g1',
+    toRevision: 21,
+  },
+};
+
+const enPassantBefore = {
+  revision: 30,
+  value: {
+    d5: { id: 'pawn-3', pieceType: 'bP' },
+    e5: { id: 'pawn-2', pieceType: 'wP' },
+  },
+};
+const enPassantAfter = {
+  revision: 31,
+  value: { d6: { id: 'pawn-2', pieceType: 'wP' } },
+  transition: {
+    capturedSquare: 'd5',
+    from: 'e5',
+    fromRevision: 30,
+    to: 'd6',
+    toRevision: 31,
+  },
+};
+```
+
+`promotion` is required exactly when the primary actor's piece type changes and
+must equal the target type; omit it when the type is unchanged. It remains
+rules-free, so custom piece vocabularies are supported. `rookMove` names one
+second continuing same-type actor; it does not require a literal rook or legal
+castling. `capturedSquare` names an actor from the previous revision that is
+removed or replaced. The whole hint is atomic: any revision, endpoint, or
+stable-identity contradiction discards it and leaves deterministic ordinary
+inference in control.
+
+Without a hint, stable piece IDs still identify replacements. As a final
+compatibility fallback, exactly one unambiguous anonymous standard promotion or
+replay reversal with no same-type actor alternative can animate; multiple
+candidates and custom anonymous types degrade to deterministic ordinary
+matching or fades.
 
 ## Accessibility and reduced motion
 

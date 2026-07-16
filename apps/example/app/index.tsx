@@ -180,12 +180,12 @@ export default function GalleryIndex() {
         <Text style={styles.pending}>
           The boards now expose one adjustable accessibility control while the
           visual subtree remains decorative. Annotation drawing, custom square
-          rendering, and special-move transition choreography remain later
-          slices. Ordinary controlled move/capture/enter/exit transitions now
-          have a focused lab. Controlled selection activation, move requests,
-          provider coordination, and external spare placement have focused
-          examples. The interaction-hardening lab adds native ScrollView,
-          clipping, geometry, lifecycle, and render/callback evidence.
+          rendering, transition continuity, and pending-to-commit handoff remain
+          later slices. Ordinary and special controlled transitions now have a
+          focused lab. Controlled selection activation, move requests, provider
+          coordination, and external spare placement have focused examples. The
+          interaction-hardening lab adds native ScrollView, clipping, geometry,
+          lifecycle, and render/callback evidence.
         </Text>
 
         <Link asChild href="/transitions">
