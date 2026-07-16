@@ -66,6 +66,15 @@ runtime. It is never retained as a fallback and never changes which pieces are
 rendered. Plain positions and the other controlled domains do not manufacture
 an equivalent signal.
 
+The current revisioned position may also contribute one detached
+`BoardTransition` candidate or one warning-only transition diagnostic to that
+same normalized result. These presentation fields are read only from the
+current envelope, never enter controlled-domain metadata, never survive as a
+fallback, and cannot invalidate an otherwise valid position. Plain positions
+do not manufacture transition hints. The pure planner validates a candidate
+against the exact previous/current semantic revision pair before it may affect
+presentation.
+
 The first valid plain value receives derived revision `0`. An equal normalized
 value keeps its revision and a changed value increments it. Invalid input uses
 the next candidate revision for diagnostics but does not consume it. Recovery

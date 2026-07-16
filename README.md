@@ -3,17 +3,20 @@
 A controlled, rules-free React Native chessboard component.
 
 > [!NOTE]
-> This repository is in early Phase 2 and the package is not published. The public
-> component now renders responsive, controlled static positions with default
-> or custom pieces, orientation, notation, native styles, controlled square and
-> arrow annotations, controlled selection styling, and one adjustable
-> accessibility control. Its optional interaction surface supports board-piece
-> drag, controlled touch/accessibility square activation, public spare-piece
-> drag and accessible placement, and accessible move, removal, clearing, and
-> cancellation without committing position or selection internally.
+> The planned Phase 2 implementation packages are merged, transition planning
+> has begun, and the package is not published. The public component renders
+> responsive, controlled positions with default or custom pieces, orientation,
+> notation, native styles, controlled square and arrow annotations, controlled
+> selection styling, and one adjustable accessibility control. Its optional
+> interaction surface supports board-piece drag, controlled
+> touch/accessibility square activation, public spare-piece drag and accessible
+> placement, and accessible move, removal, clearing, and cancellation without
+> committing position or selection internally.
 > `ChessboardProvider` supplies provider-scoped board identity, one shared
 > transient overlay, and stale-safe external-drop measurement for single- and
-> multi-board composition.
+> multi-board composition. Pure position-transition plans are deterministic and
+> revision-correlated internally; the mounted animation runtime remains future
+> work.
 
 ## Direction
 
@@ -66,9 +69,10 @@ boards, per-arrow width/opacity, same-target shortening, and whole-value
 `annotationStyle` configuration use deterministic 2048-wide geometry.
 Controlled destination, selected, and disabled square paint now follows
 canonical `squareStyles` without changing hit geometry. Custom square
-rendering, annotation drawing, and transitions remain later work. Phase 2 now
-has a pure interaction reducer, board-level RNGH adapter, mounted move-request
-executor, an accessible non-drag path, and controlled square activation.
+renderers, annotation gesture drawing, and mounted transition animation remain
+later work. Phase 2 has a pure interaction reducer, board-level RNGH adapter,
+mounted move-request executor, an accessible non-drag path, and controlled
+square activation.
 Supplying `onSquareActivate` opts into same-square touch and accessibility
 activation. When `onMoveRequest` is also supplied, an allowed destination with
 a current controlled source routes touch exclusively through it; accessibility
@@ -100,6 +104,11 @@ escapes clipping inside a source palette without introducing semantic state.
 P2.7 also adds deterministic parent-ScrollView arbitration, AppState and
 geometry cancellation, native interaction stress coverage, and bounded
 render/callback evidence. It does not programmatically auto-scroll an ancestor.
+The P3.1 pure transition layer snapshots warning-only `BoardTransition` hints
+from the current revisioned position, matches stable piece IDs before
+conservative anonymous type/geometry inference, degrades candidate ties to
+deterministic exits and enters, and produces detached epoch/revision-correlated
+plans. It does not mount an animation scheduler or retain a shadow position.
 
 The accepted architecture decisions and all 20 reserved invariant contracts
 are indexed in
