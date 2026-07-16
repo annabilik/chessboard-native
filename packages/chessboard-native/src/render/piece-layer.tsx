@@ -1,7 +1,12 @@
 import { memo, type ReactElement } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  type SharedValue,
+} from 'react-native-reanimated';
 
 import type { NormalizedControlledValue } from '../internal/controlled-domain';
+import type { MountedPositionTransition } from '../internal/use-position-transition-runtime';
 import type {
   PieceData,
   PieceRenderer,
@@ -31,10 +36,30 @@ interface PieceLayerProps {
   readonly pendingSourceSquare?: SquareId | null;
   readonly position: NormalizedControlledValue<PositionObject> | null;
   readonly style: Readonly<ViewStyle>;
+  readonly transition?: Readonly<MountedPositionTransition> | null;
 }
 
 const EMPTY_PIECE_LAYOUTS: readonly Readonly<BoardPieceLayout>[] =
   Object.freeze([]);
+
+export type PieceTransitionVisual =
+  | Readonly<{
+      kind: 'move';
+      translateX: number;
+      translateY: number;
+    }>
+  | Readonly<{ kind: 'enter' | 'exit' }>;
+
+export interface PieceTransitionProjection {
+  readonly current: ReadonlyMap<SquareId, Readonly<PieceTransitionVisual>>;
+  readonly exits: readonly Readonly<BoardPieceLayout>[];
+}
+
+const EMPTY_TRANSITION_PROJECTION: Readonly<PieceTransitionProjection> =
+  Object.freeze({
+    current: new Map(),
+    exits: EMPTY_PIECE_LAYOUTS,
+  });
 
 const STATIC_PIECE_STATE: Readonly<PieceVisualState> = Object.freeze({
   isDragging: false,
@@ -59,6 +84,32 @@ const DRAG_SOURCE_STATE: Readonly<PieceVisualState> = Object.freeze({
   isPressed: false,
   isTransitioning: false,
 });
+
+const TRANSITIONING_PIECE_STATE: Readonly<PieceVisualState> = Object.freeze({
+  isDragging: false,
+  isGhost: false,
+  isPending: false,
+  isPressed: false,
+  isTransitioning: true,
+});
+
+const TRANSITIONING_PENDING_SOURCE_STATE: Readonly<PieceVisualState> =
+  Object.freeze({
+    isDragging: false,
+    isGhost: true,
+    isPending: true,
+    isPressed: false,
+    isTransitioning: true,
+  });
+
+const TRANSITIONING_DRAG_SOURCE_STATE: Readonly<PieceVisualState> =
+  Object.freeze({
+    isDragging: false,
+    isGhost: true,
+    isPending: false,
+    isPressed: false,
+    isTransitioning: true,
+  });
 
 /**
  * Project only the latest normalized controlled position into measured cells.
@@ -99,6 +150,89 @@ export function createBoardPieceLayouts(
   }
 
   return pieces.length === 0 ? EMPTY_PIECE_LAYOUTS : Object.freeze(pieces);
+}
+
+function boardPieceLayoutAtSquare(
+  layout: Readonly<BoardSurfaceLayout>,
+  square: SquareId,
+  piece: Readonly<PieceData>,
+  key: string,
+): Readonly<BoardPieceLayout> | null {
+  const cell = layout.cells.find((candidate) => candidate.square === square);
+  if (cell === undefined) {
+    return null;
+  }
+  const size = Math.min(cell.rect.width, cell.rect.height);
+  return Object.freeze({
+    key,
+    piece,
+    rect: Object.freeze({
+      height: size,
+      left: cell.rect.left + (cell.rect.width - size) / 2,
+      top: cell.rect.top + (cell.rect.height - size) / 2,
+      width: size,
+    }),
+    size,
+    square,
+  });
+}
+
+/**
+ * Project detached plan operations into the current measured coordinate plane.
+ *
+ * Replacements deliberately snap in P3.2; promotion and special-move
+ * presentation remain P3.3 work.
+ */
+export function createPieceTransitionProjection(
+  layout: Readonly<BoardSurfaceLayout>,
+  transition: Readonly<MountedPositionTransition> | null,
+): Readonly<PieceTransitionProjection> {
+  if (transition === null) {
+    return EMPTY_TRANSITION_PROJECTION;
+  }
+
+  const current = new Map<SquareId, Readonly<PieceTransitionVisual>>();
+  const cellsBySquare = new Map(
+    layout.cells.map((cell) => [cell.square, cell] as const),
+  );
+  for (const move of transition.plan.moves) {
+    const from = cellsBySquare.get(move.from);
+    const to = cellsBySquare.get(move.to);
+    if (from === undefined || to === undefined) {
+      continue;
+    }
+    current.set(
+      move.to,
+      Object.freeze({
+        kind: 'move' as const,
+        translateX: from.rect.left - to.rect.left,
+        translateY: from.rect.top - to.rect.top,
+      }),
+    );
+  }
+  for (const enter of transition.plan.enters) {
+    if (cellsBySquare.has(enter.to)) {
+      current.set(enter.to, Object.freeze({ kind: 'enter' as const }));
+    }
+  }
+
+  const exits: Readonly<BoardPieceLayout>[] = [];
+  for (const exit of transition.plan.exits) {
+    const projected = boardPieceLayoutAtSquare(
+      layout,
+      exit.from,
+      exit.piece,
+      `transition-exit:${String(transition.plan.epoch)}:${exit.from}:${exit.piece.id ?? exit.piece.pieceType}`,
+    );
+    if (projected !== null) {
+      exits.push(projected);
+    }
+  }
+
+  return Object.freeze({
+    current,
+    exits: exits.length === 0 ? EMPTY_PIECE_LAYOUTS : Object.freeze(exits),
+  });
 }
 
 /** Exact own-key renderer lookup for the deliberately open piece vocabulary. */
@@ -154,7 +288,143 @@ function pieceLayerPropsAreEqual(
     previous.pieceRenderers === next.pieceRenderers &&
     previous.pendingSourceSquare === next.pendingSourceSquare &&
     previous.style === next.style &&
+    previous.transition === next.transition &&
     samePositionRevision(previous.position, next.position)
+  );
+}
+
+function clampProgress(progress: number): number {
+  'worklet';
+  if (progress <= 0) {
+    return 0;
+  }
+  if (progress >= 1) {
+    return 1;
+  }
+  return progress;
+}
+
+/** Pure style resolver shared by Reanimated worklets and deterministic tests. */
+export function resolvePieceTransitionAnimatedStyle(
+  transition: Readonly<PieceTransitionVisual> | null,
+  progress: number,
+  baseOpacity: number,
+): Readonly<ViewStyle> {
+  'worklet';
+  const amount = clampProgress(progress);
+  if (transition === null) {
+    return { opacity: baseOpacity, transform: undefined };
+  }
+  switch (transition.kind) {
+    case 'move':
+      return {
+        opacity: baseOpacity,
+        transform: [
+          { translateX: transition.translateX * (1 - amount) },
+          { translateY: transition.translateY * (1 - amount) },
+        ],
+      };
+    case 'enter':
+      return {
+        opacity: baseOpacity * amount,
+        transform: undefined,
+      };
+    case 'exit':
+      return {
+        opacity: baseOpacity * (1 - amount),
+        transform: undefined,
+      };
+  }
+}
+
+function visualState(
+  isDragSource: boolean,
+  isPendingSource: boolean,
+  isTransitioning: boolean,
+): Readonly<PieceVisualState> {
+  if (isDragSource) {
+    return isTransitioning
+      ? TRANSITIONING_DRAG_SOURCE_STATE
+      : DRAG_SOURCE_STATE;
+  }
+  if (isPendingSource) {
+    return isTransitioning
+      ? TRANSITIONING_PENDING_SOURCE_STATE
+      : PENDING_SOURCE_STATE;
+  }
+  return isTransitioning ? TRANSITIONING_PIECE_STATE : STATIC_PIECE_STATE;
+}
+
+interface BoardPieceHostProps {
+  readonly boardId: string;
+  readonly isDragSource: boolean;
+  readonly isPendingSource: boolean;
+  readonly layout: Readonly<BoardPieceLayout>;
+  readonly progress: SharedValue<number> | null;
+  readonly renderer: PieceRenderer;
+  readonly style: Readonly<ViewStyle>;
+  readonly transition: Readonly<PieceTransitionVisual> | null;
+}
+
+function BoardPieceHost({
+  boardId,
+  isDragSource,
+  isPendingSource,
+  layout,
+  progress,
+  renderer: Renderer,
+  style,
+  transition,
+}: BoardPieceHostProps): ReactElement {
+  const baseOpacity =
+    isDragSource || isPendingSource
+      ? 0.45
+      : typeof style.opacity === 'number'
+        ? style.opacity
+        : 1;
+  const animatedStyle = useAnimatedStyle(
+    () =>
+      resolvePieceTransitionAnimatedStyle(
+        transition,
+        progress?.value ?? 1,
+        baseOpacity,
+      ),
+    [baseOpacity, progress, transition],
+  );
+  const rendererProps: PieceRendererProps = {
+    boardId,
+    piece: layout.piece,
+    size: layout.size,
+    source: Object.freeze({
+      kind: 'board' as const,
+      square: layout.square,
+    }),
+    square: layout.square,
+    state: visualState(isDragSource, isPendingSource, transition !== null),
+    style,
+  };
+
+  return (
+    <Animated.View
+      accessibilityElementsHidden
+      accessible={false}
+      importantForAccessibility="no-hide-descendants"
+      pointerEvents="none"
+      style={[
+        style,
+        PIECE_HOST_STRUCTURAL_RESET,
+        {
+          height: layout.rect.height,
+          left: layout.rect.left,
+          top: layout.rect.top,
+          width: layout.rect.width,
+        },
+        isDragSource || isPendingSource ? styles.sourceGhost : undefined,
+        animatedStyle,
+      ]}
+    >
+      <Renderer {...rendererProps} />
+    </Animated.View>
   );
 }
 
@@ -167,8 +437,13 @@ export const PieceLayer = memo(function PieceLayer({
   pendingSourceSquare = null,
   position,
   style,
+  transition = null,
 }: PieceLayerProps): ReactElement {
   const pieces = createBoardPieceLayouts(layout, position?.value ?? null);
+  const transitionProjection = createPieceTransitionProjection(
+    layout,
+    transition,
+  );
 
   return (
     <View
@@ -178,6 +453,25 @@ export const PieceLayer = memo(function PieceLayer({
       pointerEvents="none"
       style={styles.layer}
     >
+      {transitionProjection.exits.map((pieceLayout) => {
+        const Renderer = resolvePieceRenderer(
+          pieceRenderers,
+          pieceLayout.piece.pieceType,
+        );
+        return Renderer === null ? null : (
+          <BoardPieceHost
+            boardId={boardId}
+            isDragSource={false}
+            isPendingSource={false}
+            key={pieceLayout.key}
+            layout={pieceLayout}
+            progress={transition?.progress ?? null}
+            renderer={Renderer}
+            style={style}
+            transition={Object.freeze({ kind: 'exit' as const })}
+          />
+        );
+      })}
       {pieces.map((pieceLayout) => {
         const Renderer = resolvePieceRenderer(
           pieceRenderers,
@@ -189,44 +483,21 @@ export const PieceLayer = memo(function PieceLayer({
 
         const isDragSource = pieceLayout.square === dragSourceSquare;
         const isPendingSource = pieceLayout.square === pendingSourceSquare;
-        const rendererProps: PieceRendererProps = {
-          boardId,
-          piece: pieceLayout.piece,
-          size: pieceLayout.size,
-          source: Object.freeze({
-            kind: 'board' as const,
-            square: pieceLayout.square,
-          }),
-          square: pieceLayout.square,
-          state: isDragSource
-            ? DRAG_SOURCE_STATE
-            : isPendingSource
-              ? PENDING_SOURCE_STATE
-              : STATIC_PIECE_STATE,
-          style,
-        };
 
         return (
-          <View
-            accessibilityElementsHidden
-            accessible={false}
-            importantForAccessibility="no-hide-descendants"
+          <BoardPieceHost
+            boardId={boardId}
+            isDragSource={isDragSource}
+            isPendingSource={isPendingSource}
             key={pieceLayout.key}
-            pointerEvents="none"
-            style={[
-              style,
-              PIECE_HOST_STRUCTURAL_RESET,
-              {
-                height: pieceLayout.rect.height,
-                left: pieceLayout.rect.left,
-                top: pieceLayout.rect.top,
-                width: pieceLayout.rect.width,
-              },
-              isDragSource || isPendingSource ? styles.sourceGhost : undefined,
-            ]}
-          >
-            <Renderer {...rendererProps} />
-          </View>
+            layout={pieceLayout}
+            progress={transition?.progress ?? null}
+            renderer={Renderer}
+            style={style}
+            transition={
+              transitionProjection.current.get(pieceLayout.square) ?? null
+            }
+          />
         );
       })}
     </View>

@@ -1852,9 +1852,9 @@
         "surface": "root",
         "symbols": ["ChessboardProps.transitionDurationMs"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ANIMATION-DURATION-IN-MS",
-      "compatibilityNotes": "Renamed and applied only to presentation transitions."
+      "compatibilityNotes": "Renamed, defaults to 300 milliseconds, accepts zero as an explicit snap, and applies only to presentation transitions."
     },
     {
       "id": "option.show-animations",
@@ -1889,7 +1889,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-OPTION-SHOW-ANIMATIONS",
-      "compatibilityNotes": "Animation policy honors system reduced motion and latest-wins transitions.",
+      "compatibilityNotes": "Ordinary transitions honor system reduced motion and latest-prop cancellation; continuity-preserving interruption remains P3.4 work.",
       "rationale": "A Boolean browser animation switch cannot express the required system, always, and never reduced-motion policy or deterministic interruption semantics.",
       "documentation": "docs/parity/react-chessboard-5.10.md#option-show-animations"
     },
@@ -2843,7 +2843,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B08",
-      "compatibilityNotes": "The mounted board invalidates interaction epochs on position, dimension, orientation, permission, layout, provider-geometry, AppState, and unmount changes; late results remain inert. Pure plans carry transition epochs, while mounted transition-epoch invalidation and replanning remain future work.",
+      "compatibilityNotes": "The mounted board invalidates interaction epochs on position, dimension, orientation, permission, layout, provider-geometry, AppState, and unmount changes; late results remain inert. Mounted transitions snap on geometry/orientation changes, while continuity-preserving replanning remains P3.4 work.",
       "rationale": "Directly replacing a local position without cancelling asynchronous work allows stale gestures and timers to overwrite newer geometry.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b08-dimension-and-orientation-reconciliation"
     },
@@ -2874,9 +2874,9 @@
           "ChessboardProps.reduceMotion"
         ]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B09",
-      "compatibilityNotes": "Transitions are deterministic presentation and honor the native reduced-motion policy."
+      "compatibilityNotes": "Ordinary controlled transitions use the configured duration, honor reduced motion, and snap safely when configuration changes."
     },
     {
       "id": "behavior.b10-external-diff-and-one-deep-timeout-queue",
@@ -2904,7 +2904,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B10",
-      "compatibilityNotes": "Pure revision-pair planning replaces shadow-position diffing; mounted latest-wins epochs and interruption remain transition-runtime work.",
+      "compatibilityNotes": "Pure revision-pair planning replaces shadow-position diffing; mounted epochs cancel stale work and expose the latest prop immediately, while continuity-preserving interruption remains P3.4 work.",
       "rationale": "The upstream queue can commit stale snapshots after rapid updates because timeouts and effect dependencies do not correlate every update to an epoch.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b10-external-diff-and-one-deep-timeout-queue"
     },
@@ -3033,11 +3033,11 @@
       "disposition": "adapt",
       "native": {
         "surface": "internal",
-        "symbols": ["CoordinateCodec", "PieceTransition"]
+        "symbols": ["createPieceTransitionProjection", "PieceTransitionVisual"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B15",
-      "compatibilityNotes": "Pure geometry and Reanimated support files a-z and ranks 1-99 without DOM transforms."
+      "compatibilityNotes": "Measured board-cell projection and Reanimated transforms support files a-z and ranks 1-99 without DOM transforms."
     },
     {
       "id": "behavior.b16-stale-effects-and-timeout-cleanup",
@@ -3060,7 +3060,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B16",
-      "compatibilityNotes": "The mounted interaction executor keys requests and timers by reducer revision, board, epoch, intent, and stage, and makes stale prop, permission, geometry, AppState, timeout, and unmount work inert. Pure plans carry transition epochs, while mounted transition scheduling and cleanup remain future work.",
+      "compatibilityNotes": "The mounted interaction executor keys requests and timers by reducer revision, board, epoch, intent, and stage. Controlled transitions now schedule and cancel by target revision, geometry epoch, and transition epoch; P3.4 retains continuity-preserving interruption and pending-to-commit handoff.",
       "rationale": "The pinned effect omits state and option dependencies and only clears the latest timeout on cleanup, allowing stale closures to settle obsolete state.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b16-stale-effects-and-timeout-cleanup"
     },

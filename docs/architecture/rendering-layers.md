@@ -163,8 +163,18 @@ not marker references or document-global IDs, so simultaneous boards and
 duplicate consumer annotation IDs across boards cannot collide.
 
 Notation now occupies its own decorative plane above both annotation planes.
-Custom square rendering, additional transient interaction styling, Reanimated
-transitions, and annotation drafts/drawing remain later slices.
+Custom square rendering, additional transient interaction styling, and
+annotation drafts/drawing remain later slices.
+
+P3.2 promotes the piece plane to stable `Animated.View` hosts. The latest
+controlled position still creates every current host; a detached transition
+plan may only add pointerless, accessibility-hidden exit hosts and animated
+style data. One shared progress value per board translates current move targets,
+fades current enter actors, and fades removed/captured/ambiguous exits below
+current pieces. Current and exit renderers receive
+`PieceVisualState.isTransitioning = true` only while that exact epoch remains
+active. Completion restores the same current hosts to static state and removes
+exit artwork. Replacements snap until the special-move slice.
 
 P2.2 adds the layer-six board gesture plane. When enabled by the public
 interaction boundaries, it is one absolute, accessibility-hidden native view
@@ -291,6 +301,11 @@ place/cancel routing without a semantic position copy. P2.7 tests add
 parent-ScrollView arbitration, AppState and geometry invalidation,
 provider-level clipping remediation, long-pan render/callback counters,
 cancellation reuse, and packed Android/iOS board-scroll/lifecycle scenarios.
+P3.2 tests add measured white/black and rectangular move transforms, ordinary
+capture ordering, enter/exit/ambiguity fades, replacement snap, current-square
+renderer context, latest-prop cancellation, reduced-motion and zero-duration
+settling, post-commit warning deduplication, and simultaneous-board animation
+isolation.
 
 This decision owns invariants `CBN-INV-010`, `CBN-INV-013`, `CBN-INV-014`,
 and `CBN-INV-018`.

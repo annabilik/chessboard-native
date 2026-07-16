@@ -180,12 +180,21 @@ export default function GalleryIndex() {
         <Text style={styles.pending}>
           The boards now expose one adjustable accessibility control while the
           visual subtree remains decorative. Annotation drawing, custom square
-          rendering, and transitions remain later slices. Controlled selection
-          activation, move requests, provider coordination, and external spare
-          placement have focused examples. The interaction-hardening lab adds
-          native ScrollView, clipping, geometry, lifecycle, and render/callback
-          evidence.
+          rendering, and special-move transition choreography remain later
+          slices. Ordinary controlled move/capture/enter/exit transitions now
+          have a focused lab. Controlled selection activation, move requests,
+          provider coordination, and external spare placement have focused
+          examples. The interaction-hardening lab adds native ScrollView,
+          clipping, geometry, lifecycle, and render/callback evidence.
         </Text>
+
+        <Link asChild href="/transitions">
+          <Pressable style={styles.routeLink}>
+            <Text style={styles.routeLinkText}>
+              Open controlled transitions
+            </Text>
+          </Pressable>
+        </Link>
 
         <Link asChild href="/interaction-hardening">
           <Pressable style={styles.routeLink}>

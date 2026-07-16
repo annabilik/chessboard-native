@@ -27,11 +27,11 @@ that.
 overlay, and stale-safe external-drop measurement. Its public `SparePiece`
 source supports drag and accessible placement on one named board while that
 board's controlled move callback remains the only position authority. Custom
-square rendering, annotation gesture drawing, and mounted transition animation
-remain future work. Internally, pure controlled-position transition planning
-now validates exact-revision hints, prefers stable piece IDs, treats ambiguous
-anonymous matches as exits and enters, and returns detached epoch-correlated
-plans without retaining a second position source.
+square rendering and annotation gesture drawing remain future work. Pure
+controlled-position transition planning validates exact-revision hints,
+prefers stable piece IDs, and treats ambiguous anonymous matches as exits and
+enters. The mounted Reanimated runtime consumes only those detached operations;
+it never renders a retained position snapshot.
 
 ```tsx
 import { Chessboard } from '@vibechess/chessboard-native';
@@ -437,6 +437,48 @@ than `true` denies the drag. Without `onMoveRequest`, no move-request pan
 recognizer is mounted; `onSquareActivate` may still enable controlled tap input.
 The default decision timeout is 10 seconds; after acceptance, the default
 controlled-commit timeout is 1.5 seconds.
+
+## Controlled position transitions
+
+Every valid position prop is authoritative as soon as it renders. When the
+previous and current committed positions form an animatable revision pair, the
+board derives detached piece operations and presents them with one board-local
+Reanimated clock:
+
+- ordinary continuing pieces translate from their old measured cell to their
+  current canonical square;
+- added and ambiguous new actors fade in;
+- removed, captured, and ambiguous old actors fade out underneath current
+  pieces;
+- type-changing replacements snap in this phase; promotion, castling, and en
+  passant choreography remain later work.
+
+The visual operation never becomes a logical position. Custom renderers for a
+moving or entering current actor receive its current target `square` and
+`state.isTransitioning = true`; an exiting actor receives its old square and
+detached old piece. All transient hosts remain pointerless and hidden from
+accessibility.
+
+```tsx
+<Chessboard
+  boardId="analysis"
+  position={position}
+  reduceMotion="system"
+  transitionDurationMs={450}
+/>
+```
+
+`transitionDurationMs` defaults to `300`, must be a finite non-negative number,
+and uses `0` as an explicit snap. Reduced motion also snaps. Initial mount,
+semantic no-ops, unavailable measurement, invalid current position, and
+geometry or orientation changes settle directly to the latest prop. A newer
+position cancels the prior epoch immediately; P3.4 will add
+continuity-preserving A-B-C replanning rather than changing that latest-prop
+authority.
+
+Revisioned positions may supply a `transition` hint for exact actor identity.
+Malformed, stale, or contradictory hints are warning-only in development and
+never invalidate an otherwise valid position.
 
 ## Accessibility and reduced motion
 
