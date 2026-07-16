@@ -31,6 +31,7 @@ interface SparePieceGestureLayerProps {
   readonly enabled: boolean;
   readonly onSignal: (signal: Readonly<SparePieceGestureSignal>) => void;
   readonly presentation: Readonly<InteractionPresentationSharedValues>;
+  readonly resetKey: string;
   readonly spareId: string;
 }
 
@@ -50,6 +51,7 @@ export function SparePieceGestureLayer({
   enabled,
   onSignal,
   presentation,
+  resetKey,
   spareId,
 }: SparePieceGestureLayerProps): ReactElement {
   const nextGestureToken = useSharedValue<number | null>(0);
@@ -172,5 +174,12 @@ export function SparePieceGestureLayer({
     testID,
   ]);
 
-  return <GestureDetector gesture={gesture}>{children}</GestureDetector>;
+  return (
+    <GestureDetector
+      gesture={gesture}
+      key={JSON.stringify([enabled, resetKey, spareId])}
+    >
+      {children}
+    </GestureDetector>
+  );
 }

@@ -3,6 +3,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
   useSyncExternalStore,
   type ReactElement,
 } from 'react';
@@ -15,6 +16,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import { useReducedMotion } from './accessibility/reduced-motion';
 import type { BoardDropSessionToken } from './internal/board-layout-registry';
 import {
   resetInteractionPresentationSharedValues,
@@ -33,7 +35,6 @@ import type {
 } from './public-types';
 import { PIECE_HOST_STRUCTURAL_RESET } from './render/piece-host-style';
 import { resolvePieceRenderer } from './render/piece-layer';
-import { ProviderDragOverlay } from './render/provider-drag-overlay';
 import {
   SparePieceGestureLayer,
   type SparePieceGestureSignal,
@@ -171,9 +172,25 @@ export function SparePiece({
     [style],
   );
   const renderer = resolvePieceRenderer(pieceRenderers, piece.pieceType);
+  const reducedMotion = useReducedMotion();
+  const providerTransientRevision = provider.runtime.getTransientRevision();
   const presentation = useInteractionPresentationSharedValues();
   const owner = useRef<ProviderDragOwner>({});
   const activeDrag = useRef<Readonly<ActiveSpareDrag> | null>(null);
+  const [providerResetRevision, setProviderResetRevision] = useState(0);
+  const providerRuntimeIdentity = useRef({
+    revision: 0,
+    runtime: provider.runtime,
+  });
+  if (providerRuntimeIdentity.current.runtime !== provider.runtime) {
+    if (providerRuntimeIdentity.current.revision === Number.MAX_SAFE_INTEGER) {
+      throw new RangeError('SparePiece provider runtime revision exhausted.');
+    }
+    providerRuntimeIdentity.current = {
+      revision: providerRuntimeIdentity.current.revision + 1,
+      runtime: provider.runtime,
+    };
+  }
   const acceptingSignalGeneration = useRef<object | null>(null);
   const signalGeneration = useMemo(
     () => Object.freeze({}),
@@ -181,7 +198,11 @@ export function SparePiece({
       disabled,
       piece.id,
       piece.pieceType,
+      provider.geometryRevision,
+      provider.lifecycleRevision,
       provider.runtime,
+      providerTransientRevision,
+      reducedMotion,
       size,
       spareId,
       targetBoardId,
@@ -225,6 +246,16 @@ export function SparePiece({
         return;
       }
       finishDrag(drag, false);
+      if (acceptingSignalGeneration.current !== null) {
+        setProviderResetRevision((revision) => {
+          if (revision === Number.MAX_SAFE_INTEGER) {
+            throw new RangeError(
+              'SparePiece provider reset revision exhausted.',
+            );
+          }
+          return revision + 1;
+        });
+      }
     },
     [finishDrag],
   );
@@ -235,7 +266,11 @@ export function SparePiece({
       // disables, retargets, replaces, or unmounts the source. Only the
       // generation installed by the latest committed layout effect may
       // create or finish provider coordination.
-      if (acceptingSignalGeneration.current !== signalGeneration) {
+      if (
+        acceptingSignalGeneration.current !== signalGeneration ||
+        provider.runtime.getGeometryRevision() !== provider.geometryRevision ||
+        provider.runtime.getTransientRevision() !== providerTransientRevision
+      ) {
         return;
       }
       if (signal.type === 'start') {
@@ -274,6 +309,7 @@ export function SparePiece({
             owner: owner.current,
             piece,
             presentation,
+            reducedMotion,
             renderer,
             size,
             source,
@@ -328,6 +364,9 @@ export function SparePiece({
       piece,
       presentation,
       provider.runtime,
+      provider.geometryRevision,
+      providerTransientRevision,
+      reducedMotion,
       renderer,
       size,
       signalGeneration,
@@ -418,6 +457,20 @@ export function SparePiece({
     },
     [piece, renderer, size, source, targetBoardId, visualStyle],
   );
+  const gestureResetKey = JSON.stringify([
+    disabled,
+    piece.id ?? null,
+    piece.pieceType,
+    provider.geometryRevision,
+    provider.lifecycleRevision,
+    providerResetRevision,
+    providerRuntimeIdentity.current.revision,
+    providerTransientRevision,
+    reducedMotion,
+    size,
+    spareId,
+    targetBoardId,
+  ]);
 
   return (
     <View
@@ -434,6 +487,7 @@ export function SparePiece({
         enabled={!disabled}
         onSignal={handleGestureSignal}
         presentation={presentation}
+        resetKey={gestureResetKey}
         spareId={spareId}
       >
         <Pressable
@@ -448,7 +502,6 @@ export function SparePiece({
           {({ pressed }) => renderPiece(pressed)}
         </Pressable>
       </SparePieceGestureLayer>
-      <ProviderDragOverlay owner={owner.current} />
     </View>
   );
 }

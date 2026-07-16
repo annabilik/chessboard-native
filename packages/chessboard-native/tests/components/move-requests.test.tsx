@@ -441,7 +441,11 @@ describe('public controlled move requests', () => {
     expect(decisionSignal?.aborted).toBe(true);
     expectNoVisual(rootOf(result), 'pending-target', 'b1');
     expectOneVisual(rootOf(result), 'source-ghost', 'a2');
-    expectOneVisual(rootOf(result), 'drag', 'a2');
+    expect(
+      result.queryAllByTestId('move-piece:drag:a2:token', {
+        includeHiddenElements: true,
+      }),
+    ).toHaveLength(1);
     expectNoVisual(rootOf(result), 'static', 'a2');
 
     await act(() => {
@@ -450,7 +454,11 @@ describe('public controlled move requests', () => {
     expect(onMoveRequest).toHaveBeenCalledTimes(1);
     expectOneVisual(rootOf(result), 'static', 'a2');
     expectNoVisual(rootOf(result), 'source-ghost', 'a2');
-    expectNoVisual(rootOf(result), 'drag', 'a2');
+    expect(
+      result.queryAllByTestId('move-piece:drag:a2:token', {
+        includeHiddenElements: true,
+      }),
+    ).toEqual([]);
   });
 
   it('clears a captured accessibility source when a physical drag starts and cancels', async () => {

@@ -1,11 +1,16 @@
 package com.vibechess.chessboardnativeharness
 
+import android.os.Bundle
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
 
 class MainActivity : ReactActivity() {
+
+  companion object {
+    const val EXTRA_FIXTURE = "chessboardNativeFixture"
+  }
 
   /**
    * Returns the name of the main component registered from JavaScript. This is used to schedule
@@ -18,5 +23,10 @@ class MainActivity : ReactActivity() {
    * which allows you to enable New Architecture with a single boolean flags [fabricEnabled]
    */
   override fun createReactActivityDelegate(): ReactActivityDelegate =
-      DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled)
+      object : DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled) {
+        override fun getLaunchOptions(): Bundle =
+            Bundle().apply {
+              putString("fixture", intent.getStringExtra(EXTRA_FIXTURE) ?: "accessibility")
+            }
+      }
 }

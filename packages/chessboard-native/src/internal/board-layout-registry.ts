@@ -220,6 +220,8 @@ export interface BoardLayoutRegistry {
     piece: Readonly<PieceData>,
   ) => boolean;
   readonly endDropSession: (session: BoardDropSessionToken) => boolean;
+  /** Cancel only transient drop work while preserving board registrations. */
+  readonly cancelTransient: () => void;
   /** Reversible cleanup for a provider tree whose effects were deactivated. */
   readonly deactivate: () => void;
   readonly dispose: () => void;
@@ -1176,6 +1178,14 @@ export function createBoardLayoutRegistry(
     return true;
   };
 
+  const cancelTransient: BoardLayoutRegistry['cancelTransient'] = () => {
+    if (disposed) {
+      return;
+    }
+    invalidateActiveSession('stale');
+    cancelPending(() => true, 'stale');
+  };
+
   const deactivate: BoardLayoutRegistry['deactivate'] = () => {
     if (disposed) {
       return;
@@ -1200,6 +1210,7 @@ export function createBoardLayoutRegistry(
 
   return Object.freeze({
     beginDropSession,
+    cancelTransient,
     canStartSpareDrag,
     deactivate,
     dispose,

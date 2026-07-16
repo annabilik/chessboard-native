@@ -1239,6 +1239,44 @@ describe('board layout registry', () => {
     expect(() => registry.register(entry)).toThrow('disposed');
   });
 
+  it('cancelTransient invalidates pending measurement while preserving registration and fresh recovery', async () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    registry.register(
+      registration({ measureInWindow: measurement.measureInWindow, owner }),
+    );
+    const session = registry.beginDropSession({
+      dropEpoch: 1,
+      targetBoardId: 'analysis',
+    });
+    const pending = registry.verifyDrop(session, { x: 10, y: 10 });
+
+    registry.cancelTransient();
+
+    expectCancelled(await pending, 'stale');
+    expect(registry.getBoardSnapshot('analysis')).toEqual(
+      expect.objectContaining({
+        available: true,
+        boardId: 'analysis',
+        cachedBounds: null,
+      }),
+    );
+    measurement.respond(0, { height: 80, width: 80, x: 0, y: 0 });
+    expect(registry.getBoardSnapshot('analysis')?.cachedBounds).toBeNull();
+
+    const freshSession = registry.beginDropSession({
+      dropEpoch: 2,
+      targetBoardId: 'analysis',
+    });
+    const freshVerification = registry.verifyDrop(freshSession, {
+      x: 10,
+      y: 10,
+    });
+    measurement.respond(1, { height: 80, width: 80, x: 0, y: 0 });
+    expectAccepted(await freshVerification);
+  });
+
   it('deactivates transient work without preventing a later registration', async () => {
     const registry = createBoardLayoutRegistry();
     const owner = createBoardLayoutOwnerToken();

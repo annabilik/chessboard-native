@@ -1,8 +1,10 @@
 import { type ReactElement } from 'react';
 import { StyleSheet, type ViewStyle } from 'react-native';
-import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import Animated, {
+  useAnimatedStyle,
+  type SharedValue,
+} from 'react-native-reanimated';
 
-import { useReducedMotion } from '../accessibility/reduced-motion';
 import type { InteractionPresentationSharedValues } from '../internal/interaction-presentation';
 import { INTERACTION_PRESENTATION_PHASE } from '../internal/interaction-presentation';
 import type {
@@ -19,14 +21,22 @@ import {
 /** Fixed presentation-only lift; public drag styling remains a later API. */
 export const DRAG_OVERLAY_LIFT_SCALE = 1.08;
 
+export interface DragOverlayWindowOrigin {
+  readonly ready: SharedValue<number>;
+  readonly x: SharedValue<number>;
+  readonly y: SharedValue<number>;
+}
+
 type DragOverlayProps = {
   readonly boardId: string;
   readonly piece: Readonly<PieceData>;
   readonly presentation: Readonly<InteractionPresentationSharedValues>;
+  readonly reducedMotion: boolean;
   readonly renderer: PieceRenderer;
   readonly size: number;
   readonly style: Readonly<ViewStyle>;
   readonly testID?: string;
+  readonly windowOrigin?: Readonly<DragOverlayWindowOrigin>;
 } & (
   | {
       readonly source: Extract<MoveSource, { readonly kind: 'board' }>;
@@ -46,40 +56,59 @@ export function resolveDragOverlayAnimatedStyle(
   presentation: Readonly<InteractionPresentationSharedValues>,
   size: number,
   reducedMotion: boolean,
+  windowOriginX = 0,
+  windowOriginY = 0,
+  windowOriginReady = 1,
 ): Readonly<ViewStyle> {
   'worklet';
   const dragging =
     presentation.phase.value === INTERACTION_PRESENTATION_PHASE.DRAG;
 
   return {
-    opacity: dragging ? 1 : 0,
+    opacity: dragging && windowOriginReady === 1 ? 1 : 0,
     transform: [
-      { translateX: presentation.pointerX.value - size / 2 },
-      { translateY: presentation.pointerY.value - size / 2 },
+      {
+        translateX:
+          presentation.pointerWindowX.value - windowOriginX - size / 2,
+      },
+      {
+        translateY:
+          presentation.pointerWindowY.value - windowOriginY - size / 2,
+      },
       { scale: dragging && !reducedMotion ? DRAG_OVERLAY_LIFT_SCALE : 1 },
     ],
   };
 }
 
 /**
- * Board-local drag artwork whose pointer transform never crosses React or JS
- * during pan updates. It contains one visual piece, not a position snapshot.
+ * Provider-level drag artwork whose window-space pointer transform never
+ * crosses React or JS during pan updates. It contains one visual piece, not a
+ * position snapshot.
  */
 export function DragOverlay({
   boardId,
   piece,
   presentation,
+  reducedMotion,
   renderer,
   size,
   source,
   square,
   style,
   testID,
+  windowOrigin,
 }: DragOverlayProps): ReactElement {
-  const reducedMotion = useReducedMotion();
   const animatedStyle = useAnimatedStyle(
-    () => resolveDragOverlayAnimatedStyle(presentation, size, reducedMotion),
-    [presentation, reducedMotion, size],
+    () =>
+      resolveDragOverlayAnimatedStyle(
+        presentation,
+        size,
+        reducedMotion,
+        windowOrigin?.x.value ?? 0,
+        windowOrigin?.y.value ?? 0,
+        windowOrigin?.ready.value ?? 1,
+      ),
+    [presentation, reducedMotion, size, windowOrigin],
   );
 
   return (

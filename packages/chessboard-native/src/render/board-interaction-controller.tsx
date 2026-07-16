@@ -3,10 +3,12 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
   type ReactElement,
 } from 'react';
 import type { ViewStyle } from 'react-native';
 
+import { useReducedMotion } from '../accessibility/reduced-motion';
 import { ChessboardProvider } from '../ChessboardProvider';
 import type { NormalizedControlledValue } from '../internal/controlled-domain';
 import { canDragCurrentPiece } from '../internal/interaction-permissions';
@@ -46,7 +48,6 @@ import {
   type BoardGestureSignal,
 } from './board-gesture-layer';
 import { resolvePieceRenderer } from './piece-layer';
-import { ProviderDragOverlay } from './provider-drag-overlay';
 
 interface BoardInteractionControllerProps {
   readonly boardId: string;
@@ -129,8 +130,15 @@ function BoardInteractionControllerContent({
   selectionRevision = null,
   tapEnabled = false,
 }: BoardInteractionControllerProps): ReactElement {
-  const { runtime: providerRuntime } = useChessboardProvider();
+  const {
+    geometryRevision: providerGeometryRevision,
+    lifecycleRevision: providerLifecycleRevision,
+    runtime: providerRuntime,
+  } = useChessboardProvider();
+  const providerTransientRevision = providerRuntime.getTransientRevision();
+  const reducedMotion = useReducedMotion();
   const presentation = useInteractionPresentationSharedValues();
+  const [providerResetRevision, setProviderResetRevision] = useState(0);
   const providerOwner = useRef<ProviderDragOwner>({});
   const cancelFromProviderAtCommit = useRef<
     (reason: ProviderDragCancellationReason) => void
@@ -213,6 +221,7 @@ function BoardInteractionControllerContent({
               owner: providerOwner.current,
               piece,
               presentation,
+              reducedMotion,
               renderer: resolvePieceRenderer(pieceRenderers, piece.pieceType),
               size: pieceSize,
               source: Object.freeze({
@@ -246,6 +255,7 @@ function BoardInteractionControllerContent({
       pieceStyle,
       presentation,
       providerRuntime,
+      reducedMotion,
     ],
   );
 
@@ -255,15 +265,27 @@ function BoardInteractionControllerContent({
       if (correlation === undefined) {
         return;
       }
+      if (acceptingSignals.current) {
+        setProviderResetRevision((revision) => {
+          if (revision === Number.MAX_SAFE_INTEGER) {
+            throw new RangeError(
+              'Board interaction provider reset revision exhausted.',
+            );
+          }
+          return revision + 1;
+        });
+      }
       applyReduction(
         reduceBoardGestureAdapter(adapter.current, {
           correlation,
           reason:
-            reason === 'geometry-change'
-              ? 'geometry-change'
-              : reason === 'unmount'
-                ? 'unmount'
-                : 'user',
+            reason === 'app-background'
+              ? 'app-background'
+              : reason === 'geometry-change'
+                ? 'geometry-change'
+                : reason === 'unmount'
+                  ? 'unmount'
+                  : 'user',
           type: 'cancel',
         }),
       );
@@ -276,6 +298,8 @@ function BoardInteractionControllerContent({
       if (
         !acceptingSignals.current ||
         !interactionEnabledAtCommit.current ||
+        providerRuntime.getGeometryRevision() !== providerGeometryRevision ||
+        providerRuntime.getTransientRevision() !== providerTransientRevision ||
         signal.boardId !== boardId
       ) {
         return;
@@ -367,7 +391,13 @@ function BoardInteractionControllerContent({
         }
       }
     },
-    [applyReduction, boardId],
+    [
+      applyReduction,
+      boardId,
+      providerGeometryRevision,
+      providerRuntime,
+      providerTransientRevision,
+    ],
   );
 
   useLayoutEffect(() => {
@@ -436,20 +466,23 @@ function BoardInteractionControllerContent({
   }, [presentation, providerRuntime]);
 
   return (
-    <>
-      <BoardGestureLayer
-        boardId={boardId}
-        dragEnabled={dragEnabled}
-        draggableSquares={draggableSquares}
-        geometry={geometry}
-        onSignal={handleSignal}
-        positionRevision={position.revision}
-        presentation={presentation}
-        selectionRevision={selectionRevision}
-        tapEnabled={tapEnabled}
-      />
-      <ProviderDragOverlay owner={providerOwner.current} />
-    </>
+    <BoardGestureLayer
+      boardId={boardId}
+      dragEnabled={dragEnabled}
+      draggableSquares={draggableSquares}
+      geometry={geometry}
+      onSignal={handleSignal}
+      positionRevision={position.revision}
+      presentation={presentation}
+      resetKey={JSON.stringify([
+        providerGeometryRevision,
+        providerLifecycleRevision,
+        providerResetRevision,
+        providerTransientRevision,
+      ])}
+      selectionRevision={selectionRevision}
+      tapEnabled={tapEnabled}
+    />
   );
 }
 

@@ -1,6 +1,11 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { useState, type ReactElement } from 'react';
-import { AccessibilityInfo, View } from 'react-native';
+import {
+  AccessibilityInfo,
+  AppState,
+  View,
+  type AppStateStatus,
+} from 'react-native';
 import { getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 import type { TestInstance } from 'test-renderer';
 
@@ -8,6 +13,8 @@ import {
   Chessboard,
   ChessboardProvider,
   SparePiece,
+  type BoardDimensions,
+  type BoardOrientation,
   type CanDragPiece,
   type MoveDecision,
   type OnMoveRequest,
@@ -150,12 +157,14 @@ function moveRequestMock(
 function renderTarget(options: {
   readonly canDragPiece?: CanDragPiece;
   readonly disabled?: boolean;
+  readonly dimensions?: BoardDimensions;
   readonly geometryRevision?: number;
   readonly interactionPermissions?: Readonly<{
     accessibility?: boolean;
     drag?: boolean;
   }>;
   readonly onMoveRequest?: OnMoveRequest;
+  readonly orientation?: BoardOrientation;
   readonly positionRevision?: number;
   readonly showBoard?: boolean;
   readonly showSpare?: boolean;
@@ -182,13 +191,14 @@ function renderTarget(options: {
           {...(options.canDragPiece === undefined
             ? {}
             : { canDragPiece: options.canDragPiece })}
-          dimensions={{ columns: 2, rows: 2 }}
+          dimensions={options.dimensions ?? { columns: 2, rows: 2 }}
           {...(options.interactionPermissions === undefined
             ? {}
             : { interactionPermissions: options.interactionPermissions })}
           {...(options.onMoveRequest === undefined
             ? {}
             : { onMoveRequest: options.onMoveRequest })}
+          orientation={options.orientation ?? 'white'}
           position={{ revision: options.positionRevision ?? 1, value: {} }}
           reduceMotion="never"
         />
@@ -421,6 +431,163 @@ describe('SparePiece', () => {
     await releaseSpareDrag(retainedCallbacks, { x: 125, y: 225 });
 
     expect(onMoveRequest).not.toHaveBeenCalled();
+  });
+
+  it('cancels an active spare drag when its target unmounts, ignores the stale terminal, and recovers after remount', async () => {
+    mockBoardWindowBounds();
+    const onMoveRequest = moveRequestMock({ status: 'accepted' });
+    const result = await render(
+      renderTarget({ onMoveRequest, showBoard: true }),
+    );
+    await measureBoard(boardByLabel(result, 'target board'));
+
+    const staleCallbacks = await beginSpareDrag('reserve');
+    expect(
+      result.queryAllByTestId(providerOverlayId('target-board'), {
+        includeHiddenElements: true,
+      }),
+    ).toHaveLength(1);
+
+    await result.rerender(renderTarget({ onMoveRequest, showBoard: false }));
+    expect(
+      result.queryAllByTestId(providerOverlayId('target-board'), {
+        includeHiddenElements: true,
+      }),
+    ).toEqual([]);
+
+    await releaseSpareDrag(staleCallbacks, { x: 125, y: 225 });
+    expect(onMoveRequest).not.toHaveBeenCalled();
+
+    await result.rerender(renderTarget({ onMoveRequest, showBoard: true }));
+    await measureBoard(boardByLabel(result, 'target board'));
+    const freshCallbacks = await beginSpareDrag('reserve');
+    await releaseSpareDrag(freshCallbacks, { x: 125, y: 225 });
+
+    await waitFor(() => {
+      expect(onMoveRequest).toHaveBeenCalledTimes(1);
+    });
+    expect(onMoveRequest.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        source: { kind: 'spare', spareId: 'reserve' },
+        targetSquare: 'a2',
+      }),
+    );
+  });
+
+  it.each([
+    {
+      dimensions: { columns: 2, rows: 2 },
+      expectedTargetSquare: 'b1',
+      label: 'orientation',
+      orientation: 'black' as const,
+    },
+    {
+      dimensions: { columns: 4, rows: 2 },
+      expectedTargetSquare: 'a2',
+      label: 'effective dimensions',
+      orientation: 'white' as const,
+    },
+  ])(
+    'cancels an active spare drag after target $label changes, rejects its stale terminal, and recovers',
+    async ({ dimensions, expectedTargetSquare, orientation }) => {
+      mockBoardWindowBounds();
+      const onMoveRequest = moveRequestMock({ status: 'accepted' });
+      const result = await render(renderTarget({ onMoveRequest }));
+      await measureBoard(boardByLabel(result, 'target board'));
+
+      const staleCallbacks = await beginSpareDrag('reserve');
+      await result.rerender(
+        renderTarget({
+          dimensions,
+          onMoveRequest,
+          orientation,
+        }),
+      );
+      expect(
+        result.queryAllByTestId(providerOverlayId('target-board'), {
+          includeHiddenElements: true,
+        }),
+      ).toEqual([]);
+
+      await releaseSpareDrag(staleCallbacks, { x: 125, y: 225 });
+      expect(onMoveRequest).not.toHaveBeenCalled();
+
+      await measureBoard(boardByLabel(result, 'target board'));
+      const freshCallbacks = await beginSpareDrag('reserve');
+      await releaseSpareDrag(freshCallbacks, { x: 125, y: 225 });
+      await waitFor(() => {
+        expect(onMoveRequest).toHaveBeenCalledTimes(1);
+      });
+      expect(onMoveRequest.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({
+          targetSquare: expectedTargetSquare,
+        }),
+      );
+    },
+  );
+
+  it('cancels provider transients and spare selection on background, ignores the stale terminal, and recovers when active', async () => {
+    const appStateListener: {
+      current: ((state: AppStateStatus) => void) | null;
+    } = { current: null };
+    jest
+      .spyOn(AppState, 'addEventListener')
+      .mockImplementation((_type, listener) => {
+        appStateListener.current = listener;
+        return { remove: jest.fn() };
+      });
+    mockBoardWindowBounds();
+    const onMoveRequest = moveRequestMock({ status: 'accepted' });
+    const result = await render(renderTarget({ onMoveRequest }));
+    await measureBoard(boardByLabel(result, 'target board'));
+    const notifyAppState = appStateListener.current;
+    if (notifyAppState === null) {
+      throw new Error('Expected the provider AppState listener.');
+    }
+
+    await fireEvent.press(result.getByRole('button'));
+    expect(result.getByRole('button')).toHaveProp('accessibilityState', {
+      disabled: false,
+      selected: true,
+    });
+    await act(() => {
+      notifyAppState('active');
+      notifyAppState('background');
+    });
+    expect(result.getByRole('button')).toHaveProp('accessibilityState', {
+      disabled: false,
+      selected: false,
+    });
+
+    await act(() => {
+      notifyAppState('active');
+    });
+    const staleCallbacks = await beginSpareDrag('reserve');
+    expect(
+      result.queryAllByTestId(providerOverlayId('target-board'), {
+        includeHiddenElements: true,
+      }),
+    ).toHaveLength(1);
+    await act(() => {
+      notifyAppState('background');
+    });
+    expect(
+      result.queryAllByTestId(providerOverlayId('target-board'), {
+        includeHiddenElements: true,
+      }),
+    ).toEqual([]);
+
+    await releaseSpareDrag(staleCallbacks, { x: 125, y: 225 });
+    expect(onMoveRequest).not.toHaveBeenCalled();
+
+    await act(() => {
+      notifyAppState('active');
+    });
+    const freshCallbacks = await beginSpareDrag('reserve');
+    await releaseSpareDrag(freshCallbacks, { x: 125, y: 225 });
+    await waitFor(() => {
+      expect(onMoveRequest).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('rejects retained UI-thread gesture signals after disable and identity commits', async () => {

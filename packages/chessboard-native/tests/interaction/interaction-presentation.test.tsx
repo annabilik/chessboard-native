@@ -408,6 +408,7 @@ describe('interaction presentation foundation', () => {
             boardId="presentation-board"
             piece={context.piece}
             presentation={presentation}
+            reducedMotion={false}
             renderer={Renderer}
             size={48}
             source={{ kind: 'board', square: 'e2' }}
@@ -449,6 +450,9 @@ describe('interaction presentation foundation', () => {
         { scale: DRAG_OVERLAY_LIFT_SCALE },
       ],
     });
+    expect(
+      resolveDragOverlayAnimatedStyle(values, 48, false, 0, 0, 0).opacity,
+    ).toBe(0);
     expect(harnessRenderCount).toBe(1);
     expect(rendererCalls).toHaveLength(1);
 
@@ -483,6 +487,7 @@ describe('interaction presentation foundation', () => {
             boardId="motion-board"
             piece={{ pieceType: 'wN' }}
             presentation={presentation}
+            reducedMotion={preference === 'always'}
             renderer={Renderer}
             size={40}
             source={{ kind: 'board', square: 'b1' }}
@@ -500,8 +505,8 @@ describe('interaction presentation foundation', () => {
         expect.objectContaining({
           opacity: 1,
           transform: [
-            { translateX: 100 },
-            { translateY: 60 },
+            { translateX: 200 },
+            { translateY: 160 },
             { scale: expectedScale },
           ],
         }),

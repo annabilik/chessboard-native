@@ -69,20 +69,29 @@ atomically before the target board's current callback, permissions,
 drag deliberately captures no target revision at gesture start; its
 `basePositionRevision` is the target's current committed revision at emission.
 
-The provider has one overlay lease. The active source host renders it: a board
-host for an on-board drag or the `SparePiece` host for an external drag. The
-spare host permits overflow, but the overlay is not a native portal, so a
-clipping palette ancestor can crop artwork outside the source bounds. Consumers
-must keep that path free of `overflow: 'hidden'` in P2.6.
+The provider has one overlay lease and projects it once after its children as a
+transient absolute, pointerless sibling. The host measures its own window
+origin and subtracts that origin from the active pointer's window coordinates,
+so board and spare sources share one coordinate-correct overlay without
+wrapping or reflowing provider children. The provider-level sibling escapes a
+clipping palette child. It is not a native window portal, so an ancestor that
+clips the entire provider scope can still crop it.
 
 `geometryRevision`, target layout, dimensions, orientation, target unmount, a
 second valid gesture, and a second-finger cancel invalidate their implemented
 correlation boundaries. Callback and permission changes are rechecked before a
-request can emit. P2.7 owns authoritative native ScrollView arbitration,
-immediate lifecycle cancellation stress suites, and callback/render
-instrumentation. The package does not yet claim that an active spare drag wins
-every nested-scroll recognizer race, and it does not programmatically
-auto-scroll arbitrary ancestors.
+request can emit. Leaving the interactive React Native AppState cancels active
+provider dragging, release verification, transient spare selection, and every
+registered board interaction. Returning to `active` starts no replacement
+gesture and cannot make a queued native terminal signal current again.
+
+Board and spare recognizers use the native pan activation threshold to arbitrate
+with an ordinary ancestor `ScrollView`. An empty, non-draggable, or otherwise
+denied board source fails before drag activation, leaving scrolling available.
+An enabled spare or current allowed board source can activate after the
+threshold and owns the rest of that native gesture cycle. Arbitration never
+implies automatic scrolling: the package does not discover or programmatically
+move arbitrary ancestor scroll views.
 
 Accessible spare placement uses the same provider routing without measurement.
 Activating a `SparePiece` publishes one detached transient source selection;
@@ -186,17 +195,25 @@ cycle. Tap also fails explicitly when a second pointer appears.
 The board drag plane remains an accessibility-hidden descendant of the stable
 board control. Its active drag publishes shared pointer values and visual
 source data to the nearest provider, which grants exactly one overlay lease
-across all registered boards and external sources. The active source host
-renders that lease as a pointerless, accessibility-hidden overlay; a board
+across all registered boards and external sources. The provider projects that
+lease once as a pointerless, accessibility-hidden absolute sibling; a board
 source ghost stays board-local. `SparePiece` uses its own one-pointer pan
 recognizer, crosses to JS only for activation/release/cancellation, and leaves
 the shared presentation active through fresh drop verification. Replacing or
 cancelling the active epoch removes the prior overlay without retaining a
 position snapshot. Pending decision and commit phases are reducer presentation
-only; public pressed/dragging/pending style options, ScrollView arbitration, and
-native frame-performance evidence remain later integration work. Controlled
-destination, selected, and disabled square styles are already derived directly
-from the current selection prop.
+only; public pressed/dragging/pending style options remain later work.
+Controlled destination, selected, and disabled square styles are already
+derived directly from the current selection prop.
+
+P2.7 keeps continuous native pan updates out of JavaScript and adds explicit
+evidence at each observable boundary. Component instrumentation counts board
+commits, custom renderer calls, semantic callback entries, geometry
+invalidation, and provider-overlay host structure. The packed Android and iOS
+harnesses exercise long board drags, parent scrolling, lifecycle cancellation,
+and post-cancellation reuse. The example gallery supplies the manual clipped
+palette and geometry-invalidation lab. Per-frame pointer movement changes shared
+values and animated transforms, not React state or consumer callbacks.
 
 ## Consequences
 
@@ -204,14 +221,15 @@ Provider coordination enables external sources without sharing game state.
 Release-time measurement may briefly delay a drop, but it prevents stale bounds
 from resolving an incorrect square. P2.6 adds the public source, one-shot
 verified request boundary, current target callback/revision lookup, nullable
-off-board drag target, and transient accessible place/cancel flow. Provider and
-multi-board contracts cover registration ownership, shared-overlay exclusivity,
-release verification, and stale callbacks without sharing semantic board state.
-Native ScrollView arbitration, full lifecycle automation, source-host clipping
-remediation, and frame-performance evidence remain mandatory P2.7 layers.
-Controlled square or spare activation adds no second semantic store: component
-and model tests keep exclusive routing, current-snapshot payloads, and stale
-selection rejection deterministic.
+off-board drag target, and transient accessible place/cancel flow. P2.7 closes
+the immediate native hardening slice with parent-ScrollView arbitration,
+AppState and geometry cancellation, a provider-level clipping boundary, and
+render/callback instrumentation. Provider and multi-board contracts cover
+registration ownership, shared-overlay exclusivity, release verification, and
+stale callbacks without sharing semantic board state. Controlled square or
+spare activation adds no second semantic store: component, model, and native
+tests keep exclusive routing, current-snapshot payloads, stale selection
+rejection, and post-cancellation reuse deterministic.
 
 This decision owns invariants `CBN-INV-003`, `CBN-INV-004`, `CBN-INV-007`,
 `CBN-INV-008`, `CBN-INV-009`, `CBN-INV-012`, `CBN-INV-014`,

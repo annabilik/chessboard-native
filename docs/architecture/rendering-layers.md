@@ -26,13 +26,15 @@ and `react-native-svg`. Its fixed back-to-front layer order is:
 
 The nearest `ChessboardProvider` supplies one active overlay lease shared by
 every registered board and external source in that provider scope. The active
-source host projects that lease as one pointerless overlay plane: a board host
-for an on-board drag or a `SparePiece` host for external drag. It is not another
-semantic board layer: it renders only the active provider epoch's detached piece
-visual and pointer transform, remains hidden from accessibility, and disappears
-on cancellation or replacement. A standalone board creates a private provider,
-so board-local composition works without an explicit wrapper; a public external
-source requires an explicit provider shared with its target.
+provider projects that lease once after its children as a transient absolute,
+pointerless overlay plane. It measures the overlay host in window coordinates
+and subtracts that origin from the active pointer transform. It is not another
+semantic board layer: it renders only the active provider epoch's detached
+piece visual and pointer transform, remains hidden from accessibility, and
+disappears on cancellation or replacement. The provider remains layout-neutral
+because it does not wrap or size its children. A standalone board creates a
+private provider, so board-local composition works without an explicit wrapper;
+a public external source requires an explicit provider shared with its target.
 
 SVG paths do not use document-global marker IDs. Every board owns its visual
 and animation state. Orientation changes coordinate projection only; canonical
@@ -179,23 +181,23 @@ movement and oriented target hit testing remain in shared values.
 The same internal presentation state projects drag lift, a source ghost, and
 decision or controlled-commit pending flags without retaining a semantic
 position. The board publishes the active drag visual and shared pointer values
-to its nearest provider. The active source host renders the provider's leased
-overlay with a direct animated transform, so frame updates do not rerender
-custom artwork or commit React state. Exactly one overlay can be active in a
-provider even when multiple boards and spare sources are present; source ghost
-and pending projection remain routed to the owning board ID and mount token.
-Controlled destination, selected, and disabled paint is public; drag, pending,
-pressed, ghost, and transition style slots remain future work.
+to its nearest provider. The provider-level overlay sibling uses a direct
+animated transform, so frame updates do not rerender custom artwork or commit
+React state. Exactly one overlay can be active in a provider even when multiple
+boards and spare sources are present; source ghost and pending projection remain
+routed to the owning board ID and mount token. Controlled destination, selected,
+and disabled paint is public; drag, pending, pressed, ghost, and transition
+style slots remain future work.
 
 P2.6 adds a `SparePiece` source host with one visual-only piece renderer, one
 accessible button, and one board-external pan recognizer. Its visual root fixes
-its structural size from the `size` prop and permits overflow. The active drag
-overlay is still source-hosted rather than portaled to a native window root, so
-an ancestor palette with clipping enabled can crop the overlay. This is a
-documented prerelease constraint; source-host clipping remediation and native
-composition stress coverage remain P2.7 work. The overlay stays mounted during
-asynchronous release measurement and is removed on every terminal verified,
-rejected, cancelled, replaced, or stale path.
+its structural size from the `size` prop. P2.7 moves the active overlay out of
+that source host and into the provider-level sibling, so a palette child may
+use `overflow: 'hidden'` without cropping artwork that travels to a board
+elsewhere in the same provider. The provider overlay is not a native window
+portal; clipping an ancestor of the full provider scope can still crop it. The
+overlay stays mounted during asynchronous release measurement and is removed
+on every terminal verified, rejected, cancelled, replaced, or stale path.
 
 P1.5 promotes only the stable outer host to one adjustable accessibility
 control. It uses `pointerEvents="box-none"` so ordinary touch remains available
@@ -211,11 +213,11 @@ orientation-aware measured projection. Provider release verification translates
 fresh window bounds into that local projection and rejects stale registration,
 board-geometry, provider-geometry, or interaction epochs.
 
-`ChessboardProvider` itself adds no accessibility target. Its overlay is
-pointerless and uses `no-hide-descendants`; this hides only overlay artwork, not
-the provider's board children. Two registered boards therefore remain two
-independent adjustable controls, and a private provider does not change the
-single-board accessibility tree.
+`ChessboardProvider` itself adds no accessibility target. Its transient overlay
+sibling is pointerless and uses `no-hide-descendants`; this hides only overlay
+artwork, not the provider's board children. Two registered boards therefore
+remain two independent adjustable controls, and a private provider does not
+change the single-board accessibility tree.
 
 The interaction-enabled accessibility surface retains navigation and adds
 source activation, target activation, off-board removal, cancellation, and
@@ -285,9 +287,10 @@ provider-scoped identity enforcement, token-safe registration cleanup,
 multi-board isolation, one shared overlay, and fresh release-measurement race
 coverage. P2.6 tests add source-discriminated custom renderers, public spare
 composition, fresh target-board payloads, transient accessible selection, and
-place/cancel routing without a semantic position copy. Native ScrollView
-arbitration, lifecycle stress, source-host clipping remediation, and
-frame-performance proof remain mandatory P2.7 evidence.
+place/cancel routing without a semantic position copy. P2.7 tests add
+parent-ScrollView arbitration, AppState and geometry invalidation,
+provider-level clipping remediation, long-pan render/callback counters,
+cancellation reuse, and packed Android/iOS board-scroll/lifecycle scenarios.
 
 This decision owns invariants `CBN-INV-010`, `CBN-INV-013`, `CBN-INV-014`,
 and `CBN-INV-018`.

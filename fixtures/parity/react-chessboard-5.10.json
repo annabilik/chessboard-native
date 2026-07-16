@@ -1995,7 +1995,7 @@
       },
       "status": "planned",
       "contractTestId": "PARITY-OPTION-ALLOW-AUTO-SCROLL",
-      "compatibilityNotes": "No programmatic ancestor scrolling is promised for 1.0; gesture arbitration is still required.",
+      "compatibilityNotes": "Native board and spare gestures arbitrate with ordinary ancestor ScrollViews, but 1.0 never discovers or programmatically scrolls an ancestor.",
       "rationale": "Portable React Native code cannot generically control an arbitrary ancestor ScrollView while preserving deterministic destination geometry.",
       "documentation": "docs/parity/react-chessboard-5.10.md#option-allow-auto-scroll"
     },
@@ -2843,7 +2843,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B08",
-      "compatibilityNotes": "The pure reducer invalidates an interaction epoch on caller-supplied dimension, orientation, permission, and geometry changes and makes late results inert. Chessboard reconciliation and transition epochs remain future work.",
+      "compatibilityNotes": "The mounted board invalidates interaction epochs on position, dimension, orientation, permission, layout, provider-geometry, AppState, and unmount changes; late results remain inert. Transition epochs remain future work.",
       "rationale": "Directly replacing a local position without cancelling asynchronous work allows stale gestures and timers to overwrite newer geometry.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b08-dimension-and-orientation-reconciliation"
     },
@@ -3060,7 +3060,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B16",
-      "compatibilityNotes": "The mounted interaction executor keys requests and timers by reducer revision, board, epoch, intent, and stage, and makes stale prop, permission, timeout, and unmount work inert. Transition epochs remain future work.",
+      "compatibilityNotes": "The mounted interaction executor keys requests and timers by reducer revision, board, epoch, intent, and stage, and makes stale prop, permission, geometry, AppState, timeout, and unmount work inert. Transition epochs remain future work.",
       "rationale": "The pinned effect omits state and option dependencies and only clears the latest timeout on cleanup, allowing stale closures to settle obsolete state.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b16-stale-effects-and-timeout-cleanup"
     },
@@ -3121,7 +3121,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B18",
-      "compatibilityNotes": "The public callback gate enables one accessibility-hidden single-pointer RNGH pan plane with worklet-only continuous updates, while the adjustable control supplies non-drag input. A second pointer cancels the active drag and leaves the next drag usable. Public gesture options and native arbitration evidence remain future work."
+      "compatibilityNotes": "Accessibility-hidden single-pointer RNGH planes keep continuous updates on the UI thread, fail denied sources before activation so an ancestor ScrollView can win, and cancel cleanly for a second pointer or AppState/geometry invalidation. Packed native suites cover arbitration and post-cancellation reuse; public gesture tuning remains future work."
     },
     {
       "id": "behavior.b19-automatic-scroll-during-drag",
@@ -3144,7 +3144,7 @@
       },
       "status": "planned",
       "contractTestId": "PARITY-BEHAVIOR-B19",
-      "compatibilityNotes": "1.0 preserves ScrollView arbitration but never programmatically scrolls an ancestor.",
+      "compatibilityNotes": "1.0 verifies native ScrollView arbitration but never discovers or programmatically scrolls an ancestor.",
       "rationale": "React Native cannot generically discover and control arbitrary ancestor scrolling while retaining a stable measured destination.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b19-automatic-scroll-during-drag"
     },
@@ -3197,7 +3197,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B21",
-      "compatibilityNotes": "One provider interaction epoch drives the shared native overlay across registered boards; the public onPieceDragStart callback remains future work."
+      "compatibilityNotes": "One provider interaction epoch drives a provider-level absolute pointerless overlay across registered boards and clipped source palettes; the public onPieceDragStart callback remains future work."
     },
     {
       "id": "behavior.b22-on-board-boolean-drop-decision",
@@ -3278,7 +3278,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B24",
-      "compatibilityNotes": "Gesture cancellation, including a second pointer, plus accessibility, permission, position, and unmount cancellation are correlated across targeting, deciding, and awaiting-commit phases. Public ChessboardActions remain future work."
+      "compatibilityNotes": "Gesture cancellation, including a second pointer, plus accessibility, permission, position, geometry, AppState, and unmount cancellation are correlated across targeting, deciding, and awaiting-commit phases. Public ChessboardActions remain future work."
     },
     {
       "id": "behavior.b25-drag-off-board-visual-clamp",
@@ -3334,7 +3334,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B26",
-      "compatibilityNotes": "The live drag path projects lift, source ghost, one provider-shared pointerless overlay, and decision/commit pending state without retaining a position snapshot. Public transient styles remain future work."
+      "compatibilityNotes": "The live drag path projects lift, source ghost, one provider-level pointerless overlay that escapes source-child clipping, and decision/commit pending state without retaining a position snapshot. Public transient styles remain future work."
     },
     {
       "id": "behavior.b27-piece-and-square-click-bubbling",

@@ -70,6 +70,7 @@ function descriptor(options: {
       pieceType: 'token',
     }),
     presentation: presentation(),
+    reducedMotion: false,
     renderer: () => null,
     size: 40,
     source: Object.freeze({ kind: 'board' as const, square: 'a2' }),

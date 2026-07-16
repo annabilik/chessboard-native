@@ -94,10 +94,12 @@ accessible activation selects one transient provider-scoped spare for placement
 from the matching board control. Both paths emit an ordinary `MoveIntent` with
 `source: { kind: 'spare', spareId }` against the target board's current
 controlled revision. They never edit a position or semantic selection. The
-active source host renders the provider's one pointerless overlay through
-asynchronous release verification. Native ScrollView arbitration, lifecycle
-stress flows, and render/callback instrumentation remain the P2.7 hardening
-slice.
+provider projects one pointerless overlay after its children and keeps it
+visible through asynchronous release verification. This provider-level host
+escapes clipping inside a source palette without introducing semantic state.
+P2.7 also adds deterministic parent-ScrollView arbitration, AppState and
+geometry cancellation, native interaction stress coverage, and bounded
+render/callback evidence. It does not programmatically auto-scroll an ancestor.
 
 The accepted architecture decisions and all 20 reserved invariant contracts
 are indexed in
@@ -113,7 +115,10 @@ Native composition and style precedence are documented in
 The accessibility control and manual TalkBack/VoiceOver pass are documented in
 [`docs/accessibility.md`](./docs/accessibility.md).
 The checked-in bare harness also runs deterministic Espresso and XCUITest
-accessibility audits against the exact packed package used by native CI.
+accessibility and interaction audits against the exact packed package used by
+native CI. The Expo gallery includes an interaction-hardening lab with a
+standard vertical `ScrollView`, an intentionally clipped spare palette,
+geometry and unmount controls, and app-owned render/callback counters.
 
 ## Development
 

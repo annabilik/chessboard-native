@@ -30,6 +30,10 @@ export default function RootLayout() {
             name="spare-pieces"
             options={{ title: 'Spare pieces' }}
           />
+          <Stack.Screen
+            name="interaction-hardening"
+            options={{ title: 'Interaction hardening' }}
+          />
         </Stack>
         <StatusBar style="dark" />
       </SafeAreaProvider>

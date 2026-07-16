@@ -182,8 +182,18 @@ export default function GalleryIndex() {
           visual subtree remains decorative. Annotation drawing, custom square
           rendering, and transitions remain later slices. Controlled selection
           activation, move requests, provider coordination, and external spare
-          placement have focused examples.
+          placement have focused examples. The interaction-hardening lab adds
+          native ScrollView, clipping, geometry, lifecycle, and render/callback
+          evidence.
         </Text>
+
+        <Link asChild href="/interaction-hardening">
+          <Pressable style={styles.routeLink}>
+            <Text style={styles.routeLinkText}>
+              Open interaction-hardening lab
+            </Text>
+          </Pressable>
+        </Link>
 
         <Link asChild href="/spare-pieces">
           <Pressable style={styles.routeLink}>

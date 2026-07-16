@@ -235,8 +235,9 @@ export default function SparePiecesExample() {
 
       <Text style={styles.boundary}>
         This route keeps the palette and board in one explicit provider and a
-        stable layout. Nested ScrollView arbitration and native lifecycle stress
-        flows arrive in the next interaction-hardening slice.
+        stable layout. The interaction-hardening route adds a deliberately
+        clipped palette, parent-ScrollView arbitration, lifecycle cancellation,
+        geometry invalidation, and observable render/callback counters.
       </Text>
     </ScrollView>
   );

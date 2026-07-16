@@ -42,6 +42,7 @@ interface HarnessProps {
   readonly onPresentation?: (
     values: Readonly<InteractionPresentationSharedValues>,
   ) => void;
+  readonly onRender?: () => void;
   readonly onSignal: (signal: Readonly<BoardGestureSignal>) => void;
   readonly selectionRevision?: number | null;
 }
@@ -52,9 +53,11 @@ function Harness({
   geometry = WHITE_GEOMETRY,
   occupiedSquares = Object.freeze(['a2']),
   onPresentation,
+  onRender,
   onSignal,
   selectionRevision = 11,
 }: HarnessProps) {
+  onRender?.();
   const presentation = useInteractionPresentationSharedValues();
   onPresentation?.(presentation);
   return (
@@ -67,6 +70,7 @@ function Harness({
         onSignal={onSignal}
         positionRevision={7}
         presentation={presentation}
+        resetKey="test-reset"
         selectionRevision={selectionRevision}
         tapEnabled={enabled ?? false}
       />
@@ -90,6 +94,7 @@ interface GestureCallbacks {
     success: boolean,
   ) => void;
   readonly onStart?: (event: Readonly<Record<string, unknown>>) => void;
+  readonly onUpdate?: (event: Readonly<Record<string, unknown>>) => void;
   readonly onTouchesDown?: (
     event: Readonly<{
       allTouches: readonly Readonly<Record<string, unknown>>[];
@@ -284,6 +289,103 @@ describe('board-level native gesture plane', () => {
       expect.objectContaining({ type: 'drag-start' }),
       expect.objectContaining({ targetSquare: 'b1', type: 'drag-end' }),
     ]);
+  });
+
+  it('keeps 100 continuous pan updates on shared values without per-update JS signals or React renders', async () => {
+    const onRender = jest.fn();
+    const onSignal = jest.fn<undefined, [signal: Readonly<BoardGestureSignal>]>(
+      () => undefined,
+    );
+    const presentation: {
+      current: Readonly<InteractionPresentationSharedValues> | null;
+    } = { current: null };
+    await render(
+      <Harness
+        enabled
+        onPresentation={(values) => {
+          presentation.current = values;
+        }}
+        onRender={onRender}
+        onSignal={onSignal}
+      />,
+    );
+    const pan = getByGestureTestId(getBoardGestureTestIds('gesture-board').pan);
+    const callbacks = gestureCallbacks(pan);
+    const handlerTag = (pan as unknown as Readonly<{ handlerTag: number }>)
+      .handlerTag;
+
+    await act(() => {
+      callbacks.onBegin?.({
+        absoluteX: 125,
+        absoluteY: 225,
+        handlerTag,
+        x: 25,
+        y: 25,
+      });
+      callbacks.onStart?.({
+        absoluteX: 130,
+        absoluteY: 225,
+        handlerTag,
+        x: 30,
+        y: 25,
+      });
+    });
+    expect(onSignal).toHaveBeenCalledTimes(1);
+    expect(onSignal).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'drag-start' }),
+    );
+    const rendersAfterStart = onRender.mock.calls.length;
+
+    await act(() => {
+      for (let index = 0; index < 100; index += 1) {
+        callbacks.onUpdate?.({
+          absoluteX: 131 + index,
+          absoluteY: 226 + index,
+          handlerTag,
+          x: 31 + index,
+          y: 26 + index,
+        });
+      }
+    });
+
+    expect(onSignal).toHaveBeenCalledTimes(1);
+    expect(onRender).toHaveBeenCalledTimes(rendersAfterStart);
+    const currentPresentation = presentation.current;
+    if (currentPresentation === null) {
+      throw new Error('Expected interaction presentation shared values.');
+    }
+    expect(currentPresentation.pointerX.value).toBe(130);
+    expect(currentPresentation.pointerY.value).toBe(125);
+    expect(currentPresentation.pointerWindowX.value).toBe(230);
+    expect(currentPresentation.pointerWindowY.value).toBe(325);
+    expect(currentPresentation.targetSquare.value).toBe('b1');
+
+    await act(() => {
+      callbacks.onEnd?.(
+        {
+          absoluteX: 230,
+          absoluteY: 325,
+          handlerTag,
+          x: 130,
+          y: 125,
+        },
+        true,
+      );
+      callbacks.onFinalize?.(
+        {
+          absoluteX: 230,
+          absoluteY: 325,
+          handlerTag,
+          x: 130,
+          y: 125,
+        },
+        true,
+      );
+    });
+    expect(onSignal).toHaveBeenCalledTimes(2);
+    expect(onSignal).toHaveBeenLastCalledWith(
+      expect.objectContaining({ targetSquare: 'b1', type: 'drag-end' }),
+    );
   });
 
   it('[PARITY-BEHAVIOR-B28] emits same-square occupied and empty activation while ignoring moved, outside, and cancelled taps in both orientations', async () => {

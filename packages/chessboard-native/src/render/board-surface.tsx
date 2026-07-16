@@ -92,6 +92,7 @@ interface BoardSurfaceProps {
   readonly onSquareActivate: OnSquareActivate | undefined;
   readonly pieceRenderers: PieceRenderers;
   readonly providerGeometryRevision: Revision;
+  readonly providerLifecycleRevision: Revision;
   readonly providerRegistration: Readonly<ProviderBoardRegistration> | null;
   readonly showNotation: boolean;
   readonly squareStyles: SquareStyles | undefined;
@@ -106,6 +107,7 @@ interface InteractionInvalidationSnapshot {
   readonly geometryRevision: number | null;
   readonly orientation: NormalizedBoardModel['orientation'];
   readonly providerGeometryRevision: Revision;
+  readonly providerLifecycleRevision: Revision;
   readonly rows: number | null;
   readonly tapEnabled: boolean;
 }
@@ -168,6 +170,11 @@ function invalidationReason(
   current: Readonly<InteractionInvalidationSnapshot>,
 ): InteractionInvalidationReason | null {
   if (
+    previous.providerLifecycleRevision !== current.providerLifecycleRevision
+  ) {
+    return 'app-background';
+  }
+  if (
     previous.accessibilityEnabled !== current.accessibilityEnabled ||
     previous.dragEnabled !== current.dragEnabled ||
     previous.tapEnabled !== current.tapEnabled
@@ -204,6 +211,7 @@ export function BoardSurface({
   onSquareActivate,
   pieceRenderers,
   providerGeometryRevision,
+  providerLifecycleRevision,
   providerRegistration,
   showNotation,
   squareStyles,
@@ -542,7 +550,7 @@ export function BoardSurface({
           : providerLayoutRevisionRef.current + 1;
       providerLayoutRevisionRef.current = nextLayoutRevision;
       if (providerRegistration?.registered === true) {
-        providerRegistration.cancelActiveDrag();
+        providerRegistration.cancelActiveDrag('geometry-change');
         const snapshot = providerRegistration.registry.getBoardSnapshot(
           providerRegistration.boardId,
         );
@@ -667,7 +675,7 @@ export function BoardSurface({
       return;
     }
     if (!providerDropAvailable) {
-      providerRegistration.cancelActiveDrag();
+      providerRegistration.cancelActiveDrag('geometry-change');
       providerRegistration.registry.update(
         providerRegistration.boardId,
         providerRegistration.owner,
@@ -675,17 +683,37 @@ export function BoardSurface({
       );
       return;
     }
+    const nextProviderGeometry = {
+      dimensions: model.dimensions,
+      geometryEpoch: nextGeometryEpochMetadata.revision,
+      layoutRevision: providerLayoutRevision,
+      orientation: model.orientation,
+    } as const;
+    const currentProviderGeometry =
+      providerRegistration.registry.getBoardSnapshot(
+        providerRegistration.boardId,
+      )?.geometry ?? null;
+    if (
+      currentProviderGeometry !== null &&
+      (currentProviderGeometry.dimensions.columns !==
+        nextProviderGeometry.dimensions.columns ||
+        currentProviderGeometry.dimensions.rows !==
+          nextProviderGeometry.dimensions.rows ||
+        currentProviderGeometry.geometryEpoch !==
+          nextProviderGeometry.geometryEpoch ||
+        currentProviderGeometry.layoutRevision !==
+          nextProviderGeometry.layoutRevision ||
+        currentProviderGeometry.orientation !==
+          nextProviderGeometry.orientation)
+    ) {
+      providerRegistration.cancelActiveDrag('geometry-change');
+    }
     const updated = providerRegistration.registry.update(
       providerRegistration.boardId,
       providerRegistration.owner,
       {
         available: true,
-        geometry: {
-          dimensions: model.dimensions,
-          geometryEpoch: nextGeometryEpochMetadata.revision,
-          layoutRevision: providerLayoutRevision,
-          orientation: model.orientation,
-        },
+        geometry: nextProviderGeometry,
       },
     );
     if (updated) {
@@ -714,6 +742,7 @@ export function BoardSurface({
         geometryRevision: gestureGeometry?.revision ?? null,
         orientation: model.orientation,
         providerGeometryRevision,
+        providerLifecycleRevision,
         rows: model.dimensions?.rows ?? null,
         tapEnabled,
       }),
@@ -725,6 +754,7 @@ export function BoardSurface({
       model.dimensions?.rows,
       model.orientation,
       providerGeometryRevision,
+      providerLifecycleRevision,
       tapEnabled,
     ],
   );
