@@ -72,7 +72,8 @@ function descriptor(options: {
     presentation: presentation(),
     renderer: () => null,
     size: 40,
-    sourceSquare: 'a2',
+    source: Object.freeze({ kind: 'board' as const, square: 'a2' }),
+    square: 'a2',
     style: Object.freeze({ opacity: 1 }),
   });
 }

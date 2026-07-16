@@ -25,12 +25,14 @@ and `react-native-svg`. Its fixed back-to-front layer order is:
 7. Single-control accessibility semantics.
 
 The nearest `ChessboardProvider` supplies one active overlay lease shared by
-every registered board in that provider scope. The owning board host projects
-that lease as one pointerless overlay plane. It is not another semantic board
-layer: it renders only the active provider epoch's detached piece visual and
-pointer transform, remains hidden from accessibility, and disappears on
-cancellation or replacement. A standalone board creates a private provider, so
-the same composition applies without requiring an explicit wrapper.
+every registered board and external source in that provider scope. The active
+source host projects that lease as one pointerless overlay plane: a board host
+for an on-board drag or a `SparePiece` host for external drag. It is not another
+semantic board layer: it renders only the active provider epoch's detached piece
+visual and pointer transform, remains hidden from accessibility, and disappears
+on cancellation or replacement. A standalone board creates a private provider,
+so board-local composition works without an explicit wrapper; a public external
+source requires an explicit provider shared with its target.
 
 SVG paths do not use document-global marker IDs. Every board owns its visual
 and animation state. Orientation changes coordinate projection only; canonical
@@ -38,10 +40,16 @@ square IDs and consumer data remain unchanged.
 
 Custom square and piece renderers are visual-only. Their props provide piece,
 square, size, resolved style, and interaction flags, but no gesture or
-accessibility handlers. P1.4 activates this contract for piece renderers only;
-custom square rendering remains deferred. Renderer content is contained by a
-pointerless, accessibility-hidden board-owned wrapper and cannot become an
-alternate event surface.
+accessibility handlers. Piece props also discriminate a board source from a
+provider spare source. A board visual has
+`source: { kind: 'board', square }` and a non-null `square`; a spare visual has
+`source: { kind: 'spare', spareId }` and a nullable square. The public external
+source and its overlay pass `square: null`; a pending spare visual projected
+inside its target board carries that canonical target. P1.4 activates this
+contract for piece renderers only; custom square rendering remains deferred.
+Renderer content is
+contained by a pointerless, accessibility-hidden board- or spare-owned wrapper
+and cannot become an alternate event surface.
 
 Static theme and style precedence is fixed as built-in defaults, `theme`,
 instance `styles`, then canonical `squareStyles`. Controlled square paint then
@@ -104,12 +112,12 @@ overrides those defaults, `styles` applies instance-level overrides, and
 `squareStyles` applies the final static square override by canonical square ID
 before the controlled state slots. The built-in controlled styles use inset
 shadow or opacity without altering layout. File/rank notation retains its
-measured placement while accepting resolved native text styles. Piece renderers
-receive their resolved native style, measured size, square, piece, board ID,
-and all-false static interaction state. The board-owned piece wrapper applies
-the resolved `ViewStyle` once; the renderer receives the same frozen value for
-inspection or derived non-View artwork and must not merge it onto the wrapper a
-second time.
+measured placement while accepting resolved native text styles. Static board
+piece renderers receive their resolved native style, measured size, non-null
+square, board source, piece, board ID, and all-false interaction state. The
+board-owned piece wrapper applies the resolved `ViewStyle` once; the renderer
+receives the same frozen value for inspection or derived non-View artwork and
+must not merge it onto the wrapper a second time.
 Board-local measurement and absolute cell geometry remain owned by the renderer
 rather than custom content. Host layout fields such as display, width, height,
 aspect ratio, flex sizing, margins, insets, and padding are removed from resolved
@@ -171,13 +179,23 @@ movement and oriented target hit testing remain in shared values.
 The same internal presentation state projects drag lift, a source ghost, and
 decision or controlled-commit pending flags without retaining a semantic
 position. The board publishes the active drag visual and shared pointer values
-to its nearest provider. The owning board host renders the provider's leased
+to its nearest provider. The active source host renders the provider's leased
 overlay with a direct animated transform, so frame updates do not rerender
 custom artwork or commit React state. Exactly one overlay can be active in a
-provider even when multiple boards are registered; source ghost and pending
-projection remain routed to the owning board ID and mount token. Controlled
-destination, selected, and disabled paint is public; drag, pending, pressed,
-ghost, and transition style slots remain future work.
+provider even when multiple boards and spare sources are present; source ghost
+and pending projection remain routed to the owning board ID and mount token.
+Controlled destination, selected, and disabled paint is public; drag, pending,
+pressed, ghost, and transition style slots remain future work.
+
+P2.6 adds a `SparePiece` source host with one visual-only piece renderer, one
+accessible button, and one board-external pan recognizer. Its visual root fixes
+its structural size from the `size` prop and permits overflow. The active drag
+overlay is still source-hosted rather than portaled to a native window root, so
+an ancestor palette with clipping enabled can crop the overlay. This is a
+documented prerelease constraint; source-host clipping remediation and native
+composition stress coverage remain P2.7 work. The overlay stays mounted during
+asynchronous release measurement and is removed on every terminal verified,
+rejected, cancelled, replaced, or stale path.
 
 P1.5 promotes only the stable outer host to one adjustable accessibility
 control. It uses `pointerEvents="box-none"` so ordinary touch remains available
@@ -207,10 +225,15 @@ emit one move request while accessible move input is permitted, while other
 squares emit one immutable activation. Clear selection is an explicit
 activation request and never edits the controlled prop.
 Without that callback, `onMoveRequest` retains its transient accessible
-source-target fallback. Spare placement and annotation operations remain later
-work. Consumer announcements are correlated by ID and deduplicated per mounted
-board. The centralized reduced-motion provider follows `system`, `always`, or
-`never` without remounting this host or its cursor.
+source-target fallback. A provider-selected spare takes precedence over the
+ordinary activation action set only on its named target board. That board
+exposes place when its current move/accessibility gates permit it and always
+exposes cancel while the selection matches. The spare source remains a separate
+accessible button; its renderer descendants and drag overlay are decorative.
+Annotation operations remain later work. Consumer announcements are correlated
+by ID and deduplicated per mounted board. The centralized reduced-motion
+provider follows `system`, `always`, or `never` without remounting this host or
+its cursor.
 
 React Native 0.86 suppresses Android's adjustable `TYPE_VIEW_SELECTED` feedback
 when `accessibilityValue.text` is present, and directional custom actions do not
@@ -260,8 +283,11 @@ accessible clear-selection, commit-only callback lookup, and stale-selection
 correlation tests. P2.5 tests add private-versus-explicit provider composition,
 provider-scoped identity enforcement, token-safe registration cleanup,
 multi-board isolation, one shared overlay, and fresh release-measurement race
-coverage. Native ScrollView arbitration and frame-performance proof remain
-mandatory later evidence.
+coverage. P2.6 tests add source-discriminated custom renderers, public spare
+composition, fresh target-board payloads, transient accessible selection, and
+place/cancel routing without a semantic position copy. Native ScrollView
+arbitration, lifecycle stress, source-host clipping remediation, and
+frame-performance proof remain mandatory P2.7 evidence.
 
 This decision owns invariants `CBN-INV-010`, `CBN-INV-013`, `CBN-INV-014`,
 and `CBN-INV-018`.

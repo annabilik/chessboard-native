@@ -221,8 +221,8 @@ export default function ProviderCoordinationExample() {
       <Text style={styles.boundary}>
         Cached window bounds are hover hints only. Release verification always
         remeasures and rejects stale board, geometry, and interaction epochs.
-        This route deliberately exposes no spare palette yet; the next slice
-        connects SparePiece to the same private resolver.
+        This route isolates the provider registry itself; the spare-piece editor
+        route exercises the public external-source API built on that resolver.
       </Text>
     </ScrollView>
   );

@@ -5,6 +5,7 @@
  */
 export { Chessboard } from './Chessboard';
 export { ChessboardProvider } from './ChessboardProvider';
+export { SparePiece } from './SparePiece';
 export { ChessboardError } from './ChessboardError';
 export { defaultAnnotationStyle } from './annotation-style';
 export {
@@ -21,6 +22,7 @@ export { defaultTheme } from './theme';
 
 export type { ChessboardProps } from './Chessboard';
 export type { ChessboardProviderProps } from './ChessboardProvider';
+export type { SparePieceProps } from './SparePiece';
 export type {
   ChessboardErrorCode,
   ChessboardErrorContext,

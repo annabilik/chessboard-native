@@ -266,9 +266,9 @@
         "surface": "root",
         "symbols": ["SparePiece"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-SPARE-PIECE",
-      "compatibilityNotes": "The native spare piece is provider-coordinated and identifies both its spare source and target board."
+      "compatibilityNotes": "The public root export requires an explicit provider and identifies its spareId, targetBoardId, and detached piece."
     },
     {
       "id": "export.default-board-style",
@@ -2237,7 +2237,7 @@
       },
       "status": "implemented",
       "contractTestId": "PARITY-OPTION-CAN-DRAG-PIECE",
-      "compatibilityNotes": "A synchronous current-snapshot callback gates board-piece drag activation and fails closed; provider spare composition remains future work."
+      "compatibilityNotes": "A synchronous current-snapshot callback gates board and spare drag activation, is rechecked for spare emission, and fails closed."
     },
     {
       "id": "option.on-arrows-change",
@@ -2683,9 +2683,9 @@
         "surface": "root",
         "symbols": ["SparePiece"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B03",
-      "compatibilityNotes": "Spare pieces require a provider and identify spareId, targetBoardId, and piece."
+      "compatibilityNotes": "Spare pieces compose with one explicitly shared provider, route drag and accessible placement to a named board, and never own its position."
     },
     {
       "id": "behavior.b04-board-identity-and-dom-ids",
@@ -3306,7 +3306,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B25",
-      "compatibilityNotes": "The provider registry verifies fresh native bounds and resolves an out-of-bounds release to a null target. Public external-source wiring and allowDragOffBoard visual clamping remain future work."
+      "compatibilityNotes": "The public spare source verifies fresh native bounds and resolves an out-of-bounds release to a null target. Configurable allowDragOffBoard visual clamping remains future work."
     },
     {
       "id": "behavior.b26-clone-and-ghost-drag-presentation",
@@ -3521,9 +3521,9 @@
         "surface": "root",
         "symbols": ["MoveSource", "SparePiece"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B32",
-      "compatibilityNotes": "A typed spare source carries spareId and resolves the target board revision at emission.",
+      "compatibilityNotes": "A typed spare source carries spareId, preserves a nullable off-board target, and resolves the named board callback and controlled revision at emission.",
       "rationale": "Using piece type as a pseudo-square is ambiguous, conflicts with the declared nullable square payload, and cannot route multiple boards.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b32-spare-callback-payload-semantics"
     },

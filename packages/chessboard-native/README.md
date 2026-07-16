@@ -18,14 +18,16 @@ orientation-aware virtual cursor and decorative visual descendants. Controlled
 square and arrow annotations render in below/above-piece SVG planes. Selection
 styling follows the controlled selection prop, and `onSquareActivate` can opt
 the board into controlled touch and accessibility activation. Supplying
-`onMoveRequest` opens the controlled move-request surface: board-piece drag and
-the adjustable control's source, target, removal, and cancellation actions use
-one correlated lifecycle. Neither gesture path nor either callback changes
-position or selection; only the consumer's next controlled props can do that.
+`onMoveRequest` opens the controlled move-request surface: board/spare-piece
+drag and the adjustable control's source, target, removal, and cancellation
+actions use one correlated lifecycle. Neither gesture path nor either callback
+changes position or selection; only the consumer's next controlled props can do
+that.
 `ChessboardProvider` adds provider-scoped board identity, one shared transient
-overlay, and stale-safe external-drop measurement infrastructure. Custom square
-rendering, annotation drawing, transitions, and the public external
-`SparePiece` source remain future work.
+overlay, and stale-safe external-drop measurement. Its public `SparePiece`
+source supports drag and accessible placement on one named board while that
+board's controlled move callback remains the only position authority. Custom
+square rendering, annotation drawing, and transitions remain future work.
 
 ```tsx
 import { Chessboard } from '@vibechess/chessboard-native';
@@ -71,10 +73,90 @@ window point into board-local coordinates, and verifies the board mount token,
 board geometry, provider geometry, and interaction epoch before resolving a
 square. A committed board reserves its ID immediately but cannot become a drop
 target until it has a current positive layout. Its shared overlay remains
-pointerless and hidden from accessibility
-while active. `SparePiece` will keep that overlay through asynchronous
-verification and expose this internal path in the next Phase 2 slice; there is
-no public external source in this release.
+pointerless and hidden from accessibility while active. `SparePiece` keeps the
+overlay visible through asynchronous release verification, then routes the
+verified result through the target board's current move-request runtime.
+
+## Spare pieces and position editors
+
+`SparePiece` is a reusable external source, not a position store. It requires an
+explicit `ChessboardProvider` around both the source and its target; a
+standalone board's private provider cannot coordinate with a sibling palette.
+Every source names exactly one board, so a provider containing multiple boards
+has no implicit drop routing.
+
+```tsx
+import {
+  Chessboard,
+  ChessboardProvider,
+  SparePiece,
+  type OnMoveRequest,
+} from '@vibechess/chessboard-native';
+
+const onMoveRequest: OnMoveRequest = (intent) => {
+  if (intent.source.kind !== 'spare' || intent.targetSquare === null) {
+    return { status: 'rejected' };
+  }
+
+  editorStore.placePiece(intent.targetSquare, intent.piece, {
+    committedIntentId: intent.intentId,
+    expectedRevision: intent.basePositionRevision,
+  });
+  return { status: 'accepted' };
+};
+
+<ChessboardProvider>
+  <SparePiece
+    piece={{ pieceType: 'wQ' }}
+    size={56}
+    spareId="white-queen"
+    targetBoardId="editor"
+  />
+  <Chessboard
+    boardId="editor"
+    onMoveRequest={onMoveRequest}
+    position={editorPosition}
+  />
+</ChessboardProvider>;
+```
+
+The required props are `spareId`, `targetBoardId`, and `piece`. `size` defaults
+to 48 points. `pieceRenderers` is the same whole-map visual replacement used by
+`Chessboard`; `style` paints the spare host without replacing its interaction
+geometry. `disabled` prevents drag and accessible selection. The source is an
+accessible button whose default label and hint can be replaced with
+`accessibilityLabel` and `accessibilityHint`.
+
+Drag and non-drag placement both call only the named board's current
+`onMoveRequest`. The immutable intent carries that `boardId`, the board's
+current `basePositionRevision`, the detached `piece`, and
+`source: { kind: 'spare', spareId }`. Drag uses `input: 'drag'` and may report
+an off-board `targetSquare: null`; accessible placement uses
+`input: 'accessibility'` and the board cursor's current square. The board
+rechecks its current callback and interaction permissions at emission. Drag
+also rechecks `canDragPiece` with the spare source. A missing callback, denied
+permission, unavailable target, or stale release fails closed.
+
+Activating a spare selects one transient source in the provider. Only its
+matching target board exposes **Place selected spare** and
+**Cancel spare selection** actions. Placement is gated by the board's current
+move callback, accessible permission, pending lifecycle, and disabled cursor
+square; cancellation remains available if those placement gates disappear.
+Selecting another spare replaces the first; starting a physical drag from that
+selected source, successful request submission, explicit cancellation, source
+identity change, disablement or unmount, target unmount, and provider
+deactivation clear the transient selection. This selection is not
+`ChessboardProps.selection` and does not edit the consumer's position. The
+consumer must accept or reject the ordinary move request and publish any
+resulting controlled position update.
+
+The drag overlay is rendered by the active source host, not a native portal.
+`SparePiece` keeps its own host overflow visible, but an ancestor with clipping
+enabled can still crop artwork that travels outside the palette. Keep the
+palette's drag path free of `overflow: 'hidden'` until a root overlay host is
+introduced. Native ScrollView arbitration, lifecycle stress automation, and
+frame/callback instrumentation remain P2.7 work; this P2.6 API should therefore
+be treated as prerelease behavior.
 
 ## Pieces and styles
 
@@ -130,10 +212,13 @@ shadow or opacity and never changes square geometry.
 Custom piece content receives the resolved piece style for inspection or
 derived artwork, while the board-owned wrapper applies that style exactly once.
 Renderers should not blindly apply it again. Renderer props contain no event or
-accessibility handlers, and the board keeps the entire visual subtree
-non-interactive and decorative. Only the stable outer host is exposed to
-assistive technology. Host measurement and absolute square/piece wrapper
-rectangles remain structural and cannot be replaced by visual styles.
+accessibility handlers. Their discriminated `source` is
+`{ kind: 'board', square }` for a controlled board piece and
+`{ kind: 'spare', spareId }` for a public spare. `square` is non-null for board
+sources and nullable for spare sources; `SparePiece` and its external overlay
+pass `null`. The corresponding board or spare host keeps the visual subtree
+non-interactive and decorative. Host measurement and absolute square/piece
+wrapper rectangles remain structural and cannot be replaced by visual styles.
 
 Board display, width, height, aspect ratio, flex sizing, margins, insets,
 padding, transforms, box sizing, border widths, and pointer-event modes are
@@ -331,8 +416,9 @@ formatters, and `{ id, message }` announcements. Announcement IDs are spoken
 once per mounted board. `reduceMotion="system"` is the default; `always` forces
 reduced motion and `never` explicitly permits it. When move interaction is
 enabled, the same control can activate a source and target, remove the source
-with a null-target intent, or cancel pending work. Spare placement and
-annotation actions remain later slices. `formatMoveOutcome` customizes the
+with a null-target intent, or cancel pending work. A selected `SparePiece`
+temporarily gives only its named board the place/cancel actions described above.
+Annotation actions remain a later slice. `formatMoveOutcome` customizes the
 correlated committed, rejected, cancelled, or timed-out announcement; returning
 `null` suppresses it.
 

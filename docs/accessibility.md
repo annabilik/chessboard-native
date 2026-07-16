@@ -9,16 +9,19 @@ assistive technology.
 The Phase 1 prototype established navigation, values, labels, announcements,
 focus identity, and reduced motion. Phase 2 adds controlled source, target,
 removal, cancellation, square activation, and selection-clearing actions
-without turning the cursor into semantic selection or creating square-level
-accessibility targets.
+plus spare-source selection and placement without turning the cursor into
+semantic selection or creating square-level accessibility targets. A public
+`SparePiece` is its own accessible button; its visual renderer descendants
+remain decorative.
 
 `ChessboardProvider` is compositional coordination, not an accessibility
 control. It contributes no focus target, while its shared drag overlay is
 pointerless and hides all overlay artwork from the accessibility tree. Each
 registered board keeps its own adjustable host and virtual cursor. Multiple
 boards under one provider therefore remain independently focusable without
-sharing cursor, selection, pending, or announcement state; a standalone board's
-private provider is likewise invisible.
+sharing cursor, semantic selection, pending, or announcement state. The
+provider may retain one transient selected spare source only until placement or
+cancellation. A standalone board's private provider is likewise invisible.
 
 ## Virtual cursor
 
@@ -81,8 +84,10 @@ fallback while accessible move input is permitted. An occupied cursor square
 exposes source activation and removal. Activating a source stores only transient
 interaction context; after moving the cursor, activation submits the target.
 Removal submits the same intent with `targetSquare: null`, and cancellation
-clears source targeting or active async work. Spare placement and annotation
-actions remain later phases.
+clears source targeting or active async work. If an external spare is selected
+for this board, its place/cancel actions replace these ordinary interaction
+actions until the spare selection ends. Annotation actions remain a later
+phase.
 
 `accessibility.formatActionLabel` formats directional and every available
 interaction action. Labels must be non-empty and unique on a board state
@@ -160,6 +165,37 @@ reducer-correlated announcement. `accessibility.formatMoveOutcome` can return a
 localized replacement, return `null` to suppress it, or fall back to the
 built-in English message when it returns empty text or throws.
 
+## Accessible spare placement
+
+`SparePiece` has the native button role. Activating it selects a detached,
+provider-scoped source and announces that selection. The source must name an
+explicit `targetBoardId`; only the matching registered board exposes **Place
+selected spare** and **Cancel spare selection**. Boards with another ID keep
+their ordinary action set. Selecting a second spare replaces the first.
+
+Placement uses the matching board's current virtual-cursor square and emits the
+same controlled request lifecycle as other moves:
+
+- `source` is `{ kind: 'spare', spareId }` rather than a fake square.
+- `piece` is the detached spare payload.
+- `input` is `accessibility`.
+- `boardId` and `basePositionRevision` come from the target board at emission.
+
+The place action appears only while the target has a current `onMoveRequest`,
+accessible move input is permitted, no move lifecycle is pending, and the
+cursor square is enabled. The cancel action remains available if a callback or
+permission disappears, so a selected source cannot trap the user. A successful
+request submission clears the transient selection; callback acceptance still
+does not commit a position. The consumer must publish the next controlled
+position, and a rejection leaves that position unchanged.
+
+Starting a physical drag from that selected source, explicit cancellation,
+selecting another source, source identity change, disablement or unmount,
+target unmount, and provider deactivation also clear the selection. These
+values never enter `ChessboardProps.selection`.
+`accessibility.formatActionLabel` receives `place-spare` and `cancel-spare` with
+the spare piece in its action context, so consumers can localize both labels.
+
 ## Correlated announcements
 
 Consumers may request an announcement with
@@ -196,7 +232,7 @@ animation paths. Callback and timeout semantics never depend on reduced motion.
 
 Run the Expo gallery and test **Accessibility prototype** first, then repeat the
 interaction-specific steps on **Controlled move requests** and **Provider
-coordination**. Test Android and iOS separately:
+coordination**, followed by **Spare pieces**. Test Android and iOS separately:
 
 1. Enable TalkBack or VoiceOver and focus the board.
 2. Confirm the board is one focus target and visual squares are not separate
@@ -238,6 +274,13 @@ coordination**. Test Android and iOS separately:
     each board is one distinct adjustable target, each retains its own cursor
     and value, and the provider and shared drag overlay never become focus
     targets.
+17. On the spare-pieces route, activate one palette button, focus the named
+    board, move its cursor, and choose place. Confirm the board emits one spare
+    move request and changes only after the example publishes a controlled
+    position update.
+18. Select a different spare and choose cancel. Confirm the palette selection
+    clears, the board position does not change, and an unrelated board never
+    exposes either spare action.
 
 The automated component and native contracts do not replace this
 assistive-technology pass.
@@ -267,10 +310,17 @@ pnpm native:android:accessibility
 pnpm native:ios:accessibility
 ```
 
-The Android command expects a running device or emulator. CI uses the
-Gradle-managed API 35 target through
-`pnpm native:android:accessibility:managed`. The iOS command requires Xcode and
-an available iPhone simulator running iOS 17 or newer.
+The Android command expects a running device or emulator. CI cold-boots a
+pinned, snapshot-disabled API 35 `aosp_atd` emulator and runs that connected
+Release audit. `pnpm native:android:accessibility:managed` remains available as
+a locally provisioned Gradle-managed alternative. The iOS command requires
+Xcode and an available iPhone simulator running iOS 17 or newer.
+
+The P2.6 component suite covers the spare button, decorative visual subtree,
+selection, place/cancel action exposure, and controlled move payload. Native
+SparePiece action/drag flows, ScrollView arbitration, and lifecycle stress
+automation are P2.7 gates and are not claimed by the current static harness
+audit.
 
 These audits catch native hierarchy, trait, label, value, range, action, hit
 region, contrast, and similar static regressions. They cannot establish spoken

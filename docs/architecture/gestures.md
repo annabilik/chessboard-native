@@ -47,10 +47,10 @@ without permanently poisoning the preserved provider runtime.
 An external spare names exactly one target board. Cached window bounds are
 hover hints only. On release the provider always requests a fresh measurement:
 it resolves synchronously where supported or enters an epoch-correlated
-verification session while `measureInWindow` completes. A future external
-source can keep its provider overlay visible while that session is pending.
-Fresh window coordinates are translated into the target's local measured
-coordinate system and use the same
+verification session while `measureInWindow` completes. `SparePiece` keeps its
+provider overlay visible while that session is pending. Fresh window
+coordinates are translated into the target's local measured coordinate system
+and use the same
 half-open, orientation-aware hit test as an on-board gesture. An out-of-bounds
 point resolves to `targetSquare: null`; an invalid or failed measurement
 cancels.
@@ -61,16 +61,37 @@ the release remains the active provider interaction. Target unmount/remount,
 layout, dimensions, orientation, explicit geometry invalidation, or a newer
 drag therefore makes late measurement work inert. Position changes alone do
 not make geometry stale: the destination board's current position revision is
-read through a commit-current adapter only after measurement succeeds. P2.5
-installs this private resolution boundary; `SparePiece` consumes it in P2.6 and
-performs the final current-handler lookup.
+read through a commit-current adapter only after measurement succeeds. A
+successful verification is a one-shot capability: the registry consumes it
+atomically before the target board's current callback, permissions,
+`canDragPiece`, position revision, and move runtime create an ordinary
+`MoveIntent`. It cannot be replayed or redirected to another board. A spare
+drag deliberately captures no target revision at gesture start; its
+`basePositionRevision` is the target's current committed revision at emission.
 
-Once a drag activates it is exclusive with registered ancestor ScrollViews.
-The package does not programmatically auto-scroll an arbitrary ancestor.
-Layout changes, geometry invalidation, orientation or dimension changes,
-permission changes, unmount, a second valid gesture, a second-finger cancel,
-and the accessibility cancel action invalidate the active epoch and all timers
-and signals. Late work is inert.
+The provider has one overlay lease. The active source host renders it: a board
+host for an on-board drag or the `SparePiece` host for an external drag. The
+spare host permits overflow, but the overlay is not a native portal, so a
+clipping palette ancestor can crop artwork outside the source bounds. Consumers
+must keep that path free of `overflow: 'hidden'` in P2.6.
+
+`geometryRevision`, target layout, dimensions, orientation, target unmount, a
+second valid gesture, and a second-finger cancel invalidate their implemented
+correlation boundaries. Callback and permission changes are rechecked before a
+request can emit. P2.7 owns authoritative native ScrollView arbitration,
+immediate lifecycle cancellation stress suites, and callback/render
+instrumentation. The package does not yet claim that an active spare drag wins
+every nested-scroll recognizer race, and it does not programmatically
+auto-scroll arbitrary ancestors.
+
+Accessible spare placement uses the same provider routing without measurement.
+Activating a `SparePiece` publishes one detached transient source selection;
+only its named target board exposes place and cancel actions. Placement reads
+the target's current accessibility permission, callback, revision, and cursor
+square at activation, then submits the ordinary move runtime. Cancellation,
+replacement, successful submission, source or target unmount, and provider
+deactivation clear the transient selection. It is neither semantic board
+selection nor proof that the consumer accepted a move.
 
 Long-press pan, two-finger pan, and explicit two-activation annotation input all
 produce the same revisioned annotation operations. Every drag path also has a
@@ -165,26 +186,31 @@ cycle. Tap also fails explicitly when a second pointer appears.
 The board drag plane remains an accessibility-hidden descendant of the stable
 board control. Its active drag publishes shared pointer values and visual
 source data to the nearest provider, which grants exactly one overlay lease
-across all registered boards. The owning board host renders that lease as a
-pointerless, accessibility-hidden overlay; the source ghost also stays
-board-local. Replacing or cancelling the active epoch removes the prior overlay
-without retaining a position snapshot. Pending decision and commit phases are
-reducer presentation only; public pressed/dragging/pending style options,
-ScrollView arbitration, and native frame-performance evidence remain later
-integration work. Controlled destination, selected, and disabled square styles
-are already derived directly from the current selection prop.
+across all registered boards and external sources. The active source host
+renders that lease as a pointerless, accessibility-hidden overlay; a board
+source ghost stays board-local. `SparePiece` uses its own one-pointer pan
+recognizer, crosses to JS only for activation/release/cancellation, and leaves
+the shared presentation active through fresh drop verification. Replacing or
+cancelling the active epoch removes the prior overlay without retaining a
+position snapshot. Pending decision and commit phases are reducer presentation
+only; public pressed/dragging/pending style options, ScrollView arbitration, and
+native frame-performance evidence remain later integration work. Controlled
+destination, selected, and disabled square styles are already derived directly
+from the current selection prop.
 
 ## Consequences
 
 Provider coordination enables external sources without sharing game state.
 Release-time measurement may briefly delay a drop, but it prevents stale bounds
-from resolving an incorrect square. Provider and multi-board contracts cover
-registration ownership, shared-overlay exclusivity, release verification, and
-stale native callbacks before the public external source is added. Native
-ScrollView arbitration, full lifecycle automation, and frame-performance
-evidence remain mandatory later layers. Controlled square activation adds no
-second semantic store: its component and model tests must keep exclusive
-destination routing, accessible clearing, current-snapshot payloads, and stale
+from resolving an incorrect square. P2.6 adds the public source, one-shot
+verified request boundary, current target callback/revision lookup, nullable
+off-board drag target, and transient accessible place/cancel flow. Provider and
+multi-board contracts cover registration ownership, shared-overlay exclusivity,
+release verification, and stale callbacks without sharing semantic board state.
+Native ScrollView arbitration, full lifecycle automation, source-host clipping
+remediation, and frame-performance evidence remain mandatory P2.7 layers.
+Controlled square or spare activation adds no second semantic store: component
+and model tests keep exclusive routing, current-snapshot payloads, and stale
 selection rejection deterministic.
 
 This decision owns invariants `CBN-INV-003`, `CBN-INV-004`, `CBN-INV-007`,

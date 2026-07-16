@@ -8,12 +8,17 @@ import {
   createProviderDragCoordinator,
   type ProviderDragCoordinator,
 } from './provider-drag-coordinator';
+import {
+  createProviderSpareSelectionCoordinator,
+  type ProviderSpareSelectionCoordinator,
+} from './provider-spare-selection';
 
 export interface ChessboardProviderRuntime {
   readonly commitGeometryRevision: (revision: number) => void;
   readonly drag: ProviderDragCoordinator;
   readonly getGeometryRevision: () => number;
   readonly registry: BoardLayoutRegistry;
+  readonly spareSelection: ProviderSpareSelectionCoordinator;
   readonly release: () => void;
   readonly retain: () => void;
 }
@@ -31,7 +36,9 @@ export function createChessboardProviderRuntime(
   initialGeometryRevision: number,
 ): ChessboardProviderRuntime {
   let geometryRevision = initialGeometryRevision;
-  const drag = createProviderDragCoordinator();
+  const drag: ProviderDragCoordinator = createProviderDragCoordinator();
+  const spareSelection: ProviderSpareSelectionCoordinator =
+    createProviderSpareSelectionCoordinator();
   const registry = createBoardLayoutRegistry({
     providerGeometryRevision: initialGeometryRevision,
   });
@@ -68,6 +75,7 @@ export function createChessboardProviderRuntime(
         if (active !== null) {
           drag.cancel(active.owner, active.gestureToken, 'unmount');
         }
+        spareSelection.deactivate();
         // Suspense and Offscreen may clean up layout effects while preserving
         // component state. Clear transient work without poisoning the runtime
         // so a later reveal can register the committed boards again.
@@ -78,6 +86,7 @@ export function createChessboardProviderRuntime(
       retainCount += 1;
       disposalRevision += 1;
     },
+    spareSelection,
   });
 }
 

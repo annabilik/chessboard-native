@@ -1,7 +1,12 @@
 import type { ViewStyle } from 'react-native';
 
 import type { InteractionPresentationSharedValues } from './interaction-presentation';
-import type { PieceData, PieceRenderer, SquareId } from '../public-types';
+import type {
+  MoveSource,
+  PieceData,
+  PieceRenderer,
+  SquareId,
+} from '../public-types';
 
 /** Opaque identity for one mounted provider drag source. */
 export type ProviderDragOwner = object;
@@ -10,7 +15,7 @@ export type ProviderDragCancellationReason =
   'geometry-change' | 'replacement' | 'unmount';
 
 /** Transient artwork and correlation for the provider's only active drag. */
-export interface ProviderDragOverlayDescriptor {
+export type ProviderDragOverlayDescriptor = {
   readonly boardId: string;
   readonly gestureToken: number;
   readonly onCancel: (reason: ProviderDragCancellationReason) => void;
@@ -19,9 +24,18 @@ export interface ProviderDragOverlayDescriptor {
   readonly presentation: Readonly<InteractionPresentationSharedValues>;
   readonly renderer: PieceRenderer | null;
   readonly size: number;
-  readonly sourceSquare: SquareId;
   readonly style: Readonly<ViewStyle>;
-}
+} & (
+  | {
+      readonly source: Extract<MoveSource, { readonly kind: 'board' }>;
+      readonly square: SquareId;
+    }
+  | {
+      readonly source: Extract<MoveSource, { readonly kind: 'spare' }>;
+      /** Null while the source remains outside a board. */
+      readonly square: SquareId | null;
+    }
+);
 
 export interface ProviderDragCoordinatorSnapshot {
   readonly active: Readonly<ProviderDragOverlayDescriptor> | null;

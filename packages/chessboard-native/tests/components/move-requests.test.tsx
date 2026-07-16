@@ -120,7 +120,7 @@ function panCallbacks(pan: unknown): Readonly<PanCallbacks> {
 function pieceProbe(props: PieceRendererProps): ReactElement {
   return (
     <View
-      testID={`move-piece:${visualKind(props)}:${props.square}:${props.piece.pieceType}`}
+      testID={`move-piece:${visualKind(props)}:${props.square ?? 'spare'}:${props.piece.pieceType}`}
     />
   );
 }
