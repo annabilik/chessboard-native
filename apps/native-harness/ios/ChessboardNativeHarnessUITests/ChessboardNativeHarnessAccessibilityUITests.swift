@@ -40,10 +40,12 @@ final class ChessboardNativeHarnessInteractionUITests: XCTestCase {
     let positionRevision = app.staticTexts["interaction:position-revision"]
     let initialBoardTop = board.frame.minY
 
-    drag(on: board, file: 3, fromRank: 4, toRank: 5)
+    // Cross two ranks so the hosted simulator reliably clears the gesture
+    // activation threshold before XCUITest releases the touch.
+    drag(on: board, file: 3, fromRank: 4, toRank: 6)
 
     waitForLabel(callbackCount, "Callback count: 1")
-    waitForLabel(lastTarget, "Last target: d5")
+    waitForLabel(lastTarget, "Last target: d6")
     waitForLabel(app.staticTexts["interaction:last-source"], "Last source: board:d4")
     waitForLabel(app.staticTexts["interaction:decision"], "Decision: rejected")
     XCTAssertEqual(app.staticTexts["interaction:abort-count"].label, "Abort count: 0")
@@ -127,7 +129,7 @@ final class ChessboardNativeHarnessInteractionUITests: XCTestCase {
     let app = launchInteractionFixture("interaction-lifecycle")
     let board = interactionBoard(in: app)
 
-    drag(on: board, file: 3, fromRank: 4, toRank: 5)
+    drag(on: board, file: 3, fromRank: 4, toRank: 6)
     waitForLabel(app.staticTexts["interaction:callback-count"], "Callback count: 1")
     waitForLabel(app.staticTexts["interaction:decision"], "Decision: pending")
 
@@ -139,7 +141,7 @@ final class ChessboardNativeHarnessInteractionUITests: XCTestCase {
     waitForLabel(app.staticTexts["interaction:abort-count"], "Abort count: 1")
     waitForLabel(app.staticTexts["interaction:decision"], "Decision: aborted")
     waitForLabel(app.staticTexts["interaction:callback-count"], "Callback count: 1")
-    waitForLabel(app.staticTexts["interaction:last-target"], "Last target: d5")
+    waitForLabel(app.staticTexts["interaction:last-target"], "Last target: d6")
     waitForLabel(app.staticTexts["interaction:last-source"], "Last source: board:d4")
     XCTAssertEqual(
       app.staticTexts["interaction:position-revision"].label,
