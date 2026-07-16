@@ -226,7 +226,11 @@ cleanup are ignored, and re-entering system mode starts safely reduced again.
 Explicit modes do not subscribe to the native preference.
 
 The policy is centralized for transition, lift, snapback, press, and annotation
-animation paths. Callback and timeout semantics never depend on reduced motion.
+animation paths. Ordinary controlled-position moves, captures, additions,
+removals, and ambiguity fades settle directly to the current prop when motion
+is reduced. Enabling reduced motion during an active transition cancels and
+settles that epoch; disabling it again does not replay the already-settled
+revision. Callback and timeout semantics never depend on reduced motion.
 
 ## Manual TalkBack and VoiceOver pass
 

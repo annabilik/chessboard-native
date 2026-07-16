@@ -63,9 +63,27 @@ orientation.
 P3.1 snapshots `promotion`, `capturedSquare`, and `rookMove` fields and rejects
 revision, endpoint, and stable-identity contradictions, but consumes only the
 ordinary `from`/`to` actor match. Promotion, en passant association,
-coordinated castling, and their animation runtime remain later transition work.
-Warning dispatch also remains a mounted post-commit responsibility; the pure
-planner returns warning data and never logs during render.
+coordinated castling, and their specialized animation runtime remain later
+transition work.
+
+P3.2 adds the ordinary mounted runtime. A layout effect compares only committed
+semantic snapshots, installs one detached plan for the exact target revision,
+and drives all actors from one board-local Reanimated progress value. Current
+move targets translate from their measured source cells, current enter actors
+fade in, and detached removed/captured/ambiguous actors fade out underneath the
+current piece plane. Type-changing replacements snap until P3.3 owns promotion
+presentation. Current renderers always receive the target square; exit
+renderers receive the old square and detached old piece.
+
+The animation callback captures only the plan epoch, target comparison token,
+and geometry epoch. A newer prop hides the old plan during render, then cancels
+its clock after commit; a late completion can clear only the still-matching
+epoch. Initial mount, no-op revisions, invalid current state, missing
+measurement, changed geometry/orientation, zero duration, and reduced motion
+all snap to the latest prop. Smooth in-flight A-B-C continuity, geometry
+replanning, and pending-to-commit handoff remain P3.4 work. Planner warnings are
+now dispatched only after commit in development and deduplicated across effect
+replay.
 
 For A to B to C, B is committed even when its animation is interrupted. A B to
 C hint is therefore valid and every A to B visual epoch becomes inert. Geometry

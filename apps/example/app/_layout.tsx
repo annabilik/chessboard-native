@@ -34,6 +34,10 @@ export default function RootLayout() {
             name="interaction-hardening"
             options={{ title: 'Interaction hardening' }}
           />
+          <Stack.Screen
+            name="transitions"
+            options={{ title: 'Controlled transitions' }}
+          />
         </Stack>
         <StatusBar style="dark" />
       </SafeAreaProvider>

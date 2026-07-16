@@ -615,7 +615,7 @@ export function inferPositionTransition(options: {
   });
 }
 
-function validateHint(options: {
+export function validatePositionTransitionHint(options: {
   readonly before: TransitionPositionSnapshot;
   readonly after: TransitionPositionSnapshot;
 }):
@@ -623,7 +623,9 @@ function validateHint(options: {
   | Readonly<{ hint: null; warning: Readonly<TransitionHintWarning> }> {
   const hint = options.after.transition;
   if (hint === undefined) {
-    throw new Error('validateHint requires a transition hint.');
+    throw new Error(
+      'validatePositionTransitionHint requires a transition hint.',
+    );
   }
 
   if (
@@ -889,7 +891,7 @@ export function planPositionTransition(options: {
 
   let acceptedHint: Readonly<BoardTransition> | null = null;
   if (options.after.transition !== undefined) {
-    const validation = validateHint({
+    const validation = validatePositionTransitionHint({
       after: options.after,
       before: options.before,
     });

@@ -375,6 +375,7 @@ describe('public data contracts', () => {
       squareStyles,
       styles,
       theme,
+      transitionDurationMs: 450,
     } satisfies ChessboardProps;
     const revisioned = {
       revision: 4,
@@ -410,6 +411,7 @@ describe('public data contracts', () => {
     expect(props.squareStyles).toBe(squareStyles);
     expect(props.styles).toBe(styles);
     expect(props.theme).toBe(theme);
+    expect(props.transitionDurationMs).toBe(450);
     expect(revisioned.revision).toBe(4);
     expect(missingBoardId).toEqual(expect.any(Object));
     expect(missingPosition).toEqual(expect.any(Object));

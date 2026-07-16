@@ -292,6 +292,7 @@ export interface ChessboardProps {
     readonly squareStyles?: SquareStyles;
     readonly styles?: ChessboardStyles;
     readonly theme?: ChessboardTheme;
+    readonly transitionDurationMs?: number;
 }
 
 // @public

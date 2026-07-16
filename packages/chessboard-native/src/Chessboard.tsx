@@ -31,6 +31,7 @@ import {
 } from './internal/provider-context';
 import type { ProviderBoardRegistration } from './internal/provider-board-registration';
 import type { ProviderDragCancellationReason } from './internal/provider-drag-coordinator';
+import { normalizeTransitionDurationMs } from './internal/use-position-transition-runtime';
 import { defaultPieceRenderers } from './pieces';
 import { BoardSurface } from './render/board-surface';
 import type {
@@ -96,6 +97,8 @@ export interface ChessboardProps {
   readonly accessibility?: ChessboardAccessibility;
   /** Animation-reduction policy; defaults to the operating-system preference. */
   readonly reduceMotion?: ReduceMotion;
+  /** Controlled-position transition duration in milliseconds; defaults to 300. */
+  readonly transitionDurationMs?: number;
   /** Receives deduplicated production contract errors after commit. */
   readonly onError?: OnChessboardError;
 }
@@ -103,6 +106,7 @@ export interface ChessboardProps {
 interface ChessboardRuntimeProps extends ChessboardProps {
   readonly development: boolean;
   readonly logError?: (error: ChessboardError) => void;
+  readonly logTransitionWarning?: (message: string) => void;
 }
 
 interface ProviderRegistrationState {
@@ -325,9 +329,13 @@ function useProviderBoardRegistration(options: {
 function ChessboardRuntimeContent({
   development,
   logError,
+  logTransitionWarning,
   ...props
 }: ChessboardRuntimeProps): ReactElement {
   const model = useBoardModel(props, development, logError);
+  const transitionDurationMs = normalizeTransitionDurationMs(
+    props.transitionDurationMs,
+  );
   const provider = useChessboardProvider();
   const providerRegistration = useProviderBoardRegistration({
     boardId: model.boardId,
@@ -343,8 +351,12 @@ function ChessboardRuntimeContent({
         accessibility={props.accessibility}
         annotationStyle={props.annotationStyle ?? defaultAnnotationStyle}
         canDragPiece={props.canDragPiece}
+        development={development}
         providerGeometryRevision={provider.geometryRevision}
         interactionPermissions={props.interactionPermissions}
+        {...(logTransitionWarning === undefined
+          ? {}
+          : { logTransitionWarning })}
         model={model}
         moveRequestTimeouts={props.moveRequestTimeouts}
         onMoveRequest={props.onMoveRequest}
@@ -356,6 +368,7 @@ function ChessboardRuntimeContent({
         squareStyles={props.squareStyles}
         styles={props.styles}
         theme={props.theme}
+        transitionDurationMs={transitionDurationMs}
       />
     </ReducedMotionProvider>
   );

@@ -10,6 +10,7 @@ import {
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
 import { useAccessibilityAnnouncement } from '../accessibility/announcements';
+import { useReducedMotion } from '../accessibility/reduced-motion';
 import {
   useBoardAccessibility,
   type BoardAccessibilityMoveInteraction,
@@ -34,6 +35,7 @@ import {
 } from '../internal/square-activation';
 import { useMoveRequestRuntime } from '../internal/use-move-request-runtime';
 import { useSquareActivation } from '../internal/use-square-activation';
+import { usePositionTransitionRuntime } from '../internal/use-position-transition-runtime';
 import type { ProviderBoardRegistration } from '../internal/provider-board-registration';
 import type {
   CanStartProviderSpareDrag,
@@ -85,7 +87,9 @@ interface BoardSurfaceProps {
   readonly accessibility: ChessboardAccessibility | undefined;
   readonly annotationStyle: Readonly<AnnotationStyle>;
   readonly canDragPiece: CanDragPiece | undefined;
+  readonly development: boolean;
   readonly interactionPermissions: InteractionPermissions | undefined;
+  readonly logTransitionWarning?: (message: string) => void;
   readonly model: NormalizedBoardModel;
   readonly moveRequestTimeouts: MoveRequestTimeouts | undefined;
   readonly onMoveRequest: OnMoveRequest | undefined;
@@ -98,6 +102,7 @@ interface BoardSurfaceProps {
   readonly squareStyles: SquareStyles | undefined;
   readonly styles: ChessboardStyles | undefined;
   readonly theme: ChessboardTheme | undefined;
+  readonly transitionDurationMs: number;
 }
 
 interface InteractionInvalidationSnapshot {
@@ -204,7 +209,9 @@ export function BoardSurface({
   accessibility,
   annotationStyle,
   canDragPiece,
+  development,
   interactionPermissions,
+  logTransitionWarning,
   model,
   moveRequestTimeouts,
   onMoveRequest,
@@ -217,8 +224,10 @@ export function BoardSurface({
   squareStyles,
   styles,
   theme,
+  transitionDurationMs,
 }: BoardSurfaceProps): ReactElement {
   useAccessibilityAnnouncement(accessibility?.announcement);
+  const reducedMotion = useReducedMotion();
   const { runtime: providerRuntime } = useChessboardProvider();
   const spareSelectionSnapshot = useSyncExternalStore(
     providerRuntime.spareSelection.subscribe,
@@ -663,6 +672,17 @@ export function BoardSurface({
       width: layout.size.width,
     });
   }, [layout, nextGeometryEpochMetadata.revision]);
+  const positionTransition = usePositionTransitionRuntime({
+    development,
+    dimensions: model.dimensions,
+    durationMs: transitionDurationMs,
+    geometryEpoch: layout === null ? null : nextGeometryEpochMetadata.revision,
+    ...(logTransitionWarning === undefined
+      ? {}
+      : { logWarning: logTransitionWarning }),
+    position: model.position,
+    reducedMotion,
+  });
   const providerDropAvailable =
     layout !== null &&
     model.status === 'ready' &&
@@ -945,6 +965,7 @@ export function BoardSurface({
               pieceRenderers={pieceRenderers}
               position={model.position}
               style={pieceStyle}
+              transition={positionTransition}
             />
           )}
           {annotationGeometry === null ? null : (
