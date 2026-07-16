@@ -30,6 +30,7 @@ import {
   type ChessboardProviderRuntime,
 } from './internal/provider-context';
 import type { ProviderBoardRegistration } from './internal/provider-board-registration';
+import type { ProviderDragCancellationReason } from './internal/provider-drag-coordinator';
 import { defaultPieceRenderers } from './pieces';
 import { BoardSurface } from './render/board-surface';
 import type {
@@ -186,17 +187,16 @@ function useProviderBoardRegistration(options: {
   );
   const readMoveRequest = useCallback(() => null, []);
   const readSpareDragPermission = useCallback(() => null, []);
-  const cancelActiveDrag = useCallback((): void => {
-    const boardId = options.boardId;
-    const active = provider.runtime.drag.getSnapshot().active;
-    if (boardId !== null && active?.boardId === boardId) {
-      provider.runtime.drag.cancel(
-        active.owner,
-        active.gestureToken,
-        'geometry-change',
-      );
-    }
-  }, [options.boardId, provider.runtime]);
+  const cancelActiveDrag = useCallback(
+    (reason: ProviderDragCancellationReason): void => {
+      const boardId = options.boardId;
+      const active = provider.runtime.drag.getSnapshot().active;
+      if (boardId !== null && active?.boardId === boardId) {
+        provider.runtime.drag.cancel(active.owner, active.gestureToken, reason);
+      }
+    },
+    [options.boardId, provider.runtime],
+  );
 
   useLayoutEffect(() => {
     positionRevisionAtCommit.current = options.positionRevision;
@@ -262,6 +262,14 @@ function useProviderBoardRegistration(options: {
     }
 
     return () => {
+      const active = provider.runtime.drag.getSnapshot().active;
+      if (active?.boardId === boardId) {
+        provider.runtime.drag.cancel(
+          active.owner,
+          active.gestureToken,
+          'unmount',
+        );
+      }
       if (provider.runtime.registry.unregister(boardId, owner)) {
         provider.runtime.spareSelection.clearTarget(boardId);
       }
@@ -343,6 +351,7 @@ function ChessboardRuntimeContent({
         onSquareActivate={props.onSquareActivate}
         pieceRenderers={props.pieceRenderers ?? defaultPieceRenderers}
         providerRegistration={providerRegistration}
+        providerLifecycleRevision={provider.lifecycleRevision}
         showNotation={props.showNotation ?? true}
         squareStyles={props.squareStyles}
         styles={props.styles}

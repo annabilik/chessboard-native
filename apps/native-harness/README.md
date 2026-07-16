@@ -5,18 +5,25 @@ Android and iOS projects are checked in deliberately; Expo CNG does not own or
 regenerate them.
 
 The harness imports `@vibechess/chessboard-native` and its public `/pieces`
-subpath through the workspace exports, then renders one deterministic audit
-fixture: a white knight on selected `d4`, white orientation, reduced motion,
-and an explicit board label and hint. The board remains touch-noninteractive;
-its outer host is one adjustable accessibility control and its visual
-descendants are decorative.
+subpath through the workspace exports. Its default deterministic accessibility
+fixture renders a white knight on selected `d4`, white orientation, reduced
+motion, and an explicit board label and hint. The board remains
+touch-noninteractive; its outer host is one adjustable accessibility control
+and its visual descendants are decorative.
 
 The Android instrumentation target inspects the native adjustable node,
 exercises its six navigation actions, and runs Espresso Accessibility Test
 Framework checks from the screen root. The iOS UI target verifies the
 aggregated board element and runs `XCUIApplication.performAccessibilityAudit()`.
-Both targets use Release builds so JavaScript is embedded and headless tests do
-not depend on Metro.
+Both targets also launch an interaction fixture through native initial props.
+That fixture places the controlled board inside a standard React Native
+`ScrollView`, with a `SparePiece` inside an `overflow: hidden` palette. It
+checks empty-square scrolling, board-piece and spare-piece capture,
+exactly-once rejection callbacks with an unchanged position revision, and
+background/resume cancellation. Android interrupts an active pointer stream;
+iOS confirms that backgrounding aborts pending interaction work. Both targets
+use Release builds so JavaScript is embedded and headless tests do not depend
+on Metro.
 
 CI also copies this harness to a fresh directory outside the repository,
 replaces `workspace:*` with the inspected npm archive, performs a clean npm

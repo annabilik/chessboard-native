@@ -5,11 +5,12 @@ import type {
   BoardLayoutOwnerToken,
   BoardLayoutRegistry,
 } from './board-layout-registry';
+import type { ProviderDragCancellationReason } from './provider-drag-coordinator';
 
 /** Commit-correlated bridge from one board surface to its nearest provider. */
 export interface ProviderBoardRegistration {
   readonly boardId: string;
-  readonly cancelActiveDrag: () => void;
+  readonly cancelActiveDrag: (reason: ProviderDragCancellationReason) => void;
   readonly hostRef: RefObject<View | null>;
   readonly owner: BoardLayoutOwnerToken;
   readonly registered: boolean;

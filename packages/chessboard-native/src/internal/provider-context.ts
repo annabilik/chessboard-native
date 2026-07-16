@@ -6,6 +6,7 @@ import {
 } from './board-layout-registry';
 import {
   createProviderDragCoordinator,
+  type ProviderDragCancellationReason,
   type ProviderDragCoordinator,
 } from './provider-drag-coordinator';
 import {
@@ -14,9 +15,14 @@ import {
 } from './provider-spare-selection';
 
 export interface ChessboardProviderRuntime {
+  readonly cancelTransient: (
+    reason: ProviderDragCancellationReason,
+    options?: Readonly<{ clearSpareSelection?: boolean }>,
+  ) => void;
   readonly commitGeometryRevision: (revision: number) => void;
   readonly drag: ProviderDragCoordinator;
   readonly getGeometryRevision: () => number;
+  readonly getTransientRevision: () => number;
   readonly registry: BoardLayoutRegistry;
   readonly spareSelection: ProviderSpareSelectionCoordinator;
   readonly release: () => void;
@@ -25,6 +31,7 @@ export interface ChessboardProviderRuntime {
 
 export interface ChessboardProviderContextValue {
   readonly geometryRevision: number;
+  readonly lifecycleRevision: number;
   readonly runtime: ChessboardProviderRuntime;
 }
 
@@ -44,8 +51,28 @@ export function createChessboardProviderRuntime(
   });
   let retainCount = 0;
   let disposalRevision = 0;
+  let transientRevision = 0;
 
   return Object.freeze({
+    cancelTransient: (
+      reason: ProviderDragCancellationReason,
+      options: Readonly<{ clearSpareSelection?: boolean }> = {},
+    ): void => {
+      if (transientRevision === Number.MAX_SAFE_INTEGER) {
+        throw new RangeError(
+          'ChessboardProvider transient revision exhausted.',
+        );
+      }
+      transientRevision += 1;
+      const active = drag.getSnapshot().active;
+      if (active !== null) {
+        drag.cancel(active.owner, active.gestureToken, reason);
+      }
+      registry.cancelTransient();
+      if (options.clearSpareSelection === true) {
+        spareSelection.deactivate();
+      }
+    },
     commitGeometryRevision: (revision: number): void => {
       if (revision === geometryRevision) {
         return;
@@ -59,6 +86,7 @@ export function createChessboardProviderRuntime(
     },
     drag,
     getGeometryRevision: () => geometryRevision,
+    getTransientRevision: () => transientRevision,
     registry,
     release: (): void => {
       if (retainCount === 0) {

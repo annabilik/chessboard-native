@@ -73,9 +73,13 @@ window point into board-local coordinates, and verifies the board mount token,
 board geometry, provider geometry, and interaction epoch before resolving a
 square. A committed board reserves its ID immediately but cannot become a drop
 target until it has a current positive layout. Its shared overlay remains
-pointerless and hidden from accessibility while active. `SparePiece` keeps the
-overlay visible through asynchronous release verification, then routes the
-verified result through the target board's current move-request runtime.
+pointerless and hidden from accessibility while active. The layout-neutral
+provider projects that overlay as one transient absolute sibling after its
+children. It translates window pointer coordinates through the freshly
+measured overlay-host origin, so a clipping palette child cannot crop a drag
+that leaves the source. `SparePiece` keeps the overlay visible through
+asynchronous release verification, then routes the verified result through the
+target board's current move-request runtime.
 
 ## Spare pieces and position editors
 
@@ -150,13 +154,41 @@ deactivation clear the transient selection. This selection is not
 consumer must accept or reject the ordinary move request and publish any
 resulting controlled position update.
 
-The drag overlay is rendered by the active source host, not a native portal.
-`SparePiece` keeps its own host overflow visible, but an ancestor with clipping
-enabled can still crop artwork that travels outside the palette. Keep the
-palette's drag path free of `overflow: 'hidden'` until a root overlay host is
-introduced. Native ScrollView arbitration, lifecycle stress automation, and
-frame/callback instrumentation remain P2.7 work; this P2.6 API should therefore
-be treated as prerelease behavior.
+The provider-level overlay can escape clipping inside a source palette, but it
+is not a native window portal. An ancestor that clips the provider's entire
+interaction scope can still crop it. Place the provider above palette- or
+board-local clipping regions and avoid clipping the full provider scope when a
+drag must travel beyond it.
+
+## Interaction hardening
+
+Board and spare-piece drag recognizers arbitrate with an ordinary ancestor
+React Native `ScrollView`. A touch that cannot start a current draggable source
+fails the drag path so the scroll view can take ownership. A valid drag can
+activate after its movement threshold and then retains the interaction until
+release or cancellation. The library never discovers or programmatically
+scrolls an arbitrary ancestor; upstream `allowAutoScroll` behavior is
+intentionally not part of the native 1.0 contract.
+
+Continuous pan coordinates and overlay transforms remain on the UI thread.
+Only activation, release, cancellation, and recognized tap boundaries cross to
+JavaScript. Deterministic component instrumentation verifies bounded React
+commits and custom-renderer calls. Packed-package Espresso and XCUITest
+scenarios separately verify parent scrolling, board-drag capture, exactly-once
+consumer callbacks, unchanged controlled revisions, and lifecycle
+cancellation.
+
+Leaving the interactive AppState cancels the provider's active drag, pending
+drop verification, transient spare selection, and board interaction work.
+Layout, dimensions, orientation, position, permissions, provider
+`geometryRevision`, target unmount, and provider unmount keep their existing
+epoch-correlated cancellation rules. Returning to the foreground never replays
+the cancelled gesture or a late native terminal signal.
+
+See the repository's
+[`interaction-hardening` example](https://github.com/annabilik/chessboard-native/blob/main/apps/example/app/interaction-hardening.tsx)
+for a clipped palette, standard vertical `ScrollView`, geometry invalidation,
+unmount/remount controls, and app-owned render/callback counters.
 
 ## Pieces and styles
 

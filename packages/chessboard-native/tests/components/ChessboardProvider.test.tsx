@@ -53,6 +53,17 @@ function boardByLabel(
   return board;
 }
 
+function hasAncestor(node: TestInstance, ancestor: TestInstance): boolean {
+  let current = node.parent;
+  while (current !== null) {
+    if (current === ancestor) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+}
+
 function RuntimeProbe({
   capture,
 }: {
@@ -302,15 +313,20 @@ describe('ChessboardProvider', () => {
     expect(result.container.children).toHaveLength(1);
     const committedRuntime = capturedRuntime(runtime);
     expect(Object.keys(committedRuntime).sort()).toEqual([
+      'cancelTransient',
       'commitGeometryRevision',
       'drag',
       'getGeometryRevision',
+      'getTransientRevision',
       'registry',
       'release',
       'retain',
       'spareSelection',
     ]);
     expect(committedRuntime.getGeometryRevision()).toBe(4);
+    expect(committedRuntime.getTransientRevision()).toBe(0);
+    committedRuntime.cancelTransient('app-background');
+    expect(committedRuntime.getTransientRevision()).toBe(1);
     expect(committedRuntime.drag.getSnapshot().active).toBeNull();
     expect(committedRuntime).not.toHaveProperty('position');
     expect(committedRuntime).not.toHaveProperty('selection');
@@ -612,7 +628,7 @@ describe('ChessboardProvider', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it('[CBN-CONTRACT-014-MULTIBOARD-ISOLATION] keeps exactly one pointerless hidden overlay while a second board replaces the active drag', async () => {
+  it('[CBN-CONTRACT-014-MULTIBOARD-ISOLATION] keeps exactly one provider-level pointerless hidden overlay host while a second board replaces the active drag', async () => {
     const result = await render(
       <ChessboardProvider>
         <ChessboardRuntime
@@ -666,6 +682,27 @@ describe('ChessboardProvider', () => {
       'chessboard-native:right:provider-drag-overlay',
       { includeHiddenElements: true },
     );
+    const overlayHosts = result.queryAllByTestId(
+      'chessboard-native:provider-drag-host',
+      { includeHiddenElements: true },
+    );
+    expect(overlayHosts).toHaveLength(1);
+    const overlayHost = overlayHosts[0];
+    if (overlayHost === undefined) {
+      throw new Error('Expected the provider drag host.');
+    }
+    expect(overlayHost).toHaveProp('accessibilityElementsHidden', true);
+    expect(overlayHost).toHaveProp('accessible', false);
+    expect(overlayHost).toHaveProp(
+      'importantForAccessibility',
+      'no-hide-descendants',
+    );
+    expect(overlayHost).toHaveProp('pointerEvents', 'none');
+    expect(hasAncestor(rightOverlay, overlayHost)).toBe(true);
+    for (const board of boardControls(result)) {
+      expect(hasAncestor(overlayHost, board)).toBe(false);
+      expect(hasAncestor(rightOverlay, board)).toBe(false);
+    }
     expect(rightOverlay).toHaveProp('accessibilityElementsHidden', true);
     expect(rightOverlay).toHaveProp('accessible', false);
     expect(rightOverlay).toHaveProp(

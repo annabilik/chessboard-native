@@ -232,7 +232,8 @@ animation paths. Callback and timeout semantics never depend on reduced motion.
 
 Run the Expo gallery and test **Accessibility prototype** first, then repeat the
 interaction-specific steps on **Controlled move requests** and **Provider
-coordination**, followed by **Spare pieces**. Test Android and iOS separately:
+coordination**, followed by **Spare pieces** and **Interaction hardening**. Test
+Android and iOS separately:
 
 1. Enable TalkBack or VoiceOver and focus the board.
 2. Confirm the board is one focus target and visual squares are not separate
@@ -281,6 +282,13 @@ coordination**, followed by **Spare pieces**. Test Android and iOS separately:
 18. Select a different spare and choose cancel. Confirm the palette selection
     clears, the board position does not change, and an unrelated board never
     exposes either spare action.
+19. On the interaction-hardening route, confirm the clipped source palette and
+    provider overlay add no focus target. Select the spare, background and
+    resume the app, then confirm the transient selection is gone and the board
+    remains one adjustable control.
+20. Repeat after starting a board or spare drag. Confirm no overlay remains
+    focused or visible after resume and the next non-drag accessible placement
+    still emits exactly one controlled request.
 
 The automated component and native contracts do not replace this
 assistive-technology pass.
@@ -299,6 +307,14 @@ read-only contract:
   and enabled state in the enabled path, checks that it has no accessible
   descendants, and runs `XCUIApplication.performAccessibilityAudit()` without
   broad suppressions.
+- Android and iOS launch a separate packed interaction fixture inside a native
+  `ScrollView`. A drag from the controlled piece stays with the board and emits
+  one rejected request, while an empty-square swipe moves the parent without a
+  callback; the controlled revision remains unchanged.
+- The lifecycle scenarios background and resume the interaction fixture, then
+  verify that obsolete work cannot commit. Android interrupts an active pointer
+  stream and proves the next gesture remains usable; iOS backgrounds pending
+  callback work and verifies its abort signal.
 
 Both targets use a Release fixture with embedded JavaScript. CI installs the
 single inspected npm archive into a fresh copy of the harness before running
@@ -317,10 +333,14 @@ a locally provisioned Gradle-managed alternative. The iOS command requires
 Xcode and an available iPhone simulator running iOS 17 or newer.
 
 The P2.6 component suite covers the spare button, decorative visual subtree,
-selection, place/cancel action exposure, and controlled move payload. Native
-SparePiece action/drag flows, ScrollView arbitration, and lifecycle stress
-automation are P2.7 gates and are not claimed by the current static harness
-audit.
+selection, place/cancel action exposure, and controlled move payload. P2.7 adds
+packed-package native interaction scenarios for board-drag versus
+parent-ScrollView ownership, exactly-once callbacks, AppState cancellation, and
+post-cancellation reuse. Component tests cover provider overlay structure,
+target geometry, unmount, and stale-signal handling; the Expo
+interaction-hardening route is the manual clipped-palette and geometry lab.
+Manual TalkBack and VoiceOver validation remains a release gate for
+assistive-technology behavior that deterministic automation cannot prove.
 
 These audits catch native hierarchy, trait, label, value, range, action, hit
 region, contrast, and similar static regressions. They cannot establish spoken

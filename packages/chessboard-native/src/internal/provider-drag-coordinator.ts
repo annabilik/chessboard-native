@@ -12,7 +12,7 @@ import type {
 export type ProviderDragOwner = object;
 
 export type ProviderDragCancellationReason =
-  'geometry-change' | 'replacement' | 'unmount';
+  'app-background' | 'geometry-change' | 'replacement' | 'unmount';
 
 /** Transient artwork and correlation for the provider's only active drag. */
 export type ProviderDragOverlayDescriptor = {
@@ -23,6 +23,7 @@ export type ProviderDragOverlayDescriptor = {
   readonly piece: Readonly<PieceData>;
   readonly presentation: Readonly<InteractionPresentationSharedValues>;
   readonly renderer: PieceRenderer | null;
+  readonly reducedMotion: boolean;
   readonly size: number;
   readonly style: Readonly<ViewStyle>;
 } & (

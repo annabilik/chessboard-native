@@ -26,10 +26,23 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     factory.startReactNative(
       withModuleName: "ChessboardNativeHarness",
       in: window,
+      initialProperties: ["fixture": requestedFixture()],
       launchOptions: launchOptions
     )
 
     return true
+  }
+
+  private func requestedFixture() -> String {
+    let arguments = ProcessInfo.processInfo.arguments
+    guard
+      let optionIndex = arguments.firstIndex(of: "--fixture"),
+      arguments.indices.contains(optionIndex + 1)
+    else {
+      return "accessibility"
+    }
+
+    return arguments[optionIndex + 1]
   }
 }
 

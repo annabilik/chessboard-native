@@ -76,6 +76,7 @@ interface BoardGestureLayerProps {
   readonly onSignal: (signal: Readonly<BoardGestureSignal>) => void;
   readonly positionRevision: Revision;
   readonly presentation: InteractionPresentationSharedValues;
+  readonly resetKey: string;
   readonly selectionRevision: Revision | null;
 }
 
@@ -383,6 +384,7 @@ export function BoardGestureLayer({
   onSignal,
   positionRevision,
   presentation,
+  resetKey,
   selectionRevision,
   tapEnabled = false,
 }: BoardGestureLayerProps): ReactElement | null {
@@ -398,6 +400,17 @@ export function BoardGestureLayer({
   const tapSelectionRevision = useSharedValue<Revision | null>(null);
   const tapSourceSquare = useSharedValue<SquareId | null>(null);
   const testIds = useMemo(() => getBoardGestureTestIds(boardId), [boardId]);
+  const detectorKey = JSON.stringify([
+    activationDistance,
+    boardId,
+    dragEnabled,
+    draggableSquares,
+    geometry.revision,
+    positionRevision,
+    resetKey,
+    selectionRevision,
+    tapEnabled,
+  ]);
   const gesture = useMemo(() => {
     if (!dragEnabled && !tapEnabled) {
       return null;
@@ -506,7 +519,11 @@ export function BoardGestureLayer({
     />
   );
 
-  return <GestureDetector gesture={gesture}>{plane}</GestureDetector>;
+  return (
+    <GestureDetector gesture={gesture} key={detectorKey}>
+      {plane}
+    </GestureDetector>
+  );
 }
 
 const styles = StyleSheet.create({

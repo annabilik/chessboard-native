@@ -19,6 +19,7 @@ export type InteractionInvalidationReason =
   | 'user'
   | 'second-finger'
   | 'accessibility'
+  | 'app-background'
   | 'dimensions-change'
   | 'orientation-change'
   | 'permissions-change'
