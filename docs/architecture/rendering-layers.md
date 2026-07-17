@@ -186,6 +186,26 @@ current target artwork last. This supports castling, off-target en passant
 capture, promotion, and stable-ID custom transformations without a fake
 position or second clock.
 
+P3.4 inserts a private `TransitionPresentation` actor graph between the exact
+semantic plan and the piece layers. A rapid A-B-C update still renders C from an
+exact B-to-C plan, but an identity-safe current host begins at its sampled
+A-to-B normalized point and opacity and gives the new B-to-C segment the
+configured full duration. Detached and pending actors that remain visibly
+useful can finish as bounded fading residuals. Geometry or orientation changes
+instead rebase the active graph into the new measured projection under a fresh
+presentation epoch while preserving the original segment's deadline and using
+only its remaining time. The graph has no position snapshot, and reduced motion
+or unusable measurement clears it and renders only the latest controlled target
+without later replay.
+
+When a newer revision exactly correlates an active non-null pending target, the
+handoff's revision pair and source, piece, and target must also match one current
+plan actor. The pending layer and canonical target host then share that point
+while the former fades out and the latter fades in. The source-to-target move is
+not replayed; secondary operations still use their adjacent transition plan.
+Unrelated commits, actor mismatches, and off-board removals use the ordinary
+transition layers and never manufacture a pending target.
+
 P2.2 adds the layer-six board gesture plane. When enabled by the public
 interaction boundaries, it is one absolute, accessibility-hidden native view
 rather than one handler per square. `onMoveRequest` enables single-pointer pan
@@ -318,7 +338,11 @@ settling, post-commit warning deduplication, and simultaneous-board animation
 isolation. P3.3 tests add deterministic promotion/reversal inference,
 capture-square reservation, coordinated and crossing two-actor plans,
 replacement path co-location and paint order, mounted special-move completion,
-and rules-free explicit custom promotion.
+and rules-free explicit custom promotion. P3.4 tests add sampled A-B-C
+continuity with a full new-segment duration, exact adjacent-plan correlation,
+geometry/orientation rebasing over the original remaining time, reduced-motion
+settle-without-replay, correlated pending target crossfade, and ordinary
+unrelated/off-board commit behavior.
 
 This decision owns invariants `CBN-INV-010`, `CBN-INV-013`, `CBN-INV-014`,
 and `CBN-INV-018`.

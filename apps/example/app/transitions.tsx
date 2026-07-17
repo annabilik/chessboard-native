@@ -1,14 +1,17 @@
 import {
+  type BoardOrientation,
   type BoardTransition,
   Chessboard,
+  type OnMoveRequest,
   type PositionObject,
   type ReduceMotion,
 } from '@vibechess/chessboard-native';
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface DemoPosition {
+  readonly committedIntentId?: string;
   readonly revision: number;
   readonly value: PositionObject;
   readonly transition?: BoardTransition;
@@ -98,6 +101,22 @@ const EN_PASSANT_END: PositionObject = Object.freeze({
   d6: Object.freeze({ id: 'en-passant-pawn', pieceType: 'wP' }),
 });
 
+const CONTINUITY_STEPS: readonly PositionObject[] = Object.freeze([
+  Object.freeze({
+    a1: Object.freeze({ id: 'continuity-runner', pieceType: 'wR' }),
+  }),
+  Object.freeze({
+    b1: Object.freeze({ id: 'continuity-runner', pieceType: 'wR' }),
+  }),
+  Object.freeze({
+    c1: Object.freeze({ id: 'continuity-runner', pieceType: 'wR' }),
+  }),
+]);
+
+const HANDOFF_START: PositionObject = Object.freeze({
+  a1: Object.freeze({ id: 'handoff-runner', pieceType: 'wR' }),
+});
+
 export default function TransitionsRoute() {
   const [durationMs, setDurationMs] = useState(600);
   const [reduceMotion, setReduceMotion] = useState<ReduceMotion>('never');
@@ -126,6 +145,119 @@ export default function TransitionsRoute() {
     revision: 1,
     value: EN_PASSANT_START,
   });
+  const [continuityPosition, setContinuityPosition] = useState<DemoPosition>({
+    revision: 1,
+    value: CONTINUITY_STEPS[0] ?? Object.freeze({}),
+  });
+  const [continuityOrientation, setContinuityOrientation] =
+    useState<BoardOrientation>('white');
+  const [compactContinuityBoard, setCompactContinuityBoard] = useState(false);
+  const continuityStep = useRef(0);
+  const continuityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [handoffPosition, setHandoffPosition] = useState<DemoPosition>({
+    revision: 1,
+    value: HANDOFF_START,
+  });
+  const handoffRequest = useRef<Readonly<{
+    readonly cancel: () => void;
+  }> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (continuityTimer.current !== null) {
+        clearTimeout(continuityTimer.current);
+      }
+      handoffRequest.current?.cancel();
+    },
+    [],
+  );
+
+  const publishRapidSequence = useCallback((): void => {
+    if (continuityTimer.current !== null) {
+      clearTimeout(continuityTimer.current);
+    }
+    const firstIndex = (continuityStep.current + 1) % CONTINUITY_STEPS.length;
+    const secondIndex = (firstIndex + 1) % CONTINUITY_STEPS.length;
+    continuityStep.current = firstIndex;
+    setContinuityPosition((current) => ({
+      revision: current.revision + 1,
+      value: CONTINUITY_STEPS[firstIndex] ?? Object.freeze({}),
+    }));
+    continuityTimer.current = setTimeout(
+      () => {
+        continuityStep.current = secondIndex;
+        setContinuityPosition((current) => ({
+          revision: current.revision + 1,
+          value: CONTINUITY_STEPS[secondIndex] ?? Object.freeze({}),
+        }));
+        continuityTimer.current = null;
+      },
+      Math.max(80, durationMs * 0.55),
+    );
+  }, [durationMs]);
+
+  const requestHandoffMove = useCallback<OnMoveRequest>(
+    (intent, { signal }) => {
+      const targetSquare = intent.targetSquare;
+      if (targetSquare === null) {
+        return {
+          reason: 'Drop on the board for this demo.',
+          status: 'rejected',
+        };
+      }
+      if (signal.aborted) {
+        return {
+          reason: 'The move request was cancelled.',
+          status: 'rejected',
+        };
+      }
+      handoffRequest.current?.cancel();
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const cancel = (): void => {
+        if (timer !== null) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        signal.removeEventListener('abort', cancel);
+        if (handoffRequest.current?.cancel === cancel) {
+          handoffRequest.current = null;
+        }
+      };
+      handoffRequest.current = Object.freeze({ cancel });
+      signal.addEventListener('abort', cancel, { once: true });
+      timer = setTimeout(() => {
+        signal.removeEventListener('abort', cancel);
+        timer = null;
+        if (handoffRequest.current?.cancel === cancel) {
+          handoffRequest.current = null;
+        }
+        if (signal.aborted) {
+          return;
+        }
+        setHandoffPosition((current) => {
+          if (current.revision !== intent.basePositionRevision) {
+            return current;
+          }
+          const value: Record<string, { id?: string; pieceType: string }> = {};
+          const sourceSquare =
+            intent.source.kind === 'board' ? intent.source.square : null;
+          for (const [square, piece] of Object.entries(current.value)) {
+            if (piece !== undefined && square !== sourceSquare) {
+              value[square] = piece;
+            }
+          }
+          value[targetSquare] = intent.piece;
+          return {
+            committedIntentId: intent.intentId,
+            revision: current.revision + 1,
+            value: Object.freeze(value),
+          };
+        });
+      }, 700);
+      return { status: 'accepted' };
+    },
+    [],
+  );
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -142,6 +274,7 @@ export default function TransitionsRoute() {
           {[0, 300, 600, 1_200].map((duration) => (
             <Pressable
               accessibilityRole="button"
+              accessibilityState={{ selected: durationMs === duration }}
               key={duration}
               onPress={() => {
                 setDurationMs(duration);
@@ -151,26 +284,119 @@ export default function TransitionsRoute() {
                 durationMs === duration ? styles.controlButtonActive : null,
               ]}
             >
-              <Text style={styles.controlText}>{duration} ms</Text>
+              <Text
+                style={[
+                  styles.controlText,
+                  durationMs === duration ? styles.controlTextActive : null,
+                ]}
+              >
+                {duration} ms
+              </Text>
             </Pressable>
           ))}
+          {(['system', 'always', 'never'] as const).map((policy) => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: reduceMotion === policy }}
+              key={policy}
+              onPress={() => {
+                setReduceMotion(policy);
+              }}
+              style={[
+                styles.controlButton,
+                reduceMotion === policy ? styles.controlButtonActive : null,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.controlText,
+                  reduceMotion === policy ? styles.controlTextActive : null,
+                ]}
+              >
+                Motion: {policy}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Text style={styles.sectionTitle}>
+          Interruption and geometry rebase
+        </Text>
+        <View
+          style={[
+            styles.boardCard,
+            compactContinuityBoard ? styles.compactBoardCard : null,
+          ]}
+        >
+          <Chessboard
+            boardId="transition-continuity"
+            dimensions={{ columns: 3, rows: 1 }}
+            orientation={continuityOrientation}
+            position={continuityPosition}
+            reduceMotion={reduceMotion}
+            showNotation={false}
+            transitionDurationMs={durationMs}
+          />
+        </View>
+        <Text style={styles.caption}>
+          Each run publishes two cyclic positions. With motion enabled, the
+          second update arrives 55% through the first segment and receives a
+          full new duration. Flip orientation or resize during motion to rebase
+          over only the original segment's remaining time.
+        </Text>
+        <View style={styles.controls}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={publishRapidSequence}
+            style={styles.controlButton}
+          >
+            <Text style={styles.controlText}>Run two rapid updates</Text>
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             onPress={() => {
-              setReduceMotion((current) =>
-                current === 'always' ? 'never' : 'always',
+              setContinuityOrientation((current) =>
+                current === 'white' ? 'black' : 'white',
               );
             }}
-            style={[
-              styles.controlButton,
-              reduceMotion === 'always' ? styles.controlButtonActive : null,
-            ]}
+            style={styles.controlButton}
           >
             <Text style={styles.controlText}>
-              {reduceMotion === 'always' ? 'Snap' : 'Animate'}
+              Orientation: {continuityOrientation}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setCompactContinuityBoard((current) => !current);
+            }}
+            style={styles.controlButton}
+          >
+            <Text style={styles.controlText}>
+              Width: {compactContinuityBoard ? 'compact' : 'full'}
             </Text>
           </Pressable>
         </View>
+
+        <Text style={styles.sectionTitle}>Pending-to-commit handoff</Text>
+        <View style={styles.boardCard}>
+          <Chessboard
+            boardId="transition-handoff"
+            dimensions={{ columns: 2, rows: 1 }}
+            moveRequestTimeouts={{ commitMs: 2_000, decisionMs: 2_000 }}
+            onMoveRequest={requestHandoffMove}
+            position={handoffPosition}
+            reduceMotion={reduceMotion}
+            showNotation={false}
+            transitionDurationMs={durationMs}
+          />
+        </View>
+        <Text style={styles.caption}>
+          Drag the rook, or use the board's accessible move actions. The demo
+          accepts immediately and publishes the exactly correlated controlled
+          commit after 700 ms. With motion enabled, the pending target
+          crossfades in place instead of replaying from its source.
+        </Text>
 
         <Text style={styles.sectionTitle}>Move, enter, exit, and capture</Text>
         <View style={styles.boardCard}>
@@ -349,8 +575,9 @@ export default function TransitionsRoute() {
         </Pressable>
 
         <Text style={styles.note}>
-          Smooth in-flight A-B-C replanning and pending-to-commit handoff remain
-          the next Phase 3 transition package.
+          Every lab still renders the latest controlled position. Continuity
+          samples and pending handoffs are presentation-only and become inert
+          when reduced motion requests an immediate settle.
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -414,6 +641,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
+  controlTextActive: {
+    color: '#ffffff',
+  },
   sectionTitle: {
     color: '#1e1b17',
     fontSize: 20,
@@ -429,6 +659,9 @@ const styles = StyleSheet.create({
     maxWidth: 560,
     overflow: 'hidden',
     width: '100%',
+  },
+  compactBoardCard: {
+    maxWidth: 320,
   },
   caption: {
     color: '#665c4d',

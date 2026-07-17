@@ -98,31 +98,63 @@ current target actor. Every transient remains pointerless and hidden from
 accessibility.
 
 The animation callback captures only the plan epoch, target comparison token,
-and geometry epoch. A newer prop hides the old plan during render, then cancels
-its clock after commit; a late completion can clear only the still-matching
-epoch. Initial mount, no-op revisions, invalid current state, missing
-measurement, changed geometry/orientation, zero duration, and reduced motion
-all snap to the latest prop. Smooth in-flight A-B-C continuity, geometry
-replanning, and pending-to-commit handoff remain P3.4 work. Planner warnings are
-now dispatched only after commit in development and deduplicated across effect
+and geometry epoch. A newer prop makes every old callback inert; a late
+completion can clear only the still-matching epoch. Planner warnings are
+dispatched only after commit in development and deduplicated across effect
 replay.
 
-For A to B to C, B is committed even when its animation is interrupted. A B to
-C hint is therefore valid and every A to B visual epoch becomes inert. P3.4
-owns continuity-preserving interruption and geometry replanning; current
-geometry or orientation changes settle directly to controlled semantics.
+P3.4 keeps semantic planning and visual continuity separate through a private
+`TransitionPresentation` actor graph between the pure plan and render layers.
+The graph carries the exact revision pair, current, detached, and pending
+actors, normalized endpoints, opacity, and actor anchors, but no canonical
+position collection. For A to B to C, B commits even when its animation is
+interrupted and the next pure plan compares exactly B with C. The mounted
+runtime may sample an identity-safe actor's active A-to-B presentation and
+start its B-to-C presentation from that sampled point and opacity for the
+configured full duration. That sample can influence visual origins only; it
+never becomes A, B, C, or another semantic source. Unmatched or ambiguous
+actors retain their deterministic fade or snap path. Visible detached and
+pending artwork from the interrupted graph may finish as bounded fading
+residuals; at most 64 are retained and opacity below one 8-bit alpha step is
+dropped. Every prior epoch becomes inert.
+
+An active geometry or orientation change follows the same presentation-only
+rule. With a usable new measurement, the runtime samples each actor's current
+normalized visual point and opacity, rebases them into the new projection, and
+continues to the current controlled target until the original segment's
+deadline, using only its remaining time. Canonical square IDs, the exact
+semantic revision pair, and the controlled position never change. Missing or
+invalid measurement settles directly to the latest controlled state. A logical
+row or column count change also snaps because the adjacent snapshots no longer
+share one square domain; it is not treated as a measured-size rebase.
+
+A matching `committedIntentId` may hand one pending on-board or spare target to
+the current controlled actor only when the lifecycle and presentation share the
+exact from/to revisions and the intent's source, piece, and target correlate to
+one current plan actor. The pending host crossfades out while the canonical
+target host crossfades in at the same point, so the primary actor does not
+replay its source-to-target move; other operations in the exact adjacent plan
+remain independent. A newer unrelated position, a nonmatching actor, and a null
+off-board target use ordinary controlled-transition behavior; an actual
+controlled removal takes the generic exit path. None creates a pending handoff
+or grants the interaction lifecycle authority over position.
 
 `reduceMotion="system"` follows the operating system, `always` settles without
 motion, and `never` explicitly permits motion. Changing into reduced motion
-mid-animation immediately settles on the latest controlled state. This rule
-also covers lift, pending placement, snapback, cancellation, press feedback,
-and annotation drafts; timeout durations and semantic callbacks do not change.
+mid-animation immediately settles on the latest controlled state and discards
+any sampled continuation or handoff. Re-enabling motion does not replay that
+settled revision. Initial mount, no-op revisions, invalid current state, zero
+duration, and unavailable measurement also snap. The reduced-motion rule covers
+lift, pending placement, snapback, cancellation, press feedback, and annotation
+drafts; timeout durations and semantic callbacks do not change.
 
 ## Consequences
 
-Consumers can obtain deterministic special-move animation with hints while
-ordinary controlled updates remain safe. Visual fidelity intentionally yields
-to correctness when identity is ambiguous or a move leaves the board.
+Consumers can obtain deterministic special-move animation with hints, smooth
+identity-safe interruption and geometry rebase, and correlated pending-target
+handoff while ordinary controlled updates remain safe. Visual fidelity
+intentionally yields to correctness when identity is ambiguous or a move leaves
+the board.
 
 This decision owns invariants `CBN-INV-005`, `CBN-INV-006`, `CBN-INV-007`,
 `CBN-INV-013`, and `CBN-INV-017`.

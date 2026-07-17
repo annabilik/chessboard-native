@@ -126,6 +126,15 @@ is never treated as a commit. A matching newer commit that arrives before the
 decision resolves still wins, clears the request, and makes the late decision
 inert.
 
+The same correlation can affect presentation without changing those semantics.
+For a matching newer revision with a non-null target, a handoff is eligible only
+when its exact revision pair and intent source, piece, and target resolve to one
+current transition actor. The board then crossfades the pending target into the
+canonical actor instead of replaying the move from its source. A missing or
+mismatched `committedIntentId`, an actor mismatch, or a null off-board target
+uses ordinary controlled-transition behavior. The handoff is visual-only and
+cannot keep the interaction lifecycle or a position snapshot alive.
+
 Every asynchronous result carries the interaction epoch and intent ID. Effects
 also carry the reducer revision that produced them. The mounted runtime rejects
 queued stale work and keys timer and abort resources by the effect's board ID,

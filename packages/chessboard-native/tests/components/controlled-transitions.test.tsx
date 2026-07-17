@@ -300,6 +300,55 @@ describe('controlled mounted transitions', () => {
     expect(hasNode(rootOf(result), 'latest:runner:b1:static')).toBe(false);
   });
 
+  it('keeps the current actor mounted across orientation and resize rebases', async () => {
+    const renderBoard = (orientation: 'white' | 'black', revision: number) => (
+      <ChessboardRuntime
+        boardId="geometry-continuity"
+        development={false}
+        dimensions={{ columns: 2, rows: 1 }}
+        orientation={orientation}
+        pieceRenderers={{ token: Probe }}
+        position={{
+          revision,
+          value: {
+            [revision === 1 ? 'a1' : 'b1']: {
+              id: 'runner',
+              pieceType: 'token',
+            },
+          },
+        }}
+        reduceMotion="never"
+        transitionDurationMs={1_000}
+      />
+    );
+    const result = await render(renderBoard('white', 1));
+    const host = boardHosts(rootOf(result))[0];
+    if (host === undefined) {
+      throw new Error('Expected one board host.');
+    }
+    await measure(host, 200, 100);
+    await result.rerender(renderBoard('white', 2));
+    await act(() => {
+      jest.advanceTimersByTime(300);
+    });
+    await result.rerender(renderBoard('black', 2));
+    expect(
+      hasNode(rootOf(result), 'geometry-continuity:runner:b1:transition'),
+    ).toBe(true);
+
+    await measure(host, 300, 150);
+    expect(
+      hasNode(rootOf(result), 'geometry-continuity:runner:b1:transition'),
+    ).toBe(true);
+
+    await act(() => {
+      jest.advanceTimersByTime(900);
+    });
+    expect(
+      hasNode(rootOf(result), 'geometry-continuity:runner:b1:static'),
+    ).toBe(true);
+  });
+
   it('mounts explicit promotion as detached source artwork plus the authoritative target renderer', async () => {
     const result = await render(
       <ChessboardRuntime

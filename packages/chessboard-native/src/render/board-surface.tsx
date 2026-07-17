@@ -29,6 +29,7 @@ import type {
   InteractionInvalidationReason,
   MoveIntentLifecycle,
 } from '../internal/interaction-reducer';
+import { derivePendingCommitHandoff } from '../internal/pending-commit-handoff';
 import {
   planSquareActivation,
   type SquareActivationInput,
@@ -677,9 +678,15 @@ export function BoardSurface({
     dimensions: model.dimensions,
     durationMs: transitionDurationMs,
     geometryEpoch: layout === null ? null : nextGeometryEpochMetadata.revision,
+    layout,
     ...(logTransitionWarning === undefined
       ? {}
       : { logWarning: logTransitionWarning }),
+    pendingHandoff: derivePendingCommitHandoff({
+      boardId: model.boardId,
+      lifecycle: moveInteraction.lifecycle,
+      position: model.position,
+    }),
     position: model.position,
     reducedMotion,
   });
@@ -977,13 +984,16 @@ export function BoardSurface({
           {showNotation ? (
             <BoardNotationLayer layout={layout} styles={styles} theme={theme} />
           ) : null}
-          {pendingLifecycle === null ? null : (
+          {pendingLifecycle === null &&
+          (positionTransition?.presentation.pending.length ?? 0) ===
+            0 ? null : (
             <PendingMoveLayer
-              boardId={pendingLifecycle.boardId}
+              boardId={pendingLifecycle?.boardId ?? model.boardId ?? ''}
               layout={layout}
               lifecycle={pendingLifecycle}
               pieceRenderers={pieceRenderers}
               style={pieceStyle}
+              transition={positionTransition}
             />
           )}
           {(!dragEnabled && !tapEnabled) || gestureGeometry === null ? null : (

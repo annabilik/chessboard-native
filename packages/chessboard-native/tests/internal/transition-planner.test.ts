@@ -1010,7 +1010,7 @@ describe('controlled position transition planner', () => {
     expect(move?.after.pieceType).toBe('wP');
   });
 
-  it('[PARITY-BEHAVIOR-B10] [CBN-CONTRACT-007-REVISION-EPOCH] correlates each plan to the supplied epoch and exact adjacent semantic revisions', () => {
+  it('[CBN-CONTRACT-007-REVISION-EPOCH] correlates each plan to the supplied epoch and exact adjacent semantic revisions', () => {
     const a = snapshot(20, { a1: { id: 'piece', pieceType: 'custom' } });
     const b = snapshot(21, { b2: { id: 'piece', pieceType: 'custom' } });
     const c = snapshot(22, { c3: { id: 'piece', pieceType: 'custom' } });

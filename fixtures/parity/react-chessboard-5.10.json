@@ -1887,9 +1887,9 @@
           "ChessboardProps.transitionDurationMs"
         ]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-SHOW-ANIMATIONS",
-      "compatibilityNotes": "Ordinary transitions honor system reduced motion and latest-prop cancellation; continuity-preserving interruption remains P3.4 work.",
+      "compatibilityNotes": "Controlled transitions honor system, always, or never reduced-motion policy, settle immediately without replay when motion becomes reduced, and preserve identity-safe presentation continuity when newer revisions interrupt active motion.",
       "rationale": "A Boolean browser animation switch cannot express the required system, always, and never reduced-motion policy or deterministic interruption semantics.",
       "documentation": "docs/parity/react-chessboard-5.10.md#option-show-animations"
     },
@@ -2841,9 +2841,9 @@
         "surface": "internal",
         "symbols": ["InteractionEpoch", "TransitionEpoch"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B08",
-      "compatibilityNotes": "The mounted board invalidates interaction epochs on position, dimension, orientation, permission, layout, provider-geometry, AppState, and unmount changes; late results remain inert. Mounted transitions snap on geometry/orientation changes, while continuity-preserving replanning remains P3.4 work.",
+      "compatibilityNotes": "The mounted board invalidates interaction epochs on position, dimension, orientation, permission, layout, provider-geometry, AppState, and unmount changes; late results remain inert. Active transition presentations sample each actor's normalized visual point and opacity, then rebase toward current geometry or orientation for the remaining deadline.",
       "rationale": "Directly replacing a local position without cancelling asynchronous work allows stale gestures and timers to overwrite newer geometry.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b08-dimension-and-orientation-reconciliation"
     },
@@ -2902,9 +2902,9 @@
         "surface": "internal",
         "symbols": ["planPositionTransition", "TransitionEpoch"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B10",
-      "compatibilityNotes": "Pure revision-pair planning replaces shadow-position diffing; mounted epochs cancel stale work and expose the latest prop immediately, while continuity-preserving interruption remains P3.4 work.",
+      "compatibilityNotes": "Pure adjacent-revision planning replaces shadow-position diffing. A newer prop is authoritative immediately, samples identity-safe active actors into a bounded presentation graph, and starts the exact next semantic plan from those visual points on a fresh epoch.",
       "rationale": "The upstream queue can commit stale snapshots after rapid updates because timeouts and effect dependencies do not correlate every update to an epoch.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b10-external-diff-and-one-deep-timeout-queue"
     },
@@ -2932,9 +2932,9 @@
         "surface": "internal",
         "symbols": ["MoveIntentLifecycle"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B11",
-      "compatibilityNotes": "The mounted lifecycle enters awaiting-commit after acceptance without storing position and records a commit only for a newer controlled revision with a matching intent ID. Transition styling remains future work.",
+      "compatibilityNotes": "The mounted lifecycle waits without storing position and records a commit only for a newer controlled revision with a matching intent ID. An exact on-board or spare endpoint crossfades its pending renderer into the canonical controlled actor without replaying the source path.",
       "rationale": "Suppressing animation through internal manual-drop flags treats a gesture result as accepted state before the consumer has committed it.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b11-accepted-manual-drop-presentation"
     },
@@ -3058,9 +3058,9 @@
         "surface": "internal",
         "symbols": ["InteractionEpoch", "TransitionEpoch"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B16",
-      "compatibilityNotes": "The mounted interaction executor keys requests and timers by reducer revision, board, epoch, intent, and stage. Controlled transitions now schedule and cancel by target revision, geometry epoch, and transition epoch; P3.4 retains continuity-preserving interruption and pending-to-commit handoff.",
+      "compatibilityNotes": "The mounted interaction executor keys requests and timers by reducer revision, board, epoch, intent, and stage. Controlled transition presentation epochs make replaced clocks and geometry deadlines inert, while pending handoff correlation can be consumed only by its exact newer revision.",
       "rationale": "The pinned effect omits state and option dependencies and only clears the latest timeout on cleanup, allowing stale closures to settle obsolete state.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b16-stale-effects-and-timeout-cleanup"
     },
@@ -3334,7 +3334,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B26",
-      "compatibilityNotes": "The live drag path projects lift, source ghost, one provider-level pointerless overlay that escapes source-child clipping, and decision/commit pending state without retaining a position snapshot. Public transient styles remain future work."
+      "compatibilityNotes": "The live drag path projects lift, source ghost, one provider-level pointerless overlay that escapes source-child clipping, and decision/commit pending state without retaining a position snapshot. An exactly correlated controlled commit now crossfades the pending target in place; public transient styles remain future work."
     },
     {
       "id": "behavior.b27-piece-and-square-click-bubbling",

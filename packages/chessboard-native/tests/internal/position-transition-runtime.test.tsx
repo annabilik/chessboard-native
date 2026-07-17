@@ -13,14 +13,39 @@ import {
 } from 'react';
 import { View } from 'react-native';
 
-import { STANDARD_BOARD_DIMENSIONS } from '../../src/core/dimensions';
+import {
+  STANDARD_BOARD_DIMENSIONS,
+  validateBoardDimensions,
+  type ValidatedBoardDimensions,
+} from '../../src/core/dimensions';
 import type { NormalizedPositionValue } from '../../src/internal/position-domain';
+import { sampleTransitionPresentation } from '../../src/internal/transition-presentation';
 import {
   DEFAULT_TRANSITION_DURATION_MS,
   normalizeTransitionDurationMs,
   usePositionTransitionRuntime,
 } from '../../src/internal/use-position-transition-runtime';
 import type { BoardTransition, PositionObject } from '../../src/public-types';
+import {
+  createBoardSurfaceLayout,
+  type BoardSurfaceLayout,
+} from '../../src/render/board-layout';
+
+const STANDARD_LAYOUT = createBoardSurfaceLayout(
+  { height: 800, width: 800 },
+  STANDARD_BOARD_DIMENSIONS,
+  'white',
+);
+
+const FOUR_BY_FOUR_DIMENSIONS = validateBoardDimensions({
+  columns: 4,
+  rows: 4,
+});
+const FOUR_BY_FOUR_LAYOUT = createBoardSurfaceLayout(
+  { height: 400, width: 400 },
+  FOUR_BY_FOUR_DIMENSIONS,
+  'white',
+);
 
 function position(
   revision: number,
@@ -37,8 +62,10 @@ function position(
 
 interface HarnessProps {
   readonly development?: boolean;
+  readonly dimensions?: ValidatedBoardDimensions | null;
   readonly durationMs?: number;
   readonly geometryEpoch?: number | null;
+  readonly layout?: Readonly<BoardSurfaceLayout> | null;
   readonly logWarning?: (message: string) => void;
   readonly position: NormalizedPositionValue | null;
   readonly reducedMotion?: boolean;
@@ -46,17 +73,20 @@ interface HarnessProps {
 
 function useHarness({
   development = false,
+  dimensions = STANDARD_BOARD_DIMENSIONS,
   durationMs = 300,
   geometryEpoch = 0,
+  layout = STANDARD_LAYOUT,
   logWarning,
   position: current,
   reducedMotion = false,
 }: HarnessProps) {
   return usePositionTransitionRuntime({
     development,
-    dimensions: STANDARD_BOARD_DIMENSIONS,
+    dimensions,
     durationMs,
     geometryEpoch,
+    layout,
     ...(logWarning === undefined ? {} : { logWarning }),
     position: current,
     reducedMotion,
@@ -89,7 +119,7 @@ describe('mounted controlled-position transition runtime', () => {
     jest.useRealTimers();
   });
 
-  it('validates the public duration and reserves zero for snap behavior', () => {
+  it('[PARITY-BEHAVIOR-B09] validates the public duration and reserves zero for snap behavior', () => {
     expect(normalizeTransitionDurationMs(undefined)).toBe(
       DEFAULT_TRANSITION_DURATION_MS,
     );
@@ -155,7 +185,7 @@ describe('mounted controlled-position transition runtime', () => {
     expect(hook.result.current).toBeNull();
   });
 
-  it('[CBN-CONTRACT-006-LATEST-PROP-WINS] replaces A-B with exact B-C work and ignores stale completion', async () => {
+  it('[PARITY-BEHAVIOR-B10] [CBN-CONTRACT-006-LATEST-PROP-WINS] replaces A-B with continuous exact B-C work and ignores stale completion', async () => {
     const a = position(1, {
       a1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
     });
@@ -175,6 +205,17 @@ describe('mounted controlled-position transition runtime', () => {
     await act(() => {
       jest.advanceTimersByTime(600);
     });
+    const aToB = hook.result.current;
+    if (aToB === null) {
+      throw new Error('Expected the A-B presentation to remain active.');
+    }
+    const sampled = sampleTransitionPresentation(
+      aToB.presentation,
+      aToB.progress.value,
+    ).actors.find(({ actor }) => actor.role === 'current');
+    if (sampled === undefined) {
+      throw new Error('Expected one sampled A-B current actor.');
+    }
     await hook.rerender({ durationMs: 1_000, position: c });
     expect(hook.result.current?.plan).toEqual(
       expect.objectContaining({
@@ -186,6 +227,13 @@ describe('mounted controlled-position transition runtime', () => {
     expect(hook.result.current?.plan.moves).toEqual([
       expect.objectContaining({ from: 'b1', to: 'c1' }),
     ]);
+    expect(hook.result.current?.presentation.current[0]).toEqual(
+      expect.objectContaining({
+        startOpacity: sampled.opacity,
+        startPoint: sampled.point,
+      }),
+    );
+    expect(hook.result.current?.durationMs).toBe(1_000);
 
     await act(() => {
       jest.advanceTimersByTime(420);
@@ -198,7 +246,7 @@ describe('mounted controlled-position transition runtime', () => {
     expect(hook.result.current).toBeNull();
   });
 
-  it('settles a cancelled transition when a preserved Suspense tree is revealed', async () => {
+  it('[PARITY-BEHAVIOR-B16] settles a cancelled transition when a preserved Suspense tree is revealed', async () => {
     type HarnessState = Readonly<{
       current: NormalizedPositionValue;
       mode: 'suspended' | 'visible';
@@ -268,10 +316,6 @@ describe('mounted controlled-position transition runtime', () => {
       label: 'zero duration',
       props: { durationMs: 0, reducedMotion: false },
     },
-    {
-      label: 'changed geometry',
-      props: { durationMs: 300, geometryEpoch: 1, reducedMotion: false },
-    },
   ])(
     '[CBN-CONTRACT-017-REDUCED-MOTION] settles current state for $label',
     async ({ props }) => {
@@ -295,7 +339,7 @@ describe('mounted controlled-position transition runtime', () => {
     },
   );
 
-  it('[PARITY-BEHAVIOR-B09] snaps immediately when reduced motion becomes active and does not replay the settled revision', async () => {
+  it('[PARITY-OPTION-SHOW-ANIMATIONS] snaps immediately when reduced motion becomes active and does not replay the settled revision', async () => {
     const a = position(1, {
       a1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
     });
@@ -314,7 +358,7 @@ describe('mounted controlled-position transition runtime', () => {
     expect(hook.result.current).toBeNull();
   });
 
-  it('cancels active work when geometry changes and ignores its old deadline', async () => {
+  it('[PARITY-BEHAVIOR-B08] rebases active work through orientation changes with the remaining deadline', async () => {
     const a = position(1, {
       a1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
     });
@@ -338,14 +382,67 @@ describe('mounted controlled-position transition runtime', () => {
     await act(() => {
       jest.advanceTimersByTime(300);
     });
+    const beforeRebase = hook.result.current;
+    if (beforeRebase === null) {
+      throw new Error('Expected active work before the geometry rebase.');
+    }
+    const sampledProgress = beforeRebase.progress.value;
+    const sampled = sampleTransitionPresentation(
+      beforeRebase.presentation,
+      sampledProgress,
+    ).actors.find(({ actor }) => actor.role === 'current');
+    if (sampled === undefined) {
+      throw new Error('Expected one sampled current actor.');
+    }
+    const blackLayout = createBoardSurfaceLayout(
+      { height: 800, width: 800 },
+      STANDARD_BOARD_DIMENSIONS,
+      'black',
+    );
     await hook.rerender({
       durationMs: 1_000,
       geometryEpoch: 1,
+      layout: blackLayout,
       position: b,
     });
-    expect(hook.result.current).toBeNull();
+    expect(hook.result.current).not.toBeNull();
+    expect(hook.result.current?.presentation.epoch).not.toBe(
+      beforeRebase.presentation.epoch,
+    );
+    expect(hook.result.current?.presentation.current[0]?.startPoint).toEqual(
+      sampled.point,
+    );
+    expect(hook.result.current?.presentation.current[0]?.endPoint).toEqual({
+      x: 0.8125,
+      y: 0.0625,
+    });
+    expect(sampledProgress).toBeCloseTo(0.18);
+    expect(hook.result.current?.durationMs).toBeCloseTo(700, 0);
     await act(() => {
-      jest.advanceTimersByTime(800);
+      jest.advanceTimersByTime(200);
+    });
+    const firstRebase = hook.result.current;
+    if (firstRebase === null) {
+      throw new Error(
+        'Expected active work before the second geometry rebase.',
+      );
+    }
+    await hook.rerender({
+      durationMs: 1_000,
+      geometryEpoch: 2,
+      layout: createBoardSurfaceLayout(
+        { height: 400, width: 400 },
+        STANDARD_BOARD_DIMENSIONS,
+        'black',
+      ),
+      position: b,
+    });
+    expect(hook.result.current?.presentation.epoch).not.toBe(
+      firstRebase.presentation.epoch,
+    );
+    expect(hook.result.current?.durationMs).toBeCloseTo(500, 0);
+    await act(() => {
+      jest.advanceTimersByTime(550);
     });
     expect(hook.result.current).toBeNull();
   });
@@ -389,7 +486,7 @@ describe('mounted controlled-position transition runtime', () => {
     expect(logWarning).toHaveBeenCalledTimes(1);
   });
 
-  it('preserves hint diagnostics when the position and geometry change together', async () => {
+  it('preserves hint diagnostics while replanning a simultaneous position and geometry change', async () => {
     const logWarning = jest.fn<undefined, [string]>();
     const a = position(1, {
       a1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
@@ -418,13 +515,42 @@ describe('mounted controlled-position transition runtime', () => {
     await hook.rerender({
       development: true,
       geometryEpoch: 1,
+      layout: createBoardSurfaceLayout(
+        { height: 800, width: 800 },
+        STANDARD_BOARD_DIMENSIONS,
+        'black',
+      ),
       logWarning,
       position: b,
     });
-    expect(hook.result.current).toBeNull();
+    expect(hook.result.current).not.toBeNull();
     expect(logWarning).toHaveBeenCalledWith(
       'Board transition revisions 0 -> 2 do not match 1 -> 2.',
     );
+  });
+
+  it('snaps a simultaneous logical-dimension shrink before planning the old square domain', async () => {
+    const hook = await renderHook(useHarness, {
+      initialProps: {
+        dimensions: STANDARD_BOARD_DIMENSIONS,
+        geometryEpoch: 0,
+        layout: STANDARD_LAYOUT,
+        position: position(1, {
+          h8: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+        }),
+      },
+    });
+
+    await hook.rerender({
+      dimensions: FOUR_BY_FOUR_DIMENSIONS,
+      geometryEpoch: 1,
+      layout: FOUR_BY_FOUR_LAYOUT,
+      position: position(2, {
+        d4: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+      }),
+    });
+
+    expect(hook.result.current).toBeNull();
   });
 
   it('clears active presentation when the current position becomes unavailable', async () => {

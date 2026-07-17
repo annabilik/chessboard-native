@@ -6,6 +6,11 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import type { NormalizedControlledValue } from '../internal/controlled-domain';
+import {
+  projectTransitionPresentationActor,
+  type ProjectedTransitionPresentationActor,
+  type TransitionPresentationActorKind,
+} from '../internal/transition-presentation';
 import type { MountedPositionTransition } from '../internal/use-position-transition-runtime';
 import type {
   PieceData,
@@ -42,18 +47,11 @@ interface PieceLayerProps {
 const EMPTY_PIECE_LAYOUTS: readonly Readonly<BoardPieceLayout>[] =
   Object.freeze([]);
 
-export type PieceTransitionVisual =
-  | Readonly<{
-      kind: 'move';
-      translateX: number;
-      translateY: number;
-    }>
-  | Readonly<{
-      kind: 'replace-enter' | 'replace-exit';
-      translateX: number;
-      translateY: number;
-    }>
-  | Readonly<{ kind: 'enter' | 'exit' }>;
+export type PieceTransitionVisual = Readonly<
+  ProjectedTransitionPresentationActor & {
+    readonly kind: TransitionPresentationActorKind;
+  }
+>;
 
 export interface DetachedReplacementLayout extends BoardPieceLayout {
   readonly transition: Readonly<PieceTransitionVisual>;
@@ -61,15 +59,18 @@ export interface DetachedReplacementLayout extends BoardPieceLayout {
 
 export interface PieceTransitionProjection {
   readonly current: ReadonlyMap<SquareId, Readonly<PieceTransitionVisual>>;
-  readonly exits: readonly Readonly<BoardPieceLayout>[];
+  readonly exits: readonly Readonly<DetachedReplacementLayout>[];
   readonly replacements: readonly Readonly<DetachedReplacementLayout>[];
 }
+
+const EMPTY_DETACHED_LAYOUTS: readonly Readonly<DetachedReplacementLayout>[] =
+  Object.freeze([]);
 
 const EMPTY_TRANSITION_PROJECTION: Readonly<PieceTransitionProjection> =
   Object.freeze({
     current: new Map(),
-    exits: EMPTY_PIECE_LAYOUTS,
-    replacements: Object.freeze([]),
+    exits: EMPTY_DETACHED_LAYOUTS,
+    replacements: EMPTY_DETACHED_LAYOUTS,
   });
 
 const STATIC_PIECE_STATE: Readonly<PieceVisualState> = Object.freeze({
@@ -203,81 +204,46 @@ export function createPieceTransitionProjection(
   }
 
   const current = new Map<SquareId, Readonly<PieceTransitionVisual>>();
-  const cellsBySquare = new Map(
-    layout.cells.map((cell) => [cell.square, cell] as const),
-  );
-  for (const move of transition.plan.moves) {
-    const from = cellsBySquare.get(move.from);
-    const to = cellsBySquare.get(move.to);
-    if (from === undefined || to === undefined) {
-      continue;
-    }
-    current.set(
-      move.to,
-      Object.freeze({
-        kind: 'move' as const,
-        translateX: from.rect.left - to.rect.left,
-        translateY: from.rect.top - to.rect.top,
-      }),
-    );
-  }
-  for (const enter of transition.plan.enters) {
-    if (cellsBySquare.has(enter.to)) {
-      current.set(enter.to, Object.freeze({ kind: 'enter' as const }));
-    }
-  }
-
-  const replacements: Readonly<DetachedReplacementLayout>[] = [];
-  for (const replacement of transition.plan.replacements) {
-    const from = cellsBySquare.get(replacement.from);
-    const to = cellsBySquare.get(replacement.to);
-    if (from === undefined || to === undefined) {
-      continue;
-    }
-    current.set(
-      replacement.to,
-      Object.freeze({
-        kind: 'replace-enter' as const,
-        translateX: from.rect.left - to.rect.left,
-        translateY: from.rect.top - to.rect.top,
-      }),
-    );
-    const projected = boardPieceLayoutAtSquare(
-      layout,
-      replacement.from,
-      replacement.before,
-      `transition-replace:${String(transition.plan.epoch)}:${replacement.from}:${replacement.to}:${replacement.before.id ?? replacement.before.pieceType}`,
-    );
+  for (const actor of transition.presentation.current) {
+    const projected = projectTransitionPresentationActor(actor, layout);
     if (projected !== null) {
-      replacements.push(
-        Object.freeze({
-          ...projected,
-          transition: Object.freeze({
-            kind: 'replace-exit' as const,
-            translateX: to.rect.left - from.rect.left,
-            translateY: to.rect.top - from.rect.top,
-          }),
-        }),
+      current.set(
+        actor.currentSquare,
+        Object.freeze({ ...projected, kind: actor.kind }),
       );
     }
   }
 
-  const exits: Readonly<BoardPieceLayout>[] = [];
-  for (const exit of transition.plan.exits) {
-    const projected = boardPieceLayoutAtSquare(
+  const replacements: Readonly<DetachedReplacementLayout>[] = [];
+  const exits: Readonly<DetachedReplacementLayout>[] = [];
+  for (const actor of transition.presentation.detached) {
+    const actorProjection = projectTransitionPresentationActor(actor, layout);
+    if (actorProjection === null) {
+      continue;
+    }
+    const pieceLayout = boardPieceLayoutAtSquare(
       layout,
-      exit.from,
-      exit.piece,
-      `transition-exit:${String(transition.plan.epoch)}:${exit.from}:${exit.piece.id ?? exit.piece.pieceType}`,
+      actor.rendererSquare,
+      actor.piece,
+      actor.actorKey,
     );
-    if (projected !== null) {
+    if (pieceLayout === null) {
+      continue;
+    }
+    const projected = Object.freeze({
+      ...pieceLayout,
+      transition: Object.freeze({ ...actorProjection, kind: actor.kind }),
+    });
+    if (actor.kind === 'replace-exit') {
+      replacements.push(projected);
+    } else {
       exits.push(projected);
     }
   }
 
   return Object.freeze({
     current,
-    exits: exits.length === 0 ? EMPTY_PIECE_LAYOUTS : Object.freeze(exits),
+    exits: exits.length === 0 ? EMPTY_DETACHED_LAYOUTS : Object.freeze(exits),
     replacements: Object.freeze(replacements),
   });
 }
@@ -362,42 +328,24 @@ export function resolvePieceTransitionAnimatedStyle(
   if (transition === null) {
     return { opacity: baseOpacity, transform: undefined };
   }
-  switch (transition.kind) {
-    case 'move':
-      return {
-        opacity: baseOpacity,
-        transform: [
-          { translateX: transition.translateX * (1 - amount) },
-          { translateY: transition.translateY * (1 - amount) },
-        ],
-      };
-    case 'replace-enter':
-      return {
-        opacity: baseOpacity * amount,
-        transform: [
-          { translateX: transition.translateX * (1 - amount) },
-          { translateY: transition.translateY * (1 - amount) },
-        ],
-      };
-    case 'replace-exit':
-      return {
-        opacity: baseOpacity * (1 - amount),
-        transform: [
-          { translateX: transition.translateX * amount },
-          { translateY: transition.translateY * amount },
-        ],
-      };
-    case 'enter':
-      return {
-        opacity: baseOpacity * amount,
-        transform: undefined,
-      };
-    case 'exit':
-      return {
-        opacity: baseOpacity * (1 - amount),
-        transform: undefined,
-      };
-  }
+  const opacity =
+    transition.startOpacity +
+    (transition.endOpacity - transition.startOpacity) * amount;
+  const translateX =
+    transition.startTranslateX +
+    (transition.endTranslateX - transition.startTranslateX) * amount;
+  const translateY =
+    transition.startTranslateY +
+    (transition.endTranslateY - transition.startTranslateY) * amount;
+  const hasTranslation =
+    transition.startTranslateX !== 0 ||
+    transition.startTranslateY !== 0 ||
+    transition.endTranslateX !== 0 ||
+    transition.endTranslateY !== 0;
+  return {
+    opacity: baseOpacity * opacity,
+    transform: hasTranslation ? [{ translateX }, { translateY }] : undefined,
+  };
 }
 
 function visualState(
@@ -531,7 +479,7 @@ export const PieceLayer = memo(function PieceLayer({
             progress={transition?.progress ?? null}
             renderer={Renderer}
             style={style}
-            transition={Object.freeze({ kind: 'exit' as const })}
+            transition={pieceLayout.transition}
           />
         );
       })}

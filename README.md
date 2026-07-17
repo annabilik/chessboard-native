@@ -3,9 +3,10 @@
 A controlled, rules-free React Native chessboard component.
 
 > [!NOTE]
-> The planned Phase 2 implementation packages are merged, controlled transition
-> animation is underway, and the package is not published. The public component
-> renders responsive, controlled positions with default or custom pieces, orientation,
+> The planned Phase 2 implementation packages and controlled-transition runtime
+> through P3.4 are implemented, and the package is not published. The public
+> component renders responsive, controlled positions with default or custom pieces,
+> orientation,
 > notation, native styles, controlled square and arrow annotations, controlled
 > selection styling, and one adjustable accessibility control. Its optional
 > interaction surface supports board-piece drag, controlled
@@ -15,9 +16,10 @@ A controlled, rules-free React Native chessboard component.
 > `ChessboardProvider` supplies provider-scoped board identity, one shared
 > transient overlay, and stale-safe external-drop measurement for single- and
 > multi-board composition. Pure position-transition plans are deterministic and
-> revision-correlated internally, and the mounted runtime now animates ordinary
-> moves, captures, additions, removals, and ambiguity fades without retaining a
-> renderable shadow position.
+> revision-correlated internally. The mounted runtime animates ordinary and
+> special moves, preserves identity-safe visual continuity across interruption
+> and geometry changes, and hands correlated pending targets to controlled
+> commits without retaining a renderable shadow position.
 
 ## Direction
 
@@ -115,8 +117,13 @@ out underneath them, reduced motion and zero duration snap, and newer props or
 geometry changes cancel stale work. P3.3 consumes explicit capture, promotion,
 and second-actor hints: castling actors share one clock, off-target captures
 fade the exact reserved victim, and type-changing artwork crossfades along one
-path without shadow state. Continuity-preserving interruption, geometry
-replanning, and pending-to-commit handoff remain P3.4 work.
+path without shadow state. P3.4 keeps every semantic plan on its exact adjacent
+revision pair while sampling only active actor points and opacity for smooth
+A-B-C interruption, then runs the new segment for the configured full duration.
+Geometry and orientation changes rebase each actor's normalized visual point
+into the new projection for the original segment's remaining time, reduced
+motion snaps without later replay, and an exactly correlated pending target
+crossfades into its controlled actor.
 
 The accepted architecture decisions and all 20 reserved invariant contracts
 are indexed in
@@ -135,8 +142,9 @@ The accessibility control and manual TalkBack/VoiceOver pass are documented in
 [`docs/accessibility.md`](./docs/accessibility.md).
 The checked-in bare harness also runs deterministic Espresso and XCUITest
 accessibility and interaction audits against the exact packed package used by
-native CI. The Expo gallery includes a controlled-transition lab plus an
-interaction-hardening lab with a
+native CI. The Expo gallery includes a controlled-transition lab for special
+moves, interruption, geometry/orientation rebase, reduced motion, and correlated
+pending commits, plus an interaction-hardening lab with a
 standard vertical `ScrollView`, an intentionally clipped spare palette,
 geometry and unmount controls, and app-owned render/callback counters.
 
