@@ -40,11 +40,12 @@
     "parity:complete": "node scripts/check-parity.mjs --complete",
     "parity:update": "node scripts/check-parity.mjs --write-doc",
     "parity:verify": "pnpm typecheck && pnpm test:ci && pnpm parity:check --results coverage/parity/jest.parity.json",
+    "release:check": "node scripts/check-prerelease.mjs",
     "test": "pnpm --filter @vibechess/chessboard-native test",
     "test:ci": "node scripts/run-jest-ci.mjs",
     "test:tooling": "node --test scripts/tests/*.test.mjs",
     "typecheck": "tsc --project tsconfig.json --noEmit && pnpm --recursive --if-present run typecheck",
-    "verify": "pnpm check && pnpm build && pnpm api:check && pnpm package:check && pnpm example:export"
+    "verify": "pnpm check && pnpm build && pnpm api:check && pnpm package:check && pnpm release:check && pnpm example:export"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",

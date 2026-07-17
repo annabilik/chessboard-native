@@ -43,9 +43,10 @@ The Android accessibility command needs a running device or emulator. The iOS
 accessibility command selects an available iPhone simulator and requires iOS
 17 or newer. Native CI is temporarily disabled; setting the repository Actions
 variable `RUN_NATIVE_CI=true` restores both native Release builds and audits.
-Those jobs install the single inspected npm archive into consumers outside the
-checkout; workspace-linked builds are development conveniences, not
-package-release evidence.
+The always-on clean-consumer job installs the single inspected npm archive into
+Expo and bare consumers outside the checkout. The opt-in jobs add native
+compilation and audits against those exact bytes; workspace-linked builds are
+development conveniences, not package-release evidence.
 
 Automated native audits supplement the manual TalkBack and VoiceOver checklist
 in `docs/accessibility.md`; they do not validate speech, rotor or action-menu
@@ -83,6 +84,11 @@ disposition, native mapping, or contract ID.
 Run `pnpm changeset` for changes to a published package that require a release
 note or semantic-version update. Infrastructure-only and documentation-only
 changes normally do not need one.
+
+Release preparation and publication are separate reviewed operations. Merging a
+pull request never publishes the package; maintainers follow
+[`docs/releasing.md`](./docs/releasing.md) and start with the workflow's default
+dry-run mode.
 
 By contributing, you agree that your contribution is licensed under the MIT
 License in this repository.
