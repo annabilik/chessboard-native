@@ -2,8 +2,10 @@
 
 ## Supported versions
 
-`chessboard-native` has not published a release. Security fixes currently apply
-to the default branch only.
+Before the first registry prerelease, security fixes apply to the default branch
+only. After prereleases begin, fixes apply to the default branch and the version
+currently selected by npm's `next` dist-tag. Earlier prereleases do not receive
+backports; upgrade to the replacement identified in the advisory.
 
 ## Reporting a vulnerability
 

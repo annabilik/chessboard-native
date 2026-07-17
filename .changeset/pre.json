@@ -1,0 +1,21 @@
+{
+  "mode": "pre",
+  "tag": "next",
+  "initialVersions": {
+    "@vibechess/chessboard-native-example": "0.0.0",
+    "@vibechess/chessboard-native-harness": "0.0.0",
+    "@vibechess/chessboard-native": "0.0.0"
+  },
+  "changesets": [
+    "controlled-annotations",
+    "controlled-move-requests",
+    "controlled-position-transitions",
+    "controlled-selection-activation",
+    "initial-controlled-board",
+    "interaction-hardening",
+    "provider-coordination",
+    "public-spare-piece",
+    "special-move-transitions",
+    "transition-continuity"
+  ]
+}

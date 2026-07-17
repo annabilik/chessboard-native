@@ -1,8 +1,95 @@
 # @vibechess/chessboard-native
 
+> **Prerelease status:** `0.1.0-next.*` releases are for evaluation and
+> integration testing, not production use; APIs may change before 1.0. The
+> installation command targets whichever published prerelease owns `next`.
+
+## Installation
+
+Install the package and every required peer on their supported release lines:
+
+```sh
+npm install \
+  @vibechess/chessboard-native@next \
+  react@19.2.x \
+  react-native@0.86.x \
+  react-native-gesture-handler@2.32.x \
+  react-native-reanimated@4.5.x \
+  react-native-svg@15.15.x \
+  react-native-worklets@0.10.x
+```
+
+| Required peer                  | Supported line |
+| ------------------------------ | -------------- |
+| `react`                        | `19.2.x`       |
+| `react-native`                 | `0.86.x`       |
+| `react-native-gesture-handler` | `2.32.x`       |
+| `react-native-reanimated`      | `4.5.x`        |
+| `react-native-svg`             | `15.15.x`      |
+| `react-native-worklets`        | `0.10.x`       |
+
+Expo SDK 57 with React Native 0.86 is the supported managed-app boundary.
+Bare React Native consumers must also use React Native 0.86. Other Expo SDK or
+React Native lines have not been validated and are outside the current support
+contract. This package is ESM-only and supports Android and iOS; it does not
+provide a CommonJS build or a React Native Web support guarantee. Reanimated 4
+requires React Native's New Architecture; the legacy architecture is not a
+supported configuration.
+
+## Required app setup
+
+Mount the application beneath `GestureHandlerRootView`. The wrapper must have
+a non-zero layout; `flex: 1` is appropriate for an app root:
+
+```tsx
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+export function App() {
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Application />
+    </GestureHandlerRootView>
+  );
+}
+```
+
+For a standard Expo SDK 57 project, follow Expo's
+[Reanimated installation guide](https://docs.expo.dev/versions/v57.0.0/sdk/reanimated/)
+and place this wrapper in the root layout. Expo's Babel preset configures the
+Worklets transform.
+
+In a bare React Native app, follow the upstream
+[Gesture Handler installation guide](https://docs.swmansion.com/react-native-gesture-handler/docs/fundamentals/installation/)
+and the
+[Reanimated getting-started guide](https://docs.swmansion.com/react-native-reanimated/docs/fundamentals/getting-started/).
+Add the Worklets Babel plugin **last**:
+
+```js
+module.exports = {
+  presets: ['module:@react-native/babel-preset'],
+  plugins: [
+    // Other plugins go above this entry.
+    'react-native-worklets/plugin',
+  ],
+};
+```
+
+Then install iOS pods and restart Metro with a cleared cache after changing the
+Babel configuration. See the
+[Worklets getting-started guide](https://docs.swmansion.com/react-native-worklets/docs/fundamentals/getting-started/)
+for the current bare-app steps.
+
+## Support
+
+Pin an exact `0.1.0-next.N` version after evaluating it if reproducible builds
+matter to your application. Report package defects and compatibility findings
+in the repository's
+[GitHub issues](https://github.com/annabilik/chessboard-native/issues). Include
+the exact package and peer versions, platform, and a minimal reproduction.
+
 A controlled, rules-free React Native chessboard component.
 
-This unpublished package includes the controlled public contracts,
+This prerelease package includes the controlled public contracts,
 platform-free position and coordinate core, measured geometry, strict FEN
 foundation, a responsive board renderer, and the completed Phase 2 interaction
 surface. `Chessboard` fills its parent width, derives height from board rows and

@@ -4,7 +4,8 @@ A controlled, rules-free React Native chessboard component.
 
 > [!NOTE]
 > The planned Phase 2 implementation packages and controlled-transition runtime
-> through P3.4 are implemented, and the package is not published. The public
+> through P3.4 are implemented. P3.5 prepares `0.1.0-next.0`; publication is a
+> separate, explicitly approved workflow operation. The public
 > component renders responsive, controlled positions with default or custom pieces,
 > orientation,
 > notation, native styles, controlled square and arrow annotations, controlled
@@ -43,7 +44,9 @@ post-1.0 work.
 
 The repository baseline, package shell, test foundation, bare React Native 0.86
 harness, packed-artifact build gates, and pinned upstream parity inventory are
-in place. The root package exports the controlled public contracts plus pure,
+in place. The first prerelease is versioned and has a dry-run-first publishing
+path; no merge publishes automatically. The root package exports the controlled
+public contracts plus pure,
 validated dimension, coordinate, logical-grid, strict 8x8 FEN, and measured
 square-center utilities. Object-position normalization and board-local hit
 testing complete the pure P1.1 layer. The public P1.2 component boundary now
@@ -173,6 +176,7 @@ Root commands:
 | `pnpm parity:check --results <path>` | Validate supplied parity evidence             |
 | `pnpm parity:update`                 | Regenerate the rendered parity document       |
 | `pnpm parity:complete`               | Run the eventual 1.0 parity-closure gate      |
+| `pnpm release:check`                 | Validate prerelease package metadata          |
 | `pnpm format`                        | Format supported repository files             |
 | `pnpm format:check`                  | Verify formatting without writing             |
 | `pnpm lint`                          | Run code and Markdown linting                 |
@@ -213,13 +217,13 @@ Android, and iOS Release jobs and their accessibility audits.
 
 ## Packed artifact gate
 
-CI always builds and inspects one npm archive. When native CI is enabled, it
-installs those exact bytes into fresh Expo and bare React Native consumers
-outside the checkout. The smoke runner rejects workspace dependencies,
-source-repository resolution, package symlinks, and missing declared peers
-before any build starts. It then runs both Expo production exports, an Expo
-Android Release assembly, and bare Android and iOS Release builds after a clean
-CocoaPods install.
+CI always builds and inspects one npm archive, installs those exact bytes into
+fresh Expo and bare React Native consumers outside the checkout, type-checks
+both consumers, and exports both Expo production bundles. The smoke runner
+rejects workspace dependencies, source-repository resolution, package
+symlinks, and missing declared peers. When native CI is enabled, the same
+archive additionally gates an Expo Android Release assembly plus bare Android
+and iOS Release builds after a clean CocoaPods install.
 
 To prepare either isolated consumer locally:
 
@@ -240,6 +244,17 @@ not replace the packed package gate.
 
 `pnpm api:check` expects a fresh `pnpm build`. Use `pnpm api:update` only when
 an intentional public declaration change has been reviewed.
+
+## Prerelease process
+
+Merging does not publish. The manual release workflow accepts an expected
+version, defaults to a registry-safe dry run, and publishes only the single
+inspected archive under npm's `next` dist-tag. The initial publish needs a
+short-lived bootstrap credential because trusted publishing can only be
+configured after the npm package exists; subsequent publishes use GitHub OIDC.
+
+See [`docs/releasing.md`](./docs/releasing.md) for the protected-environment,
+bootstrap, trusted-publisher, verification, and recovery procedure.
 
 ## Upstream parity
 

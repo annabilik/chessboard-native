@@ -42,6 +42,7 @@ if (outputArchive && path.extname(outputArchive) !== '.tgz') {
 }
 
 const requiredPackageFiles = new Set([
+  'CHANGELOG.md',
   'LICENSE',
   'README.md',
   'lib/module/index.js',
@@ -127,6 +128,7 @@ function assertPackageContents(files) {
   );
   const unexpected = paths.filter(
     (file) =>
+      file !== 'CHANGELOG.md' &&
       file !== 'LICENSE' &&
       file !== 'README.md' &&
       file !== 'package.json' &&
