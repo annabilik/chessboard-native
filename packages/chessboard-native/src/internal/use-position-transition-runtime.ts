@@ -9,34 +9,55 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import type { ValidatedBoardDimensions } from '../core/dimensions';
 import type { Revision } from '../public-types';
+import type { BoardSurfaceLayout } from '../render/board-layout';
+import type { PendingCommitHandoffDescriptor } from './pending-commit-handoff';
 import { positionComparisonToken } from './position-domain';
 import type { NormalizedPositionValue } from './position-domain';
 import {
   planPositionTransition,
   type PositionTransitionPlan,
   type TransitionPositionSnapshot,
-  validatePositionTransitionHint,
 } from './transition-planner';
+import {
+  createTransitionPresentation,
+  rebaseTransitionPresentation,
+  sampleTransitionPresentation,
+  type TransitionPresentation,
+} from './transition-presentation';
 
 export const DEFAULT_TRANSITION_DURATION_MS = 300;
 
 export interface MountedPositionTransition {
   readonly durationMs: number;
   readonly plan: Readonly<PositionTransitionPlan>;
+  readonly presentation: Readonly<TransitionPresentation>;
   readonly progress: SharedValue<number>;
 }
 
 interface ActivePositionTransition extends MountedPositionTransition {
+  readonly deadlineMs: number;
   readonly geometryEpoch: Revision;
   readonly targetKey: string;
 }
 
 interface CommittedTransitionInput {
+  readonly dimensions: ValidatedBoardDimensions | null;
   readonly durationMs: number;
   readonly geometryEpoch: Revision | null;
   readonly key: string | null;
+  readonly layout: Readonly<BoardSurfaceLayout> | null;
   readonly reducedMotion: boolean;
   readonly snapshot: Readonly<TransitionPositionSnapshot> | null;
+}
+
+function sameDimensions(
+  previous: ValidatedBoardDimensions | null,
+  current: ValidatedBoardDimensions | null,
+): boolean {
+  if (previous === null || current === null) {
+    return previous === current;
+  }
+  return previous.columns === current.columns && previous.rows === current.rows;
 }
 
 interface UsePositionTransitionRuntimeOptions {
@@ -44,7 +65,9 @@ interface UsePositionTransitionRuntimeOptions {
   readonly dimensions: ValidatedBoardDimensions | null;
   readonly durationMs: number;
   readonly geometryEpoch: Revision | null;
+  readonly layout: Readonly<BoardSurfaceLayout> | null;
   readonly logWarning?: (message: string) => void;
+  readonly pendingHandoff?: Readonly<PendingCommitHandoffDescriptor> | null;
   readonly position: NormalizedPositionValue | null;
   readonly reducedMotion: boolean;
 }
@@ -91,6 +114,7 @@ function sameCommittedInput(
   current: Readonly<CommittedTransitionInput>,
 ): boolean {
   return (
+    sameDimensions(previous.dimensions, current.dimensions) &&
     previous.durationMs === current.durationMs &&
     previous.geometryEpoch === current.geometryEpoch &&
     previous.key === current.key &&
@@ -105,6 +129,23 @@ function nextEpoch(epoch: number): number {
   return epoch + 1;
 }
 
+function clampProgress(value: number): number {
+  if (!Number.isFinite(value) || value >= 1) {
+    return 1;
+  }
+  return value <= 0 ? 0 : value;
+}
+
+function presentationHasActors(
+  presentation: Readonly<TransitionPresentation>,
+): boolean {
+  return (
+    presentation.current.length > 0 ||
+    presentation.detached.length > 0 ||
+    presentation.pending.length > 0
+  );
+}
+
 /**
  * Mount pure transition plans without ever rendering the retained comparison
  * snapshot. The latest controlled position is always projected independently.
@@ -114,7 +155,9 @@ export function usePositionTransitionRuntime({
   dimensions,
   durationMs,
   geometryEpoch,
+  layout,
   logWarning = defaultWarningLogger,
+  pendingHandoff = null,
   position,
   reducedMotion,
 }: UsePositionTransitionRuntimeOptions): Readonly<MountedPositionTransition> | null {
@@ -124,9 +167,11 @@ export function usePositionTransitionRuntime({
   const activeRef = useRef<Readonly<ActivePositionTransition> | null>(null);
   const committedRef = useRef<Readonly<CommittedTransitionInput>>(
     Object.freeze({
+      dimensions,
       durationMs,
       geometryEpoch,
       key: null,
+      layout: null,
       reducedMotion,
       snapshot: null,
     }),
@@ -141,15 +186,12 @@ export function usePositionTransitionRuntime({
   }, []);
 
   const finishActive = useCallback(
-    (epoch: number, targetKey: string, targetGeometryEpoch: number): void => {
+    (epoch: number, targetKey: string): void => {
       const current = activeRef.current;
-      if (current?.plan.epoch !== epoch) {
+      if (current?.presentation.epoch !== epoch) {
         return;
       }
-      if (
-        current.targetKey !== targetKey ||
-        current.geometryEpoch !== targetGeometryEpoch
-      ) {
+      if (current.targetKey !== targetKey) {
         return;
       }
       clearActive();
@@ -160,9 +202,11 @@ export function usePositionTransitionRuntime({
   useLayoutEffect(() => {
     const snapshot = position === null ? null : snapshotPosition(position);
     const current: Readonly<CommittedTransitionInput> = Object.freeze({
+      dimensions,
       durationMs,
       geometryEpoch,
       key: currentKey,
+      layout,
       reducedMotion,
       snapshot,
     });
@@ -175,15 +219,16 @@ export function usePositionTransitionRuntime({
       return;
     }
 
-    cancelAnimation(progress);
-    progress.value = 1;
-    clearActive();
-
     const semanticChanged = previous.key !== current.key;
-    const geometryStable =
-      previous.geometryEpoch !== null &&
-      current.geometryEpoch !== null &&
-      previous.geometryEpoch === current.geometryEpoch;
+    const dimensionsChanged = !sameDimensions(
+      previous.dimensions,
+      current.dimensions,
+    );
+    const geometryChanged = previous.geometryEpoch !== current.geometryEpoch;
+    const durationChanged = previous.durationMs !== current.durationMs;
+    const mounted = activeRef.current;
+    const mountedProgress =
+      mounted === null ? 1 : clampProgress(progress.get());
     committedRef.current = current;
     const reportWarning = (code: string, message: string): void => {
       if (!development) {
@@ -197,26 +242,94 @@ export function usePositionTransitionRuntime({
       logWarning(message);
     };
 
-    if (!semanticChanged || current.snapshot === null || dimensions === null) {
+    const mount = (
+      nextActive: Readonly<ActivePositionTransition>,
+      animationDurationMs: number,
+    ): void => {
+      progress.value = 0;
+      activeRef.current = nextActive;
+      setActive(nextActive);
+      const presentationEpoch = nextActive.presentation.epoch;
+      const targetKey = nextActive.targetKey;
+      progress.value = withTiming(
+        1,
+        { duration: animationDurationMs },
+        (finished): void => {
+          if (finished) {
+            scheduleOnRN(finishActive, presentationEpoch, targetKey);
+          }
+        },
+      );
+    };
+
+    if (!semanticChanged) {
+      if (mounted === null) {
+        return;
+      }
+      if (
+        mounted.targetKey !== current.key ||
+        dimensionsChanged ||
+        reducedMotion ||
+        durationMs === 0 ||
+        durationChanged ||
+        current.geometryEpoch === null ||
+        current.layout === null
+      ) {
+        cancelAnimation(progress);
+        progress.value = 1;
+        clearActive();
+        return;
+      }
+      if (!geometryChanged) {
+        return;
+      }
+
+      const remainingDurationMs = Math.max(
+        0,
+        Math.min(mounted.durationMs, mounted.deadlineMs - Date.now()),
+      );
+      cancelAnimation(progress);
+      clearActive();
+      if (remainingDurationMs <= 0) {
+        progress.value = 1;
+        return;
+      }
+      const epoch = nextEpochRef.current;
+      nextEpochRef.current = nextEpoch(epoch);
+      const presentation = rebaseTransitionPresentation({
+        epoch,
+        layout: current.layout,
+        presentation: mounted.presentation,
+        progress: mountedProgress,
+      });
+      if (!presentationHasActors(presentation)) {
+        progress.value = 1;
+        return;
+      }
+      mount(
+        Object.freeze({
+          deadlineMs: mounted.deadlineMs,
+          durationMs: remainingDurationMs,
+          geometryEpoch: current.geometryEpoch,
+          plan: mounted.plan,
+          presentation,
+          progress,
+          targetKey: mounted.targetKey,
+        }),
+        remainingDurationMs,
+      );
       return;
     }
 
-    if (previous.snapshot !== null && !geometryStable) {
-      if (current.snapshot.transitionWarning !== undefined) {
-        reportWarning(
-          current.snapshot.transitionWarning.code,
-          current.snapshot.transitionWarning.message,
-        );
-      }
-      if (current.snapshot.transition !== undefined) {
-        const validation = validatePositionTransitionHint({
-          after: current.snapshot,
-          before: previous.snapshot,
-        });
-        if (validation.warning !== null) {
-          reportWarning(validation.warning.code, validation.warning.message);
-        }
-      }
+    const prior =
+      mounted?.targetKey !== previous.key
+        ? null
+        : sampleTransitionPresentation(mounted.presentation, mountedProgress);
+    cancelAnimation(progress);
+    progress.value = 1;
+    clearActive();
+
+    if (current.snapshot === null || dimensions === null || dimensionsChanged) {
       return;
     }
 
@@ -236,36 +349,37 @@ export function usePositionTransitionRuntime({
 
     if (
       planning.plan === null ||
-      !geometryStable ||
       reducedMotion ||
       durationMs === 0 ||
-      current.key === null
+      current.key === null ||
+      current.geometryEpoch === null ||
+      current.layout === null ||
+      previous.layout === null
     ) {
       return;
     }
 
+    const presentation = createTransitionPresentation({
+      currentLayout: current.layout,
+      pendingHandoff,
+      plan: planning.plan,
+      previousLayout: previous.layout,
+      prior,
+    });
+    if (!presentationHasActors(presentation)) {
+      return;
+    }
+
     const nextActive: Readonly<ActivePositionTransition> = Object.freeze({
+      deadlineMs: Date.now() + durationMs,
       durationMs,
       geometryEpoch: current.geometryEpoch,
       plan: planning.plan,
+      presentation,
       progress,
       targetKey: current.key,
     });
-    progress.value = 0;
-    activeRef.current = nextActive;
-    setActive(nextActive);
-    const planEpoch = planning.plan.epoch;
-    const targetKey = current.key;
-    const targetGeometryEpoch = current.geometryEpoch;
-    progress.value = withTiming(
-      1,
-      { duration: durationMs },
-      (finished): void => {
-        if (finished) {
-          scheduleOnRN(finishActive, planEpoch, targetKey, targetGeometryEpoch);
-        }
-      },
-    );
+    mount(nextActive, durationMs);
   }, [
     active,
     clearActive,
@@ -275,7 +389,9 @@ export function usePositionTransitionRuntime({
     durationMs,
     finishActive,
     geometryEpoch,
+    layout,
     logWarning,
+    pendingHandoff,
     position,
     progress,
     reducedMotion,
@@ -292,7 +408,6 @@ export function usePositionTransitionRuntime({
 
   return active !== null &&
     active.targetKey === currentKey &&
-    active.geometryEpoch === geometryEpoch &&
     !reducedMotion &&
     durationMs > 0
     ? active

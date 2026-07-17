@@ -133,6 +133,18 @@ function nodesByTestId(root: TestInstance, testID: string): TestInstance[] {
   return root.queryAll((node) => node.props['testID'] === testID);
 }
 
+function animatedStyle(node: TestInstance): Readonly<Record<string, unknown>> {
+  const animated: unknown = node.props['jestAnimatedStyle'];
+  if (typeof animated !== 'object' || animated === null) {
+    throw new Error('Expected a Reanimated Jest style.');
+  }
+  const value = (animated as Readonly<Record<string, unknown>>)['value'];
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('Expected a Reanimated Jest style value.');
+  }
+  return value as Readonly<Record<string, unknown>>;
+}
+
 function expectOneVisual(
   root: TestInstance,
   kind: string,
@@ -152,6 +164,10 @@ function expectNoVisual(
 }
 
 describe('public controlled move requests', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('[PARITY-OPTION-ALLOW-DRAGGING] mounts no gesture plane without a callback and honors the declarative drag gate', async () => {
     const boardId = 'allow-dragging';
     const position = Object.freeze({
@@ -339,7 +355,7 @@ describe('public controlled move requests', () => {
     );
   });
 
-  it('never mutates position optimistically and remains pending after acceptance until a matching correlated commit arrives', async () => {
+  it('[PARITY-BEHAVIOR-B11] never mutates position optimistically and hands a matching controlled commit off at the pending target', async () => {
     const boardId = 'controlled-commit';
     const value: PositionObject = Object.freeze({
       a2: Object.freeze({ id: 'controlled', pieceType: 'token' }),
@@ -360,6 +376,8 @@ describe('public controlled move requests', () => {
         onMoveRequest={onMoveRequest}
         pieceRenderers={PIECE_RENDERERS}
         position={position}
+        reduceMotion="never"
+        transitionDurationMs={1_000}
       />,
     );
     await measure(rootOf(result));
@@ -380,6 +398,7 @@ describe('public controlled move requests', () => {
     expectOneVisual(rootOf(result), 'pending-target', 'b1');
     expectNoVisual(rootOf(result), 'static', 'b1');
 
+    jest.useFakeTimers();
     await result.rerender(
       <ChessboardRuntime
         boardId={boardId}
@@ -393,12 +412,108 @@ describe('public controlled move requests', () => {
           revision: 21,
           value: { b1: { id: 'controlled', pieceType: 'token' } },
         }}
+        reduceMotion="never"
+        transitionDurationMs={1_000}
       />,
     );
 
     expectNoVisual(rootOf(result), 'pending-source', 'a2');
-    expectNoVisual(rootOf(result), 'pending-target', 'b1');
+    expectOneVisual(rootOf(result), 'pending-target', 'b1');
     expectOneVisual(rootOf(result), 'static', 'b1');
+    const canonical = nodesByTestId(
+      rootOf(result),
+      'move-piece:static:b1:token',
+    )[0];
+    const pending = nodesByTestId(
+      rootOf(result),
+      'move-piece:pending-target:b1:token',
+    )[0];
+    if (
+      canonical?.parent === null ||
+      canonical?.parent === undefined ||
+      pending?.parent?.parent === null ||
+      pending?.parent?.parent === undefined
+    ) {
+      throw new Error('Expected canonical and pending animated hosts.');
+    }
+    const canonicalStyle = animatedStyle(canonical.parent);
+    const pendingStyle = animatedStyle(pending.parent.parent);
+    expect(canonicalStyle['transform']).toBeUndefined();
+    expect(pendingStyle['transform']).toBeUndefined();
+    expect(pendingStyle['opacity']).toBe(1);
+    expect(pending.parent.parent).toHaveProp('accessible', false);
+    expect(pending.parent.parent).toHaveProp('pointerEvents', 'none');
+
+    await act(() => {
+      // The Reanimated Jest mock publishes the newly mounted canonical
+      // worklet on its first clock tick; the pure presentation tests cover
+      // the exact zero-time endpoint.
+      jest.advanceTimersByTime(1);
+    });
+    const startedCanonical = nodesByTestId(
+      rootOf(result),
+      'move-piece:static:b1:token',
+    )[0];
+    const startedPending = nodesByTestId(
+      rootOf(result),
+      'move-piece:pending-target:b1:token',
+    )[0];
+    if (
+      startedCanonical?.parent === null ||
+      startedCanonical?.parent === undefined ||
+      startedPending?.parent?.parent === null ||
+      startedPending?.parent?.parent === undefined
+    ) {
+      throw new Error('Expected both actors at the start of the crossfade.');
+    }
+    expect(
+      Number(animatedStyle(startedCanonical.parent)['opacity']),
+    ).toBeLessThan(0.01);
+    expect(
+      Number(animatedStyle(startedPending.parent.parent)['opacity']),
+    ).toBeGreaterThan(0.99);
+
+    await act(() => {
+      jest.advanceTimersByTime(499);
+    });
+    const midpointCanonical = nodesByTestId(
+      rootOf(result),
+      'move-piece:static:b1:token',
+    )[0];
+    const midpointPending = nodesByTestId(
+      rootOf(result),
+      'move-piece:pending-target:b1:token',
+    )[0];
+    if (
+      midpointCanonical?.parent === null ||
+      midpointCanonical?.parent === undefined ||
+      midpointPending?.parent?.parent === null ||
+      midpointPending?.parent?.parent === undefined
+    ) {
+      throw new Error('Expected both actors throughout the crossfade.');
+    }
+    expect(animatedStyle(midpointCanonical.parent)['opacity']).toBeCloseTo(0.5);
+    expect(animatedStyle(midpointPending.parent.parent)['opacity']).toBeCloseTo(
+      0.5,
+    );
+
+    await act(() => {
+      jest.advanceTimersByTime(500);
+    });
+    expectNoVisual(rootOf(result), 'pending-target', 'b1');
+    const settledCanonical = nodesByTestId(
+      rootOf(result),
+      'move-piece:static:b1:token',
+    )[0];
+    if (
+      settledCanonical?.parent === null ||
+      settledCanonical?.parent === undefined
+    ) {
+      throw new Error('Expected the settled canonical actor.');
+    }
+    const settledStyle = animatedStyle(settledCanonical.parent);
+    expect(settledStyle['opacity']).toBe(1);
+    expect(settledStyle['transform']).toBeUndefined();
   });
 
   it('cancels pending work when a second drag starts and renders one active source ghost plus overlay', async () => {

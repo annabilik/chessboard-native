@@ -249,7 +249,7 @@ describe('pure interaction reducer', () => {
     expect(changed.effects).toEqual([]);
   });
 
-  it('[PARITY-BEHAVIOR-B11] [CBN-CONTRACT-004-CALLBACK-NONCOMMITTING] waits for a newer controlled revision after acceptance', () => {
+  it('[CBN-CONTRACT-004-CALLBACK-NONCOMMITTING] waits for a newer controlled revision after acceptance', () => {
     const pending = accept(request().state);
     const awaiting = phase(pending.state, 'awaiting-commit');
     expect(effectTypes(pending.effects)).toEqual([
@@ -401,7 +401,7 @@ describe('pure interaction reducer', () => {
     expect(stale.effects).toEqual([]);
   });
 
-  it('[PARITY-BEHAVIOR-B08] invalidates epochs when dimensions, orientation, permissions, or geometry change', () => {
+  it('invalidates epochs when dimensions, orientation, permissions, or geometry change', () => {
     const reasons = [
       'dimensions-change',
       'orientation-change',
@@ -436,7 +436,7 @@ describe('pure interaction reducer', () => {
     }
   });
 
-  it('[PARITY-BEHAVIOR-B16] guards queued work and makes timeout-versus-result races deterministic', () => {
+  it('guards queued work and makes timeout-versus-result races deterministic', () => {
     const started = request();
     const deciding = phase(started.state, 'deciding');
     expect(

@@ -30,8 +30,9 @@ board's controlled move callback remains the only position authority. Custom
 square rendering and annotation gesture drawing remain future work. Pure
 controlled-position transition planning validates exact-revision hints,
 prefers stable piece IDs, and treats ambiguous anonymous matches as exits and
-enters. The mounted Reanimated runtime consumes only those detached operations;
-it never renders a retained position snapshot.
+enters. The mounted Reanimated runtime consumes only those detached operations,
+samples presentation-only continuity across interruption and geometry changes,
+and never renders a retained position snapshot.
 
 ```tsx
 import { Chessboard } from '@vibechess/chessboard-native';
@@ -471,12 +472,33 @@ accessibility.
 ```
 
 `transitionDurationMs` defaults to `300`, must be a finite non-negative number,
-and uses `0` as an explicit snap. Reduced motion also snaps. Initial mount,
-semantic no-ops, unavailable measurement, invalid current position, and
-geometry or orientation changes settle directly to the latest prop. A newer
-position cancels the prior epoch immediately; P3.4 will add
-continuity-preserving A-B-C replanning rather than changing that latest-prop
-authority.
+and uses `0` as an explicit snap. Every semantic plan still compares only the
+exact previous and current committed revisions. A private
+`TransitionPresentation` actor graph contains normalized visual endpoints,
+opacity, and correlation metadata, never a canonical position collection. If C
+arrives during an A-to-B animation, B remains committed and the next plan is
+exactly B to C. An identity-safe actor may start that new presentation from its
+sampled current A-to-B visual point and opacity and run the B-to-C segment for
+the configured full duration; the sample can never become a semantic source.
+Visible detached or pending artwork may finish as bounded fading residuals.
+
+When measured geometry or orientation changes during active motion, the runtime
+samples each actor's current normalized visual point and opacity, rebases them
+into the new projection, and continues to the same current controlled target
+for the original segment's remaining time. Initial mount, semantic no-ops,
+unavailable measurement, logical row/column changes, invalid current position,
+and zero duration still snap. Reduced motion also snaps immediately, clears
+sampled continuity, and does not replay a settled revision if motion is later
+re-enabled.
+
+A newer revision with the active move's matching `committedIntentId` and a
+non-null target may crossfade the pending target into the canonical current
+actor without replaying its source-to-target move. The handoff also requires the
+exact plan revisions and a current actor matching the intent's source, piece,
+and target. Other changed actors still follow the exact adjacent semantic plan.
+A missing or mismatched correlation, an actor mismatch, and an off-board target
+use ordinary controlled-transition behavior instead; none fabricates a handoff
+actor.
 
 Revisioned positions may supply a `transition` hint for exact actor identity.
 Malformed, stale, or contradictory hints are warning-only in development and

@@ -4,6 +4,7 @@ import type { SharedValue } from 'react-native-reanimated';
 import type { TestInstance } from 'test-renderer';
 
 import type { MountedPositionTransition } from '../../src/internal/use-position-transition-runtime';
+import { createTransitionPresentation } from '../../src/internal/transition-presentation';
 import type { PositionTransitionPlan } from '../../src/internal/transition-planner';
 import type {
   PieceRenderer,
@@ -61,11 +62,17 @@ function plan(
 
 function transition(
   value: Readonly<PositionTransitionPlan>,
+  layout: ReturnType<typeof createBoardSurfaceLayout>,
   progress = testSharedValue(0),
 ): Readonly<MountedPositionTransition> {
   return Object.freeze({
     durationMs: 300,
     plan: value,
+    presentation: createTransitionPresentation({
+      currentLayout: layout,
+      plan: value,
+      previousLayout: layout,
+    }),
     progress,
   });
 }
@@ -151,22 +158,32 @@ describe('mounted piece transition projection', () => {
     });
 
     expect(
-      createPieceTransitionProjection(white, transition(movePlan)).current.get(
-        'c2',
-      ),
+      createPieceTransitionProjection(
+        white,
+        transition(movePlan, white),
+      ).current.get('c2'),
     ).toEqual({
+      endOpacity: 1,
+      endTranslateX: 0,
+      endTranslateY: 0,
       kind: 'move',
-      translateX: -200,
-      translateY: 100,
+      startOpacity: 1,
+      startTranslateX: -200,
+      startTranslateY: 100,
     });
     expect(
-      createPieceTransitionProjection(black, transition(movePlan)).current.get(
-        'c2',
-      ),
+      createPieceTransitionProjection(
+        black,
+        transition(movePlan, black),
+      ).current.get('c2'),
     ).toEqual({
+      endOpacity: 1,
+      endTranslateX: 0,
+      endTranslateY: 0,
       kind: 'move',
-      translateX: 200,
-      translateY: -100,
+      startOpacity: 1,
+      startTranslateX: 200,
+      startTranslateY: -100,
     });
 
     const widePlan = plan({
@@ -181,19 +198,24 @@ describe('mounted piece transition projection', () => {
         }),
       ]),
     });
+    const wideLayout = createBoardSurfaceLayout(
+      { height: 100, width: 2_600 },
+      { columns: 26, rows: 1 },
+      'white',
+    );
     expect(
       createPieceTransitionProjection(
-        createBoardSurfaceLayout(
-          { height: 100, width: 2_600 },
-          { columns: 26, rows: 1 },
-          'white',
-        ),
-        transition(widePlan),
+        wideLayout,
+        transition(widePlan, wideLayout),
       ).current.get('z1'),
     ).toEqual({
+      endOpacity: 1,
+      endTranslateX: 0,
+      endTranslateY: 0,
       kind: 'move',
-      translateX: -2_500,
-      translateY: 0,
+      startOpacity: 1,
+      startTranslateX: -2_500,
+      startTranslateY: 0,
     });
 
     const tallPlan = plan({
@@ -208,19 +230,24 @@ describe('mounted piece transition projection', () => {
         }),
       ]),
     });
+    const tallLayout = createBoardSurfaceLayout(
+      { height: 1_000, width: 100 },
+      { columns: 1, rows: 10 },
+      'white',
+    );
     expect(
       createPieceTransitionProjection(
-        createBoardSurfaceLayout(
-          { height: 1_000, width: 100 },
-          { columns: 1, rows: 10 },
-          'white',
-        ),
-        transition(tallPlan),
+        tallLayout,
+        transition(tallPlan, tallLayout),
       ).current.get('a10'),
     ).toEqual({
+      endOpacity: 1,
+      endTranslateX: 0,
+      endTranslateY: 0,
       kind: 'move',
-      translateX: 0,
-      translateY: 100,
+      startOpacity: 1,
+      startTranslateX: 0,
+      startTranslateY: 100,
     });
   });
 
@@ -244,20 +271,28 @@ describe('mounted piece transition projection', () => {
     });
     const projection = createPieceTransitionProjection(
       layout,
-      transition(replacementPlan),
+      transition(replacementPlan, layout),
     );
     const enter = projection.current.get('c2') ?? null;
     const exit = projection.replacements[0]?.transition ?? null;
 
     expect(enter).toEqual({
+      endOpacity: 1,
+      endTranslateX: 0,
+      endTranslateY: 0,
       kind: 'replace-enter',
-      translateX: 200,
-      translateY: -100,
+      startOpacity: 0,
+      startTranslateX: 200,
+      startTranslateY: -100,
     });
     expect(exit).toEqual({
+      endOpacity: 0,
+      endTranslateX: -200,
+      endTranslateY: 100,
       kind: 'replace-exit',
-      translateX: -200,
-      translateY: 100,
+      startOpacity: 1,
+      startTranslateX: 0,
+      startTranslateY: 0,
     });
     expect(resolvePieceTransitionAnimatedStyle(enter, 0.5, 1)).toEqual({
       opacity: 0.5,
@@ -293,6 +328,7 @@ describe('mounted piece transition projection', () => {
           }),
         ]),
       }),
+      layout,
       progress,
     );
     const result = await render(
@@ -328,7 +364,7 @@ describe('mounted piece transition projection', () => {
           b1: Object.freeze({ id: 'runner', pieceType: 'token' }),
         })}
         style={EMPTY_STYLE}
-        transition={transition(mounted.plan, testSharedValue(0.5))}
+        transition={transition(mounted.plan, layout, testSharedValue(0.5))}
       />,
     );
     const currentArtwork = requiredNode(
@@ -389,7 +425,7 @@ describe('mounted piece transition projection', () => {
           c1: Object.freeze({ id: 'added', pieceType: 'token' }),
         })}
         style={{ opacity: 0.8 }}
-        transition={transition(capturePlan, progress)}
+        transition={transition(capturePlan, layout, progress)}
       />,
     );
     const root = rootOf(result);
@@ -423,7 +459,7 @@ describe('mounted piece transition projection', () => {
           c1: Object.freeze({ id: 'added', pieceType: 'token' }),
         })}
         style={{ opacity: 0.8 }}
-        transition={transition(capturePlan, testSharedValue(0.25))}
+        transition={transition(capturePlan, layout, testSharedValue(0.25))}
       />,
     );
     const progressedRoot = rootOf(progressedResult);
@@ -472,29 +508,46 @@ describe('mounted piece transition projection', () => {
         }),
       ]),
     });
+    const layout = createBoardSurfaceLayout(
+      { height: 100, width: 400 },
+      { columns: 4, rows: 1 },
+      'white',
+    );
     const projection = createPieceTransitionProjection(
-      createBoardSurfaceLayout(
-        { height: 100, width: 400 },
-        { columns: 4, rows: 1 },
-        'white',
-      ),
-      transition(ambiguous),
+      layout,
+      transition(ambiguous, layout),
     );
 
-    expect(projection.current.get('b1')).toEqual({ kind: 'enter' });
+    expect(projection.current.get('b1')).toEqual({
+      endOpacity: 1,
+      endTranslateX: 0,
+      endTranslateY: 0,
+      kind: 'enter',
+      startOpacity: 0,
+      startTranslateX: 0,
+      startTranslateY: 0,
+    });
     expect(projection.exits.map(({ square }) => square)).toEqual(['a1']);
     expect(projection.current.get('d1')).toEqual({
+      endOpacity: 1,
+      endTranslateX: 0,
+      endTranslateY: 0,
       kind: 'replace-enter',
-      translateX: -100,
-      translateY: 0,
+      startOpacity: 0,
+      startTranslateX: -100,
+      startTranslateY: 0,
     });
     expect(projection.replacements).toEqual([
       expect.objectContaining({
         square: 'c1',
         transition: {
+          endOpacity: 0,
+          endTranslateX: 100,
+          endTranslateY: 0,
           kind: 'replace-exit',
-          translateX: 100,
-          translateY: 0,
+          startOpacity: 1,
+          startTranslateX: 0,
+          startTranslateY: 0,
         },
       }),
     ]);
@@ -548,20 +601,21 @@ describe('mounted piece transition projection', () => {
         }),
       ]),
     });
+    const layout = createBoardSurfaceLayout(
+      { height: 100, width: 400 },
+      { columns: 4, rows: 1 },
+      'white',
+    );
     const result = await render(
       <PieceLayer
         boardId="promotion"
-        layout={createBoardSurfaceLayout(
-          { height: 100, width: 400 },
-          { columns: 4, rows: 1 },
-          'white',
-        )}
+        layout={layout}
         pieceRenderers={{ captured: Probe, pawn: Probe, promoted: Probe }}
         position={currentPosition({
           d1: Object.freeze({ id: 'pawn', pieceType: 'promoted' }),
         })}
         style={EMPTY_STYLE}
-        transition={transition(replacementPlan, testSharedValue(0.5))}
+        transition={transition(replacementPlan, layout, testSharedValue(0.5))}
       />,
     );
     const root = rootOf(result);
@@ -599,14 +653,15 @@ describe('mounted piece transition projection', () => {
   });
 
   it('keeps transient hosts pointerless and hidden from accessibility', async () => {
+    const layout = createBoardSurfaceLayout(
+      { height: 80, width: 80 },
+      { columns: 1, rows: 1 },
+      'white',
+    );
     const result = await render(
       <PieceLayer
         boardId="decorative"
-        layout={createBoardSurfaceLayout(
-          { height: 80, width: 80 },
-          { columns: 1, rows: 1 },
-          'white',
-        )}
+        layout={layout}
         pieceRenderers={{ token: Probe }}
         position={currentPosition({})}
         style={EMPTY_STYLE}
@@ -621,6 +676,7 @@ describe('mounted piece transition projection', () => {
               }),
             ]),
           }),
+          layout,
         )}
       />,
     );
