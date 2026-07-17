@@ -37,12 +37,13 @@ or invalidate an otherwise valid controlled position.
 The pure planner applies identity in this order:
 
 1. one structurally valid hint correlated to the exact previous and current
-   revisions;
-2. equal stable piece IDs, including a type-changing replacement reserved for
-   later promotion presentation;
+   revisions, including its optional second actor and captured square;
+2. equal stable piece IDs, including type-changing replacements;
 3. anonymous pieces that remain unchanged on the same square;
-4. one-to-one anonymous type matches;
-5. mutually unique standard-piece geometry matches within a bounded candidate
+4. one globally unambiguous standard promotion or replay reversal whose source
+   and target have no remaining same-type identity alternative;
+5. one-to-one anonymous type matches;
+6. mutually unique standard-piece geometry matches within a bounded candidate
    scan.
 
 An ID-bearing piece never falls back to anonymous or different-ID matching.
@@ -60,20 +61,41 @@ Initial mount and semantic no-op revisions create no plan. Operation order is
 canonical rank/file order and does not depend on object insertion order or
 orientation.
 
-P3.1 snapshots `promotion`, `capturedSquare`, and `rookMove` fields and rejects
-revision, endpoint, and stable-identity contradictions, but consumes only the
-ordinary `from`/`to` actor match. Promotion, en passant association,
-coordinated castling, and their specialized animation runtime remain later
-transition work.
+P3.1 introduced detached validation for `promotion`, `capturedSquare`, and
+`rookMove`. P3.3 consumes an accepted hint atomically. The primary actor and
+optional `rookMove` actor become independent operations on the same plan and
+clock. The captured before-square is reserved from every other matcher and
+becomes exactly one captured exit, including when it differs from the primary
+target as in en passant. Crossing primary and secondary paths remain valid for
+rules-free variants. The planner never fabricates a castling intermediate
+position.
+
+An explicit `promotion` only names the target piece type. It deliberately does
+not impose pawn roles, colors, ranks, or legal chess movement on the open piece
+vocabulary. Without a hint or stable identity, the compatibility fallback is
+conservative: it recognizes only one unambiguous same-color standard
+`P`-to-`Q/R/B/N` promotion or replay reversal on the appropriate edge rank,
+within one file and only when neither endpoint has an ordinary same-type actor
+alternative. Multiple candidates, custom piece types, competing identities,
+and oversized candidate scans fall back to ordinary matching, exits, and
+enters rather than inventing identity.
 
 P3.2 adds the ordinary mounted runtime. A layout effect compares only committed
 semantic snapshots, installs one detached plan for the exact target revision,
 and drives all actors from one board-local Reanimated progress value. Current
 move targets translate from their measured source cells, current enter actors
 fade in, and detached removed/captured/ambiguous actors fade out underneath the
-current piece plane. Type-changing replacements snap until P3.3 owns promotion
-presentation. Current renderers always receive the target square; exit
+current piece plane. Current renderers always receive the target square; exit
 renderers receive the old square and detached old piece.
+
+P3.3 presents every identity-safe type-changing replacement with two detached
+views on that same clock. The old artwork begins at the source, travels to the
+target, and fades out. The current authoritative artwork begins hidden at the
+same visual point, travels along the same path, and fades in. Thus promotion
+and custom stable-ID transformations never require a shadow position. Generic
+capture exits paint below the replacement-before actor, which paints below the
+current target actor. Every transient remains pointerless and hidden from
+accessibility.
 
 The animation callback captures only the plan epoch, target comparison token,
 and geometry epoch. A newer prop hides the old plan during render, then cancels
@@ -86,8 +108,9 @@ now dispatched only after commit in development and deduplicated across effect
 replay.
 
 For A to B to C, B is committed even when its animation is interrupted. A B to
-C hint is therefore valid and every A to B visual epoch becomes inert. Geometry
-or orientation changes replan from current controlled semantics.
+C hint is therefore valid and every A to B visual epoch becomes inert. P3.4
+owns continuity-preserving interruption and geometry replanning; current
+geometry or orientation changes settle directly to controlled semantics.
 
 `reduceMotion="system"` follows the operating system, `always` settles without
 motion, and `never` explicitly permits motion. Changing into reduced motion

@@ -162,22 +162,15 @@ export interface BoardSquare {
 
 // @public
 export interface BoardTransition {
-    // (undocumented)
     readonly capturedSquare?: SquareId;
-    // (undocumented)
     readonly from: SquareId;
-    // (undocumented)
     readonly fromRevision: Revision;
-    // (undocumented)
     readonly promotion?: PieceType;
-    // (undocumented)
     readonly rookMove?: Readonly<{
         from: SquareId;
         to: SquareId;
     }>;
-    // (undocumented)
     readonly to: SquareId;
-    // (undocumented)
     readonly toRevision: Revision;
 }
 

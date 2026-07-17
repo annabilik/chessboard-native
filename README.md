@@ -112,9 +112,11 @@ deterministic exits and enters, and produces detached epoch/revision-correlated
 plans. P3.2 mounts those detached operations in one board-local Reanimated
 clock: current target actors translate or fade in, removed/captured actors fade
 out underneath them, reduced motion and zero duration snap, and newer props or
-geometry changes cancel stale work. Replacements still snap; promotion,
-castling, en passant, continuity-preserving interruption, and pending-to-commit
-handoff remain later transition packages.
+geometry changes cancel stale work. P3.3 consumes explicit capture, promotion,
+and second-actor hints: castling actors share one clock, off-target captures
+fade the exact reserved victim, and type-changing artwork crossfades along one
+path without shadow state. Continuity-preserving interruption, geometry
+replanning, and pending-to-commit handoff remain P3.4 work.
 
 The accepted architecture decisions and all 20 reserved invariant contracts
 are indexed in
@@ -192,22 +194,24 @@ pnpm native:ios:accessibility
 ```
 
 The iOS commands require macOS with Xcode, Ruby, Bundler, and CocoaPods.
-The Android accessibility command requires a running device or emulator; CI
-cold-boots a pinned, snapshot-disabled API 35 `aosp_atd` emulator and runs the
-connected Release audit. `pnpm native:android:accessibility:managed` remains
-available as a locally provisioned Gradle-managed alternative.
-`pnpm verify` remains portable and does not invoke either native toolchain; CI
-runs each native accessibility audit inside its platform's independent required
-Release job.
+The Android accessibility command requires a running device or emulator. When
+native CI is enabled, it cold-boots a pinned, snapshot-disabled API 35
+`aosp_atd` emulator and runs the connected Release audit.
+`pnpm native:android:accessibility:managed` remains available as a locally
+provisioned Gradle-managed alternative. `pnpm verify` remains portable and does
+not invoke either native toolchain. The native CI jobs are temporarily disabled;
+set the repository Actions variable `RUN_NATIVE_CI=true` to restore the Expo,
+Android, and iOS Release jobs and their accessibility audits.
 
 ## Packed artifact gate
 
-CI builds and inspects one npm archive, then installs those exact bytes into
-fresh Expo and bare React Native consumers outside the checkout. The smoke
-runner rejects workspace dependencies, source-repository resolution, package
-symlinks, and missing declared peers before any build starts. CI then runs both
-Expo production exports, an Expo Android Release assembly, and bare Android and
-iOS Release builds after a clean CocoaPods install.
+CI always builds and inspects one npm archive. When native CI is enabled, it
+installs those exact bytes into fresh Expo and bare React Native consumers
+outside the checkout. The smoke runner rejects workspace dependencies,
+source-repository resolution, package symlinks, and missing declared peers
+before any build starts. It then runs both Expo production exports, an Expo
+Android Release assembly, and bare Android and iOS Release builds after a clean
+CocoaPods install.
 
 To prepare either isolated consumer locally:
 

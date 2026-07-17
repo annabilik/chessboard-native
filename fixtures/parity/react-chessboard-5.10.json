@@ -866,9 +866,9 @@
         "surface": "internal",
         "symbols": ["inferPromotionTransition"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-GET-PROMOTION-UPDATES",
-      "compatibilityNotes": "Promotion inference is a safe fallback behind explicit transition hints and piece IDs.",
+      "compatibilityNotes": "Promotion inference is a bounded, globally unambiguous anonymous fallback behind explicit hints, stable piece IDs, and competing same-type actor identities.",
       "rationale": "Promotion and reversal inference is presentation-only and cannot decide game semantics or manufacture a canonical move.",
       "documentation": "docs/parity/react-chessboard-5.10.md#export-get-promotion-updates"
     },
@@ -2876,7 +2876,7 @@
       },
       "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B09",
-      "compatibilityNotes": "Ordinary controlled transitions use the configured duration, honor reduced motion, and snap safely when configuration changes."
+      "compatibilityNotes": "Ordinary and special controlled transitions use the configured duration, share one board-local clock, honor reduced motion, and snap safely when configuration changes."
     },
     {
       "id": "behavior.b10-external-diff-and-one-deep-timeout-queue",
@@ -2957,9 +2957,9 @@
         "surface": "root",
         "symbols": ["BoardTransition.rookMove"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B12",
-      "compatibilityNotes": "The public rook hint is detached and checked for revision, endpoint, and stable-identity contradictions by the internal pure planner without fabricating semantic state; coordinated castling planning and runtime remain future work.",
+      "compatibilityNotes": "An accepted rookMove becomes a second exact actor in the same detached plan and board-local clock; both current targets animate without fabricating an intermediate semantic position.",
       "rationale": "A fake intermediate position temporarily renders state the consumer never supplied and can become stale when another update interrupts the timeout.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b12-castling-fake-intermediate-position"
     },
@@ -2987,9 +2987,9 @@
         "surface": "internal",
         "symbols": ["inferPromotionTransition"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B13",
-      "compatibilityNotes": "Explicit hints and piece IDs take precedence; only a safe unambiguous promotion fallback animates."
+      "compatibilityNotes": "Explicit hints, piece IDs, and competing same-type identities take precedence; only one safe, bounded, globally unambiguous anonymous promotion or replay reversal falls back to animation."
     },
     {
       "id": "behavior.b14-ambiguous-diff-first-candidate-fallback",

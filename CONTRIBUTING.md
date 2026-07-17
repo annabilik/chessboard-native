@@ -41,10 +41,10 @@ pnpm native:ios:accessibility
 
 The Android accessibility command needs a running device or emulator. The iOS
 accessibility command selects an available iPhone simulator and requires iOS
-17 or newer. CI runs both native Release builds and audits even when only one
-platform can be exercised on a contributor's development machine. Those
-required jobs install the single inspected npm archive into consumers outside
-the checkout; workspace-linked builds are development conveniences, not
+17 or newer. Native CI is temporarily disabled; setting the repository Actions
+variable `RUN_NATIVE_CI=true` restores both native Release builds and audits.
+Those jobs install the single inspected npm archive into consumers outside the
+checkout; workspace-linked builds are development conveniences, not
 package-release evidence.
 
 Automated native audits supplement the manual TalkBack and VoiceOver checklist

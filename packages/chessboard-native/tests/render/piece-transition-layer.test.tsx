@@ -224,6 +224,55 @@ describe('mounted piece transition projection', () => {
     });
   });
 
+  it('keeps replacement artwork co-located on a black-oriented rectangular board', () => {
+    const layout = createBoardSurfaceLayout(
+      { height: 200, width: 300 },
+      { columns: 3, rows: 2 },
+      'black',
+    );
+    const replacementPlan = plan({
+      replacements: Object.freeze([
+        Object.freeze({
+          after: Object.freeze({ pieceType: 'wQ' }),
+          before: Object.freeze({ pieceType: 'wP' }),
+          from: 'a1',
+          kind: 'replace' as const,
+          matchedBy: 'promotion' as const,
+          to: 'c2',
+        }),
+      ]),
+    });
+    const projection = createPieceTransitionProjection(
+      layout,
+      transition(replacementPlan),
+    );
+    const enter = projection.current.get('c2') ?? null;
+    const exit = projection.replacements[0]?.transition ?? null;
+
+    expect(enter).toEqual({
+      kind: 'replace-enter',
+      translateX: 200,
+      translateY: -100,
+    });
+    expect(exit).toEqual({
+      kind: 'replace-exit',
+      translateX: -200,
+      translateY: 100,
+    });
+    expect(resolvePieceTransitionAnimatedStyle(enter, 0.5, 1)).toEqual({
+      opacity: 0.5,
+      transform: [{ translateX: 100 }, { translateY: -50 }],
+    });
+    expect(resolvePieceTransitionAnimatedStyle(exit, 0.5, 1)).toEqual({
+      opacity: 0.5,
+      transform: [{ translateX: -100 }, { translateY: 50 }],
+    });
+    expect(resolvePieceTransitionAnimatedStyle(enter, 0, 1).opacity).toBe(0);
+    expect(resolvePieceTransitionAnimatedStyle(exit, 0, 1).opacity).toBe(1);
+    expect(resolvePieceTransitionAnimatedStyle(enter, 1, 1).opacity).toBe(1);
+    expect(resolvePieceTransitionAnimatedStyle(exit, 1, 1).opacity).toBe(0);
+  });
+
   it('animates the current target host from its measured source without changing its canonical square', async () => {
     const progress = testSharedValue(0);
     const layout = createBoardSurfaceLayout(
@@ -393,7 +442,7 @@ describe('mounted piece transition projection', () => {
     expect(animatedStyle(currentAdded).opacity).toBeCloseTo(0.2);
   });
 
-  it('crossfades ambiguous actors without inventing a move and snaps replacements', () => {
+  it('crossfades ambiguous actors and co-locates both sides of a replacement path', () => {
     const ambiguous = plan({
       enters: Object.freeze([
         Object.freeze({
@@ -434,7 +483,21 @@ describe('mounted piece transition projection', () => {
 
     expect(projection.current.get('b1')).toEqual({ kind: 'enter' });
     expect(projection.exits.map(({ square }) => square)).toEqual(['a1']);
-    expect(projection.current.has('d1')).toBe(false);
+    expect(projection.current.get('d1')).toEqual({
+      kind: 'replace-enter',
+      translateX: -100,
+      translateY: 0,
+    });
+    expect(projection.replacements).toEqual([
+      expect.objectContaining({
+        square: 'c1',
+        transition: {
+          kind: 'replace-exit',
+          translateX: 100,
+          translateY: 0,
+        },
+      }),
+    ]);
     expect(
       resolvePieceTransitionAnimatedStyle(
         projection.current.get('b1') ?? null,
@@ -442,6 +505,97 @@ describe('mounted piece transition projection', () => {
         1,
       ),
     ).toEqual({ opacity: 0.4, transform: undefined });
+    expect(
+      resolvePieceTransitionAnimatedStyle(
+        projection.current.get('d1') ?? null,
+        0.4,
+        1,
+      ),
+    ).toEqual({
+      opacity: 0.4,
+      transform: [{ translateX: -60 }, { translateY: 0 }],
+    });
+    expect(
+      resolvePieceTransitionAnimatedStyle(
+        projection.replacements[0]?.transition ?? null,
+        0.4,
+        1,
+      ),
+    ).toEqual({
+      opacity: 0.6,
+      transform: [{ translateX: 40 }, { translateY: 0 }],
+    });
+  });
+
+  it('renders detached before artwork below the canonical replacement target on one shared progress value', async () => {
+    const replacementPlan = plan({
+      exits: Object.freeze([
+        Object.freeze({
+          from: 'd1',
+          kind: 'exit' as const,
+          piece: Object.freeze({ id: 'victim', pieceType: 'captured' }),
+          reason: 'captured' as const,
+        }),
+      ]),
+      replacements: Object.freeze([
+        Object.freeze({
+          after: Object.freeze({ id: 'pawn', pieceType: 'promoted' }),
+          before: Object.freeze({ id: 'pawn', pieceType: 'pawn' }),
+          from: 'c1',
+          kind: 'replace' as const,
+          matchedBy: 'explicit' as const,
+          to: 'd1',
+        }),
+      ]),
+    });
+    const result = await render(
+      <PieceLayer
+        boardId="promotion"
+        layout={createBoardSurfaceLayout(
+          { height: 100, width: 400 },
+          { columns: 4, rows: 1 },
+          'white',
+        )}
+        pieceRenderers={{ captured: Probe, pawn: Probe, promoted: Probe }}
+        position={currentPosition({
+          d1: Object.freeze({ id: 'pawn', pieceType: 'promoted' }),
+        })}
+        style={EMPTY_STYLE}
+        transition={transition(replacementPlan, testSharedValue(0.5))}
+      />,
+    );
+    const root = rootOf(result);
+    const victim = requiredNode(root, 'victim:d1:transition');
+    const before = requiredNode(root, 'pawn:c1:transition');
+    const after = requiredNode(root, 'pawn:d1:transition');
+    if (
+      victim.parent === null ||
+      before.parent === null ||
+      after.parent === null
+    ) {
+      throw new Error('Expected capture and replacement transition hosts.');
+    }
+    expect(animatedStyle(before.parent)).toEqual(
+      expect.objectContaining({
+        opacity: 0.5,
+        transform: [{ translateX: 50 }, { translateY: 0 }],
+      }),
+    );
+    expect(animatedStyle(after.parent)).toEqual(
+      expect.objectContaining({
+        opacity: 0.5,
+        transform: [{ translateX: -50 }, { translateY: 0 }],
+      }),
+    );
+    const visualChildren = root.children.filter(
+      (child): child is TestInstance => typeof child !== 'string',
+    );
+    expect(visualChildren.indexOf(victim.parent)).toBeLessThan(
+      visualChildren.indexOf(before.parent),
+    );
+    expect(visualChildren.indexOf(before.parent)).toBeLessThan(
+      visualChildren.indexOf(after.parent),
+    );
   });
 
   it('keeps transient hosts pointerless and hidden from accessibility', async () => {

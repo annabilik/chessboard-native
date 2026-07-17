@@ -113,6 +113,9 @@ jobs:
 
   packed-expo:
     name: Packed / Expo
+    # Native consumer builds are temporarily opt-in. Set the repository Actions
+    # variable RUN_NATIVE_CI=true to restore all three native jobs.
+    if: ${{ vars.RUN_NATIVE_CI == 'true' }}
     needs:
       - baseline
       - package-artifact
@@ -171,6 +174,7 @@ jobs:
 
   packed-bare-android:
     name: Native / Android Release
+    if: ${{ vars.RUN_NATIVE_CI == 'true' }}
     needs:
       - baseline
       - package-artifact
@@ -364,6 +368,7 @@ jobs:
 
   packed-bare-ios:
     name: Native / iOS Release
+    if: ${{ vars.RUN_NATIVE_CI == 'true' }}
     needs:
       - baseline
       - package-artifact
@@ -439,6 +444,7 @@ jobs:
       PACKED_EXPO_RESULT: ${{ needs.packed-expo.result }}
       PACKED_BARE_ANDROID_RESULT: ${{ needs.packed-bare-android.result }}
       PACKED_BARE_IOS_RESULT: ${{ needs.packed-bare-ios.result }}
+      RUN_NATIVE_CI: ${{ vars.RUN_NATIVE_CI == 'true' }}
 
     steps:
       - name: Require every CI job to succeed
@@ -448,15 +454,31 @@ jobs:
 
           for variable in \
             BASELINE_RESULT \
-            PACKAGE_ARTIFACT_RESULT \
+            PACKAGE_ARTIFACT_RESULT
+          do
+            result="${!variable}"
+
+            if [[ "$result" != "success" ]]; then
+              echo "$variable was $result; expected success"
+              failed=1
+            fi
+          done
+
+          if [[ "$RUN_NATIVE_CI" == "true" ]]; then
+            expected_native_result="success"
+          else
+            expected_native_result="skipped"
+          fi
+
+          for variable in \
             PACKED_EXPO_RESULT \
             PACKED_BARE_ANDROID_RESULT \
             PACKED_BARE_IOS_RESULT
           do
             result="${!variable}"
 
-            if [[ "$result" != "success" ]]; then
-              echo "$variable was $result"
+            if [[ "$result" != "$expected_native_result" ]]; then
+              echo "$variable was $result; expected $expected_native_result"
               failed=1
             fi
           done

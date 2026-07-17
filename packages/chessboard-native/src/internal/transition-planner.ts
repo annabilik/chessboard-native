@@ -12,7 +12,7 @@ import type { TransitionHintWarning } from './transition-hint';
 export type TransitionEpoch = number;
 
 export type TransitionMatchBasis =
-  'explicit' | 'piece-id' | 'geometry' | 'piece-type';
+  'explicit' | 'piece-id' | 'geometry' | 'piece-type' | 'promotion';
 
 export interface MovePieceTransition {
   readonly kind: 'move';
@@ -29,7 +29,7 @@ export interface ReplacePieceTransition {
   readonly to: SquareId;
   readonly before: Readonly<PieceData>;
   readonly after: Readonly<PieceData>;
-  readonly matchedBy: 'explicit' | 'piece-id';
+  readonly matchedBy: 'explicit' | 'piece-id' | 'promotion';
 }
 
 export interface ExitPieceTransition {
@@ -83,9 +83,41 @@ interface ExplicitMatch {
   readonly to: SquareId;
 }
 
+type PromotionDirection = 'promotion' | 'reversal';
+
+interface PromotionEntryMatch {
+  readonly before: Readonly<PieceEntry>;
+  readonly after: Readonly<PieceEntry>;
+  readonly direction: PromotionDirection;
+}
+
+interface PromotionEntryInference {
+  readonly match: Readonly<PromotionEntryMatch> | null;
+  readonly ambiguousBefore: readonly SquareId[];
+  readonly ambiguousAfter: readonly SquareId[];
+}
+
+/** One conservative anonymous standard-piece promotion presentation match. */
+export interface PromotionTransitionMatch {
+  readonly from: SquareId;
+  readonly to: SquareId;
+  readonly before: Readonly<PieceData>;
+  readonly after: Readonly<PieceData>;
+  readonly direction: PromotionDirection;
+}
+
 const EMPTY_WARNINGS: readonly Readonly<TransitionHintWarning>[] =
   Object.freeze([]);
+const EMPTY_EXPLICIT_MATCHES: readonly Readonly<ExplicitMatch>[] =
+  Object.freeze([]);
 const MAX_GEOMETRY_CANDIDATE_PAIRS = 4096;
+const MAX_PROMOTION_CANDIDATE_PAIRS = 4096;
+const PROMOTABLE_STANDARD_ROLES: ReadonlySet<string> = new Set([
+  'Q',
+  'R',
+  'B',
+  'N',
+]);
 
 function clonePiece(piece: Readonly<PieceData>): Readonly<PieceData> {
   return Object.freeze({
@@ -283,7 +315,7 @@ function freezeMove(
 function freezeReplacement(
   before: Readonly<PieceEntry>,
   after: Readonly<PieceEntry>,
-  matchedBy: 'explicit' | 'piece-id',
+  matchedBy: 'explicit' | 'piece-id' | 'promotion',
 ): Readonly<ReplacePieceTransition> {
   return Object.freeze({
     after: clonePiece(after.piece),
@@ -293,6 +325,162 @@ function freezeReplacement(
     matchedBy,
     to: after.square,
   });
+}
+
+function promotionDirectionAtSquares(
+  before: Readonly<PieceEntry>,
+  after: Readonly<PieceEntry>,
+  dimensions: ValidatedBoardDimensions,
+): PromotionDirection | null {
+  const beforeMatch = /^([wb])([PNBRQK])$/.exec(before.piece.pieceType);
+  const afterMatch = /^([wb])([PNBRQK])$/.exec(after.piece.pieceType);
+  if (
+    beforeMatch === null ||
+    afterMatch === null ||
+    beforeMatch[1] !== afterMatch[1]
+  ) {
+    return null;
+  }
+
+  let direction: PromotionDirection;
+  let pawnSquare: SquareId;
+  let promotionSquare: SquareId;
+  if (
+    beforeMatch[2] === 'P' &&
+    PROMOTABLE_STANDARD_ROLES.has(afterMatch[2] ?? '')
+  ) {
+    direction = 'promotion';
+    pawnSquare = before.square;
+    promotionSquare = after.square;
+  } else if (
+    afterMatch[2] === 'P' &&
+    PROMOTABLE_STANDARD_ROLES.has(beforeMatch[2] ?? '')
+  ) {
+    direction = 'reversal';
+    pawnSquare = after.square;
+    promotionSquare = before.square;
+  } else {
+    return null;
+  }
+
+  const pawn = parseSquareId(pawnSquare, dimensions);
+  const promotion = parseSquareId(promotionSquare, dimensions);
+  if (Math.abs(pawn.fileIndex - promotion.fileIndex) > 1) {
+    return null;
+  }
+  const isWhite = beforeMatch[1] === 'w';
+  return (isWhite &&
+    pawn.rank === dimensions.rows - 1 &&
+    promotion.rank === dimensions.rows) ||
+    (!isWhite && pawn.rank === 2 && promotion.rank === 1)
+    ? direction
+    : null;
+}
+
+function inferPromotionEntryMatch(options: {
+  readonly before: readonly Readonly<PieceEntry>[];
+  readonly after: readonly Readonly<PieceEntry>[];
+  readonly dimensions: ValidatedBoardDimensions;
+}): Readonly<PromotionEntryInference> {
+  const beforeBySquare = new Map(
+    options.before.map((entry) => [entry.square, entry]),
+  );
+  const afterBySquare = new Map(
+    options.after.map((entry) => [entry.square, entry]),
+  );
+  const beforeCandidates = options.before.filter((entry) => {
+    const current = afterBySquare.get(entry.square);
+    return (
+      entry.piece.id === undefined &&
+      (current === undefined || !samePiece(entry.piece, current.piece))
+    );
+  });
+  const afterCandidates = options.after.filter((entry) => {
+    const previous = beforeBySquare.get(entry.square);
+    return (
+      entry.piece.id === undefined &&
+      (previous === undefined || !samePiece(previous.piece, entry.piece))
+    );
+  });
+  if (
+    beforeCandidates.length * afterCandidates.length >
+    MAX_PROMOTION_CANDIDATE_PAIRS
+  ) {
+    return Object.freeze({
+      ambiguousAfter: Object.freeze([]),
+      ambiguousBefore: Object.freeze([]),
+      match: null,
+    });
+  }
+  const changedBeforeTypes = new Set(
+    beforeCandidates.map((entry) => entry.piece.pieceType),
+  );
+  const changedAfterTypes = new Set(
+    afterCandidates.map((entry) => entry.piece.pieceType),
+  );
+  let candidate: Readonly<PromotionEntryMatch> | null = null;
+  let candidateCount = 0;
+  const ambiguousBefore = new Set<SquareId>();
+  const ambiguousAfter = new Set<SquareId>();
+
+  for (const before of beforeCandidates) {
+    for (const after of afterCandidates) {
+      if (
+        changedAfterTypes.has(before.piece.pieceType) ||
+        changedBeforeTypes.has(after.piece.pieceType)
+      ) {
+        continue;
+      }
+      const direction = promotionDirectionAtSquares(
+        before,
+        after,
+        options.dimensions,
+      );
+      if (direction !== null) {
+        candidate ??= Object.freeze({ after, before, direction });
+        candidateCount += 1;
+        ambiguousBefore.add(before.square);
+        ambiguousAfter.add(after.square);
+      }
+    }
+  }
+
+  return Object.freeze({
+    ambiguousAfter:
+      candidateCount > 1
+        ? Object.freeze([...ambiguousAfter])
+        : Object.freeze([]),
+    ambiguousBefore:
+      candidateCount > 1
+        ? Object.freeze([...ambiguousBefore])
+        : Object.freeze([]),
+    match: candidateCount === 1 ? candidate : null,
+  });
+}
+
+/**
+ * Infer only one globally unambiguous anonymous standard promotion or replay
+ * reversal. This is presentation inference, never a chess-rules decision.
+ */
+export function inferPromotionTransition(options: {
+  readonly before: PositionObject;
+  readonly after: PositionObject;
+  readonly dimensions: ValidatedBoardDimensions;
+}): Readonly<PromotionTransitionMatch> | null {
+  const inference = inferPromotionEntryMatch({
+    after: positionEntries(options.after, options.dimensions),
+    before: positionEntries(options.before, options.dimensions),
+    dimensions: options.dimensions,
+  });
+  return inference.match === null
+    ? null
+    : Object.freeze({
+        after: clonePiece(inference.match.after.piece),
+        before: clonePiece(inference.match.before.piece),
+        direction: inference.match.direction,
+        from: inference.match.before.square,
+        to: inference.match.after.square,
+      });
 }
 
 function byPieceType(
@@ -429,7 +617,8 @@ export function inferPositionTransition(options: {
   readonly before: PositionObject;
   readonly after: PositionObject;
   readonly dimensions: ValidatedBoardDimensions;
-  readonly explicitMatch?: Readonly<ExplicitMatch> | null;
+  readonly explicitMatches?: readonly Readonly<ExplicitMatch>[];
+  readonly explicitCapturedSquare?: SquareId | null;
 }): Readonly<InferredPositionTransition> {
   const beforeEntries = positionEntries(options.before, options.dimensions);
   const afterEntries = positionEntries(options.after, options.dimensions);
@@ -441,6 +630,14 @@ export function inferPositionTransition(options: {
   );
   const consumedBefore = new Set<SquareId>();
   const consumedAfter = new Set<SquareId>();
+  const reservedBefore = new Set<SquareId>();
+  if (
+    options.explicitCapturedSquare !== undefined &&
+    options.explicitCapturedSquare !== null &&
+    beforeBySquare.has(options.explicitCapturedSquare)
+  ) {
+    reservedBefore.add(options.explicitCapturedSquare);
+  }
   const ambiguousBefore = new Set<SquareId>();
   const ambiguousAfter = new Set<SquareId>();
   const moves: Readonly<MovePieceTransition>[] = [];
@@ -451,7 +648,11 @@ export function inferPositionTransition(options: {
     after: Readonly<PieceEntry>,
     matchedBy: TransitionMatchBasis,
   ): void => {
-    if (consumedBefore.has(before.square) || consumedAfter.has(after.square)) {
+    if (
+      reservedBefore.has(before.square) ||
+      consumedBefore.has(before.square) ||
+      consumedAfter.has(after.square)
+    ) {
       return;
     }
     consumedBefore.add(before.square);
@@ -470,13 +671,14 @@ export function inferPositionTransition(options: {
       freezeReplacement(
         before,
         after,
-        matchedBy === 'explicit' ? 'explicit' : 'piece-id',
+        matchedBy === 'explicit' || matchedBy === 'promotion'
+          ? matchedBy
+          : 'piece-id',
       ),
     );
   };
 
-  const explicitMatch = options.explicitMatch;
-  if (explicitMatch !== undefined && explicitMatch !== null) {
+  for (const explicitMatch of options.explicitMatches ?? []) {
     const source = beforeBySquare.get(explicitMatch.from);
     const target = afterBySquare.get(explicitMatch.to);
     if (
@@ -518,7 +720,11 @@ export function inferPositionTransition(options: {
   }
 
   for (const before of beforeEntries) {
-    if (consumedBefore.has(before.square) || before.piece.id !== undefined) {
+    if (
+      reservedBefore.has(before.square) ||
+      consumedBefore.has(before.square) ||
+      before.piece.id !== undefined
+    ) {
       continue;
     }
     const after = afterBySquare.get(before.square);
@@ -532,9 +738,39 @@ export function inferPositionTransition(options: {
     }
   }
 
+  const promotionInference = inferPromotionEntryMatch({
+    after: afterEntries.filter(
+      (entry) =>
+        !consumedAfter.has(entry.square) && entry.piece.id === undefined,
+    ),
+    before: beforeEntries.filter(
+      (entry) =>
+        !reservedBefore.has(entry.square) &&
+        !consumedBefore.has(entry.square) &&
+        entry.piece.id === undefined,
+    ),
+    dimensions: options.dimensions,
+  });
+  if (promotionInference.match !== null) {
+    consume(
+      promotionInference.match.before,
+      promotionInference.match.after,
+      'promotion',
+    );
+  } else {
+    for (const square of promotionInference.ambiguousBefore) {
+      ambiguousBefore.add(square);
+    }
+    for (const square of promotionInference.ambiguousAfter) {
+      ambiguousAfter.add(square);
+    }
+  }
+
   const unmatchedBefore = beforeEntries.filter(
     (entry) =>
-      !consumedBefore.has(entry.square) && entry.piece.id === undefined,
+      !reservedBefore.has(entry.square) &&
+      !consumedBefore.has(entry.square) &&
+      entry.piece.id === undefined,
   );
   const unmatchedAfter = afterEntries.filter(
     (entry) => !consumedAfter.has(entry.square) && entry.piece.id === undefined,
@@ -571,11 +807,13 @@ export function inferPositionTransition(options: {
         from: entry.square,
         kind: 'exit' as const,
         piece: clonePiece(entry.piece),
-        reason: occupiedTargets.has(entry.square)
+        reason: reservedBefore.has(entry.square)
           ? 'captured'
-          : ambiguousBefore.has(entry.square)
-            ? 'ambiguous'
-            : 'removed',
+          : occupiedTargets.has(entry.square)
+            ? 'captured'
+            : ambiguousBefore.has(entry.square)
+              ? 'ambiguous'
+              : 'removed',
       }),
     );
   const enters = afterEntries
@@ -720,9 +958,14 @@ export function validatePositionTransitionHint(options: {
     }
     const captured = options.before.value[hint.capturedSquare];
     const currentCaptured = options.after.value[hint.capturedSquare];
+    const isExplicitTarget =
+      hint.capturedSquare === hint.to ||
+      hint.capturedSquare === hint.rookMove?.to;
     if (
       captured === undefined ||
-      (currentCaptured !== undefined && samePiece(captured, currentCaptured)) ||
+      (!isExplicitTarget &&
+        currentCaptured !== undefined &&
+        samePiece(captured, currentCaptured)) ||
       (captured.id !== undefined &&
         findPieceSquareById(options.after.value, captured.id) !== null)
     ) {
@@ -905,10 +1148,21 @@ export function planPositionTransition(options: {
     after: options.after.value,
     before: options.before.value,
     dimensions: options.dimensions,
-    explicitMatch:
+    explicitCapturedSquare: acceptedHint?.capturedSquare ?? null,
+    explicitMatches:
       acceptedHint === null
-        ? null
-        : Object.freeze({ from: acceptedHint.from, to: acceptedHint.to }),
+        ? EMPTY_EXPLICIT_MATCHES
+        : Object.freeze([
+            Object.freeze({ from: acceptedHint.from, to: acceptedHint.to }),
+            ...(acceptedHint.rookMove === undefined
+              ? []
+              : [
+                  Object.freeze({
+                    from: acceptedHint.rookMove.from,
+                    to: acceptedHint.rookMove.to,
+                  }),
+                ]),
+          ]),
   });
   if (
     inferred.moves.length === 0 &&

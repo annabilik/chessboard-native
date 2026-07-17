@@ -10,6 +10,7 @@ import type {
   PositionObject,
 } from '../../src/public-types';
 import {
+  inferPromotionTransition,
   inferPositionTransition,
   planPositionTransition,
   type TransitionPositionSnapshot,
@@ -209,7 +210,7 @@ describe('controlled position transition planner', () => {
         e2: { id: 'pawn', pieceType: 'wP' },
       },
       dimensions,
-      explicitMatch: { from: 'e2', to: 'e4' },
+      explicitMatches: [{ from: 'e2', to: 'e4' }],
     });
 
     expect(inferred.moves).toEqual([]);
@@ -535,7 +536,7 @@ describe('controlled position transition planner', () => {
     expect(requirePlan(conflict).enters).toHaveLength(1);
   });
 
-  it('[PARITY-BEHAVIOR-B12] validates and detaches reserved capture and rook hints without applying their special semantics', () => {
+  it('[PARITY-BEHAVIOR-B12] consumes the rook hint as a second detached move without fabricating position state', () => {
     const transition: BoardTransition = {
       capturedSquare: 'd5',
       from: 'e5',
@@ -569,8 +570,273 @@ describe('controlled position transition planner', () => {
     expect(plan.hint?.rookMove).not.toBe(transition.rookMove);
     expect(Object.isFrozen(plan.hint)).toBe(true);
     expect(Object.isFrozen(plan.hint?.rookMove)).toBe(true);
+    expect(plan.moves).toEqual([
+      expect.objectContaining({
+        from: 'h1',
+        matchedBy: 'explicit',
+        to: 'f1',
+      }),
+      expect.objectContaining({
+        from: 'e5',
+        matchedBy: 'explicit',
+        to: 'd6',
+      }),
+    ]);
     expect(plan.exits).toEqual([
-      expect.objectContaining({ from: 'd5', reason: 'removed' }),
+      expect.objectContaining({ from: 'd5', reason: 'captured' }),
+    ]);
+  });
+
+  it('[PARITY-EXPORT-GET-PROMOTION-UPDATES] infers only one safe anonymous promotion or replay reversal', () => {
+    expect(
+      inferPromotionTransition({
+        after: { b8: { pieceType: 'wQ' } },
+        before: { a7: { pieceType: 'wP' } },
+        dimensions,
+      }),
+    ).toEqual({
+      after: { pieceType: 'wQ' },
+      before: { pieceType: 'wP' },
+      direction: 'promotion',
+      from: 'a7',
+      to: 'b8',
+    });
+    expect(
+      inferPromotionTransition({
+        after: { b2: { pieceType: 'bP' } },
+        before: { a1: { pieceType: 'bN' } },
+        dimensions,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        direction: 'reversal',
+        from: 'a1',
+        to: 'b2',
+      }),
+    );
+    expect(
+      inferPromotionTransition({
+        after: { a8: { pieceType: 'wQ' } },
+        before: {
+          a7: { pieceType: 'wP' },
+          b7: { pieceType: 'wP' },
+        },
+        dimensions,
+      }),
+    ).toBeNull();
+    expect(
+      inferPromotionTransition({
+        after: { z10: { pieceType: 'wN' } },
+        before: { y9: { pieceType: 'wP' } },
+        dimensions: validateBoardDimensions({ columns: 26, rows: 10 }),
+      }),
+    ).toEqual(expect.objectContaining({ from: 'y9', to: 'z10' }));
+    expect(
+      inferPromotionTransition({
+        after: { a8: { pieceType: 'custom-queen' } },
+        before: { a7: { pieceType: 'custom-pawn' } },
+        dimensions,
+      }),
+    ).toBeNull();
+  });
+
+  it('[PARITY-BEHAVIOR-B13] plans promotion and reversal replacements without a canonical shadow position', () => {
+    const promotion = inferPositionTransition({
+      after: { h8: { pieceType: 'wR' } },
+      before: { g7: { pieceType: 'wP' } },
+      dimensions,
+    });
+    const reversal = inferPositionTransition({
+      after: { g7: { pieceType: 'wP' } },
+      before: { h8: { pieceType: 'wR' } },
+      dimensions,
+    });
+
+    expect(promotion.replacements).toEqual([
+      {
+        after: { pieceType: 'wR' },
+        before: { pieceType: 'wP' },
+        from: 'g7',
+        kind: 'replace',
+        matchedBy: 'promotion',
+        to: 'h8',
+      },
+    ]);
+    expect(reversal.replacements).toEqual([
+      expect.objectContaining({
+        from: 'h8',
+        matchedBy: 'promotion',
+        to: 'g7',
+      }),
+    ]);
+    expect(promotion.exits).toEqual([]);
+    expect(promotion.enters).toEqual([]);
+  });
+
+  it('marks multiple promotion candidates ambiguous independently of object insertion order', () => {
+    const first = inferPositionTransition({
+      after: { a8: { pieceType: 'wQ' } },
+      before: {
+        a7: { pieceType: 'wP' },
+        b7: { pieceType: 'wP' },
+      },
+      dimensions,
+    });
+    const reordered = inferPositionTransition({
+      after: { a8: { pieceType: 'wQ' } },
+      before: {
+        b7: { pieceType: 'wP' },
+        a7: { pieceType: 'wP' },
+      },
+      dimensions,
+    });
+
+    expect(reordered).toEqual(first);
+    expect(first.hasAmbiguity).toBe(true);
+    expect(first.replacements).toEqual([]);
+    expect(first.exits.map((exit) => [exit.from, exit.reason])).toEqual([
+      ['a7', 'ambiguous'],
+      ['b7', 'ambiguous'],
+    ]);
+    expect(first.enters).toEqual([
+      expect.objectContaining({ reason: 'ambiguous', to: 'a8' }),
+    ]);
+  });
+
+  it('keeps ordinary anonymous type identity ahead of promotion fallback conflicts', () => {
+    const targetConflict = inferPositionTransition({
+      after: { a8: { pieceType: 'wQ' } },
+      before: {
+        a7: { pieceType: 'wP' },
+        h8: { pieceType: 'wQ' },
+      },
+      dimensions,
+    });
+    expect(targetConflict.replacements).toEqual([]);
+    expect(targetConflict.moves).toEqual([
+      expect.objectContaining({
+        from: 'h8',
+        matchedBy: 'piece-type',
+        to: 'a8',
+      }),
+    ]);
+    expect(targetConflict.exits).toEqual([
+      expect.objectContaining({ from: 'a7', reason: 'removed' }),
+    ]);
+
+    const sourceConflict = inferPositionTransition({
+      after: {
+        a8: { pieceType: 'wQ' },
+        b7: { pieceType: 'wP' },
+      },
+      before: { a7: { pieceType: 'wP' } },
+      dimensions,
+    });
+    expect(sourceConflict.replacements).toEqual([]);
+    expect(sourceConflict.moves).toEqual([
+      expect.objectContaining({ from: 'a7', to: 'b7' }),
+    ]);
+    expect(sourceConflict.enters).toEqual([
+      expect.objectContaining({ reason: 'added', to: 'a8' }),
+    ]);
+  });
+
+  it('honors rules-free explicit promotion and reserves an off-target captured actor from every matcher', () => {
+    const explicitPromotion = planPositionTransition({
+      after: snapshot(
+        2,
+        { d4: { id: 'morph', pieceType: 'custom-phoenix' } },
+        {
+          from: 'c3',
+          fromRevision: 1,
+          promotion: 'custom-phoenix',
+          to: 'd4',
+          toRevision: 2,
+        },
+      ),
+      before: snapshot(1, {
+        c3: { id: 'morph', pieceType: 'custom-egg' },
+      }),
+      dimensions,
+      epoch: 8,
+    });
+    expect(explicitPromotion.warnings).toEqual([]);
+    expect(requirePlan(explicitPromotion).replacements).toEqual([
+      expect.objectContaining({
+        from: 'c3',
+        matchedBy: 'explicit',
+        to: 'd4',
+      }),
+    ]);
+
+    const enPassant = planPositionTransition({
+      after: snapshot(
+        2,
+        {
+          d4: { pieceType: 'bP' },
+          d6: { id: 'mover', pieceType: 'wP' },
+        },
+        {
+          capturedSquare: 'd5',
+          from: 'e5',
+          fromRevision: 1,
+          to: 'd6',
+          toRevision: 2,
+        },
+      ),
+      before: snapshot(1, {
+        d5: { pieceType: 'bP' },
+        e5: { id: 'mover', pieceType: 'wP' },
+      }),
+      dimensions,
+      epoch: 9,
+    });
+    const enPassantPlan = requirePlan(enPassant);
+    expect(enPassant.warnings).toEqual([]);
+    expect(enPassantPlan.moves).toEqual([
+      expect.objectContaining({ from: 'e5', to: 'd6' }),
+    ]);
+    expect(enPassantPlan.exits).toEqual([
+      expect.objectContaining({ from: 'd5', reason: 'captured' }),
+    ]);
+    expect(enPassantPlan.enters).toEqual([
+      expect.objectContaining({ reason: 'added', to: 'd4' }),
+    ]);
+  });
+
+  it('allows an explicit target to replace the same anonymous piece type', () => {
+    const result = planPositionTransition({
+      after: snapshot(
+        2,
+        { d5: { pieceType: 'wP' } },
+        {
+          capturedSquare: 'd5',
+          from: 'e4',
+          fromRevision: 1,
+          to: 'd5',
+          toRevision: 2,
+        },
+      ),
+      before: snapshot(1, {
+        d5: { pieceType: 'wP' },
+        e4: { pieceType: 'wP' },
+      }),
+      dimensions,
+      epoch: 10,
+    });
+    const plan = requirePlan(result);
+
+    expect(result.warnings).toEqual([]);
+    expect(plan.hint).not.toBeNull();
+    expect(plan.moves).toEqual([
+      expect.objectContaining({
+        from: 'e4',
+        matchedBy: 'explicit',
+        to: 'd5',
+      }),
+    ]);
+    expect(plan.exits).toEqual([
+      expect.objectContaining({ from: 'd5', reason: 'captured' }),
     ]);
   });
 

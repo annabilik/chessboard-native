@@ -174,7 +174,17 @@ fades current enter actors, and fades removed/captured/ambiguous exits below
 current pieces. Current and exit renderers receive
 `PieceVisualState.isTransitioning = true` only while that exact epoch remains
 active. Completion restores the same current hosts to static state and removes
-exit artwork. Replacements snap until the special-move slice.
+exit artwork.
+
+P3.3 projects an accepted `rookMove` as a second ordinary move on that shared
+progress value and an accepted `capturedSquare` as one reserved stationary
+exit. For a type-changing replacement, detached before artwork translates from
+source to target while fading out; the canonical current target artwork uses
+the same path while fading in. At every progress value they are visually
+co-located. Captured exits paint first, replacement-before artwork next, and
+current target artwork last. This supports castling, off-target en passant
+capture, promotion, and stable-ID custom transformations without a fake
+position or second clock.
 
 P2.2 adds the layer-six board gesture plane. When enabled by the public
 interaction boundaries, it is one absolute, accessibility-hidden native view
@@ -302,10 +312,13 @@ parent-ScrollView arbitration, AppState and geometry invalidation,
 provider-level clipping remediation, long-pan render/callback counters,
 cancellation reuse, and packed Android/iOS board-scroll/lifecycle scenarios.
 P3.2 tests add measured white/black and rectangular move transforms, ordinary
-capture ordering, enter/exit/ambiguity fades, replacement snap, current-square
+capture ordering, enter/exit/ambiguity fades, current-square
 renderer context, latest-prop cancellation, reduced-motion and zero-duration
 settling, post-commit warning deduplication, and simultaneous-board animation
-isolation.
+isolation. P3.3 tests add deterministic promotion/reversal inference,
+capture-square reservation, coordinated and crossing two-actor plans,
+replacement path co-location and paint order, mounted special-move completion,
+and rules-free explicit custom promotion.
 
 This decision owns invariants `CBN-INV-010`, `CBN-INV-013`, `CBN-INV-014`,
 and `CBN-INV-018`.

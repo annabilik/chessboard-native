@@ -300,16 +300,167 @@ describe('controlled mounted transitions', () => {
     expect(hasNode(rootOf(result), 'latest:runner:b1:static')).toBe(false);
   });
 
+  it('mounts explicit promotion as detached source artwork plus the authoritative target renderer', async () => {
+    const result = await render(
+      <ChessboardRuntime
+        boardId="promotion"
+        development={false}
+        dimensions={{ columns: 2, rows: 1 }}
+        pieceRenderers={{ pawn: Probe, queen: Probe }}
+        position={{
+          revision: 1,
+          value: { a1: { id: 'actor', pieceType: 'pawn' } },
+        }}
+        reduceMotion="never"
+        transitionDurationMs={1_000}
+      />,
+    );
+    const host = boardHosts(rootOf(result))[0];
+    if (host === undefined) {
+      throw new Error('Expected one board host.');
+    }
+    await measure(host, 200, 100);
+    await result.rerender(
+      <ChessboardRuntime
+        boardId="promotion"
+        development={false}
+        dimensions={{ columns: 2, rows: 1 }}
+        pieceRenderers={{ pawn: Probe, queen: Probe }}
+        position={{
+          revision: 2,
+          transition: {
+            from: 'a1',
+            fromRevision: 1,
+            promotion: 'queen',
+            to: 'b1',
+            toRevision: 2,
+          },
+          value: { b1: { id: 'actor', pieceType: 'queen' } },
+        }}
+        reduceMotion="never"
+        transitionDurationMs={1_000}
+      />,
+    );
+
+    const root = rootOf(result);
+    expect(hasNode(root, 'promotion:actor:a1:transition')).toBe(true);
+    expect(hasNode(root, 'promotion:actor:b1:transition')).toBe(true);
+    await act(() => {
+      jest.advanceTimersByTime(500);
+    });
+    const oldStyle = animatedStyle(
+      requiredParent(requiredNode(root, 'promotion:actor:a1:transition')),
+    );
+    const currentStyle = animatedStyle(
+      requiredParent(requiredNode(root, 'promotion:actor:b1:transition')),
+    );
+    expect(Number(oldStyle.opacity)).toBeCloseTo(Number(currentStyle.opacity));
+    expect(oldStyle.transform).toEqual([{ translateX: 50 }, { translateY: 0 }]);
+    expect(currentStyle.transform).toEqual([
+      { translateX: -50 },
+      { translateY: 0 },
+    ]);
+
+    await act(() => {
+      jest.advanceTimersByTime(500);
+    });
+    expect(hasNode(root, 'promotion:actor:a1:transition')).toBe(false);
+    expect(hasNode(root, 'promotion:actor:b1:static')).toBe(true);
+  });
+
+  it('runs castling and off-target capture actors from the same board-local clock', async () => {
+    const result = await render(
+      <ChessboardRuntime
+        boardId="special"
+        development={false}
+        dimensions={{ columns: 4, rows: 2 }}
+        pieceRenderers={{ token: Probe }}
+        position={{
+          revision: 1,
+          value: {
+            a1: { id: 'king', pieceType: 'token' },
+            b2: { id: 'victim', pieceType: 'token' },
+            d1: { id: 'rook', pieceType: 'token' },
+          },
+        }}
+        reduceMotion="never"
+        transitionDurationMs={1_000}
+      />,
+    );
+    const host = boardHosts(rootOf(result))[0];
+    if (host === undefined) {
+      throw new Error('Expected one board host.');
+    }
+    await measure(host, 400, 200);
+    await result.rerender(
+      <ChessboardRuntime
+        boardId="special"
+        development={false}
+        dimensions={{ columns: 4, rows: 2 }}
+        pieceRenderers={{ token: Probe }}
+        position={{
+          revision: 2,
+          transition: {
+            capturedSquare: 'b2',
+            from: 'a1',
+            fromRevision: 1,
+            rookMove: { from: 'd1', to: 'b1' },
+            to: 'c1',
+            toRevision: 2,
+          },
+          value: {
+            b1: { id: 'rook', pieceType: 'token' },
+            c1: { id: 'king', pieceType: 'token' },
+          },
+        }}
+        reduceMotion="never"
+        transitionDurationMs={1_000}
+      />,
+    );
+
+    const root = rootOf(result);
+    expect(hasNode(root, 'special:king:c1:transition')).toBe(true);
+    expect(hasNode(root, 'special:rook:b1:transition')).toBe(true);
+    expect(hasNode(root, 'special:victim:b2:transition')).toBe(true);
+    await act(() => {
+      jest.advanceTimersByTime(500);
+    });
+    expect(
+      animatedStyle(
+        requiredParent(requiredNode(root, 'special:king:c1:transition')),
+      ).transform,
+    ).toEqual([{ translateX: -100 }, { translateY: 0 }]);
+    expect(
+      animatedStyle(
+        requiredParent(requiredNode(root, 'special:rook:b1:transition')),
+      ).transform,
+    ).toEqual([{ translateX: 100 }, { translateY: 0 }]);
+    expect(
+      animatedStyle(
+        requiredParent(requiredNode(root, 'special:victim:b2:transition')),
+      ).opacity,
+    ).toBeCloseTo(0.5);
+    await act(() => {
+      jest.advanceTimersByTime(500);
+    });
+    expect(hasNode(root, 'special:king:c1:static')).toBe(true);
+    expect(hasNode(root, 'special:rook:b1:static')).toBe(true);
+    expect(hasNode(root, 'special:victim:b2:transition')).toBe(false);
+  });
+
   it('[CBN-CONTRACT-017-REDUCED-MOTION] snaps every current actor when motion is reduced', async () => {
     const result = await render(
       <ChessboardRuntime
         boardId="reduced"
         development={false}
         dimensions={{ columns: 2, rows: 1 }}
-        pieceRenderers={{ token: Probe }}
+        pieceRenderers={{ pawn: Probe, queen: Probe }}
         position={{
           revision: 1,
-          value: { a1: { id: 'runner', pieceType: 'token' } },
+          value: {
+            a1: { id: 'runner', pieceType: 'pawn' },
+            b1: { id: 'victim', pieceType: 'pawn' },
+          },
         }}
         reduceMotion="always"
       />,
@@ -324,16 +475,26 @@ describe('controlled mounted transitions', () => {
         boardId="reduced"
         development={false}
         dimensions={{ columns: 2, rows: 1 }}
-        pieceRenderers={{ token: Probe }}
+        pieceRenderers={{ pawn: Probe, queen: Probe }}
         position={{
           revision: 2,
-          value: { b1: { id: 'runner', pieceType: 'token' } },
+          transition: {
+            capturedSquare: 'b1',
+            from: 'a1',
+            fromRevision: 1,
+            promotion: 'queen',
+            to: 'b1',
+            toRevision: 2,
+          },
+          value: { b1: { id: 'runner', pieceType: 'queen' } },
         }}
         reduceMotion="always"
       />,
     );
 
     expect(hasNode(rootOf(result), 'reduced:runner:b1:static')).toBe(true);
+    expect(hasNode(rootOf(result), 'reduced:runner:a1:transition')).toBe(false);
+    expect(hasNode(rootOf(result), 'reduced:victim:b1:transition')).toBe(false);
     expect(hasNode(rootOf(result), 'reduced:runner:b1:transition')).toBe(false);
   });
 
