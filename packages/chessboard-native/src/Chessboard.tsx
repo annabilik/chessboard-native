@@ -36,6 +36,7 @@ import { defaultPieceRenderers } from './pieces';
 import { BoardSurface } from './render/board-surface';
 import type {
   AnnotationsProp,
+  AnnotationPolicies,
   AnnotationStyle,
   BoardDimensions,
   BoardOrientation,
@@ -46,6 +47,7 @@ import type {
   InteractionPermissions,
   MoveRequestTimeouts,
   OnMoveRequest,
+  OnAnnotationOperation,
   OnSquareActivate,
   PieceRenderers,
   PositionProp,
@@ -78,6 +80,10 @@ export interface ChessboardProps {
   readonly annotations?: AnnotationsProp;
   /** Whole-value annotation geometry and presentation configuration. */
   readonly annotationStyle?: AnnotationStyle;
+  /** Independent opt-in policies that request controlled annotation clears. */
+  readonly annotationPolicies?: AnnotationPolicies;
+  /** Emits immutable deltas without changing the controlled collection. */
+  readonly onAnnotationOperation?: OnAnnotationOperation;
   /** Consumer-owned selection presentation when supplied. */
   readonly selection?: SelectionProp;
   /** Emits a controlled square activation without changing selection. */
@@ -349,6 +355,7 @@ function ChessboardRuntimeContent({
     <ReducedMotionProvider preference={props.reduceMotion ?? 'system'}>
       <BoardSurface
         accessibility={props.accessibility}
+        annotationPolicies={props.annotationPolicies}
         annotationStyle={props.annotationStyle ?? defaultAnnotationStyle}
         canDragPiece={props.canDragPiece}
         development={development}
@@ -359,6 +366,7 @@ function ChessboardRuntimeContent({
           : { logTransitionWarning })}
         model={model}
         moveRequestTimeouts={props.moveRequestTimeouts}
+        onAnnotationOperation={props.onAnnotationOperation}
         onMoveRequest={props.onMoveRequest}
         onSquareActivate={props.onSquareActivate}
         pieceRenderers={props.pieceRenderers ?? defaultPieceRenderers}

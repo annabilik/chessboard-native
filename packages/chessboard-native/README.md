@@ -102,7 +102,10 @@ Consumers can replace it with a visual-only renderer map keyed by the open
 `pieceType` vocabulary. Theme, instance, and canonical per-square styles are
 also declarative. The board is one adjustable accessibility control with an
 orientation-aware virtual cursor and decorative visual descendants. Controlled
-square and arrow annotations render in below/above-piece SVG planes. Selection
+square and arrow annotations render in below/above-piece SVG planes. Revisioned
+annotation stores can consume immutable operation callbacks with the public pure
+application helper; independent board-press and position-change policies only
+request controlled deltas. Selection
 styling follows the controlled selection prop, and `onSquareActivate` can opt
 the board into controlled touch and accessibility activation. Supplying
 `onMoveRequest` opens the controlled move-request surface: board/spare-piece
@@ -114,7 +117,7 @@ that.
 overlay, and stale-safe external-drop measurement. Its public `SparePiece`
 source supports drag and accessible placement on one named board while that
 board's controlled move callback remains the only position authority. Custom
-square rendering and annotation gesture drawing remain future work. Pure
+square rendering and native annotation gesture adapters remain future work. Pure
 controlled-position transition planning validates exact-revision hints,
 prefers stable piece IDs, and treats ambiguous anonymous matches as exits and
 enters. The mounted Reanimated runtime consumes only those detached operations,
@@ -355,16 +358,22 @@ derivation but cannot replace canonical measured placement.
 `annotations` is the only persistent square/arrow collection. Replacing that
 prop replaces the rendered collection immediately; the board never merges it
 with an internal arrow list. Array order is same-layer paint order. Arrows
-default above pieces, while square annotations default below pieces.
+default above pieces, while square annotations default below pieces. Use the
+revisioned `ControlledAnnotations` tier for interactive annotation stores.
 
 ```tsx
 import {
+  applyAnnotationOperation,
   Chessboard,
   defaultAnnotationStyle,
+  type ControlledAnnotations,
+  type OnAnnotationOperation,
 } from '@vibechess/chessboard-native';
+import { useCallback, useState } from 'react';
 
-<Chessboard
-  annotations={[
+const initialAnnotations: ControlledAnnotations = {
+  revision: 4,
+  value: [
     {
       id: 'candidate',
       type: 'arrow',
@@ -379,15 +388,68 @@ import {
       shape: 'circle',
       color: 'rgba(228, 111, 24, 0.45)',
     },
-  ]}
-  annotationStyle={{
-    ...defaultAnnotationStyle,
-    arrowStartOffset: 0.25,
-  }}
-  boardId="analysis"
-  position="8/8/8/8/8/8/8/8"
-/>;
+  ],
+};
+
+function AnalysisBoard() {
+  const [annotations, setAnnotations] =
+    useState<ControlledAnnotations>(initialAnnotations);
+  const onAnnotationOperation = useCallback<OnAnnotationOperation>(
+    (operation) => {
+      setAnnotations((current) => {
+        const result = applyAnnotationOperation({
+          boardId: 'analysis',
+          current,
+          operation,
+        });
+        return result.status === 'rejected' ? current : result.next;
+      });
+    },
+    [],
+  );
+
+  return (
+    <Chessboard
+      annotationPolicies={{
+        clearOnBoardPress: true,
+        clearOnPositionChange: true,
+      }}
+      annotations={annotations}
+      annotationStyle={{
+        ...defaultAnnotationStyle,
+        arrowStartOffset: 0.25,
+      }}
+      boardId="analysis"
+      onAnnotationOperation={onAnnotationOperation}
+      position={{ revision: 9, value: '8/8/8/8/8/8/8/8' }}
+    />
+  );
+}
 ```
+
+`onAnnotationOperation` is a synchronous notification. Its return value is
+ignored, and the board never applies the delta itself. Add and toggle operations
+carry the stable `annotationId` to use if the delta adds a persistent value.
+Toggle operations also name only the matching IDs observed at their base;
+clear operations likewise carry `annotationIdsAtBase` and a reason. Operation
+IDs provide correlation; consumers that need exactly-once processing must
+deduplicate them in their own store boundary.
+
+`applyAnnotationOperation` is a pure convenience reducer for the consumer side.
+Always call it against the latest store envelope, not a snapshot captured when
+the gesture or policy began. It returns `applied`, `unchanged`, or `rejected`
+with the next envelope. A stale operation can still be applied safely: toggle
+and clear remove only IDs named at their base, so annotations added concurrently
+survive. Board mismatches, future bases, conflicting annotation IDs, and
+revision overflow are rejected without changing `next`.
+`findMatchingAnnotationIds` returns the deterministic type-and-square or
+type-and-endpoints match set required when a consumer constructs a toggle
+operation outside the future gesture adapters.
+
+`annotationPolicies.clearOnBoardPress` and `clearOnPositionChange` independently
+emit scoped clear operations. They never mutate the controlled collection, and
+position-change clearing is not coupled to board-press clearing. A consumer may
+omit either policy or the callback to keep the board read-only for annotations.
 
 Omitted arrow shape automatically selects an L path only for an integer
 one-by-two canonical move. `shape="straight"` always overrides that choice;
@@ -402,8 +464,13 @@ annotation continues to render its own required `color`.
 
 Square shapes are `fill`, `circle`, `dot`, and `border`. All SVG descendants are
 pointerless and hidden from accessibility; the stable outer board remains the
-only accessible control. This slice renders annotations only—it does not draw,
-toggle, clear, or commit them.
+only accessible control. The renderer can compose at most one
+revision/geometry-correlated transient draft. Layer ordering follows the draft
+type, and the draft is appended after persistent entries only within that
+layer. Arrow drafts use active width and opacity styling; square drafts use
+active opacity styling. A draft never becomes a persistent annotation. Native
+long-press, two-finger, and explicit two-activation gesture adapters that
+produce the draft and final operation arrive in P4.4.
 
 ## Controlled selection and square activation
 

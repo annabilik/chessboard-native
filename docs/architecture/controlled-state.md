@@ -75,6 +75,30 @@ Every annotation callback emits a delta correlated to
 at that base, so reducing an operation against current consumer state cannot
 silently remove a concurrently added annotation.
 
+P4.1 makes that boundary executable without moving ownership into the board.
+`onAnnotationOperation` is synchronous and its return value is ignored. Add and
+toggle operations carry a stable consumer-usable `annotationId`; toggle also
+records the matching IDs observed at its base. Clear operations record every ID
+they observed and one reason. Independent board-press and position-change
+policies may request clear operations, but neither policy edits the rendered
+collection or gates the other.
+
+The public pure `applyAnnotationOperation` helper reduces one delta against the
+consumer's latest revisioned envelope. It rejects a different board, a base from
+the future, a conflicting add identity, or revision overflow. A stale operation
+is otherwise safe: remove targets one stable ID, while toggle and clear can
+remove only IDs named at their base. A concurrently added annotation therefore
+survives even when an older operation is applied after it. The helper returns an
+explicit applied, unchanged, or rejected result and never mutates either input.
+The returned envelope is still only a candidate for the consumer to publish;
+the board does not render it until it arrives through `annotations`.
+
+P4.3 similarly permits at most one presentation-only draft correlated to the
+current board, annotation revision, position revision, board geometry, provider
+geometry, and provider lifecycle. A correlation change suppresses it
+synchronously. The draft has no persistent ID, never enters the normalized
+annotation domain, and cannot outlive or replace the controlled collection.
+
 ## Revisions and invalid input
 
 Envelope revisions are non-negative safe integers and monotonic per domain. A

@@ -10,14 +10,14 @@ function arrow(
   annotations: readonly Readonly<
     ArrowAnnotationGeometry | SquareAnnotationGeometry
   >[],
-  id: string,
+  id: string | null,
 ): Readonly<ArrowAnnotationGeometry> {
   const match = annotations.find(
     (annotation): annotation is Readonly<ArrowAnnotationGeometry> =>
       annotation.kind === 'arrow' && annotation.annotationId === id,
   );
   if (match === undefined) {
-    throw new Error(`Expected arrow geometry for ${id}.`);
+    throw new Error(`Expected arrow geometry for ${String(id)}.`);
   }
   return match;
 }
@@ -26,14 +26,14 @@ function square(
   annotations: readonly Readonly<
     ArrowAnnotationGeometry | SquareAnnotationGeometry
   >[],
-  id: string,
+  id: string | null,
 ): Readonly<SquareAnnotationGeometry> {
   const match = annotations.find(
     (annotation): annotation is Readonly<SquareAnnotationGeometry> =>
       annotation.kind === 'square' && annotation.annotationId === id,
   );
   if (match === undefined) {
-    throw new Error(`Expected square geometry for ${id}.`);
+    throw new Error(`Expected square geometry for ${String(id)}.`);
   }
   return match;
 }
@@ -306,6 +306,114 @@ describe('annotation geometry', () => {
     expect(active?.head[0].x).toBe(87.5);
     expect(active?.strokeWidth).toBe(18);
     expect(active?.opacity).toBe(0.5);
+  });
+
+  it('appends an active draft after controlled arrows without borrowing their ID namespace', () => {
+    const geometry = computeAnnotationGeometry({
+      annotations: [
+        {
+          color: '#f00',
+          from: 'e2',
+          id: 'draft',
+          to: 'e4',
+          type: 'arrow',
+        },
+      ],
+      dimensions: { columns: 8, rows: 8 },
+      draft: {
+        color: '#0f0',
+        from: 'd2',
+        to: 'e4',
+        type: 'arrow',
+      },
+      orientation: 'white',
+      style: defaultAnnotationStyle,
+    });
+
+    expect(geometry.abovePieces.map(({ renderKey }) => renderKey)).toEqual([
+      'controlled:draft',
+      'draft',
+    ]);
+    const controlled = arrow(geometry.abovePieces, 'draft');
+    const draft = arrow(geometry.abovePieces, null);
+    expect(controlled).toEqual(
+      expect.objectContaining({
+        isDraft: false,
+        opacity: 0.65,
+        renderKey: 'controlled:draft',
+      }),
+    );
+    expect(controlled.head[0].y).toBe(1216);
+    expect(draft).toEqual(
+      expect.objectContaining({
+        annotationId: null,
+        isDraft: true,
+        opacity: 0.5,
+        renderKey: 'draft',
+      }),
+    );
+    expect(draft.strokeWidth).toBeCloseTo(46.08, 12);
+    expect(
+      Math.hypot(draft.head[0].x - 1152, draft.head[0].y - 1152),
+    ).toBeCloseTo(32, 12);
+    expect(Object.isFrozen(draft)).toBe(true);
+    expect(Object.isFrozen(draft.points)).toBe(true);
+    expect(draft.points.every((item) => Object.isFrozen(item))).toBe(true);
+    expect(Object.isFrozen(draft.head)).toBe(true);
+    expect(draft.head.every((item) => Object.isFrozen(item))).toBe(true);
+  });
+
+  it('uses active opacity for a square draft and omits degenerate arrow drafts', () => {
+    const geometry = computeAnnotationGeometry({
+      annotations: [
+        { color: '#f00', id: 'draft', square: 'a1', type: 'square' },
+      ],
+      dimensions: { columns: 8, rows: 8 },
+      draft: {
+        color: '#0f0',
+        shape: 'circle',
+        square: 'b2',
+        type: 'square',
+      },
+      orientation: 'white',
+      style: { ...defaultAnnotationStyle, activeOpacity: 0.37 },
+    });
+
+    expect(geometry.belowPieces.map(({ renderKey }) => renderKey)).toEqual([
+      'controlled:draft',
+      'draft',
+    ]);
+    expect(square(geometry.belowPieces, 'draft')).toEqual(
+      expect.objectContaining({ isDraft: false, opacity: 1 }),
+    );
+    const draft = square(geometry.belowPieces, null);
+    expect(draft).toEqual(
+      expect.objectContaining({
+        annotationId: null,
+        isDraft: true,
+        opacity: 0.37,
+        renderKey: 'draft',
+        shape: 'circle',
+      }),
+    );
+    expect(Object.isFrozen(draft)).toBe(true);
+    expect(Object.isFrozen(draft.center)).toBe(true);
+    expect(Object.isFrozen(draft.rect)).toBe(true);
+
+    const degenerate = computeAnnotationGeometry({
+      annotations: [],
+      dimensions: { columns: 8, rows: 8 },
+      draft: {
+        color: '#0f0',
+        from: 'e4',
+        to: 'e4',
+        type: 'arrow',
+      },
+      orientation: 'white',
+      style: defaultAnnotationStyle,
+    });
+    expect(degenerate.abovePieces).toEqual([]);
+    expect(Object.isFrozen(degenerate.abovePieces)).toBe(true);
   });
 
   it('projects all square shapes, default layers, and finite degenerate behavior', () => {

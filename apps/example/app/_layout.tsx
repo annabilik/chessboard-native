@@ -23,6 +23,10 @@ export default function RootLayout() {
             options={{ title: 'Controlled selection' }}
           />
           <Stack.Screen
+            name="controlled-annotations"
+            options={{ title: 'Controlled annotations' }}
+          />
+          <Stack.Screen
             name="provider-coordination"
             options={{ title: 'Provider coordination' }}
           />

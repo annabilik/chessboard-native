@@ -179,16 +179,26 @@ export default function GalleryIndex() {
 
         <Text style={styles.pending}>
           The boards now expose one adjustable accessibility control while the
-          visual subtree remains decorative. Annotation drawing, custom square
-          rendering, and transient public style mappings remain later slices.
-          Ordinary and special controlled transitions, rapid-update continuity,
-          geometry and orientation rebasing, reduced motion, and
-          pending-to-commit handoff now have a focused lab. Controlled selection
-          activation, move requests, provider coordination, and external spare
-          placement have focused examples. The interaction-hardening lab adds
-          native ScrollView, clipping, geometry, lifecycle, and render/callback
-          evidence.
+          visual subtree remains decorative. Controlled annotation operations,
+          independent clearing policies, stale-safe consumer application, and
+          transient draft composition now have a focused lab. Native annotation
+          gesture adapters, custom square rendering, and transient public style
+          mappings remain later slices. Ordinary and special controlled
+          transitions, rapid-update continuity, geometry and orientation
+          rebasing, reduced motion, and pending-to-commit handoff now have a
+          focused lab. Controlled selection activation, move requests, provider
+          coordination, and external spare placement have focused examples. The
+          interaction-hardening lab adds native ScrollView, clipping, geometry,
+          lifecycle, and render/callback evidence.
         </Text>
+
+        <Link asChild href="/controlled-annotations">
+          <Pressable style={styles.routeLink}>
+            <Text style={styles.routeLinkText}>
+              Open controlled annotation store
+            </Text>
+          </Pressable>
+        </Link>
 
         <Link asChild href="/transitions">
           <Pressable style={styles.routeLink}>

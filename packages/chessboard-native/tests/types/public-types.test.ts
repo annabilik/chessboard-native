@@ -449,6 +449,7 @@ describe('public data contracts', () => {
     } satisfies AnnotationDraft;
     const operation = {
       annotation: draft,
+      annotationId: 'annotation-13',
       baseAnnotationRevision: 12,
       boardId: 'analysis',
       input: 'touch',

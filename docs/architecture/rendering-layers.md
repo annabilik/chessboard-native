@@ -162,9 +162,18 @@ opacity, and future-tool color defaults. Arrowheads are explicit SVG polygons,
 not marker references or document-global IDs, so simultaneous boards and
 duplicate consumer annotation IDs across boards cannot collide.
 
+P4.3 composes at most one draft through those same planes without placing it in
+the normalized annotation collection. The draft is correlated to the current
+board identity, annotation and position revisions, board geometry epoch,
+provider geometry revision, and provider lifecycle revision. Any mismatch
+suppresses it synchronously, so a committed frame cannot paint a draft captured
+from stale props or coordinates. Active arrows use the configured active width
+multiplier and opacity and remain exempt from shared-target shortening. The
+draft is pointerless, accessibility-hidden, and has no persistent consumer ID.
+
 Notation now occupies its own decorative plane above both annotation planes.
 Custom square rendering, additional transient interaction styling, and
-annotation drafts/drawing remain later slices.
+the native gestures that produce annotation drafts remain later slices.
 
 P3.2 promotes the piece plane to stable `Animated.View` hosts. The latest
 controlled position still creates every current host; a detached transition
@@ -272,10 +281,12 @@ ordinary activation action set only on its named target board. That board
 exposes place when its current move/accessibility gates permit it and always
 exposes cancel while the selection matches. The spare source remains a separate
 accessible button; its renderer descendants and drag overlay are decorative.
-Annotation operations remain later work. Consumer announcements are correlated
-by ID and deduplicated per mounted board. The centralized reduced-motion
-provider follows `system`, `always`, or `never` without remounting this host or
-its cursor.
+Board-press and position-change annotation policies now emit controlled
+operations without changing this accessibility tree or the rendered collection.
+Accessible annotation creation and cancellation actions remain P4.5 work.
+Consumer announcements are correlated by ID and deduplicated per mounted board.
+The centralized reduced-motion provider follows `system`, `always`, or `never`
+without remounting this host or its cursor.
 
 React Native 0.86 suppresses Android's adjustable `TYPE_VIEW_SELECTED` feedback
 when `accessibilityValue.text` is present, and directional custom actions do not
@@ -312,8 +323,11 @@ projection, single-host semantics, formatter contexts, announcement lifetimes,
 reduced-motion races, and mounted-board isolation. P1.6 tests add controlled
 collection replacement, rectangular/oriented geometry, straight and knight
 paths, target shortening, explicit marker-free heads, below/piece/above/notation
-ordering, and multi-board isolation. Later slices must verify annotation drafts
-and custom square renderer behavior. P2.2 tests add rectangular worklet hit
+ordering, and multi-board isolation. P4.1/P4.3 tests add controlled-operation
+emission, stale-base application, independent policy clearing, single-draft
+composition, active styling, exact correlation invalidation, and persistent
+collection isolation. Later slices must verify custom square renderer behavior.
+P2.2 tests add rectangular worklet hit
 testing, tap/pan boundary correlation, zero per-frame JS signals,
 disabled-by-default mounting, reducer adapter stale-event guards, and transient
 piece presentation. P2.3 tests add public permission gates, drag overlay
