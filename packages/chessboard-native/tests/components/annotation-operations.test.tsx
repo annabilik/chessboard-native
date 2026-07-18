@@ -12,11 +12,13 @@ import type {
   AnnotationOperation,
   ControlledAnnotations,
   ControlledPosition,
+  OnMoveRequest,
 } from '../../src/public-types';
 import { getBoardGestureTestIds } from '../../src/render/board-gesture-layer';
 
 const SIZE = 200;
 const POINT = Object.freeze({ x: 25, y: 25 });
+const DRAG_TARGET = Object.freeze({ x: 135, y: 135 });
 
 const ANNOTATIONS: ControlledAnnotations = Object.freeze({
   revision: 7,
@@ -67,6 +69,18 @@ async function tap(boardId: string): Promise<void> {
     fireGestureHandler(gesture, [
       { state: State.BEGAN, ...POINT },
       { state: State.END, ...POINT },
+    ]);
+  });
+}
+
+async function drag(boardId: string): Promise<void> {
+  const gesture = getByGestureTestId(getBoardGestureTestIds(boardId).pan);
+  await act(() => {
+    fireGestureHandler(gesture, [
+      { state: State.BEGAN, ...POINT },
+      { state: State.ACTIVE, x: POINT.x + 10, y: POINT.y },
+      { state: State.ACTIVE, ...DRAG_TARGET },
+      { state: State.END, ...DRAG_TARGET },
     ]);
   });
 }
@@ -207,6 +221,58 @@ describe('controlled annotation operations', () => {
       ),
     ).toHaveLength(1);
     expect(ANNOTATIONS.revision).toBe(7);
+  });
+
+  it('does not cancel a pending move when only annotation clear availability changes', async () => {
+    const boardId = 'annotation-availability-pending-move';
+    let decisionSignal: AbortSignal | undefined;
+    const onMoveRequest: OnMoveRequest = jest.fn((_intent, { signal }) => {
+      decisionSignal = signal;
+      return new Promise(() => undefined);
+    });
+    const currentPosition: ControlledPosition = Object.freeze({
+      revision: 6,
+      value: Object.freeze({
+        a2: Object.freeze({ id: 'moving', pieceType: 'wP' }),
+      }),
+    });
+    const onAnnotationOperation = jest.fn();
+    const result = await render(
+      <ChessboardRuntime
+        annotationPolicies={{ clearOnBoardPress: true }}
+        annotations={ANNOTATIONS}
+        boardId={boardId}
+        development={false}
+        dimensions={{ columns: 2, rows: 2 }}
+        moveRequestTimeouts={{ commitMs: 60_000, decisionMs: 60_000 }}
+        onAnnotationOperation={onAnnotationOperation}
+        onMoveRequest={onMoveRequest}
+        position={currentPosition}
+      />,
+    );
+    await measure(rootOf(result));
+    await drag(boardId);
+    expect(onMoveRequest).toHaveBeenCalledTimes(1);
+    expect(decisionSignal?.aborted).toBe(false);
+
+    await result.rerender(
+      <ChessboardRuntime
+        annotationPolicies={{ clearOnBoardPress: true }}
+        annotations={{ revision: 8, value: [] }}
+        boardId={boardId}
+        development={false}
+        dimensions={{ columns: 2, rows: 2 }}
+        moveRequestTimeouts={{ commitMs: 60_000, decisionMs: 60_000 }}
+        onAnnotationOperation={onAnnotationOperation}
+        onMoveRequest={onMoveRequest}
+        position={currentPosition}
+      />,
+    );
+
+    expect(decisionSignal?.aborted).toBe(false);
+    expect(onMoveRequest).toHaveBeenCalledTimes(1);
+    await result.unmount();
+    expect(decisionSignal?.aborted).toBe(true);
   });
 
   it('[PARITY-OPTION-CLEAR-ARROWS-ON-POSITION-CHANGE] skips the initial commit and requests one clear from the later commit snapshot', async () => {

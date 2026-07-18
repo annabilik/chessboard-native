@@ -217,14 +217,15 @@ function rejected(
 
 function applied(
   current: Readonly<ControlledAnnotations>,
+  currentRevision: Revision,
   value: readonly Readonly<BoardAnnotation>[],
   stale: boolean,
 ): ApplyAnnotationOperationResult {
-  if (current.revision === Number.MAX_SAFE_INTEGER) {
+  if (currentRevision === Number.MAX_SAFE_INTEGER) {
     return rejected(current, 'revision-overflow');
   }
   const next: Readonly<ControlledAnnotations> = Object.freeze({
-    revision: current.revision + 1,
+    revision: currentRevision + 1,
     value: Object.freeze(value.map(cloneAnnotation)),
   });
   return Object.freeze({ next, stale, status: 'applied' });
@@ -232,12 +233,14 @@ function applied(
 
 function addAnnotation(
   current: Readonly<ControlledAnnotations>,
+  currentRevision: Revision,
+  currentValue: readonly Readonly<BoardAnnotation>[],
   annotationId: string,
   draft: Readonly<AnnotationDraft>,
   stale: boolean,
 ): ApplyAnnotationOperationResult {
   const expected = persistentAnnotation(annotationId, draft);
-  const existing = current.value.find(
+  const existing = currentValue.find(
     (annotation) => annotation.id === annotationId,
   );
   if (existing !== undefined) {
@@ -245,11 +248,13 @@ function addAnnotation(
       ? unchanged(current, stale)
       : rejected(current, 'annotation-id-conflict');
   }
-  return applied(current, [...current.value, expected], stale);
+  return applied(current, currentRevision, [...currentValue, expected], stale);
 }
 
 function removeIds(
   current: Readonly<ControlledAnnotations>,
+  currentRevision: Revision,
+  currentValue: readonly Readonly<BoardAnnotation>[],
   ids: readonly string[],
   stale: boolean,
 ): ApplyAnnotationOperationResult {
@@ -257,12 +262,12 @@ function removeIds(
     return unchanged(current, stale);
   }
   const removedIds = new Set(ids);
-  const next = current.value.filter(
+  const next = currentValue.filter(
     (annotation) => !removedIds.has(annotation.id),
   );
-  return next.length === current.value.length
+  return next.length === currentValue.length
     ? unchanged(current, stale)
-    : applied(current, next, stale);
+    : applied(current, currentRevision, next, stale);
 }
 
 /**
@@ -278,11 +283,10 @@ export function applyAnnotationOperation(
   options: Readonly<ApplyAnnotationOperationOptions>,
 ): ApplyAnnotationOperationResult {
   const boardId = requireNonEmptyString(options.boardId, 'boardId');
-  const currentRevision = requireRevision(
-    options.current.revision,
-    'current.revision',
-  );
-  if (!Array.isArray(options.current.value)) {
+  const current = options.current;
+  const currentRevision = requireRevision(current.revision, 'current.revision');
+  const currentValue = current.value;
+  if (!Array.isArray(currentValue)) {
     throw new TypeError('current.value must be an annotation array.');
   }
   const operation = options.operation;
@@ -292,40 +296,55 @@ export function applyAnnotationOperation(
     'operation.baseAnnotationRevision',
   );
   if (operation.boardId !== boardId) {
-    return rejected(options.current, 'board-mismatch');
+    return rejected(current, 'board-mismatch');
   }
   if (baseRevision > currentRevision) {
-    return rejected(options.current, 'future-base');
+    return rejected(current, 'future-base');
   }
   const stale = baseRevision < currentRevision;
 
   switch (operation.type) {
     case 'add':
       return addAnnotation(
-        options.current,
+        current,
+        currentRevision,
+        currentValue,
         requireNonEmptyString(operation.annotationId, 'operation.annotationId'),
         operation.annotation,
         stale,
       );
     case 'toggle': {
-      requireNonEmptyString(operation.annotationId, 'operation.annotationId');
+      const annotationId = requireNonEmptyString(
+        operation.annotationId,
+        'operation.annotationId',
+      );
       const matchingIdsAtBase = requireIdArray(
         operation.matchingIdsAtBase,
         'operation.matchingIdsAtBase',
       );
       if (matchingIdsAtBase.length > 0) {
-        return removeIds(options.current, matchingIdsAtBase, stale);
+        return removeIds(
+          current,
+          currentRevision,
+          currentValue,
+          matchingIdsAtBase,
+          stale,
+        );
       }
       return addAnnotation(
-        options.current,
-        operation.annotationId,
+        current,
+        currentRevision,
+        currentValue,
+        annotationId,
         operation.annotation,
         stale,
       );
     }
     case 'remove':
       return removeIds(
-        options.current,
+        current,
+        currentRevision,
+        currentValue,
         [
           requireNonEmptyString(
             operation.annotationId,
@@ -336,7 +355,9 @@ export function applyAnnotationOperation(
       );
     case 'clear':
       return removeIds(
-        options.current,
+        current,
+        currentRevision,
+        currentValue,
         requireIdArray(
           operation.annotationIdsAtBase,
           'operation.annotationIdsAtBase',

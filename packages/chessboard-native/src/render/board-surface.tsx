@@ -126,7 +126,7 @@ interface InteractionInvalidationSnapshot {
   readonly providerGeometryRevision: Revision;
   readonly providerLifecycleRevision: Revision;
   readonly rows: number | null;
-  readonly tapEnabled: boolean;
+  readonly squareActivationEnabled: boolean;
 }
 
 interface ExternalMoveCommitSnapshot {
@@ -194,7 +194,7 @@ function invalidationReason(
   if (
     previous.accessibilityEnabled !== current.accessibilityEnabled ||
     previous.dragEnabled !== current.dragEnabled ||
-    previous.tapEnabled !== current.tapEnabled
+    previous.squareActivationEnabled !== current.squareActivationEnabled
   ) {
     return 'permissions-change';
   }
@@ -854,7 +854,7 @@ export function BoardSurface({
         providerGeometryRevision,
         providerLifecycleRevision,
         rows: model.dimensions?.rows ?? null,
-        tapEnabled,
+        squareActivationEnabled,
       }),
     [
       accessibilityMoveEnabled,
@@ -865,7 +865,7 @@ export function BoardSurface({
       model.orientation,
       providerGeometryRevision,
       providerLifecycleRevision,
-      tapEnabled,
+      squareActivationEnabled,
     ],
   );
   const previousInvalidationSnapshot =

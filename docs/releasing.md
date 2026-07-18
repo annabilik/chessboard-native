@@ -200,7 +200,7 @@ then completed successfully on corrected `main` commit
 published `@vibechess/chessboard-native@0.1.0-next.1` from that same commit. The
 bootstrap setup and token-publish steps were skipped. The workflow verified the
 exact registry tarball digest, confirmed npm exposed a Sigstore/SLSA provenance
-URL with the expected predicate type, and verified clean Expo and bare React
+URL with predicate-type metadata, and verified clean Expo and bare React
 Native consumers. The registry attestation identifies the repository, workflow,
 branch, commit, and run. `next` moved to `0.1.0-next.1`; `latest` correctly
 remained on the bootstrap version `0.1.0-next.0`.

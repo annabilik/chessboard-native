@@ -407,6 +407,63 @@ describe('controlled annotation operations', () => {
     });
   });
 
+  it('snapshots accessor-backed IDs and current state before reducing', () => {
+    let annotationIdReads = 0;
+    const toggle = {
+      ...operationBase(0),
+      annotation: { color: '#f00', square: 'a1', type: 'square' as const },
+      get annotationId(): string {
+        annotationIdReads += 1;
+        return annotationIdReads === 1 ? 'candidate' : '';
+      },
+      matchingIdsAtBase: [],
+      type: 'toggle' as const,
+    } satisfies AnnotationOperation;
+    const toggled = requireApplied(
+      applyAnnotationOperation({
+        boardId,
+        current: snapshot(0, []),
+        operation: toggle,
+      }),
+    );
+
+    expect(annotationIdReads).toBe(1);
+    expect(toggled.next.value).toEqual([
+      { color: '#f00', id: 'candidate', square: 'a1', type: 'square' },
+    ]);
+
+    let revisionReads = 0;
+    let valueReads = 0;
+    const changingCurrent = {
+      get revision(): number {
+        revisionReads += 1;
+        return revisionReads < 3
+          ? Number.MAX_SAFE_INTEGER - 1
+          : Number.MAX_SAFE_INTEGER;
+      },
+      get value(): readonly BoardAnnotation[] {
+        valueReads += 1;
+        return [];
+      },
+    } satisfies ControlledAnnotations;
+    const added = requireApplied(
+      applyAnnotationOperation({
+        boardId,
+        current: changingCurrent,
+        operation: {
+          ...operationBase(Number.MAX_SAFE_INTEGER - 1),
+          annotation: { color: '#0f0', square: 'b2', type: 'square' },
+          annotationId: 'maximum-revision',
+          type: 'add',
+        },
+      }),
+    );
+
+    expect(revisionReads).toBe(1);
+    expect(valueReads).toBe(1);
+    expect(added.next.revision).toBe(Number.MAX_SAFE_INTEGER);
+  });
+
   it('rejects malformed correlation values before reducing typed deltas', () => {
     const current = snapshot(1, []);
     const operation = {
