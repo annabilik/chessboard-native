@@ -1,5 +1,12 @@
 # @vibechess/chessboard-native
 
+## 0.1.0-next.1
+
+### Patch Changes
+
+- Advance the prerelease for a one-time npm trusted-publishing proof. This release
+  does not change the public API or runtime behavior.
+
 ## 0.1.0-next.0
 
 ### Minor Changes

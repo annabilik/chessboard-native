@@ -153,6 +153,12 @@ For the accepted bootstrap release, supply `0.1.0-next.0` for both version
 inputs. This records a green, credential-free verification of the bytes that
 npm already accepted; it does not create a new version or move a dist-tag.
 
+Recovery workflow run
+[`29653184776`](https://github.com/annabilik/chessboard-native/actions/runs/29653184776)
+completed successfully on July 18, 2026. It verified the exact registry bytes,
+`next` and `latest`, provenance, and clean Expo and bare React Native consumers
+without executing either publishing job.
+
 ## Enable trusted publishing
 
 After the bootstrap workflow and its registry checks succeed, open the package
@@ -164,6 +170,7 @@ settings on npm and configure a GitHub Actions trusted publisher with exactly:
 | Repository                  | `chessboard-native` |
 | Workflow filename           | `release.yml`       |
 | Environment name            | `npm`               |
+| Allowed action              | `npm publish`       |
 
 Allow the publisher to perform `npm publish`. The package's `repository.url`
 must remain exactly
@@ -171,11 +178,12 @@ must remain exactly
 [trusted publishing documentation](https://docs.npmjs.com/trusted-publishers/)
 for the settings and OIDC security model.
 
-Prove the configuration before removing the recovery path. Prepare a new,
-previously unpublished `0.1.0-next.N` version and dispatch `trusted-oidc` as
-described below. That mode never injects `NPM_TOKEN`, even while the protected
-environment still holds it. Confirm that publication, provenance, registry-byte
-verification, and clean-consumer checks all succeed through OIDC.
+The trusted publisher was configured after the successful recovery run. Prove
+the configuration before removing the recovery path by publishing the prepared,
+previously unpublished `0.1.0-next.1` version through `trusted-oidc` as described
+below. That mode never injects `NPM_TOKEN`, even while the protected environment
+still holds it. Confirm that publication, provenance, registry-byte verification,
+and clean-consumer checks all succeed through OIDC.
 
 Immediately after that proof succeeds:
 
