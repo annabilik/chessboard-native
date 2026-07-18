@@ -185,6 +185,15 @@ below. That mode never injects `NPM_TOKEN`, even while the protected environment
 still holds it. Confirm that publication, provenance, registry-byte verification,
 and clean-consumer checks all succeed through OIDC.
 
+The first trusted-publishing attempt, workflow run
+[`29655350415`](https://github.com/annabilik/chessboard-native/actions/runs/29655350415),
+stopped before `npm publish` because a shared `actions/setup-node` registry
+configuration generated token-authentication environment state. The corrective
+workflow configures `registry-url` only for `bootstrap-token`; `trusted-oidc`
+uses a separate Node.js setup and fails closed if `NODE_AUTH_TOKEN`, `NPM_TOKEN`,
+or `NPM_CONFIG_USERCONFIG` is present. npm did not accept `0.1.0-next.1`, so the
+same version remains the one safe retry target after the correction is merged.
+
 Immediately after that proof succeeds:
 
 1. Revoke the granular token on npm.

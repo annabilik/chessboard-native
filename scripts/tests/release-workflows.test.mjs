@@ -30,6 +30,19 @@ function jobBlock(workflow, jobName) {
   );
 }
 
+function stepBlock(job, stepName) {
+  const marker = `      - name: ${stepName}\n`;
+  const start = job.indexOf(marker);
+  assert.notEqual(start, -1, `Missing ${stepName} step`);
+
+  const rest = job.slice(start + marker.length);
+  const nextStep = /\n {6}- (?:name|uses):/u.exec(rest);
+  return job.slice(
+    start,
+    nextStep ? start + marker.length + nextStep.index : job.length,
+  );
+}
+
 test('keeps prerelease publication manual, main-only, and dry-run first', () => {
   assert.match(releaseWorkflow, /^on:\n {2}workflow_dispatch:/mu);
   assert.doesNotMatch(
@@ -50,6 +63,18 @@ test('publishes only an unpublished exact archive under next', () => {
   const prepare = jobBlock(releaseWorkflow, 'prepare');
   const dryRun = jobBlock(releaseWorkflow, 'dry-run');
   const publish = jobBlock(releaseWorkflow, 'publish');
+  const bootstrapSetup = stepBlock(
+    publish,
+    'Set up Node.js for bootstrap token publishing',
+  );
+  const trustedSetup = stepBlock(
+    publish,
+    'Set up Node.js for trusted publishing',
+  );
+  const trustedPublish = stepBlock(
+    publish,
+    'Publish with npm trusted publishing',
+  );
 
   assert.match(prepare, /inspect-package\.mjs --output "\$RELEASE_ARCHIVE"/u);
   assert.match(prepare, /Validate registry recovery inputs/u);
@@ -73,6 +98,11 @@ test('publishes only an unpublished exact archive under next', () => {
   );
   assert.match(publish, /read-registry-state\.mjs/u);
   assert.match(publish, /check-release-tags\.mjs before/u);
+  assert.match(bootstrapSetup, /if:.*inputs\.mode == 'bootstrap-token'/u);
+  assert.match(bootstrapSetup, /registry-url: https:\/\/registry\.npmjs\.org/u);
+  assert.match(trustedSetup, /if:.*inputs\.mode == 'trusted-oidc'/u);
+  assert.doesNotMatch(trustedSetup, /registry-url/u);
+  assert.equal(publish.match(/registry-url:/gu)?.length, 1);
   assert.equal(
     publish.match(
       /npm publish "\$ARCHIVE" --access public --tag next --provenance/gu,
@@ -80,6 +110,10 @@ test('publishes only an unpublished exact archive under next', () => {
     2,
   );
   assert.match(publish, /secrets\.NPM_TOKEN/u);
+  assert.match(trustedPublish, /NODE_AUTH_TOKEN/u);
+  assert.match(trustedPublish, /NPM_TOKEN/u);
+  assert.match(trustedPublish, /NPM_CONFIG_USERCONFIG/u);
+  assert.doesNotMatch(trustedPublish, /secrets\.NPM_TOKEN/u);
   assert.doesNotMatch(publish, /npm view "\$PACKAGE_NAME@next" version/u);
   assert.doesNotMatch(publish, /npm view "\$PACKAGE_NAME" dist-tags/u);
   assert.doesNotMatch(publish, /changeset publish|npm publish packages\//u);
