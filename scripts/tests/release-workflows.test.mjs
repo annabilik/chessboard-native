@@ -39,18 +39,21 @@ test('keeps prerelease publication manual, main-only, and dry-run first', () => 
   assert.match(releaseWorkflow, /default: dry-run/u);
   assert.match(
     releaseWorkflow,
-    /options:\n {10}- dry-run\n {10}- bootstrap-token\n {10}- trusted-oidc/u,
+    /options:\n {10}- dry-run\n {10}- bootstrap-token\n {10}- trusted-oidc\n {10}- verify-registry/u,
   );
+  assert.match(releaseWorkflow, /^ {6}expected-latest:/mu);
   assert.match(releaseWorkflow, /RELEASE_REF.*github\.ref/u);
   assert.match(releaseWorkflow, /refs\/heads\/main/u);
 });
 
-test('publishes only the exact inspected archive under next', () => {
+test('publishes only an unpublished exact archive under next', () => {
   const prepare = jobBlock(releaseWorkflow, 'prepare');
   const dryRun = jobBlock(releaseWorkflow, 'dry-run');
   const publish = jobBlock(releaseWorkflow, 'publish');
 
   assert.match(prepare, /inspect-package\.mjs --output "\$RELEASE_ARCHIVE"/u);
+  assert.match(prepare, /Validate registry recovery inputs/u);
+  assert.match(prepare, /check-release-tags\.mjs expected-latest/u);
   assert.match(prepare, /--consumer expo/u);
   assert.match(prepare, /--consumer native/u);
   assert.match(prepare, /sha256sum "\$RELEASE_ARCHIVE"/u);
@@ -58,10 +61,18 @@ test('publishes only the exact inspected archive under next', () => {
     dryRun,
     /npm publish "\$ARCHIVE" --dry-run --access public --tag next/u,
   );
-  assert.doesNotMatch(dryRun, /^ {4}if:/mu);
+  assert.match(dryRun, /if:.*inputs\.mode != 'verify-registry'/u);
+  assert.match(dryRun, /read-registry-state\.mjs/u);
+  assert.match(dryRun, /--require-unpublished true/u);
   assert.match(publish, /environment: npm/u);
   assert.match(publish, /^ {6}- dry-run$/mu);
   assert.match(publish, /id-token: write/u);
+  assert.match(
+    publish,
+    /latest-before:.*steps\.registry-before\.outputs\.latest-before/u,
+  );
+  assert.match(publish, /read-registry-state\.mjs/u);
+  assert.match(publish, /check-release-tags\.mjs before/u);
   assert.equal(
     publish.match(
       /npm publish "\$ARCHIVE" --access public --tag next --provenance/gu,
@@ -69,9 +80,36 @@ test('publishes only the exact inspected archive under next', () => {
     2,
   );
   assert.match(publish, /secrets\.NPM_TOKEN/u);
-  assert.match(publish, /npm view "\$PACKAGE_NAME@next" version/u);
+  assert.doesNotMatch(publish, /npm view "\$PACKAGE_NAME@next" version/u);
   assert.doesNotMatch(publish, /npm view "\$PACKAGE_NAME" dist-tags/u);
   assert.doesNotMatch(publish, /changeset publish|npm publish packages\//u);
+});
+
+test('verifies publish or recovery without credentials or a second publish', () => {
+  const verification = jobBlock(releaseWorkflow, 'registry-verification');
+
+  assert.match(verification, /always\(\)/u);
+  assert.match(verification, /inputs\.mode == 'verify-registry'/u);
+  assert.match(verification, /needs\.publish\.result == 'success'/u);
+  assert.match(verification, /EXPECTED_LATEST_INPUT/u);
+  assert.match(verification, /check-release-tags\.mjs expected-latest/u);
+  assert.match(verification, /check-release-tags\.mjs after/u);
+  assert.match(verification, /npm view "\$PACKAGE_NAME@next" version/u);
+  assert.match(verification, /npm view "\$PACKAGE_NAME@latest" version/u);
+  assert.match(verification, /dist\.attestations/u);
+  assert.match(verification, /sha256sum "\$registry_archive"/u);
+  assert.match(verification, /--consumer expo/u);
+  assert.match(verification, /--consumer native/u);
+  assert.equal(verification.match(/npm run typecheck/gu)?.length, 2);
+  assert.match(verification, /npm run export:native/u);
+  assert.doesNotMatch(verification, /^ {4}environment:/mu);
+  assert.doesNotMatch(verification, /id-token: write/u);
+  assert.doesNotMatch(verification, /NPM_TOKEN|NODE_AUTH_TOKEN/u);
+  assert.doesNotMatch(verification, /npm publish/u);
+  assert.doesNotMatch(
+    releaseWorkflow,
+    /prerelease must not be assigned to dist-tags\.latest/u,
+  );
   assert.doesNotMatch(
     releaseWorkflow,
     /gradlew|xcodebuild|expo prebuild|run-android|run-ios|pod install/u,
