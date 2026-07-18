@@ -6,21 +6,28 @@ modify, build, or publish any VibeChess application or private codebase. A
 release is sourced from `annabilik/chessboard-native`, and the package archive
 must contain only the allowlisted open-source package files.
 
-Do not infer npm registry state from this document. Consider the first release
-successful only after both the publish step and registry verification succeed.
+Do not infer current npm registry state from this document. npm versions are
+immutable once accepted, even when a later workflow verification step fails.
+Record publication and verification as separate release evidence.
 
 ## Release rules
 
-- Publish prereleases only under the npm `next` dist-tag. Never publish or move
-  `latest` during this phase. The package manifest pins `publishConfig.tag` to
-  `next` as a backstop, and the workflow still supplies `--tag next`
-  explicitly.
+- Publish prereleases only under the npm `next` dist-tag. The package manifest
+  pins `publishConfig.tag` to `next` as a backstop, and the workflow still
+  supplies `--tag next` explicitly. npm necessarily initializes `latest` when
+  the first version of a new package is published, even with `--tag next`.
+  Bootstrap verification requires that initial value to equal the first
+  version; every later prerelease must preserve the exact pre-publish `latest`
+  value.
 - Release only a clean commit on `main` after its required CI checks pass.
 - Use `.github/workflows/release.yml` through GitHub Actions. Do not publish a
   separately packed local archive.
 - The workflow's `dry-run` mode is the default. Publishing requires explicitly
   selecting either `bootstrap-token` or `trusted-oidc` and supplying the exact
   `expected-version`.
+- `verify-registry` verifies an already published immutable version. It skips
+  the dry-run and publish jobs, requires an explicit `expected-latest`, and
+  receives no npm token, protected environment, or OIDC write permission.
 - Both publishing modes use the protected GitHub environment named `npm`.
 - Never reuse a version. Every correction receives a new
   `0.1.0-next.N` version.
@@ -113,7 +120,38 @@ The workflow must not repack after inspection. After publication, it downloads
 that exact version from the npm registry, verifies the registry artifact, and
 installs the downloaded artifact into clean Expo and bare React Native
 consumers. Treat a failed post-publish verification as a failed release even
-though npm has accepted the immutable version.
+though npm has accepted the immutable version. For the first package version,
+the verifier also requires npm's automatically initialized `latest` tag to
+equal that version; this is the sole prerelease exception to preserving an
+older `latest` value.
+
+The bootstrap publication on July 18, 2026, was accepted as
+`@vibechess/chessboard-native@0.1.0-next.0` with provenance. Both `next` and
+npm's mandatory initial `latest` resolve to that version. Workflow run
+[`29650521219`](https://github.com/annabilik/chessboard-native/actions/runs/29650521219)
+then failed only because the old verifier incorrectly rejected the mandatory
+initial `latest` tag; it must never be rerun in a publishing mode.
+
+## Recover post-publish verification
+
+When npm accepted a version but a later workflow check failed, never rerun the
+publishing mode and never attempt to reuse the version. After correcting only
+the verification code, dispatch **npm prerelease** on `main` with:
+
+- `mode`: `verify-registry`
+- `expected-version`: the exact immutable version already on npm
+- `expected-latest`: the exact `latest` value independently observed for that
+  release
+
+Recovery mode prepares and inspects the package from `main`, compares its exact
+SHA-256 digest with the registry tarball, checks the supplied `next` and
+`latest` expectations and provenance, and repeats the clean Expo and bare React
+Native consumer checks. It cannot publish: the job does not enter the protected
+`npm` environment, request an OIDC token, or receive `NPM_TOKEN`.
+
+For the accepted bootstrap release, supply `0.1.0-next.0` for both version
+inputs. This records a green, credential-free verification of the bytes that
+npm already accepted; it does not create a new version or move a dist-tag.
 
 ## Enable trusted publishing
 
@@ -181,7 +219,9 @@ npm pack @vibechess/chessboard-native@0.1.0-next.N --ignore-scripts
 Confirm all of the following:
 
 - `@next` resolves to the exact workflow `expected-version`.
-- `latest` was neither created nor changed by this release.
+- for the bootstrap version, `latest` equals that first version; for every
+  subsequent prerelease, `latest` remains equal to its recorded pre-publish
+  value;
 - the registry archive passes the workflow's artifact checks and clean Expo
   and bare React Native installs;
 - npm displays repository, license, README, provenance, and public access as
