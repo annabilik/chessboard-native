@@ -33,6 +33,13 @@ change. These signals are independent. Interactive stores should use this tier
 when they need a committed outcome: after accepting an intent, they publish a
 greater revision and copy that intent's ID into `committedIntentId`.
 
+Interactive annotation stores likewise use `ControlledAnnotations`. Emitted
+operations carry the exact normalized annotation revision observed by the
+board, and the public `applyAnnotationOperation` helper accepts an explicit
+revisioned current envelope. This keeps stale-base handling and the next
+revision under consumer control instead of asking a derived plain-tier counter
+to become application state.
+
 Changing one domain between plain and revisioned tiers while its board remains
 mounted uses that domain's `*_CONTROL_TIER_CHANGED` error code. It does not
 activate a second render source. Unmounting and mounting may choose a different

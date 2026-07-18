@@ -17,6 +17,10 @@ export {
 } from './core/coordinates';
 export { parseFenPosition } from './core/fen';
 export { squareToBoardPoint } from './core/hit-test';
+export {
+  applyAnnotationOperation,
+  findMatchingAnnotationIds,
+} from './core/annotation-operations';
 export { defaultPieceRenderers } from './pieces';
 export { defaultTheme } from './theme';
 
@@ -31,9 +35,15 @@ export type {
   OnChessboardError,
 } from './ChessboardError';
 export type {
+  AnnotationOperationRejectionReason,
+  ApplyAnnotationOperationOptions,
+  ApplyAnnotationOperationResult,
+} from './core/annotation-operations';
+export type {
   AnnotationDraft,
   AnnotationOperation,
   AnnotationOperationBase,
+  AnnotationPolicies,
   AnnotationStyle,
   AnnotationsProp,
   AnnotationTool,
@@ -63,6 +73,7 @@ export type {
   MoveRequestTimeouts,
   MoveSource,
   OnMoveRequest,
+  OnAnnotationOperation,
   OnSquareActivate,
   PieceData,
   PieceInteractionContext,

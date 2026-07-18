@@ -181,6 +181,10 @@ export interface InteractionPermissions {
 
 /** Consumer-owned arrow annotation. @public */
 export interface ArrowAnnotation {
+  /**
+   * Stable logical identity, unique within a collection and never recycled
+   * within one controlled annotation revision lineage.
+   */
   readonly id: string;
   readonly type: 'arrow';
   readonly from: SquareId;
@@ -195,6 +199,10 @@ export interface ArrowAnnotation {
 
 /** Consumer-owned square annotation. @public */
 export interface SquareAnnotation {
+  /**
+   * Stable logical identity, unique within a collection and never recycled
+   * within one controlled annotation revision lineage.
+   */
   readonly id: string;
   readonly type: 'square';
   readonly square: SquareId;
@@ -256,10 +264,14 @@ export interface AnnotationOperationBase {
 export type AnnotationOperation =
   | (AnnotationOperationBase & {
       readonly type: 'add';
+      /** Stable identity assigned to the persistent annotation if applied. */
+      readonly annotationId: string;
       readonly annotation: AnnotationDraft;
     })
   | (AnnotationOperationBase & {
       readonly type: 'toggle';
+      /** Stable identity assigned only when this toggle was an add at its base. */
+      readonly annotationId: string;
       readonly annotation: AnnotationDraft;
       readonly matchingIdsAtBase: readonly string[];
     })
@@ -272,6 +284,26 @@ export type AnnotationOperation =
       readonly annotationIdsAtBase: readonly string[];
       readonly reason: 'board-press' | 'position-change' | 'consumer-action';
     });
+
+/** Independent policies that request controlled annotation deltas. @public */
+export interface AnnotationPolicies {
+  /** Request removal of annotations observed when the board is pressed. */
+  readonly clearOnBoardPress?: boolean;
+  /** Request removal of annotations observed after a position revision changes. */
+  readonly clearOnPositionChange?: boolean;
+}
+
+/**
+ * Synchronous notification for one immutable annotation delta.
+ *
+ * The callback result is ignored. Only a subsequently published `annotations`
+ * prop can commit the requested change.
+ *
+ * @public
+ */
+export type OnAnnotationOperation = (
+  operation: Readonly<AnnotationOperation>,
+) => void;
 
 /** Consumer-selected annotation presentation tool. @public */
 export type AnnotationTool =

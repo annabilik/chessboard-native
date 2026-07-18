@@ -1,12 +1,11 @@
 import { defaultAnnotationStyle } from '../annotation-style';
 import { parseSquareId } from '../core/coordinates';
 import type {
+  AnnotationDraft,
   AnnotationStyle,
-  ArrowAnnotation,
   BoardAnnotation,
   BoardDimensions,
   BoardOrientation,
-  SquareAnnotation,
 } from '../public-types';
 import { createBoardSurfaceLayout, type BoardCellRect } from './board-layout';
 
@@ -36,20 +35,25 @@ export interface ArrowPathGeometry {
 }
 
 export interface ArrowAnnotationGeometry extends ArrowPathGeometry {
-  readonly annotationId: string;
+  readonly annotationId: string | null;
   readonly color: string;
+  readonly isDraft: boolean;
   readonly kind: 'arrow';
   readonly layer: AnnotationLayerName;
+  readonly renderKey: string;
 }
 
 export interface SquareAnnotationGeometry {
-  readonly annotationId: string;
+  readonly annotationId: string | null;
   readonly center: Readonly<AnnotationPoint>;
   readonly color: string;
+  readonly isDraft: boolean;
   readonly kind: 'square';
   readonly layer: AnnotationLayerName;
+  readonly opacity: number;
   readonly radius: number;
   readonly rect: Readonly<BoardCellRect>;
+  readonly renderKey: string;
   readonly shape: 'fill' | 'circle' | 'dot' | 'border';
   readonly strokeWidth: number;
 }
@@ -63,6 +67,30 @@ export interface ComputedAnnotationGeometry {
   readonly height: number;
   readonly width: number;
 }
+
+type RenderableAnnotation = BoardAnnotation | AnnotationDraft;
+type RenderableArrowAnnotation = Extract<
+  RenderableAnnotation,
+  { readonly type: 'arrow' }
+>;
+type RenderableSquareAnnotation = Extract<
+  RenderableAnnotation,
+  { readonly type: 'square' }
+>;
+
+type AnnotationGeometryEntry =
+  | {
+      readonly annotation: Readonly<BoardAnnotation>;
+      readonly annotationId: string;
+      readonly isDraft: false;
+      readonly renderKey: string;
+    }
+  | {
+      readonly annotation: Readonly<AnnotationDraft>;
+      readonly annotationId: null;
+      readonly isDraft: true;
+      readonly renderKey: 'draft';
+    };
 
 interface ComputeArrowPathOptions {
   readonly active?: boolean;
@@ -289,7 +317,7 @@ export function computeArrowPath(
 }
 
 function resolveArrowShape(
-  annotation: Readonly<ArrowAnnotation>,
+  annotation: Readonly<RenderableArrowAnnotation>,
   dimensions: Readonly<BoardDimensions>,
 ): ArrowPathShape {
   if (annotation.shape !== undefined) {
@@ -305,7 +333,7 @@ function resolveArrowShape(
 }
 
 function defaultLayer(
-  annotation: Readonly<BoardAnnotation>,
+  annotation: Readonly<RenderableAnnotation>,
 ): AnnotationLayerName {
   return (
     annotation.layer ??
@@ -314,9 +342,13 @@ function defaultLayer(
 }
 
 function squareGeometry(
-  annotation: Readonly<SquareAnnotation>,
+  annotation: Readonly<RenderableSquareAnnotation>,
   rect: Readonly<BoardCellRect>,
   squareSize: number,
+  identity: Readonly<
+    Pick<AnnotationGeometryEntry, 'annotationId' | 'isDraft' | 'renderKey'>
+  >,
+  opacity: number,
 ): Readonly<SquareAnnotationGeometry> {
   const shape = annotation.shape ?? 'fill';
   const center = point(rect.left + rect.width / 2, rect.top + rect.height / 2);
@@ -328,24 +360,32 @@ function squareGeometry(
         : 0;
 
   return Object.freeze({
-    annotationId: annotation.id,
+    annotationId: identity.annotationId,
     center,
     color: annotation.color,
+    isDraft: identity.isDraft,
     kind: 'square',
     layer: defaultLayer(annotation),
+    opacity,
     radius,
     rect,
+    renderKey: identity.renderKey,
     shape,
     strokeWidth: shape === 'border' ? squareSize * 0.08 : 0,
   });
 }
 
 /**
- * Project the current controlled annotation collection into one logical SVG
- * coordinate space while preserving same-layer collection order.
+ * Project the current controlled annotation collection plus at most one
+ * presentation-only draft into one logical SVG coordinate space.
+ *
+ * Controlled collection order remains stable within each layer. A current
+ * draft is appended last in its resolved layer and never gains a persistent
+ * consumer annotation ID.
  */
 export function computeAnnotationGeometry(options: {
   readonly annotations: readonly Readonly<BoardAnnotation>[];
+  readonly draft?: Readonly<AnnotationDraft> | null;
   readonly dimensions: Readonly<BoardDimensions>;
   readonly orientation: BoardOrientation;
   readonly style: Readonly<AnnotationStyle>;
@@ -359,20 +399,50 @@ export function computeAnnotationGeometry(options: {
     options.orientation,
   );
   const cells = new Map(layout.cells.map((cell) => [cell.square, cell]));
-  const arrows = options.annotations.filter(
-    (annotation): annotation is Readonly<ArrowAnnotation> =>
-      annotation.type === 'arrow',
-  );
+  const entries: readonly Readonly<AnnotationGeometryEntry>[] = Object.freeze([
+    ...options.annotations.map((annotation) =>
+      Object.freeze({
+        annotation,
+        annotationId: annotation.id,
+        isDraft: false as const,
+        renderKey: `controlled:${annotation.id}`,
+      }),
+    ),
+    ...(options.draft === undefined || options.draft === null
+      ? []
+      : [
+          Object.freeze({
+            annotation: options.draft,
+            annotationId: null,
+            isDraft: true as const,
+            renderKey: 'draft' as const,
+          }),
+        ]),
+  ]);
   const belowPieces: Readonly<RenderedAnnotationGeometry>[] = [];
   const abovePieces: Readonly<RenderedAnnotationGeometry>[] = [];
 
-  for (const annotation of options.annotations) {
+  for (const entry of entries) {
+    const annotation = entry.annotation;
     const layer = defaultLayer(annotation);
     const target = layer === 'belowPieces' ? belowPieces : abovePieces;
     if (annotation.type === 'square') {
       const cell = cells.get(annotation.square);
       if (cell !== undefined) {
-        target.push(squareGeometry(annotation, cell.rect, layout.cellWidth));
+        target.push(
+          squareGeometry(
+            annotation,
+            cell.rect,
+            layout.cellWidth,
+            entry,
+            entry.isDraft
+              ? opacityOr(
+                  options.style.activeOpacity,
+                  defaultAnnotationStyle.activeOpacity,
+                )
+              : 1,
+          ),
+        );
       }
       continue;
     }
@@ -390,14 +460,16 @@ export function computeAnnotationGeometry(options: {
       toCell.rect.left + toCell.rect.width / 2,
       toCell.rect.top + toCell.rect.height / 2,
     );
-    const sameTarget = arrows.some(
+    const sameTarget = entries.some(
       (other) =>
-        other.id !== annotation.id &&
-        other.from !== other.to &&
-        other.to === annotation.to &&
-        other.from !== annotation.from,
+        other !== entry &&
+        other.annotation.type === 'arrow' &&
+        other.annotation.from !== other.annotation.to &&
+        other.annotation.to === annotation.to &&
+        other.annotation.from !== annotation.from,
     );
     const path = computeArrowPath({
+      active: entry.isDraft,
       from,
       ...(annotation.opacity === undefined
         ? {}
@@ -412,10 +484,12 @@ export function computeAnnotationGeometry(options: {
     if (path !== null) {
       target.push(
         Object.freeze({
-          annotationId: annotation.id,
+          annotationId: entry.annotationId,
           color: annotation.color,
+          isDraft: entry.isDraft,
           kind: 'arrow',
           layer,
+          renderKey: entry.renderKey,
           ...path,
         }),
       );

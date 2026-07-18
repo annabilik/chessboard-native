@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -20,6 +21,10 @@ import {
 import { announceMoveOutcome } from '../accessibility/move-outcome';
 import { STANDARD_BOARD_DIMENSIONS } from '../core/dimensions';
 import type { NormalizedBoardModel } from '../internal/board-model';
+import {
+  projectCurrentAnnotationDraft,
+  type CorrelatedAnnotationDraft,
+} from '../internal/annotation-draft-presentation';
 import type { BoardGestureIntentCandidate } from '../internal/board-gesture-adapter';
 import {
   canDragCurrentPiece,
@@ -35,6 +40,7 @@ import {
   type SquareActivationInput,
 } from '../internal/square-activation';
 import { useMoveRequestRuntime } from '../internal/use-move-request-runtime';
+import { useAnnotationOperation } from '../internal/use-annotation-operation';
 import { useSquareActivation } from '../internal/use-square-activation';
 import { usePositionTransitionRuntime } from '../internal/use-position-transition-runtime';
 import type { ProviderBoardRegistration } from '../internal/provider-board-registration';
@@ -47,6 +53,7 @@ import { useChessboardProvider } from '../internal/provider-context';
 import type { ProviderSpareSelectionDescriptor } from '../internal/provider-spare-selection';
 import type {
   AnnotationStyle,
+  AnnotationPolicies,
   BoardSize,
   CanDragPiece,
   ChessboardAccessibility,
@@ -57,6 +64,7 @@ import type {
   MoveOutcomeAccessibilityContext,
   MoveRequestTimeouts,
   OnMoveRequest,
+  OnAnnotationOperation,
   OnSquareActivate,
   PieceRenderers,
   SquareActivationIntent,
@@ -86,6 +94,8 @@ interface MeasuredBoardSize extends BoardSize {
 
 interface BoardSurfaceProps {
   readonly accessibility: ChessboardAccessibility | undefined;
+  readonly annotationDraft?: Readonly<CorrelatedAnnotationDraft> | null;
+  readonly annotationPolicies: AnnotationPolicies | undefined;
   readonly annotationStyle: Readonly<AnnotationStyle>;
   readonly canDragPiece: CanDragPiece | undefined;
   readonly development: boolean;
@@ -93,6 +103,7 @@ interface BoardSurfaceProps {
   readonly logTransitionWarning?: (message: string) => void;
   readonly model: NormalizedBoardModel;
   readonly moveRequestTimeouts: MoveRequestTimeouts | undefined;
+  readonly onAnnotationOperation: OnAnnotationOperation | undefined;
   readonly onMoveRequest: OnMoveRequest | undefined;
   readonly onSquareActivate: OnSquareActivate | undefined;
   readonly pieceRenderers: PieceRenderers;
@@ -208,6 +219,8 @@ function invalidationReason(
 /** Responsive native host for measured visual board layers. */
 export function BoardSurface({
   accessibility,
+  annotationDraft = null,
+  annotationPolicies,
   annotationStyle,
   canDragPiece,
   development,
@@ -215,6 +228,7 @@ export function BoardSurface({
   logTransitionWarning,
   model,
   moveRequestTimeouts,
+  onAnnotationOperation,
   onMoveRequest,
   onSquareActivate,
   pieceRenderers,
@@ -250,7 +264,15 @@ export function BoardSurface({
   const accessibilityMoveEnabled =
     interactionReady && resolvedPermissions.accessibility;
   const dragEnabled = interactionReady && resolvedPermissions.drag;
-  const tapEnabled = interactionReady && typeof onSquareActivate === 'function';
+  const squareActivationEnabled =
+    interactionReady && typeof onSquareActivate === 'function';
+  const annotationBoardPressEnabled =
+    interactionReady &&
+    annotationPolicies?.clearOnBoardPress === true &&
+    typeof onAnnotationOperation === 'function' &&
+    model.annotations !== null &&
+    model.annotations.value.length > 0;
+  const tapEnabled = squareActivationEnabled || annotationBoardPressEnabled;
   const [activeDragSourceSquare, setActiveDragSourceSquare] = useState<
     string | null
   >(null);
@@ -379,8 +401,56 @@ export function BoardSurface({
   }, [providerRegistration, readProviderSpareMove, readSpareDragPermission]);
   const squareActivation = useSquareActivation({
     boardId: model.boardId,
-    onSquareActivate: tapEnabled ? onSquareActivate : undefined,
+    onSquareActivate: squareActivationEnabled ? onSquareActivate : undefined,
   });
+  const annotationOperation = useAnnotationOperation({
+    boardId: model.boardId,
+    onAnnotationOperation,
+  });
+  const previousPositionForAnnotationPolicy = useRef<Readonly<{
+    readonly boardId: string;
+    readonly revision: Revision;
+  }> | null>(null);
+  useEffect(() => {
+    const boardId = model.boardId;
+    const position = model.position;
+    if (!interactionReady || boardId === null || position === null) {
+      previousPositionForAnnotationPolicy.current = null;
+      return;
+    }
+    const previous = previousPositionForAnnotationPolicy.current;
+    previousPositionForAnnotationPolicy.current = Object.freeze({
+      boardId,
+      revision: position.revision,
+    });
+    if (
+      previous?.boardId !== boardId ||
+      previous.revision === position.revision ||
+      annotationPolicies?.clearOnPositionChange !== true ||
+      typeof onAnnotationOperation !== 'function' ||
+      model.annotations === null ||
+      model.annotations.value.length === 0
+    ) {
+      return;
+    }
+    annotationOperation.emit({
+      annotationIdsAtBase: Object.freeze(
+        model.annotations.value.map(({ id }) => id),
+      ),
+      baseAnnotationRevision: model.annotations.revision,
+      input: 'policy',
+      reason: 'position-change',
+      type: 'clear',
+    });
+  }, [
+    annotationOperation.emit,
+    annotationPolicies?.clearOnPositionChange,
+    interactionReady,
+    model.annotations,
+    model.boardId,
+    model.position,
+    onAnnotationOperation,
+  ]);
   const dispatchSquareActivation = useCallback(
     (
       square: SquareId,
@@ -389,7 +459,7 @@ export function BoardSurface({
     ): boolean => {
       const plan = planSquareActivation({
         action,
-        activationEnabled: tapEnabled,
+        activationEnabled: squareActivationEnabled,
         input,
         model,
         moveEnabled:
@@ -414,7 +484,7 @@ export function BoardSurface({
       moveRequestEnabled,
       moveInteraction.request,
       squareActivation.emit,
-      tapEnabled,
+      squareActivationEnabled,
     ],
   );
   const handleDragSourceChange = useCallback(
@@ -458,9 +528,9 @@ export function BoardSurface({
           dispatchSquareActivation(square, 'accessibility'),
         clearSelection: (square: SquareId): boolean =>
           dispatchSquareActivation(square, 'accessibility', 'clear-selection'),
-        enabled: tapEnabled && activeDragSourceSquare === null,
+        enabled: squareActivationEnabled && activeDragSourceSquare === null,
       }),
-    [activeDragSourceSquare, dispatchSquareActivation, tapEnabled],
+    [activeDragSourceSquare, dispatchSquareActivation, squareActivationEnabled],
   );
   const selectedSpare: Readonly<ProviderSpareSelectionDescriptor> | null =
     providerRegistered &&
@@ -649,6 +719,18 @@ export function BoardSurface({
   if (nextGeometryEpochMetadata !== geometryEpochMetadata) {
     setGeometryEpochMetadata(nextGeometryEpochMetadata);
   }
+  const currentAnnotationDraft = projectCurrentAnnotationDraft(
+    annotationDraft,
+    Object.freeze({
+      annotationRevision: model.annotations?.revision ?? null,
+      boardId: model.boardId,
+      geometryEpoch:
+        layout === null ? null : nextGeometryEpochMetadata.revision,
+      positionRevision: model.position?.revision ?? null,
+      providerGeometryRevision,
+      providerLifecycleRevision,
+    }),
+  );
   const annotationGeometry = useMemo(() => {
     if (layout === null || model.annotations === null) {
       return null;
@@ -656,10 +738,11 @@ export function BoardSurface({
     return computeAnnotationGeometry({
       annotations: model.annotations.value,
       dimensions: layout.dimensions,
+      draft: currentAnnotationDraft,
       orientation: layout.orientation,
       style: annotationStyle,
     });
-  }, [annotationStyle, layout, model.annotations]);
+  }, [annotationStyle, currentAnnotationDraft, layout, model.annotations]);
   const gestureGeometry = useMemo<Readonly<BoardGestureGeometry> | null>(() => {
     if (layout === null || nextGeometryEpochMetadata.revision === null) {
       return null;
@@ -860,7 +943,20 @@ export function BoardSurface({
         ) {
           return;
         }
-        dispatchSquareActivation(candidate.square, 'touch');
+        if (annotationBoardPressEnabled) {
+          annotationOperation.emit({
+            annotationIdsAtBase: Object.freeze(
+              model.annotations.value.map(({ id }) => id),
+            ),
+            baseAnnotationRevision: model.annotations.revision,
+            input: 'touch',
+            reason: 'board-press',
+            type: 'clear',
+          });
+        }
+        if (squareActivationEnabled) {
+          dispatchSquareActivation(candidate.square, 'touch');
+        }
         return;
       }
       if (
@@ -898,13 +994,17 @@ export function BoardSurface({
     },
     [
       canDragPiece,
+      annotationBoardPressEnabled,
+      annotationOperation.emit,
       dispatchSquareActivation,
       dragEnabled,
       gestureGeometry,
+      model.annotations,
       model.boardId,
       model.position,
       model.selection?.revision,
       moveInteraction.request,
+      squareActivationEnabled,
       tapEnabled,
     ],
   );

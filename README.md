@@ -5,13 +5,14 @@ A controlled, rules-free React Native chessboard component.
 > [!NOTE]
 > The planned Phase 2 implementation packages and controlled-transition runtime
 > through P3.4 are implemented. P3.5 published
-> `@vibechess/chessboard-native@0.1.0-next.0` for prerelease evaluation. The
-> corrective registry verification passed, and `0.1.0-next.1` is prepared for
-> the first trusted-publishing proof. The public
-> component renders responsive, controlled positions with default or custom pieces,
-> orientation,
-> notation, native styles, controlled square and arrow annotations, controlled
-> selection styling, and one adjustable accessibility control. Its optional
+> `@vibechess/chessboard-native@0.1.0-next.1` through npm trusted publishing
+> after a clean dry run. The registry bytes, provenance, and clean Expo and bare
+> React Native consumers passed verification; `next` resolves to that version
+> while npm's mandatory initial `latest` remains `0.1.0-next.0`. The public
+> component renders responsive, controlled positions with default or custom
+> pieces, orientation, notation, native styles, controlled square and arrow
+> annotations, revision-safe annotation operations, controlled selection
+> styling, and one adjustable accessibility control. Its optional
 > interaction surface supports board-piece drag, controlled
 > touch/accessibility square activation, public spare-piece drag and accessible
 > placement, and accessible move, removal, clearing, and cancellation without
@@ -46,11 +47,14 @@ post-1.0 work.
 
 The repository baseline, package shell, test foundation, bare React Native 0.86
 harness, packed-artifact build gates, and pinned upstream parity inventory are
-in place. The first prerelease is public under npm's `next` tag with provenance;
-npm also initialized its mandatory first-package `latest` tag to that same
-version. A credential-free recovery run verified the accepted immutable bytes
-without publishing again. The next prerelease is versioned solely to prove npm
-trusted publishing, and no merge publishes automatically. The root package
+in place. The bootstrap prerelease `0.1.0-next.0` initialized npm's mandatory
+first-package `latest` tag, and a credential-free recovery run verified its
+accepted immutable bytes without publishing again. A fresh dry run and the
+subsequent `0.1.0-next.1` release proved trusted publishing, verified provenance
+and exact registry bytes, and installed successfully in clean Expo and bare
+React Native consumers. `next` now resolves to `0.1.0-next.1`; `latest` remains
+`0.1.0-next.0`. The one-time bootstrap token and its GitHub environment secret
+have been retired, and no merge publishes automatically. The root package
 exports the controlled public contracts plus pure,
 validated dimension, coordinate, logical-grid, strict 8x8 FEN, and measured
 square-center utilities. Object-position normalization and board-local hit
@@ -78,10 +82,15 @@ square fills/circles/dots/borders default below pieces, while marker-free
 straight and knight arrows default above pieces. Both orientations, rectangular
 boards, per-arrow width/opacity, same-target shortening, and whole-value
 `annotationStyle` configuration use deterministic 2048-wide geometry.
+P4.1 adds immutable annotation-operation callbacks, independent board-press and
+position-change clear policies, and a public pure reducer that applies stale
+deltas against the latest consumer envelope without removing concurrent IDs.
+P4.3 composes at most one revision- and geometry-correlated transient draft
+without adding it to the persistent annotation collection.
 Controlled destination, selected, and disabled square paint now follows
 canonical `squareStyles` without changing hit geometry. Custom square
-renderers and annotation gesture drawing remain later work. Phase 2 has a pure
-interaction reducer, board-level RNGH adapter,
+renderers and the P4.4 native annotation gesture adapters remain later work.
+Phase 2 has a pure interaction reducer, board-level RNGH adapter,
 mounted move-request executor, an accessible non-drag path, and controlled
 square activation.
 Supplying `onSquareActivate` opts into same-square touch and accessibility
@@ -257,9 +266,10 @@ version, defaults to a registry-safe dry run, and publishes only the single
 inspected archive under npm's `next` dist-tag. The initial publish needs a
 short-lived bootstrap credential because trusted publishing can only be
 configured after the npm package exists; subsequent publishes use GitHub OIDC.
-The first package version is public and its recovery verification passed. The
-next release milestone is publishing `0.1.0-next.1` through trusted OIDC before
-the bootstrap token is removed.
+The bootstrap version and its recovery verification passed. The subsequent
+`0.1.0-next.1` proof succeeded through trusted OIDC, and the bootstrap token and
+GitHub secret were removed. Every later prerelease receives a new Changesets
+version, completes a fresh dry run, and publishes only through trusted OIDC.
 
 See [`docs/releasing.md`](./docs/releasing.md) for the protected-environment,
 bootstrap, trusted-publisher, verification, and recovery procedure.

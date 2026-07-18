@@ -34,9 +34,11 @@ export type AnnotationDraft = {
 // @public
 export type AnnotationOperation = (AnnotationOperationBase & {
     readonly type: 'add';
+    readonly annotationId: string;
     readonly annotation: AnnotationDraft;
 }) | (AnnotationOperationBase & {
     readonly type: 'toggle';
+    readonly annotationId: string;
     readonly annotation: AnnotationDraft;
     readonly matchingIdsAtBase: readonly string[];
 }) | (AnnotationOperationBase & {
@@ -58,6 +60,15 @@ export interface AnnotationOperationBase {
     readonly input: 'touch' | 'keyboard' | 'accessibility' | 'policy';
     // (undocumented)
     readonly operationId: string;
+}
+
+// @public
+export type AnnotationOperationRejectionReason = 'board-mismatch' | 'future-base' | 'annotation-id-conflict' | 'revision-overflow';
+
+// @public
+export interface AnnotationPolicies {
+    readonly clearOnBoardPress?: boolean;
+    readonly clearOnPositionChange?: boolean;
 }
 
 // @public
@@ -90,12 +101,36 @@ export type AnnotationTool = {
 } | null;
 
 // @public
+export function applyAnnotationOperation(options: Readonly<ApplyAnnotationOperationOptions>): ApplyAnnotationOperationResult;
+
+// @public
+export interface ApplyAnnotationOperationOptions {
+    readonly boardId: string;
+    readonly current: Readonly<ControlledAnnotations>;
+    readonly operation: Readonly<AnnotationOperation>;
+}
+
+// @public
+export type ApplyAnnotationOperationResult = Readonly<{
+    readonly status: 'applied';
+    readonly next: Readonly<ControlledAnnotations>;
+    readonly stale: boolean;
+}> | Readonly<{
+    readonly status: 'unchanged';
+    readonly next: Readonly<ControlledAnnotations>;
+    readonly stale: boolean;
+}> | Readonly<{
+    readonly status: 'rejected';
+    readonly next: Readonly<ControlledAnnotations>;
+    readonly reason: AnnotationOperationRejectionReason;
+}>;
+
+// @public
 export interface ArrowAnnotation {
     // (undocumented)
     readonly color: string;
     // (undocumented)
     readonly from: SquareId;
-    // (undocumented)
     readonly id: string;
     // (undocumented)
     readonly layer?: 'belowPieces' | 'abovePieces';
@@ -266,6 +301,7 @@ export type ChessboardErrorDomain = 'board' | 'dimensions' | 'position' | 'annot
 // @public
 export interface ChessboardProps {
     readonly accessibility?: ChessboardAccessibility;
+    readonly annotationPolicies?: AnnotationPolicies;
     readonly annotations?: AnnotationsProp;
     readonly annotationStyle?: AnnotationStyle;
     readonly boardId: string;
@@ -273,6 +309,7 @@ export interface ChessboardProps {
     readonly dimensions?: BoardDimensions;
     readonly interactionPermissions?: InteractionPermissions;
     readonly moveRequestTimeouts?: MoveRequestTimeouts;
+    readonly onAnnotationOperation?: OnAnnotationOperation;
     readonly onError?: OnChessboardError;
     readonly onMoveRequest?: OnMoveRequest;
     readonly onSquareActivate?: OnSquareActivate;
@@ -380,6 +417,9 @@ export type FenPieceCode = 'p' | 'r' | 'n' | 'b' | 'q' | 'k' | 'P' | 'R' | 'N' |
 export function fileToColumnIndex(file: string, columns: number, orientation: BoardOrientation): number;
 
 // @public
+export function findMatchingAnnotationIds(annotations: readonly Readonly<BoardAnnotation>[], draft: Readonly<AnnotationDraft>): readonly string[];
+
+// @public
 export function generateBoardGeometry(dimensions: BoardDimensions, orientation: BoardOrientation): readonly (readonly BoardSquare[])[];
 
 // @public
@@ -441,6 +481,9 @@ export type MoveSource = {
     readonly kind: 'spare';
     readonly spareId: string;
 };
+
+// @public
+export type OnAnnotationOperation = (operation: Readonly<AnnotationOperation>) => void;
 
 // @public
 export type OnChessboardError = (error: ChessboardError, context: ChessboardErrorContext) => void;
@@ -624,7 +667,6 @@ export interface SquareActivationIntent {
 export interface SquareAnnotation {
     // (undocumented)
     readonly color: string;
-    // (undocumented)
     readonly id: string;
     // (undocumented)
     readonly layer?: 'belowPieces' | 'abovePieces';

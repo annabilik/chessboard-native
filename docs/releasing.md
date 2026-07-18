@@ -178,12 +178,10 @@ must remain exactly
 [trusted publishing documentation](https://docs.npmjs.com/trusted-publishers/)
 for the settings and OIDC security model.
 
-The trusted publisher was configured after the successful recovery run. Prove
-the configuration before removing the recovery path by publishing the prepared,
-previously unpublished `0.1.0-next.1` version through `trusted-oidc` as described
-below. That mode never injects `NPM_TOKEN`, even while the protected environment
-still holds it. Confirm that publication, provenance, registry-byte verification,
-and clean-consumer checks all succeed through OIDC.
+The trusted publisher was configured after the successful recovery run. Its
+proof release was the prepared `0.1.0-next.1` version through `trusted-oidc`.
+That mode never injects `NPM_TOKEN`; publication, provenance, registry-byte
+verification, and clean-consumer checks must all succeed through OIDC.
 
 The first trusted-publishing attempt, workflow run
 [`29655350415`](https://github.com/annabilik/chessboard-native/actions/runs/29655350415),
@@ -191,21 +189,27 @@ stopped before `npm publish` because a shared `actions/setup-node` registry
 configuration generated token-authentication environment state. The corrective
 workflow configures `registry-url` only for `bootstrap-token`; `trusted-oidc`
 uses a separate Node.js setup and fails closed if `NODE_AUTH_TOKEN`, `NPM_TOKEN`,
-or `NPM_CONFIG_USERCONFIG` is present. npm did not accept `0.1.0-next.1`, so the
-same version remains the one safe retry target after the correction is merged.
+or `NPM_CONFIG_USERCONFIG` is present. npm did not accept `0.1.0-next.1` during
+that failed run.
 
-Immediately after that proof succeeds:
+Fresh dry-run workflow run
+[`29656864085`](https://github.com/annabilik/chessboard-native/actions/runs/29656864085)
+then completed successfully on corrected `main` commit
+`8d3c419f9e2fc9ad29034649c9929252fe2a0c0a`. Trusted-publishing workflow run
+[`29657036632`](https://github.com/annabilik/chessboard-native/actions/runs/29657036632)
+published `@vibechess/chessboard-native@0.1.0-next.1` from that same commit. The
+bootstrap setup and token-publish steps were skipped. The workflow verified the
+exact registry tarball digest, confirmed npm exposed a Sigstore/SLSA provenance
+URL with the expected predicate type, and verified clean Expo and bare React
+Native consumers. The registry attestation identifies the repository, workflow,
+branch, commit, and run. `next` moved to `0.1.0-next.1`; `latest` correctly
+remained on the bootstrap version `0.1.0-next.0`.
 
-1. Revoke the granular token on npm.
-2. Delete `NPM_TOKEN` from the GitHub `npm` environment.
-3. Confirm that no equivalent npm token exists as a repository or organization
-   secret for this workflow.
-4. Configure the package to require two-factor authentication and disallow
-   token-based publishing, leaving trusted publishing as the automated path.
-
-If OIDC authentication fails before npm accepts the new version, correct the
-trusted-publisher fields and retry that version. Do not fall back to token mode.
-The bootstrap token must not remain after a successful OIDC proof.
+After that proof, the one-time granular token was revoked on npm and
+`NPM_TOKEN` was deleted from the protected GitHub `npm` environment. Repository
+and environment secret scopes contain no replacement npm token. Trusted
+publishing is now the automated release path; do not recreate or fall back to a
+long-lived publish token when OIDC needs correction.
 
 ## Subsequent OIDC prereleases
 

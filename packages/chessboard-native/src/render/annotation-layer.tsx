@@ -30,17 +30,27 @@ function polygonPoints(points: readonly Readonly<AnnotationPoint>[]): string {
     .join(' ');
 }
 
+function annotationTestId(
+  annotation: Readonly<RenderedAnnotationGeometry>,
+  suffix: string,
+): string {
+  return annotation.isDraft
+    ? `annotation-draft:${suffix}`
+    : `annotation:${String(annotation.annotationId)}:${suffix}`;
+}
+
 function renderSquare(
   annotation: Readonly<SquareAnnotationGeometry>,
 ): ReactElement {
-  const testID = `annotation:${annotation.annotationId}:${annotation.shape}`;
+  const testID = annotationTestId(annotation, annotation.shape);
   if (annotation.shape === 'circle' || annotation.shape === 'dot') {
     return (
       <Circle
         cx={annotation.center.x}
         cy={annotation.center.y}
         fill={annotation.color}
-        key={annotation.annotationId}
+        key={annotation.renderKey}
+        opacity={annotation.opacity}
         r={annotation.radius}
         testID={testID}
       />
@@ -52,7 +62,8 @@ function renderSquare(
       <Rect
         fill="none"
         height={Math.max(0, annotation.rect.height - annotation.strokeWidth)}
-        key={annotation.annotationId}
+        key={annotation.renderKey}
+        opacity={annotation.opacity}
         stroke={annotation.color}
         strokeWidth={annotation.strokeWidth}
         testID={testID}
@@ -65,7 +76,8 @@ function renderSquare(
     <Rect
       fill={annotation.color}
       height={annotation.rect.height}
-      key={annotation.annotationId}
+      key={annotation.renderKey}
+      opacity={annotation.opacity}
       testID={testID}
       transform={`translate(${String(annotation.rect.left)} ${String(annotation.rect.top)})`}
       width={annotation.rect.width}
@@ -80,7 +92,7 @@ function renderAnnotation(
     return renderSquare(annotation);
   }
   return (
-    <Fragment key={annotation.annotationId}>
+    <Fragment key={annotation.renderKey}>
       <Path
         d={pathData(annotation.points)}
         fill="none"
@@ -89,19 +101,19 @@ function renderAnnotation(
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth={annotation.strokeWidth}
-        testID={`annotation:${annotation.annotationId}:shaft`}
+        testID={annotationTestId(annotation, 'shaft')}
       />
       <Polygon
         fill={annotation.color}
         opacity={annotation.opacity}
         points={polygonPoints(annotation.head)}
-        testID={`annotation:${annotation.annotationId}:head`}
+        testID={annotationTestId(annotation, 'head')}
       />
     </Fragment>
   );
 }
 
-/** Pointerless, accessibility-hidden controlled annotation plane. */
+/** Pointerless, accessibility-hidden persistent and transient annotation plane. */
 export const AnnotationLayer = memo(function AnnotationLayer({
   geometry,
   layer,

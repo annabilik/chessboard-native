@@ -105,6 +105,12 @@ selection nor proof that the consumer accepted a move.
 Long-press pan, two-finger pan, and explicit two-activation annotation input all
 produce the same revisioned annotation operations. Every drag path also has a
 tap, keyboard, or accessibility alternative using the same semantic intent.
+P4.1 establishes the commit-current operation emitter and independent
+board-press/position-change policy paths first. They snapshot only the current
+annotation revision and observed IDs, invoke `onAnnotationOperation` after the
+relevant boundary commits, and never apply the delta. P4.4 will connect the
+three native drawing adapters to that same emitter; it must not create another
+operation or annotation store.
 
 ## Move-request lifecycle, gesture adapter, and executor
 
@@ -239,6 +245,11 @@ stale callbacks without sharing semantic board state. Controlled square or
 spare activation adds no second semantic store: component, model, and native
 tests keep exclusive routing, current-snapshot payloads, stale selection
 rejection, and post-cancellation reuse deterministic.
+The controlled-annotation operation path follows the same boundary: callback
+refs become active only after commit, callback results are ignored, and a
+consumer applies the delta against its latest store envelope. Policy emissions
+remain separate from the future long-press, two-finger, and explicit-mode
+recognizers.
 
 This decision owns invariants `CBN-INV-003`, `CBN-INV-004`, `CBN-INV-007`,
 `CBN-INV-008`, `CBN-INV-009`, `CBN-INV-012`, `CBN-INV-014`,

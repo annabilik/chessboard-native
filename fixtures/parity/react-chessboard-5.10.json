@@ -2098,7 +2098,7 @@
       },
       "status": "implemented",
       "contractTestId": "PARITY-OPTION-ARROWS",
-      "compatibilityNotes": "Arrows are ID-bearing controlled annotations; transient draft composition remains a separate in-progress behavior.",
+      "compatibilityNotes": "Arrows are ID-bearing controlled annotations, with at most one revision- and geometry-correlated transient draft composed without persistent internal state.",
       "rationale": "Combining external arrows with a persistent internal list creates dual ownership and cannot safely reconcile concurrent store updates.",
       "documentation": "docs/parity/react-chessboard-5.10.md#option-arrows"
     },
@@ -2165,9 +2165,9 @@
           "ChessboardProps.onAnnotationOperation"
         ]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-CLEAR-ARROWS-ON-CLICK",
-      "compatibilityNotes": "A policy emits a revisioned clear operation naming only observed annotation IDs.",
+      "compatibilityNotes": "The independent board-press policy emits a revisioned clear operation naming only observed annotation IDs; the consumer remains the only collection owner.",
       "rationale": "The board cannot clear consumer-owned annotations itself; emitting a scoped operation avoids overwriting annotations added concurrently.",
       "documentation": "docs/parity/react-chessboard-5.10.md#option-clear-arrows-on-click"
     },
@@ -2202,9 +2202,9 @@
           "ChessboardProps.onAnnotationOperation"
         ]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-CLEAR-ARROWS-ON-POSITION-CHANGE",
-      "compatibilityNotes": "The policy is independent of click clearing and emits a reasoned controlled operation.",
+      "compatibilityNotes": "The position-change policy is independent of board-press clearing and emits one reasoned controlled operation after commit.",
       "rationale": "Upstream accidentally gates position-change clearing on clearArrowsOnClick and mutates internal state; native policy must be independent and store-driven.",
       "documentation": "docs/parity/react-chessboard-5.10.md#option-clear-arrows-on-position-change"
     },
@@ -2269,9 +2269,9 @@
           "ChessboardProps.onAnnotationOperation"
         ]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-OPTION-ON-ARROWS-CHANGE",
-      "compatibilityNotes": "The compatibility adapter reduces one operation against latest controlled arrows; the primary API emits the operation.",
+      "compatibilityNotes": "The board-press and position-change clear paths emit one immutable operation at their causal boundary for consumer reduction against the latest controlled annotations; add/toggle gesture emission and the Phase 5 compatibility adapter remain open.",
       "rationale": "Emitting whole internal-arrow snapshots on effects can overwrite concurrent controlled updates and fires even for the initial empty state.",
       "documentation": "docs/parity/react-chessboard-5.10.md#option-on-arrows-change"
     },
@@ -3586,9 +3586,9 @@
         "surface": "root",
         "symbols": ["ChessboardProps.annotations", "AnnotationDraft"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B34",
-      "compatibilityNotes": "Rendered annotations equal the controlled collection plus at most one ephemeral draft.",
+      "compatibilityNotes": "Rendered annotations equal the controlled collection plus at most one ephemeral draft correlated to current semantic and geometry revisions.",
       "rationale": "A second persistent internal arrow list makes rendering and callbacks diverge from the controlled collection and cannot safely merge concurrent changes.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b34-external-internal-and-draft-arrow-composition"
     },
@@ -3670,11 +3670,15 @@
       "disposition": "redesign",
       "native": {
         "surface": "root",
-        "symbols": ["AnnotationOperation"]
+        "symbols": [
+          "AnnotationOperation",
+          "applyAnnotationOperation",
+          "findMatchingAnnotationIds"
+        ]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B37",
-      "compatibilityNotes": "ID-based add/toggle/remove operations include base revision and deterministic geometry matching.",
+      "compatibilityNotes": "Add and toggle carry stable candidate IDs, toggle captures deterministic geometry matches, and remove names one stable target ID; all carry a base revision, and stale reduction preserves concurrent IDs.",
       "rationale": "Index-based internal toggling cannot represent duplicate controlled arrows or safely modify a store collection that changed during the gesture.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b37-internal-arrow-toggle-and-external-duplicate-refusal"
     },
@@ -3700,9 +3704,9 @@
           "ReactChessboardOptions.onArrowsChange"
         ]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B38",
-      "compatibilityNotes": "Primary code emits an operation; compatibility reduces it against latest arrows and requires controlled feedback.",
+      "compatibilityNotes": "The implemented board-press and position-change clear paths emit at their causal boundary and require controlled feedback; add/toggle gesture emission and the Phase 5 compatibility adapter remain open.",
       "rationale": "Effect-driven snapshots fire for the initial empty list and can overwrite controlled annotations that arrived after a gesture began.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b38-on-arrows-change-effect-lifecycle"
     },
@@ -3728,11 +3732,15 @@
       "disposition": "redesign",
       "native": {
         "surface": "root",
-        "symbols": ["AnnotationOperation"]
+        "symbols": [
+          "ChessboardProps.annotationPolicies.clearOnBoardPress",
+          "ChessboardProps.onAnnotationOperation",
+          "applyAnnotationOperation"
+        ]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B39",
-      "compatibilityNotes": "A clear operation names IDs observed at its base revision and includes reason board-press.",
+      "compatibilityNotes": "A board press emits one clear operation naming only IDs observed at its base revision and including reason board-press.",
       "rationale": "Clearing internal state cannot clear controlled arrows and offers no safe concurrency semantics for a store-owned annotation collection.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b39-click-clearing-arrows"
     },
@@ -3758,11 +3766,14 @@
       "disposition": "redesign",
       "native": {
         "surface": "root",
-        "symbols": ["ChessboardProps.annotationPolicies.clearOnPositionChange"]
+        "symbols": [
+          "ChessboardProps.annotationPolicies.clearOnPositionChange",
+          "ChessboardProps.onAnnotationOperation"
+        ]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B40",
-      "compatibilityNotes": "Position clearing is an independent policy operation and is never gated by click-clearing configuration.",
+      "compatibilityNotes": "Position clearing emits an independent post-commit policy operation and is never gated by board-press clearing configuration.",
       "rationale": "The upstream clearArrows helper checks clearArrowsOnClick, so clearArrowsOnPositionChange silently fails when click clearing is disabled.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b40-position-clear-coupling-bug"
     },
@@ -3846,9 +3857,9 @@
         "surface": "internal",
         "symbols": ["computeArrowPath"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B43",
-      "compatibilityNotes": "Endpoint and same-target shortening are implemented. Active-draft exemption is covered by the pure geometry helper but awaits runtime draft composition."
+      "compatibilityNotes": "Endpoint and same-target shortening remain deterministic, while the mounted transient draft uses active geometry and stays exempt from shared-target shortening."
     },
     {
       "id": "behavior.b44-arrow-width-opacity-offset-layers-and-marker-ids",
