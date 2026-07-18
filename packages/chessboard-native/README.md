@@ -105,7 +105,11 @@ orientation-aware virtual cursor and decorative visual descendants. Controlled
 square and arrow annotations render in below/above-piece SVG planes. Revisioned
 annotation stores can consume immutable operation callbacks with the public pure
 application helper; independent board-press and position-change policies only
-request controlled deltas. Selection
+request controlled deltas. A non-null `annotationTool` additionally enables
+explicit tap, long-press-pan, and two-finger-pan drawing when a current
+annotation collection and `onAnnotationOperation` are present. Every completed
+path requests one controlled toggle; it never edits the collection inside the
+board. Selection
 styling follows the controlled selection prop, and `onSquareActivate` can opt
 the board into controlled touch and accessibility activation. Supplying
 `onMoveRequest` opens the controlled move-request surface: board/spare-piece
@@ -117,8 +121,9 @@ that.
 overlay, and stale-safe external-drop measurement. Its public `SparePiece`
 source supports drag and accessible placement on one named board while that
 board's controlled move callback remains the only position authority. Custom
-square rendering and native annotation gesture adapters remain future work. Pure
-controlled-position transition planning validates exact-revision hints,
+square rendering plus accessible annotation actions and physical annotation
+validation remain future work. Pure controlled-position transition planning
+validates exact-revision hints,
 prefers stable piece IDs, and treats ambiguous anonymous matches as exits and
 enters. The mounted Reanimated runtime consumes only those detached operations,
 samples presentation-only continuity across interruption and geometry changes,
@@ -415,6 +420,7 @@ function AnalysisBoard() {
         clearOnPositionChange: true,
       }}
       annotations={annotations}
+      annotationTool={{ color: '#e46f18', type: 'arrow' }}
       annotationStyle={{
         ...defaultAnnotationStyle,
         arrowStartOffset: 0.25,
@@ -444,12 +450,41 @@ survive. Board mismatches, future bases, conflicting annotation IDs, and
 revision overflow are rejected without changing `next`.
 `findMatchingAnnotationIds` returns the deterministic type-and-square or
 type-and-endpoints match set required when a consumer constructs a toggle
-operation outside the future gesture adapters.
+operation outside the board's touch paths.
 
 `annotationPolicies.clearOnBoardPress` and `clearOnPositionChange` independently
 emit scoped clear operations. They never mutate the controlled collection, and
 position-change clearing is not coupled to board-press clearing. A consumer may
 omit either policy or the callback to keep the board read-only for annotations.
+
+Interactive annotation input is enabled only when all of these current values
+are available: a ready measured board, `annotations`, a non-null
+`annotationTool`, and a committed `onAnnotationOperation` callback. An empty
+collection is valid and can receive its first annotation. Plain annotation
+arrays receive an internally derived correlation revision, but an interactive
+store should use `ControlledAnnotations` so it can apply operations and publish
+the next revision explicitly.
+
+An arrow tool supports three equivalent touch paths. Tap one source square and
+then a different target square; hold a source for 500 milliseconds and pan to
+the target; or use the two-finger pan. The first explicit arrow tap paints a
+transient border anchor. A square tool toggles on one explicit tap, while its
+pan paths use the terminal square. Every successful path emits one immutable
+`toggle` operation with `input: "touch"`, the exact base annotation revision,
+all matching IDs observed at that revision, and a stable candidate ID for an
+add. Releasing an arrow on its source, releasing outside the board, or
+cancelling emits nothing.
+
+Annotation activation is exclusive: a consumed touch does not also request a
+board-press clear, square activation, or move. Immediate one-finger piece drag
+keeps its existing path; long-press and two-finger recognition arbitrate on the
+same accessibility-hidden board plane. Changes to the position or annotation
+revision, tool semantics, geometry, provider lifecycle, callback availability,
+or mount lifetime cancel the transient session. Callback results are ignored,
+and a persistent annotation appears or disappears only after the consumer
+publishes the next `annotations` prop. Keyboard and accessibility annotation
+actions arrive with the P4.5 accessibility and physical native-validation
+slice.
 
 Omitted arrow shape automatically selects an L path only for an integer
 one-by-two canonical move. `shape="straight"` always overrides that choice;
@@ -459,8 +494,9 @@ to keep heads distinct. `width` is an optional stroke width in the fixed
 2048-wide logical annotation space, and per-arrow `opacity` overrides the style
 default.
 `annotationStyle` is a complete whole-value configuration, not a partial merge.
-Its three colors are reserved for future annotation tools; every persistent
-annotation continues to render its own required `color`.
+The selected `annotationTool` supplies the color and optional presentation
+fields for a drawn candidate; every persistent annotation continues to render
+its own required `color`.
 
 Square shapes are `fill`, `circle`, `dot`, and `border`. All SVG descendants are
 pointerless and hidden from accessibility; the stable outer board remains the
@@ -468,9 +504,9 @@ only accessible control. The renderer can compose at most one
 revision/geometry-correlated transient draft. Layer ordering follows the draft
 type, and the draft is appended after persistent entries only within that
 layer. Arrow drafts use active width and opacity styling; square drafts use
-active opacity styling. A draft never becomes a persistent annotation. Native
-long-press, two-finger, and explicit two-activation gesture adapters that
-produce the draft and final operation arrive in P4.4.
+active opacity styling. A draft never becomes a persistent annotation. The
+explicit, long-press, and two-finger touch paths produce that one correlated
+draft and request the final operation without retaining an annotation list.
 
 ## Controlled selection and square activation
 

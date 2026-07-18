@@ -3,6 +3,7 @@ import {
   Chessboard,
   findMatchingAnnotationIds,
   type AnnotationOperation,
+  type AnnotationTool,
   type ControlledAnnotations,
   type ControlledPosition,
   type OnAnnotationOperation,
@@ -12,6 +13,18 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const BOARD_ID = 'controlled-annotation-lab';
+
+const ARROW_TOOL = Object.freeze({
+  color: '#e46f18',
+  opacity: 0.82,
+  type: 'arrow',
+}) satisfies Exclude<AnnotationTool, null>;
+
+const SQUARE_TOOL = Object.freeze({
+  color: 'rgba(118, 81, 181, 0.42)',
+  shape: 'border',
+  type: 'square',
+}) satisfies Exclude<AnnotationTool, null>;
 
 const INITIAL_ANNOTATIONS = Object.freeze({
   revision: 4,
@@ -49,6 +62,8 @@ export default function ControlledAnnotationsRoute() {
   const annotationsRef = useRef<ControlledAnnotations>(INITIAL_ANNOTATIONS);
   const [position, setPosition] =
     useState<ControlledPosition>(INITIAL_POSITION);
+  const [annotationTool, setAnnotationTool] =
+    useState<AnnotationTool>(ARROW_TOOL);
   const [labEpoch, setLabEpoch] = useState(0);
   const [operationLog, setOperationLog] = useState<readonly string[]>([]);
   const nextIdentity = useRef(1);
@@ -75,7 +90,7 @@ export default function ControlledAnnotationsRoute() {
       }
       publishAnnotations(result.next);
       record(
-        `${operation.operationId}: ${result.status}${result.stale ? ' · stale-safe' : ''}`,
+        `${operation.operationId}: ${operation.type}/${operation.input} · ${result.status}${result.stale ? ' · stale-safe' : ''}`,
       );
     },
     [publishAnnotations, record],
@@ -204,6 +219,7 @@ export default function ControlledAnnotationsRoute() {
     nextIdentity.current = 1;
     publishAnnotations(INITIAL_ANNOTATIONS);
     setPosition(INITIAL_POSITION);
+    setAnnotationTool(ARROW_TOOL);
     setOperationLog([]);
     setLabEpoch((current) => current + 1);
   }, [publishAnnotations]);
@@ -212,17 +228,43 @@ export default function ControlledAnnotationsRoute() {
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.eyebrow}>PHASE 4 · CONTROLLED ANNOTATIONS</Text>
-        <Text style={styles.title}>Revision-safe annotation store</Text>
+        <Text style={styles.title}>Revision-safe annotation gestures</Text>
         <Text style={styles.description}>
-          The callback emits deltas only. This route applies each delta against
-          the latest consumer-owned envelope and publishes the returned value as
-          the next controlled prop.
+          Touch input emits deltas only. This route applies each operation
+          against the latest consumer-owned envelope and publishes the returned
+          value as the next controlled prop.
         </Text>
+
+        <Text style={styles.sectionTitle}>Drawing tool</Text>
+        <View style={styles.toolControls}>
+          <LabButton
+            label="Arrow"
+            onPress={() => {
+              setAnnotationTool(ARROW_TOOL);
+            }}
+            selected={annotationTool?.type === 'arrow'}
+          />
+          <LabButton
+            label="Square"
+            onPress={() => {
+              setAnnotationTool(SQUARE_TOOL);
+            }}
+            selected={annotationTool?.type === 'square'}
+          />
+          <LabButton
+            label="Off"
+            onPress={() => {
+              setAnnotationTool(null);
+            }}
+            selected={annotationTool === null}
+          />
+        </View>
 
         <View style={styles.boardContainer}>
           <Chessboard
             annotationPolicies={annotationPolicies}
             annotations={annotations}
+            annotationTool={annotationTool}
             boardId={BOARD_ID}
             key={labEpoch}
             onAnnotationOperation={onAnnotationOperation}
@@ -232,16 +274,20 @@ export default function ControlledAnnotationsRoute() {
 
         <Text style={styles.status}>
           Annotation revision {annotations.revision} · position revision{' '}
-          {position.revision} · {annotations.value.length} persistent items
+          {position.revision} · tool {annotationTool?.type ?? 'off'} ·{' '}
+          {annotations.value.length} persistent items
         </Text>
 
         <Text style={styles.help}>
-          The controls construct deterministic add, toggle, remove, and clear
-          operations. Tap the board to request policy clearing; advancing the
-          position tests the independent position-change policy. Neither policy
-          edits the collection inside the board.
+          With Arrow selected, tap a source and target, long-press then pan, or
+          use a two-finger pan. The long-press activates after 500 ms. With
+          Square selected, tap a square or finish a pan over it. Each completed
+          path requests one controlled toggle. Turn the tool off and tap the
+          board to test policy clearing; advancing the position tests the
+          independent position-change policy.
         </Text>
 
+        <Text style={styles.sectionTitle}>Store operations and races</Text>
         <View style={styles.controls}>
           <LabButton label="Add square" onPress={addSquare} />
           <LabButton label="Toggle candidate arrow" onPress={toggleCandidate} />
@@ -268,10 +314,10 @@ export default function ControlledAnnotationsRoute() {
         </View>
 
         <Text style={styles.pending}>
-          This lab proves operation application and stale-base safety. Native
-          long-press, two-finger, and explicit-mode gestures will produce the
-          transient drawing draft and final operation in P4.4; a draft is never
-          added to this persistent store.
+          The visible drawing draft is transient and never enters this store.
+          Persistent changes appear only after the callback publishes the next
+          annotation revision. Keyboard and accessibility annotation actions,
+          plus physical Android and iOS validation, remain P4.5 work.
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -281,17 +327,29 @@ export default function ControlledAnnotationsRoute() {
 function LabButton({
   label,
   onPress,
+  selected,
 }: {
   readonly label: string;
   readonly onPress: () => void;
+  readonly selected?: boolean;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={
+        selected === undefined ? undefined : { selected: selected }
+      }
       onPress={onPress}
-      style={styles.button}
+      style={[styles.button, selected === true && styles.buttonSelected]}
     >
-      <Text style={styles.buttonText}>{label}</Text>
+      <Text
+        style={[
+          styles.buttonText,
+          selected === true && styles.buttonTextSelected,
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -313,6 +371,12 @@ const styles = StyleSheet.create({
     color: '#236a5b',
     fontSize: 14,
     fontWeight: '700',
+  },
+  buttonSelected: {
+    backgroundColor: '#236a5b',
+  },
+  buttonTextSelected: {
+    color: '#ffffff',
   },
   content: {
     alignSelf: 'center',
@@ -370,6 +434,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#f7f4ee',
     flex: 1,
   },
+  sectionTitle: {
+    color: '#1e1b17',
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 22,
+  },
   status: {
     color: '#1e1b17',
     fontSize: 14,
@@ -382,5 +452,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.8,
     marginTop: 6,
+  },
+  toolControls: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
   },
 });

@@ -20,6 +20,11 @@ import {
 } from '../accessibility/board-accessibility';
 import { announceMoveOutcome } from '../accessibility/move-outcome';
 import { STANDARD_BOARD_DIMENSIONS } from '../core/dimensions';
+import { findMatchingAnnotationIds } from '../core/annotation-operations';
+import {
+  normalizeAnnotationTool,
+  type AnnotationGestureCandidate,
+} from '../internal/annotation-gesture-adapter';
 import type { NormalizedBoardModel } from '../internal/board-model';
 import {
   projectCurrentAnnotationDraft,
@@ -54,6 +59,7 @@ import type { ProviderSpareSelectionDescriptor } from '../internal/provider-spar
 import type {
   AnnotationStyle,
   AnnotationPolicies,
+  AnnotationTool,
   BoardSize,
   CanDragPiece,
   ChessboardAccessibility,
@@ -97,6 +103,7 @@ interface BoardSurfaceProps {
   readonly annotationDraft?: Readonly<CorrelatedAnnotationDraft> | null;
   readonly annotationPolicies: AnnotationPolicies | undefined;
   readonly annotationStyle: Readonly<AnnotationStyle>;
+  readonly annotationTool?: AnnotationTool | undefined;
   readonly canDragPiece: CanDragPiece | undefined;
   readonly development: boolean;
   readonly interactionPermissions: InteractionPermissions | undefined;
@@ -222,6 +229,7 @@ export function BoardSurface({
   annotationDraft = null,
   annotationPolicies,
   annotationStyle,
+  annotationTool,
   canDragPiece,
   development,
   interactionPermissions,
@@ -259,6 +267,15 @@ export function BoardSurface({
     model.status === 'ready' &&
     model.boardId !== null &&
     model.position !== null;
+  const normalizedAnnotationTool = useMemo(
+    () => normalizeAnnotationTool(annotationTool),
+    [annotationTool],
+  );
+  const annotationGestureEnabled =
+    interactionReady &&
+    model.annotations !== null &&
+    normalizedAnnotationTool !== null &&
+    typeof onAnnotationOperation === 'function';
   const moveRequestEnabled =
     interactionReady && typeof onMoveRequest === 'function';
   const accessibilityMoveEnabled =
@@ -276,6 +293,8 @@ export function BoardSurface({
   const [activeDragSourceSquare, setActiveDragSourceSquare] = useState<
     string | null
   >(null);
+  const [gestureAnnotationDraft, setGestureAnnotationDraft] =
+    useState<Readonly<CorrelatedAnnotationDraft> | null>(null);
   const [
     accessibilitySourceResetRevision,
     setAccessibilitySourceResetRevision,
@@ -719,8 +738,15 @@ export function BoardSurface({
   if (nextGeometryEpochMetadata !== geometryEpochMetadata) {
     setGeometryEpochMetadata(nextGeometryEpochMetadata);
   }
+  useLayoutEffect(() => {
+    if (!annotationGestureEnabled) {
+      setGestureAnnotationDraft((current) =>
+        current === null ? current : null,
+      );
+    }
+  }, [annotationGestureEnabled]);
   const currentAnnotationDraft = projectCurrentAnnotationDraft(
-    annotationDraft,
+    gestureAnnotationDraft ?? annotationDraft,
     Object.freeze({
       annotationRevision: model.annotations?.revision ?? null,
       boardId: model.boardId,
@@ -923,6 +949,64 @@ export function BoardSurface({
     pendingLifecycle,
   ]);
 
+  const handleAnnotationDraftChange = useCallback(
+    (draft: Readonly<CorrelatedAnnotationDraft> | null): void => {
+      setGestureAnnotationDraft((current) =>
+        current === draft ? current : draft,
+      );
+    },
+    [],
+  );
+  const handleAnnotationCandidate = useCallback(
+    (candidate: Readonly<AnnotationGestureCandidate>): void => {
+      const boardId = model.boardId;
+      const position = model.position;
+      const annotations = model.annotations;
+      const geometry = gestureGeometry;
+      const annotation = candidate.annotation;
+      const annotationSquaresAreCurrent =
+        annotation.type === 'arrow'
+          ? geometry?.visualSquares.includes(annotation.from) === true &&
+            geometry.visualSquares.includes(annotation.to)
+          : geometry?.visualSquares.includes(annotation.square) === true;
+      if (
+        !annotationGestureEnabled ||
+        boardId === null ||
+        position === null ||
+        annotations === null ||
+        geometry === null ||
+        candidate.boardId !== boardId ||
+        candidate.geometryEpoch !== geometry.revision ||
+        candidate.basePositionRevision !== position.revision ||
+        candidate.baseAnnotationRevision !== annotations.revision ||
+        candidate.providerGeometryRevision !== providerGeometryRevision ||
+        candidate.providerLifecycleRevision !== providerLifecycleRevision ||
+        !annotationSquaresAreCurrent
+      ) {
+        return;
+      }
+      annotationOperation.emit({
+        annotation,
+        baseAnnotationRevision: annotations.revision,
+        input: candidate.input,
+        matchingIdsAtBase: findMatchingAnnotationIds(
+          annotations.value,
+          annotation,
+        ),
+        type: 'toggle',
+      });
+    },
+    [
+      annotationGestureEnabled,
+      annotationOperation.emit,
+      gestureGeometry,
+      model.annotations,
+      model.boardId,
+      model.position,
+      providerGeometryRevision,
+      providerLifecycleRevision,
+    ],
+  );
   const handleGestureCandidate = useCallback(
     (candidate: Readonly<BoardGestureIntentCandidate>): void => {
       const boardId = model.boardId;
@@ -1096,8 +1180,17 @@ export function BoardSurface({
               transition={positionTransition}
             />
           )}
-          {(!dragEnabled && !tapEnabled) || gestureGeometry === null ? null : (
+          {(!dragEnabled && !tapEnabled && !annotationGestureEnabled) ||
+          gestureGeometry === null ? null : (
             <BoardInteractionController
+              {...(annotationGestureEnabled
+                ? {
+                    annotations: model.annotations,
+                    annotationTool: normalizedAnnotationTool,
+                    onAnnotationCandidate: handleAnnotationCandidate,
+                    onAnnotationDraftChange: handleAnnotationDraftChange,
+                  }
+                : {})}
               boardId={model.boardId}
               {...(canDragPiece === undefined ? {} : { canDragPiece })}
               dragEnabled={dragEnabled}

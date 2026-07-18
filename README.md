@@ -86,10 +86,17 @@ P4.1 adds immutable annotation-operation callbacks, independent board-press and
 position-change clear policies, and a public pure reducer that applies stale
 deltas against the latest consumer envelope without removing concurrent IDs.
 P4.3 composes at most one revision- and geometry-correlated transient draft
-without adding it to the persistent annotation collection.
+without adding it to the persistent annotation collection. P4.4 connects that
+draft and operation boundary to three touch paths selected by a non-null
+`annotationTool`: explicit tap activation, long-press pan, and two-finger pan.
+They request one revision-correlated toggle and never edit the controlled
+collection; stale semantic, geometry, provider, and gesture correlations fail
+closed. Annotation input is exclusive with board-press clearing and ordinary
+square activation for the consumed touch. Keyboard and accessibility annotation
+actions plus physical native and visual validation remain P4.5 work.
 Controlled destination, selected, and disabled square paint now follows
-canonical `squareStyles` without changing hit geometry. Custom square
-renderers and the P4.4 native annotation gesture adapters remain later work.
+canonical `squareStyles` without changing hit geometry. Custom square renderers
+remain later work.
 Phase 2 has a pure interaction reducer, board-level RNGH adapter,
 mounted move-request executor, an accessible non-drag path, and controlled
 square activation.
@@ -107,10 +114,12 @@ and stale taps inert. Callback results never change semantic state. Consumers
 must publish the next controlled selection or position, using a newer position
 revision and matching `committedIntentId` when move correlation is required.
 Without `onSquareActivate`, no same-square tap recognizer is enabled;
-`onMoveRequest` retains its accessible transient source-target fallback. With
-neither callback, the component mounts no native gesture hit plane and remains
-read-only. Boards register by a required, mount-stable `boardId` in their
-nearest `ChessboardProvider`; standalone boards create a private provider.
+`onMoveRequest` retains its accessible transient source-target fallback.
+Annotation touch input can independently mount that same hidden plane when its
+tool, collection, and callback gate is complete. With none of those input
+boundaries, the component mounts no native gesture hit plane and remains
+read-only. Boards register by a required, mount-stable `boardId` in their nearest
+`ChessboardProvider`; standalone boards create a private provider.
 Provider identity is token-safe across duplicates, remounts, Strict Mode, and
 abandoned renders. Public `SparePiece` sources require an explicit provider and
 name exactly one `targetBoardId`. Drag release remeasures that current target;

@@ -102,15 +102,49 @@ replacement, successful submission, source or target unmount, and provider
 deactivation clear the transient selection. It is neither semantic board
 selection nor proof that the consumer accepted a move.
 
-Long-press pan, two-finger pan, and explicit two-activation annotation input all
-produce the same revisioned annotation operations. Every drag path also has a
-tap, keyboard, or accessibility alternative using the same semantic intent.
-P4.1 establishes the commit-current operation emitter and independent
-board-press/position-change policy paths first. They snapshot only the current
-annotation revision and observed IDs, invoke `onAnnotationOperation` after the
-relevant boundary commits, and never apply the delta. P4.4 will connect the
-three native drawing adapters to that same emitter; it must not create another
-operation or annotation store.
+Explicit activation, long-press pan, and two-finger pan are three touch input
+paths over one annotation reducer and operation emitter. P4.1 establishes that
+commit-current emitter and the independent board-press/position-change policy
+paths. P4.4 connects the touch paths without creating another operation or
+annotation store. Keyboard and accessibility annotation actions remain a
+separate P4.5 adapter over the same semantic operation boundary.
+
+`annotationTool` is the controlled annotation mode. Input is enabled only for a
+ready measured board with a current annotation domain, a non-null valid tool,
+and a committed `onAnnotationOperation` callback. The explicit arrow path uses
+one tap to arm a visible transient border at the source and a second tap on a
+different square to finish. Tapping the source again cancels. The explicit
+square path finishes on one tap. Long-press and two-finger pans draw an arrow
+from source to terminal target; a square tool applies to the terminal square.
+An arrow ending on its source or outside the board emits nothing.
+
+All three paths emit the same immutable `toggle` request with `input: "touch"`.
+The request carries the exact current annotation revision and only matching IDs
+observed at that revision; its generated annotation ID is used only if the
+consumer applies an add. The callback result is ignored. Persistent rendering
+changes only after a later controlled `annotations` prop arrives.
+
+Annotation recognizers compose on the existing accessibility-hidden board
+plane as
+`Gesture.Race(longPressPan, twoFingerPan, Gesture.Exclusive(movePan, tap))`.
+The long-press pan requires exactly one pointer and activates after 500
+milliseconds; quick movement still lets the ordinary piece pan or ancestor
+scroll win. The two-finger pan requires exactly two pointers, uses the same
+four-point movement threshold as the other board pans, and averages touches on
+Android so both platforms hit-test the pointer centroid consistently. A second
+pointer fails the one-pointer move and tap candidates before that path can own
+the cycle. A consumed annotation activation does not also request board-press
+clearing, square activation, or a move. Continuous coordinates and hit testing
+remain in worklet/shared-value state; only activation, distinct target-square
+changes, and terminal or cancellation boundaries cross to JavaScript.
+
+One annotation session is correlated by board ID, gesture/session token,
+annotation and position revisions, board geometry epoch, and provider geometry
+and lifecycle revisions. Position, annotation, dimensions, orientation, layout,
+provider lifecycle, tool semantics, callback removal, replacement gesture, and
+unmount cancel it. A stale draft is synchronously suppressed, and late native
+signals are inert. Callback replacements become visible only after commit; an
+abandoned render cannot install a handler.
 
 ## Move-request lifecycle, gesture adapter, and executor
 
@@ -198,9 +232,11 @@ revision before activation; exceptions and non-true results deny the drag.
 `interactionPermissions.drag: false` leaves the accessible path available.
 Setting `interactionPermissions.accessibility: false` disables both paths, so a
 consumer cannot configure a drag-only board. It does not disable controlled
-square activation or touch destination routing. `onMoveRequest` enables the pan
-path, while `onSquareActivate` enables the tap path. With neither callback, the
-component renders no native hit plane and constructs no recognizer.
+square activation or touch destination routing. `onMoveRequest` enables the
+move pan path, while `onSquareActivate` enables the ordinary tap path. A usable
+annotation tool and operation callback enable the annotation paths
+independently. With none of those input boundaries, the component renders no
+native hit plane and constructs no recognizer.
 
 Each native gesture cycle receives a board-local monotonic token rather than
 reusing RNGH's recognizer handler tag. Start and terminal signals therefore
@@ -248,8 +284,10 @@ rejection, and post-cancellation reuse deterministic.
 The controlled-annotation operation path follows the same boundary: callback
 refs become active only after commit, callback results are ignored, and a
 consumer applies the delta against its latest store envelope. Policy emissions
-remain separate from the future long-press, two-finger, and explicit-mode
-recognizers.
+remain distinct from long-press, two-finger, and explicit touch recognition;
+exclusive routing prevents one annotation activation from also requesting a
+policy clear. Accessible annotation actions and physical native validation
+remain the next annotation slice.
 
 This decision owns invariants `CBN-INV-003`, `CBN-INV-004`, `CBN-INV-007`,
 `CBN-INV-008`, `CBN-INV-009`, `CBN-INV-012`, `CBN-INV-014`,
