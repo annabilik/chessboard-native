@@ -38,6 +38,7 @@ import type {
   AnnotationsProp,
   AnnotationPolicies,
   AnnotationStyle,
+  AnnotationTool,
   BoardDimensions,
   BoardOrientation,
   CanDragPiece,
@@ -80,6 +81,8 @@ export interface ChessboardProps {
   readonly annotations?: AnnotationsProp;
   /** Whole-value annotation geometry and presentation configuration. */
   readonly annotationStyle?: AnnotationStyle;
+  /** Selected native drawing tool; omitted or null keeps drawing disabled. */
+  readonly annotationTool?: AnnotationTool;
   /** Independent opt-in policies that request controlled annotation clears. */
   readonly annotationPolicies?: AnnotationPolicies;
   /** Emits immutable deltas without changing the controlled collection. */
@@ -357,6 +360,7 @@ function ChessboardRuntimeContent({
         accessibility={props.accessibility}
         annotationPolicies={props.annotationPolicies}
         annotationStyle={props.annotationStyle ?? defaultAnnotationStyle}
+        annotationTool={props.annotationTool}
         canDragPiece={props.canDragPiece}
         development={development}
         providerGeometryRevision={provider.geometryRevision}

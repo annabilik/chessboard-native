@@ -99,6 +99,28 @@ geometry, and provider lifecycle. A correlation change suppresses it
 synchronously. The draft has no persistent ID, never enters the normalized
 annotation domain, and cannot outlive or replace the controlled collection.
 
+P4.4 makes that presentation boundary interactive without creating another
+annotation source. A ready board enables annotation input only when it has a
+current annotation domain, a non-null `annotationTool`, and a committed
+`onAnnotationOperation` callback. The explicit, long-press, and two-finger
+touch paths retain only a tool-derived draft and correlation metadata. They do
+not retain the controlled annotation array. The terminal boundary rechecks the
+current annotation revision, resolves matching IDs from that exact current
+collection, and emits one `toggle` operation with `input: "touch"`. A generated
+annotation ID is a candidate for consumer application, not component-owned
+state.
+
+An explicit arrow activation retains a transient source anchor until a second,
+different square finalizes it; a square tool finalizes on one activation. Pan
+paths use their terminal square. Same-square or off-board arrows and cancelled
+sessions emit nothing. Position or annotation revision, geometry, provider
+lifecycle, tool semantics, callback availability, replacement gesture, and
+unmount all invalidate the correlation. Annotation input is routed exclusively
+before board-press clearing and ordinary square activation, so one touch cannot
+request two semantic outcomes. Only the consumer's later `annotations` prop can
+make the toggle persistent. Keyboard and accessibility annotation actions are a
+separate later input adapter over the same operation boundary.
+
 ## Revisions and invalid input
 
 Envelope revisions are non-negative safe integers and monotonic per domain. A

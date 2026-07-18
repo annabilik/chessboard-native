@@ -3,6 +3,7 @@ import {
   findMatchingAnnotationIds,
   type AnnotationOperation,
   type AnnotationPolicies,
+  type AnnotationTool,
   type ApplyAnnotationOperationOptions,
   type ApplyAnnotationOperationResult,
   type ChessboardProps,
@@ -16,6 +17,12 @@ describe('public annotation operation contracts', () => {
       clearOnBoardPress: true,
       clearOnPositionChange: false,
     } satisfies AnnotationPolicies;
+    const tool = {
+      color: '#ef4444',
+      opacity: 0.7,
+      type: 'arrow',
+      width: 20,
+    } satisfies Exclude<AnnotationTool, null>;
     const current = {
       revision: 4,
       value: [{ color: '#f00', id: 'focus', square: 'e4', type: 'square' }],
@@ -40,6 +47,7 @@ describe('public annotation operation contracts', () => {
     } satisfies ApplyAnnotationOperationOptions;
     const props = {
       annotationPolicies: policies,
+      annotationTool: tool,
       boardId: 'analysis',
       onAnnotationOperation: callback,
       position: {},
@@ -49,6 +57,7 @@ describe('public annotation operation contracts', () => {
 
     callback(operation);
     expect(policies.clearOnBoardPress).toBe(true);
+    expect(props.annotationTool).toBe(tool);
     expect(props.onAnnotationOperation).toBe(callback);
     expect(
       findMatchingAnnotationIds(current.value, operation.annotation),
@@ -83,8 +92,15 @@ describe('public annotation operation contracts', () => {
         boardId: 'analysis',
         position: {},
       };
+      const invalidTool: ChessboardProps = {
+        // @ts-expect-error Arrow tool width must be numeric.
+        annotationTool: { color: '#f00', type: 'arrow', width: 'wide' },
+        boardId: 'analysis',
+        position: {},
+      };
       void plainCurrent;
       void publicDraftProp;
+      void invalidTool;
     };
 
     expect(invalidContracts).toEqual(expect.any(Function));

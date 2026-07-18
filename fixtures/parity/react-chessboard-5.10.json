@@ -2062,9 +2062,9 @@
           "ChessboardProps.onAnnotationOperation"
         ]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ALLOW-DRAWING-ARROWS",
-      "compatibilityNotes": "Drawing is enabled by a controlled native tool and operation handler.",
+      "compatibilityNotes": "Drawing is enabled only by a current annotation collection, a non-null controlled native tool, and an operation handler; the board emits toggles without owning an annotation list.",
       "rationale": "The upstream gate controls an internal arrow list; native drawing must emit revisioned operations without accepting semantic state inside the component.",
       "documentation": "docs/parity/react-chessboard-5.10.md#option-allow-drawing-arrows"
     },
@@ -2271,7 +2271,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-OPTION-ON-ARROWS-CHANGE",
-      "compatibilityNotes": "The board-press and position-change clear paths emit one immutable operation at their causal boundary for consumer reduction against the latest controlled annotations; add/toggle gesture emission and the Phase 5 compatibility adapter remain open.",
+      "compatibilityNotes": "Board-press and position-change clears plus explicit, long-press, and two-finger toggle drawing emit one immutable operation at their causal boundary for reduction against the latest controlled annotations; only the Phase 5 compatibility adapter remains open.",
       "rationale": "Emitting whole internal-arrow snapshots on effects can overwrite concurrent controlled updates and fires even for the initial empty state.",
       "documentation": "docs/parity/react-chessboard-5.10.md#option-on-arrows-change"
     },
@@ -3619,9 +3619,9 @@
           "ChessboardProps.onAnnotationOperation"
         ]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B35",
-      "compatibilityNotes": "Long-press, two-finger, and explicit-mode gestures emit one controlled annotation operation."
+      "compatibilityNotes": "Explicit activation, long-press pan, and two-finger pan share one correlated draft lifecycle and emit exactly one controlled toggle without retaining persistent annotations."
     },
     {
       "id": "behavior.b36-modifier-color-precedence",
@@ -3706,7 +3706,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B38",
-      "compatibilityNotes": "The implemented board-press and position-change clear paths emit at their causal boundary and require controlled feedback; add/toggle gesture emission and the Phase 5 compatibility adapter remain open.",
+      "compatibilityNotes": "Board-press and position-change clears plus explicit, long-press, and two-finger toggle drawing emit at their causal boundary and require controlled feedback; only the Phase 5 compatibility adapter remains open.",
       "rationale": "Effect-driven snapshots fire for the initial empty list and can overwrite controlled annotations that arrived after a gesture began.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b38-on-arrows-change-effect-lifecycle"
     },

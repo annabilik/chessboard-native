@@ -304,6 +304,7 @@ export interface ChessboardProps {
     readonly annotationPolicies?: AnnotationPolicies;
     readonly annotations?: AnnotationsProp;
     readonly annotationStyle?: AnnotationStyle;
+    readonly annotationTool?: AnnotationTool;
     readonly boardId: string;
     readonly canDragPiece?: CanDragPiece;
     readonly dimensions?: BoardDimensions;

@@ -13,6 +13,7 @@ import {
 import type { SquareId } from '../../src/public-types';
 import {
   BoardGestureLayer,
+  DEFAULT_ANNOTATION_LONG_PRESS_DURATION_MS,
   DEFAULT_DRAG_ACTIVATION_DISTANCE,
   getBoardGestureTestIds,
   type BoardGestureGeometry,
@@ -35,6 +36,8 @@ const BLACK_GEOMETRY: Readonly<BoardGestureGeometry> = Object.freeze({
 });
 
 interface HarnessProps {
+  readonly annotationEnabled?: boolean;
+  readonly annotationRevision?: number | null;
   readonly boardId?: string;
   readonly enabled?: boolean;
   readonly geometry?: Readonly<BoardGestureGeometry>;
@@ -48,6 +51,8 @@ interface HarnessProps {
 }
 
 function Harness({
+  annotationEnabled = false,
+  annotationRevision = 17,
   boardId = 'gesture-board',
   enabled,
   geometry = WHITE_GEOMETRY,
@@ -63,6 +68,8 @@ function Harness({
   return (
     <GestureHandlerRootView>
       <BoardGestureLayer
+        annotationEnabled={annotationEnabled}
+        annotationRevision={annotationRevision}
         boardId={boardId}
         dragEnabled={enabled ?? false}
         draggableSquares={occupiedSquares}
@@ -101,6 +108,13 @@ interface GestureCallbacks {
     }>,
     manager: Readonly<{ fail: () => void }>,
   ) => void;
+  readonly onTouchesUp?: (
+    event: Readonly<{
+      allTouches: readonly Readonly<Record<string, unknown>>[];
+      numberOfTouches: number;
+    }>,
+    manager: Readonly<{ fail: () => void }>,
+  ) => void;
 }
 
 function gestureCallbacks(gesture: unknown): Readonly<GestureCallbacks> {
@@ -129,6 +143,8 @@ describe('board-level native gesture plane', () => {
     ).toEqual([]);
     expect(() => getByGestureTestId(ids.pan)).toThrow();
     expect(() => getByGestureTestId(ids.tap)).toThrow();
+    expect(() => getByGestureTestId(ids.longPress)).toThrow();
+    expect(() => getByGestureTestId(ids.twoFinger)).toThrow();
     expect(disabledSignal).not.toHaveBeenCalled();
     await disabled.unmount();
 
@@ -425,6 +441,7 @@ describe('board-level native gesture plane', () => {
         expect.objectContaining({
           sourceSquare: 'a2',
           targetSquare: 'a2',
+          annotationRevision: 17,
           selectionRevision: 11,
           type: 'tap',
         }),
@@ -452,6 +469,7 @@ describe('board-level native gesture plane', () => {
       expect(signals).toEqual([
         expect.objectContaining({
           sourceSquare: 'a2',
+          annotationRevision: 17,
           selectionRevision: 11,
           targetSquare: 'a2',
           type: 'tap',
@@ -459,6 +477,7 @@ describe('board-level native gesture plane', () => {
         expect.objectContaining({
           selectionRevision: 11,
           sourceSquare: fixture.geometry === WHITE_GEOMETRY ? 'b2' : 'a1',
+          annotationRevision: 17,
           targetSquare: fixture.geometry === WHITE_GEOMETRY ? 'b2' : 'a1',
           type: 'tap',
         }),
@@ -547,7 +566,373 @@ describe('board-level native gesture plane', () => {
       ]);
     });
     expect(signals).toEqual([
-      expect.objectContaining({ selectionRevision: 13, type: 'tap' }),
+      expect.objectContaining({
+        annotationRevision: 17,
+        selectionRevision: 13,
+        type: 'tap',
+      }),
     ]);
+  });
+
+  it('configures long-press and two-finger annotation pans on the existing single plane', async () => {
+    const result = await render(
+      <Harness annotationEnabled onSignal={() => undefined} />,
+    );
+    const root = result.root;
+    if (root === null) {
+      throw new Error('Expected the annotation harness to remain mounted.');
+    }
+    const ids = getBoardGestureTestIds('gesture-board');
+    const planes = root.queryAll(
+      (node) =>
+        node.props['collapsable'] === false &&
+        node.props['pointerEvents'] === 'auto' &&
+        node.props['accessibilityElementsHidden'] === true,
+    );
+    expect(planes).toHaveLength(1);
+
+    const longPress = getByGestureTestId(ids.longPress);
+    const twoFinger = getByGestureTestId(ids.twoFinger);
+    expect(gestureConfig(longPress)).toEqual(
+      expect.objectContaining({
+        activateAfterLongPress: DEFAULT_ANNOTATION_LONG_PRESS_DURATION_MS,
+        enabled: true,
+        maxPointers: 1,
+        minPointers: 1,
+      }),
+    );
+    expect(gestureConfig(twoFinger)).toEqual(
+      expect.objectContaining({
+        avgTouches: true,
+        enabled: true,
+        maxPointers: 2,
+        minDist: DEFAULT_DRAG_ACTIVATION_DISTANCE,
+        minPointers: 2,
+      }),
+    );
+  });
+
+  it('preserves quick one-finger piece pan and tap signals while annotation producers are enabled', async () => {
+    const signals: Readonly<BoardGestureSignal>[] = [];
+    await render(
+      <Harness
+        annotationEnabled
+        enabled
+        onSignal={(signal) => {
+          signals.push(signal);
+        }}
+      />,
+    );
+    const ids = getBoardGestureTestIds('gesture-board');
+    const pan = getByGestureTestId(ids.pan);
+    const tap = getByGestureTestId(ids.tap);
+
+    await act(() => {
+      fireGestureHandler(pan, [
+        { state: State.BEGAN, x: 25, y: 25 },
+        { state: State.ACTIVE, x: 35, y: 25 },
+        { state: State.END, x: 125, y: 125 },
+      ]);
+      fireGestureHandler(tap, [
+        { state: State.BEGAN, x: 25, y: 25 },
+        { state: State.END, x: 25, y: 25 },
+      ]);
+    });
+
+    expect(signals.map((signal) => signal.type)).toEqual([
+      'drag-start',
+      'drag-end',
+      'tap',
+    ]);
+    expect(signals[2]).toEqual(
+      expect.objectContaining({ annotationRevision: 17, type: 'tap' }),
+    );
+  });
+
+  it('captures a newly committed annotation revision at tap begin without rebuilding the detector', async () => {
+    const signals: Readonly<BoardGestureSignal>[] = [];
+    const onSignal = (signal: Readonly<BoardGestureSignal>): void => {
+      signals.push(signal);
+    };
+    const result = await render(
+      <Harness enabled annotationRevision={40} onSignal={onSignal} />,
+    );
+    const ids = getBoardGestureTestIds('gesture-board');
+    const tap = getByGestureTestId(ids.tap);
+    const callbacks = gestureCallbacks(tap);
+    const handlerTag = (tap as unknown as Readonly<{ handlerTag: number }>)
+      .handlerTag;
+
+    await result.rerender(
+      <Harness enabled annotationRevision={41} onSignal={onSignal} />,
+    );
+    expect(getByGestureTestId(ids.tap)).toBe(tap);
+    await act(() => {
+      callbacks.onBegin?.({ handlerTag, x: 25, y: 25 });
+      callbacks.onEnd?.({ handlerTag, x: 25, y: 25 }, true);
+      callbacks.onFinalize?.({ handlerTag, x: 25, y: 25 }, true);
+    });
+
+    expect(signals).toEqual([
+      expect.objectContaining({ annotationRevision: 41, type: 'tap' }),
+    ]);
+  });
+
+  it('emits long-press updates only when the hit-tested target changes and captures the current annotation revision at begin', async () => {
+    const signals: Readonly<BoardGestureSignal>[] = [];
+    const onSignal = (signal: Readonly<BoardGestureSignal>): void => {
+      signals.push(signal);
+    };
+    const result = await render(
+      <Harness annotationEnabled annotationRevision={20} onSignal={onSignal} />,
+    );
+    const ids = getBoardGestureTestIds('gesture-board');
+    const longPress = getByGestureTestId(ids.longPress);
+    const callbacks = gestureCallbacks(longPress);
+    const handlerTag = (
+      longPress as unknown as Readonly<{ handlerTag: number }>
+    ).handlerTag;
+
+    await result.rerender(
+      <Harness annotationEnabled annotationRevision={21} onSignal={onSignal} />,
+    );
+    expect(getByGestureTestId(ids.longPress)).toBe(longPress);
+
+    await act(() => {
+      callbacks.onTouchesDown?.(
+        { allTouches: [{ x: 25, y: 25 }] },
+        { fail: jest.fn() },
+      );
+      callbacks.onBegin?.({ handlerTag, x: 25, y: 25 });
+      callbacks.onStart?.({ handlerTag, x: 25, y: 25 });
+      for (let index = 0; index < 40; index += 1) {
+        callbacks.onUpdate?.({ handlerTag, x: 25 + index, y: 25 });
+      }
+      callbacks.onUpdate?.({ handlerTag, x: 125, y: 25 });
+      for (let index = 0; index < 40; index += 1) {
+        callbacks.onUpdate?.({ handlerTag, x: 125 + index / 10, y: 25 });
+      }
+      callbacks.onUpdate?.({ handlerTag, x: 225, y: 25 });
+      callbacks.onUpdate?.({ handlerTag, x: 225, y: 26 });
+      callbacks.onUpdate?.({ handlerTag, x: 125, y: 125 });
+      callbacks.onEnd?.({ handlerTag, x: 125, y: 125 }, true);
+      callbacks.onFinalize?.({ handlerTag, x: 125, y: 125 }, true);
+    });
+
+    const longPressToken = signals[0]?.gestureToken;
+    expect(typeof longPressToken).toBe('number');
+    expect(signals).toEqual([
+      {
+        annotationRevision: 21,
+        boardId: 'gesture-board',
+        geometryRevision: 3,
+        gestureKind: 'long-press',
+        gestureToken: longPressToken,
+        positionRevision: 7,
+        sourceSquare: 'a2',
+        targetSquare: 'a2',
+        type: 'annotation-start',
+      },
+      expect.objectContaining({
+        annotationRevision: 21,
+        gestureKind: 'long-press',
+        targetSquare: 'b2',
+        type: 'annotation-update',
+      }),
+      expect.objectContaining({
+        annotationRevision: 21,
+        gestureKind: 'long-press',
+        targetSquare: null,
+        type: 'annotation-update',
+      }),
+      expect.objectContaining({
+        annotationRevision: 21,
+        gestureKind: 'long-press',
+        targetSquare: 'b1',
+        type: 'annotation-update',
+      }),
+      expect.objectContaining({
+        annotationRevision: 21,
+        gestureKind: 'long-press',
+        targetSquare: 'b1',
+        type: 'annotation-end',
+      }),
+    ]);
+    const tokens = new Set(signals.map((signal) => signal.gestureToken));
+    expect(tokens.size).toBe(1);
+  });
+
+  it('cancels and then reuses the two-finger producer with averaged source correlation', async () => {
+    const signals: Readonly<BoardGestureSignal>[] = [];
+    await render(
+      <Harness
+        annotationEnabled
+        annotationRevision={31}
+        onSignal={(signal) => {
+          signals.push(signal);
+        }}
+      />,
+    );
+    const twoFinger = getByGestureTestId(
+      getBoardGestureTestIds('gesture-board').twoFinger,
+    );
+    const callbacks = gestureCallbacks(twoFinger);
+    const handlerTag = (
+      twoFinger as unknown as Readonly<{ handlerTag: number }>
+    ).handlerTag;
+
+    await act(() => {
+      callbacks.onTouchesDown?.(
+        {
+          allTouches: [
+            { x: 20, y: 20 },
+            { x: 30, y: 30 },
+          ],
+        },
+        { fail: jest.fn() },
+      );
+      callbacks.onBegin?.({ handlerTag, x: 25, y: 25 });
+      callbacks.onStart?.({ handlerTag, x: 25, y: 25 });
+      callbacks.onUpdate?.({
+        handlerTag,
+        numberOfPointers: 2,
+        x: 125,
+        y: 25,
+      });
+      callbacks.onFinalize?.({ handlerTag, x: 125, y: 25 }, false);
+    });
+    const cancelledToken = signals[0]?.gestureToken;
+    expect(signals).toEqual([
+      expect.objectContaining({
+        annotationRevision: 31,
+        gestureKind: 'two-finger',
+        sourceSquare: 'a2',
+        targetSquare: 'a2',
+        type: 'annotation-start',
+      }),
+      expect.objectContaining({
+        gestureToken: cancelledToken,
+        targetSquare: 'b2',
+        type: 'annotation-update',
+      }),
+      expect.objectContaining({
+        gestureToken: cancelledToken,
+        reason: 'user',
+        targetSquare: 'b2',
+        type: 'annotation-cancel',
+      }),
+    ]);
+
+    signals.length = 0;
+    await act(() => {
+      callbacks.onTouchesDown?.(
+        {
+          allTouches: [
+            { x: 20, y: 20 },
+            { x: 30, y: 30 },
+          ],
+        },
+        { fail: jest.fn() },
+      );
+      callbacks.onBegin?.({ handlerTag, x: 25, y: 25 });
+      callbacks.onStart?.({ handlerTag, x: 25, y: 25 });
+      callbacks.onUpdate?.({
+        handlerTag,
+        numberOfPointers: 2,
+        x: 125,
+        y: 125,
+      });
+      callbacks.onEnd?.({ handlerTag, x: 175, y: 25 }, true);
+      callbacks.onFinalize?.({ handlerTag, x: 125, y: 125 }, true);
+    });
+    const reusedToken = signals[0]?.gestureToken;
+    expect(reusedToken).not.toBe(cancelledToken);
+    expect(signals).toEqual([
+      expect.objectContaining({
+        gestureToken: reusedToken,
+        sourceSquare: 'a2',
+        type: 'annotation-start',
+      }),
+      expect.objectContaining({
+        gestureToken: reusedToken,
+        targetSquare: 'b1',
+        type: 'annotation-update',
+      }),
+      expect.objectContaining({
+        gestureToken: reusedToken,
+        targetSquare: 'b1',
+        type: 'annotation-end',
+      }),
+    ]);
+  });
+
+  it('finishes at the cached two-touch centroid when Android fails the normal first-pointer release', async () => {
+    const signals: Readonly<BoardGestureSignal>[] = [];
+    await render(
+      <Harness
+        annotationEnabled
+        annotationRevision={32}
+        onSignal={(signal) => {
+          signals.push(signal);
+        }}
+      />,
+    );
+    const twoFinger = getByGestureTestId(
+      getBoardGestureTestIds('gesture-board').twoFinger,
+    );
+    const callbacks = gestureCallbacks(twoFinger);
+    const handlerTag = (
+      twoFinger as unknown as Readonly<{ handlerTag: number }>
+    ).handlerTag;
+    await act(() => {
+      callbacks.onTouchesDown?.(
+        {
+          allTouches: [
+            { x: 20, y: 20 },
+            { x: 30, y: 30 },
+          ],
+        },
+        { fail: jest.fn() },
+      );
+      callbacks.onBegin?.({ handlerTag, x: 25, y: 25 });
+      callbacks.onStart?.({ handlerTag, x: 25, y: 25 });
+      callbacks.onUpdate?.({
+        handlerTag,
+        numberOfPointers: 2,
+        x: 125,
+        y: 25,
+      });
+      callbacks.onTouchesUp?.(
+        {
+          allTouches: [
+            { x: 125, y: 25 },
+            { x: 175, y: 25 },
+          ],
+          numberOfTouches: 1,
+        },
+        { fail: jest.fn() },
+      );
+      callbacks.onFinalize?.({ handlerTag, x: 175, y: 25 }, false);
+    });
+
+    expect(signals).toEqual([
+      expect.objectContaining({
+        annotationRevision: 32,
+        sourceSquare: 'a2',
+        targetSquare: 'a2',
+        type: 'annotation-start',
+      }),
+      expect.objectContaining({
+        targetSquare: 'b2',
+        type: 'annotation-update',
+      }),
+      expect.objectContaining({
+        targetSquare: 'b2',
+        type: 'annotation-end',
+      }),
+    ]);
+    expect(signals.some((signal) => signal.type === 'annotation-cancel')).toBe(
+      false,
+    );
   });
 });

@@ -65,6 +65,7 @@ function tapSignal(options: {
 }): Readonly<BoardGestureSignal> {
   const square = options.square ?? 'b2';
   return Object.freeze({
+    annotationRevision: null,
     boardId: 'race-board',
     geometryRevision: options.geometryRevision ?? 5,
     gestureToken: options.gestureToken,
