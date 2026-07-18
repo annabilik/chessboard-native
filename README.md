@@ -6,8 +6,8 @@ A controlled, rules-free React Native chessboard component.
 > The planned Phase 2 implementation packages and controlled-transition runtime
 > through P3.4 are implemented. P3.5 published
 > `@vibechess/chessboard-native@0.1.0-next.0` for prerelease evaluation. The
-> corrective registry-verification run and the first trusted-publishing proof
-> remain. The public
+> corrective registry verification passed, and `0.1.0-next.1` is prepared for
+> the first trusted-publishing proof. The public
 > component renders responsive, controlled positions with default or custom pieces,
 > orientation,
 > notation, native styles, controlled square and arrow annotations, controlled
@@ -48,9 +48,10 @@ The repository baseline, package shell, test foundation, bare React Native 0.86
 harness, packed-artifact build gates, and pinned upstream parity inventory are
 in place. The first prerelease is public under npm's `next` tag with provenance;
 npm also initialized its mandatory first-package `latest` tag to that same
-version. A credential-free recovery mode verifies an already accepted immutable
-version without publishing it again, and no merge publishes automatically. The
-root package exports the controlled public contracts plus pure,
+version. A credential-free recovery run verified the accepted immutable bytes
+without publishing again. The next prerelease is versioned solely to prove npm
+trusted publishing, and no merge publishes automatically. The root package
+exports the controlled public contracts plus pure,
 validated dimension, coordinate, logical-grid, strict 8x8 FEN, and measured
 square-center utilities. Object-position normalization and board-local hit
 testing complete the pure P1.1 layer. The public P1.2 component boundary now
@@ -256,9 +257,9 @@ version, defaults to a registry-safe dry run, and publishes only the single
 inspected archive under npm's `next` dist-tag. The initial publish needs a
 short-lived bootstrap credential because trusted publishing can only be
 configured after the npm package exists; subsequent publishes use GitHub OIDC.
-The first package version is now public. The next release milestone is a
-credential-free verification of those exact registry bytes, followed by a new
-prerelease proving trusted publishing before the bootstrap token is removed.
+The first package version is public and its recovery verification passed. The
+next release milestone is publishing `0.1.0-next.1` through trusted OIDC before
+the bootstrap token is removed.
 
 See [`docs/releasing.md`](./docs/releasing.md) for the protected-environment,
 bootstrap, trusted-publisher, verification, and recovery procedure.
