@@ -407,6 +407,196 @@ describe('board interaction controller races', () => {
     );
   });
 
+  it('[PARITY-BEHAVIOR-B21] routes one accepted drag start to the current callback and rejects duplicate, stale, and denied starts', async () => {
+    const staleStart = jest.fn(() => true);
+    const currentStart = jest.fn(() => true);
+    const allowDrag = jest.fn(() => true);
+    const result = await render(
+      <BoardInteractionController
+        boardId="race-board"
+        canDragPiece={allowDrag}
+        dragEnabled
+        geometry={geometry(5)}
+        onPieceDragStart={staleStart}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+      />,
+    );
+    const retainedSignal = currentSignalHandler();
+
+    await result.rerender(
+      <BoardInteractionController
+        boardId="race-board"
+        canDragPiece={allowDrag}
+        dragEnabled
+        geometry={geometry(5)}
+        onPieceDragStart={currentStart}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+      />,
+    );
+    await act(() => {
+      retainedSignal(dragSignal({ gestureToken: 91, type: 'drag-start' }));
+      retainedSignal(dragSignal({ gestureToken: 91, type: 'drag-start' }));
+    });
+
+    expect(staleStart).not.toHaveBeenCalled();
+    expect(currentStart).toHaveBeenCalledTimes(1);
+    expect(currentStart).toHaveBeenCalledWith({
+      basePositionRevision: 9,
+      boardId: 'race-board',
+      piece: { id: 'pawn', pieceType: 'wP' },
+      source: { kind: 'board', square: 'a2' },
+    });
+
+    await result.rerender(
+      <BoardInteractionController
+        boardId="race-board"
+        canDragPiece={allowDrag}
+        dragEnabled
+        geometry={geometry(5)}
+        onPieceDragStart={currentStart}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(10)}
+      />,
+    );
+    await act(() => {
+      retainedSignal(
+        dragSignal({
+          gestureToken: 92,
+          positionRevision: 9,
+          type: 'drag-start',
+        }),
+      );
+    });
+
+    await result.rerender(
+      <BoardInteractionController
+        boardId="race-board"
+        canDragPiece={() => false}
+        dragEnabled
+        geometry={geometry(5)}
+        onPieceDragStart={currentStart}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(10)}
+      />,
+    );
+    await act(() => {
+      retainedSignal(
+        dragSignal({
+          gestureToken: 93,
+          positionRevision: 10,
+          type: 'drag-start',
+        }),
+      );
+    });
+
+    expect(currentStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels an active drag when activation distance changes and ignores its retained terminal', async () => {
+    const onCandidate = jest.fn();
+    const onDragSourceChange = jest.fn();
+    const onPieceDragStart = jest.fn(() => true);
+    const result = await render(
+      <BoardInteractionController
+        activationDistance={4}
+        boardId="race-board"
+        dragEnabled
+        geometry={geometry(5)}
+        onCandidate={onCandidate}
+        onDragSourceChange={onDragSourceChange}
+        onPieceDragStart={onPieceDragStart}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+      />,
+    );
+    const retainedSignal = currentSignalHandler();
+
+    await act(() => {
+      retainedSignal(dragSignal({ gestureToken: 94, type: 'drag-start' }));
+    });
+    expect(onPieceDragStart).toHaveBeenCalledTimes(1);
+    expect(onDragSourceChange).toHaveBeenCalledWith('a2');
+
+    await result.rerender(
+      <BoardInteractionController
+        activationDistance={16}
+        boardId="race-board"
+        dragEnabled
+        geometry={geometry(5)}
+        onCandidate={onCandidate}
+        onDragSourceChange={onDragSourceChange}
+        onPieceDragStart={onPieceDragStart}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+      />,
+    );
+
+    const latestLayer = jest.mocked(BoardGestureLayer).mock.calls.at(-1)?.[0];
+    expect(latestLayer?.activationDistance).toBe(16);
+    expect(onDragSourceChange).toHaveBeenLastCalledWith(null);
+    await act(() => {
+      retainedSignal(
+        dragSignal({
+          gestureToken: 94,
+          targetSquare: 'b1',
+          type: 'drag-end',
+        }),
+      );
+    });
+
+    expect(onCandidate).not.toHaveBeenCalled();
+    expect(onPieceDragStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a queued drag start from the gesture generation replaced by an activation-distance commit', async () => {
+    const onPieceDragStart = jest.fn(() => true);
+    const result = await render(
+      <BoardInteractionController
+        activationDistance={4}
+        boardId="race-board"
+        dragEnabled
+        geometry={geometry(5)}
+        onPieceDragStart={onPieceDragStart}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+      />,
+    );
+    const retainedSignal = currentSignalHandler();
+
+    await result.rerender(
+      <BoardInteractionController
+        activationDistance={16}
+        boardId="race-board"
+        dragEnabled
+        geometry={geometry(5)}
+        onPieceDragStart={onPieceDragStart}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+      />,
+    );
+    await act(() => {
+      retainedSignal(dragSignal({ gestureToken: 95, type: 'drag-start' }));
+    });
+
+    expect(onPieceDragStart).not.toHaveBeenCalled();
+    expect(
+      result.queryAllByTestId(
+        'chessboard-native:race-board:provider-drag-overlay',
+        { includeHiddenElements: true },
+      ),
+    ).toEqual([]);
+  });
+
   it('rejects a tap correlated to a stale selection commit and accepts the current revision', async () => {
     const onCandidate = jest.fn();
     const result = await render(

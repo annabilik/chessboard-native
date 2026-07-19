@@ -7,7 +7,10 @@ import {
 
 import type { BoardGestureIntentCandidate } from '../../src/internal/board-gesture-adapter';
 import type { NormalizedControlledValue } from '../../src/internal/controlled-domain';
-import type { PositionObject } from '../../src/public-types';
+import type {
+  PieceInteractionContext,
+  PositionObject,
+} from '../../src/public-types';
 import { BoardInteractionController } from '../../src/render/board-interaction-controller';
 import {
   getBoardGestureTestIds,
@@ -35,6 +38,59 @@ const CONTROLLED_POSITION: NormalizedControlledValue<PositionObject> =
   });
 
 describe('board interaction controller', () => {
+  it('[PARITY-OPTION-ON-PIECE-DRAG] emits one detached drag-start callback only after a draggable piece activates', async () => {
+    const starts: Readonly<PieceInteractionContext>[] = [];
+    const canDragPiece = jest.fn(() => true);
+    await render(
+      <GestureHandlerRootView>
+        <BoardInteractionController
+          boardId="drag-start-board"
+          canDragPiece={canDragPiece}
+          dragEnabled
+          geometry={GEOMETRY}
+          onPieceDragStart={(context) => {
+            starts.push(context);
+            return true;
+          }}
+          pieceRenderers={{}}
+          pieceStyle={{}}
+          position={CONTROLLED_POSITION}
+        />
+      </GestureHandlerRootView>,
+    );
+
+    const pan = getByGestureTestId(
+      getBoardGestureTestIds('drag-start-board').pan,
+    );
+    await act(() => {
+      fireGestureHandler(pan, [
+        { state: State.BEGAN, x: 25, y: 25 },
+        { state: State.ACTIVE, x: 35, y: 25 },
+        { state: State.ACTIVE, x: 135, y: 135 },
+        { state: State.END, x: 135, y: 135 },
+      ]);
+    });
+
+    expect(canDragPiece).toHaveBeenCalledWith({
+      basePositionRevision: 9,
+      boardId: 'drag-start-board',
+      piece: { id: 'pawn', pieceType: 'wP' },
+      source: { kind: 'board', square: 'a2' },
+    });
+    expect(starts).toEqual([
+      {
+        basePositionRevision: 9,
+        boardId: 'drag-start-board',
+        piece: { id: 'pawn', pieceType: 'wP' },
+        source: { kind: 'board', square: 'a2' },
+      },
+    ]);
+    expect(Object.isFrozen(starts[0])).toBe(true);
+    expect(Object.isFrozen(starts[0]?.piece)).toBe(true);
+    expect(Object.isFrozen(starts[0]?.source)).toBe(true);
+    expect(starts[0]?.piece).not.toBe(POSITION['a2']);
+  });
+
   it('wires terminal native signals through the reducer adapter without changing the controlled position', async () => {
     const candidates: Readonly<BoardGestureIntentCandidate>[] = [];
     await render(

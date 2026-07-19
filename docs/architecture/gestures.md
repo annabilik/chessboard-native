@@ -85,13 +85,19 @@ provider dragging, release verification, transient spare selection, and every
 registered board interaction. Returning to `active` starts no replacement
 gesture and cannot make a queued native terminal signal current again.
 
-Board and spare recognizers use the native pan activation threshold to arbitrate
-with an ordinary ancestor `ScrollView`. An empty, non-draggable, or otherwise
-denied board source fails before drag activation, leaving scrolling available.
-An enabled spare or current allowed board source can activate after the
-threshold and owns the rest of that native gesture cycle. Arbitration never
-implies automatic scrolling: the package does not discover or programmatically
-move arbitrary ancestor scroll views.
+Board and spare recognizers use `ChessboardProps.gesture.activationDistance` to
+arbitrate with an ordinary ancestor `ScrollView`. The value is measured in
+native points, defaults to four, and must be finite and non-negative. The named
+board publishes the same current value to spares targeting it. On the shared
+board plane it also supplies same-square tap travel tolerance and two-finger
+annotation-pan activation distance. Changing it replaces current recognizer
+configuration and makes an obsolete native terminal signal inert.
+
+An empty, non-draggable, or otherwise denied board source fails before drag
+activation, leaving scrolling available. An enabled spare or current allowed
+board source can activate after the threshold and owns the rest of that native
+gesture cycle. Arbitration never implies automatic scrolling: the package does
+not discover or programmatically move arbitrary ancestor scroll views.
 
 Accessible spare placement uses the same provider routing without measurement.
 Activating a `SparePiece` publishes one detached transient source selection;
@@ -222,26 +228,34 @@ or emitting. Geometry, position, or selection changes make a stale candidate
 fail closed, while a late foreign handler token cannot cancel newer work. No
 gesture, callback, or executor effect can mutate position or selection.
 
-Supplying `onSquareActivate` opts into controlled same-square touch and
-accessibility activation, including empty squares. One exclusive router handles
-ordinary activation. When `onMoveRequest` also exists, a selected enabled source
-still contains a current controlled piece, and the enabled target is a declared
-destination, touch emits only a `MoveIntent`. Accessibility does the same while
+Supplying `onSquareActivate` or `onPiecePress` opts into controlled same-square
+touch and accessibility activation; only the square callback covers empty
+squares. One exclusive router handles ordinary activation. When
+`onMoveRequest` also exists, a selected enabled source still contains a current
+controlled piece, and the enabled target is a declared destination, touch emits
+only a `MoveIntent`. Accessibility does the same while
 `interactionPermissions.accessibility` permits move input; with that gate off,
-it emits the square activation instead. Every other enabled activation emits
-only an immutable `SquareActivationIntent`. The accessibility surface also
-emits an explicit `clear-selection` activation; only a new consumer selection
-prop can clear the rendered selection.
+it continues through ordinary activation. Otherwise, an occupied current square
+emits only `onPiecePress` when that callback exists; remaining enabled
+activations emit only an immutable `SquareActivationIntent` when
+`onSquareActivate` exists. Piece activation therefore never bubbles into a
+second square callback. The accessibility surface also emits an explicit
+`clear-selection` activation; only a new consumer selection prop can clear the
+rendered selection.
 
 Callback references become active only after their render commits. The tap's
 captured selection revision and the current normalized position and selection
 are rechecked immediately before routing, so callbacks from abandoned renders
-and stale taps are inert.
+and stale taps are inert. `onPiecePress` receives a detached frozen board-source
+context at this terminal boundary. Activating a public `SparePiece` both retains
+its existing provider-scoped accessible selection behavior and asks its named
+board's commit-current `onPiecePress` observer with a spare-source context.
 
-Without `onSquareActivate`, the tap recognizer and controlled activation action
-are disabled. Supplying `onMoveRequest` alone retains the existing accessible
-transient source, target, removal, and cancellation flow. Those actions use the
-same request executor as drag and never write consumer selection.
+Without either `onSquareActivate` or `onPiecePress`, the ordinary same-square
+tap recognizer and controlled activation action are disabled. Supplying
+`onMoveRequest` alone retains the existing accessible transient source, target,
+removal, and cancellation flow. Those actions use the same request executor as
+drag and never write consumer selection.
 
 Board-piece drag also defaults on when the callback exists. The synchronous
 `canDragPiece` gate is evaluated against the current controlled piece and
@@ -250,10 +264,18 @@ revision before activation; exceptions and non-true results deny the drag.
 Setting `interactionPermissions.accessibility: false` disables both paths, so a
 consumer cannot configure a drag-only board. It does not disable controlled
 square activation or touch destination routing. `onMoveRequest` enables the
-move pan path, while `onSquareActivate` enables the ordinary tap path. A usable
-annotation tool and operation callback enable the annotation paths
-independently. With none of those input boundaries, the component renders no
-native hit plane and constructs no recognizer.
+move pan path, while `onSquareActivate` or `onPiecePress` enables the ordinary
+tap path. A usable annotation tool and operation callback enable the annotation
+paths independently. With none of those input boundaries, the component
+renders no native hit plane and constructs no recognizer.
+
+`onPieceDragStart` is observation, not a drag gate. After permissions and
+`canDragPiece` admit a source and its pan actually activates, the owning board
+receives exactly one detached frozen `PieceInteractionContext`. A board source
+uses its canonical square; a targeted spare uses its stable spare ID and the
+target board's current revision. Denied or pre-activation-cancelled input emits
+nothing. Callback exceptions are isolated, no return value is consulted, and
+release still enters only the correlated `onMoveRequest` path.
 
 Each native gesture cycle receives a board-local monotonic token rather than
 reusing RNGH's recognizer handler tag. Start and terminal signals therefore

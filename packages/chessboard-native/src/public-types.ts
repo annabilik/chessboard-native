@@ -179,6 +179,12 @@ export interface InteractionPermissions {
   readonly accessibility?: boolean;
 }
 
+/** Native gesture-recognition tuning shared by a board and targeted spares. @public */
+export interface ChessboardGestureOptions {
+  /** Activation distance in native points; defaults to 4. */
+  readonly activationDistance?: number;
+}
+
 /** Consumer-owned arrow annotation. @public */
 export interface ArrowAnnotation {
   /**
@@ -352,14 +358,22 @@ export type PieceInteractionContext =
       readonly boardId: string;
       readonly basePositionRevision: Revision;
       readonly source: { readonly kind: 'board'; readonly square: SquareId };
-      readonly piece: PieceData;
+      readonly piece: Readonly<PieceData>;
     }
   | {
       readonly boardId: string;
       readonly basePositionRevision: Revision;
       readonly source: { readonly kind: 'spare'; readonly spareId: string };
-      readonly piece: PieceData;
+      readonly piece: Readonly<PieceData>;
     };
+
+/** Non-committing notification for one current piece activation. @public */
+export type OnPiecePress = (context: Readonly<PieceInteractionContext>) => void;
+
+/** Non-committing notification after one current native drag activates. @public */
+export type OnPieceDragStart = (
+  context: Readonly<PieceInteractionContext>,
+) => void;
 
 /** Synchronous board or spare drag permission evaluated from current props. @public */
 export type CanDragPiece = (

@@ -299,6 +299,11 @@ export type ChessboardErrorDetails = {
 export type ChessboardErrorDomain = 'board' | 'dimensions' | 'position' | 'annotations' | 'selection';
 
 // @public
+export interface ChessboardGestureOptions {
+    readonly activationDistance?: number;
+}
+
+// @public
 export interface ChessboardProps {
     readonly accessibility?: ChessboardAccessibility;
     readonly annotationPolicies?: AnnotationPolicies;
@@ -308,11 +313,14 @@ export interface ChessboardProps {
     readonly boardId: string;
     readonly canDragPiece?: CanDragPiece;
     readonly dimensions?: BoardDimensions;
+    readonly gesture?: ChessboardGestureOptions;
     readonly interactionPermissions?: InteractionPermissions;
     readonly moveRequestTimeouts?: MoveRequestTimeouts;
     readonly onAnnotationOperation?: OnAnnotationOperation;
     readonly onError?: OnChessboardError;
     readonly onMoveRequest?: OnMoveRequest;
+    readonly onPieceDragStart?: OnPieceDragStart;
+    readonly onPiecePress?: OnPiecePress;
     readonly onSquareActivate?: OnSquareActivate;
     readonly orientation?: BoardOrientation;
     readonly pieceRenderers?: PieceRenderers;
@@ -502,6 +510,12 @@ export type OnMoveRequest = (intent: MoveIntent, context: {
 }) => MoveDecision | Promise<MoveDecision>;
 
 // @public
+export type OnPieceDragStart = (context: Readonly<PieceInteractionContext>) => void;
+
+// @public
+export type OnPiecePress = (context: Readonly<PieceInteractionContext>) => void;
+
+// @public
 export type OnSquareActivate = (intent: Readonly<SquareActivationIntent>) => void;
 
 // @public
@@ -521,7 +535,7 @@ export type PieceInteractionContext = {
         readonly kind: 'board';
         readonly square: SquareId;
     };
-    readonly piece: PieceData;
+    readonly piece: Readonly<PieceData>;
 } | {
     readonly boardId: string;
     readonly basePositionRevision: Revision;
@@ -529,7 +543,7 @@ export type PieceInteractionContext = {
         readonly kind: 'spare';
         readonly spareId: string;
     };
-    readonly piece: PieceData;
+    readonly piece: Readonly<PieceData>;
 };
 
 // @public

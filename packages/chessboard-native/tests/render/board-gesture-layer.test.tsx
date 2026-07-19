@@ -36,6 +36,7 @@ const BLACK_GEOMETRY: Readonly<BoardGestureGeometry> = Object.freeze({
 });
 
 interface HarnessProps {
+  readonly activationDistance?: number;
   readonly annotationEnabled?: boolean;
   readonly annotationRevision?: number | null;
   readonly boardId?: string;
@@ -53,6 +54,7 @@ interface HarnessProps {
 }
 
 function Harness({
+  activationDistance,
   annotationEnabled = false,
   annotationRevision = 17,
   boardId = 'gesture-board',
@@ -72,6 +74,7 @@ function Harness({
   return (
     <GestureHandlerRootView>
       <BoardGestureLayer
+        {...(activationDistance === undefined ? {} : { activationDistance })}
         annotationEnabled={annotationEnabled}
         annotationRevision={annotationRevision}
         boardId={boardId}
@@ -129,6 +132,16 @@ function gestureCallbacks(gesture: unknown): Readonly<GestureCallbacks> {
 }
 
 describe('board-level native gesture plane', () => {
+  it('[PARITY-OPTION-DRAG-ACTIVATION-DISTANCE] forwards a custom activation distance to the board pan and tap recognizers', async () => {
+    await render(
+      <Harness activationDistance={12.5} enabled onSignal={jest.fn()} />,
+    );
+
+    const ids = getBoardGestureTestIds('gesture-board');
+    expect(gestureConfig(getByGestureTestId(ids.pan))['minDist']).toBe(12.5);
+    expect(gestureConfig(getByGestureTestId(ids.tap))['maxDist']).toBe(12.5);
+  });
+
   it('[PARITY-BEHAVIOR-B18] configures board-level tap/pan activation, keeps updates on shared values, cancels cleanly, and is disabled by default', async () => {
     const ids = getBoardGestureTestIds('gesture-board');
     const disabledSignal = jest.fn();

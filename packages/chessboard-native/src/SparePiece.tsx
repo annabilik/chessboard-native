@@ -27,6 +27,7 @@ import {
   resetInteractionPresentationSharedValues,
   useInteractionPresentationSharedValues,
 } from './internal/interaction-presentation';
+import { DEFAULT_DRAG_ACTIVATION_DISTANCE } from './internal/gesture-options';
 import { useOptionalChessboardProvider } from './internal/provider-context';
 import type {
   ProviderDragOverlayDescriptor,
@@ -234,6 +235,32 @@ export function SparePiece({
   const renderer = resolvePieceRenderer(pieceRenderers, piece.pieceType);
   const reducedMotion = useReducedMotion();
   const providerTransientRevision = provider.runtime.getTransientRevision();
+  const subscribeBoardConfiguration = useCallback(
+    (listener: () => void): (() => void) =>
+      provider.runtime.registry.subscribeBoardConfiguration(
+        targetBoardId,
+        listener,
+      ),
+    [provider.runtime.registry, targetBoardId],
+  );
+  const readGestureConfigurationEpoch = useCallback(
+    (): number =>
+      provider.runtime.registry.getSpareGestureConfigurationEpoch(
+        targetBoardId,
+      ),
+    [provider.runtime.registry, targetBoardId],
+  );
+  const gestureConfigurationEpoch = useSyncExternalStore(
+    subscribeBoardConfiguration,
+    readGestureConfigurationEpoch,
+    readGestureConfigurationEpoch,
+  );
+  const activationDistance = useMemo(
+    () =>
+      provider.runtime.registry.getSpareDragActivationDistance(targetBoardId) ??
+      DEFAULT_DRAG_ACTIVATION_DISTANCE,
+    [gestureConfigurationEpoch, provider.runtime.registry, targetBoardId],
+  );
   const presentation = useInteractionPresentationSharedValues();
   const hoverBoundsHeight = useSharedValue(0);
   const hoverBoundsWidth = useSharedValue(0);
@@ -290,7 +317,9 @@ export function SparePiece({
   const signalGeneration = useMemo(
     () => Object.freeze({}),
     [
+      activationDistance,
       disabled,
+      gestureConfigurationEpoch,
       piece.id,
       piece.pieceType,
       provider.geometryRevision,
@@ -464,6 +493,11 @@ export function SparePiece({
             targetSquare,
           }),
         );
+        provider.runtime.registry.notifySparePieceDragStart(
+          targetBoardId,
+          source,
+          piece,
+        );
         return;
       }
 
@@ -557,6 +591,11 @@ export function SparePiece({
         targetBoardId,
       }),
     );
+    provider.runtime.registry.notifySparePiecePress(
+      targetBoardId,
+      source,
+      piece,
+    );
     AccessibilityInfo.announceForAccessibility(
       `${accessibilityLabel} selected for ${targetBoardId}.`,
     );
@@ -564,7 +603,9 @@ export function SparePiece({
     accessibilityLabel,
     disabled,
     piece,
+    provider.runtime.registry,
     provider.runtime.spareSelection,
+    source,
     spareId,
     targetBoardId,
   ]);
@@ -661,7 +702,9 @@ export function SparePiece({
     );
   })();
   const gestureResetKey = JSON.stringify([
+    activationDistance,
     disabled,
+    gestureConfigurationEpoch,
     piece.id ?? null,
     piece.pieceType,
     provider.geometryRevision,
@@ -687,6 +730,7 @@ export function SparePiece({
       testID={`chessboard-native:spare:${spareId}`}
     >
       <SparePieceGestureLayer
+        activationDistance={activationDistance}
         enabled={!disabled}
         hover={hover}
         onSignal={handleGestureSignal}

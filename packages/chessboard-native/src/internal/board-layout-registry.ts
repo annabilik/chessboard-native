@@ -69,6 +69,12 @@ export type CanStartProviderSpareDrag = (
   piece: Readonly<PieceData>,
 ) => boolean;
 
+/** Commit-current target-board notification for one spare piece boundary. */
+export type NotifyProviderSparePieceInteraction = (
+  source: ProviderSpareSource,
+  piece: Readonly<PieceData>,
+) => boolean;
+
 /** Current non-semantic coordinate mapping for one registered board. */
 export interface BoardLayoutGeometry {
   readonly dimensions: BoardDimensions;
@@ -85,20 +91,27 @@ export interface BoardLayoutRegistration {
   readonly owner: BoardLayoutOwnerToken;
   readonly geometry: BoardLayoutGeometry;
   readonly measureInWindow: MeasureBoardInWindow;
+  /** Native activation threshold inherited by targeted spare sources. */
+  readonly dragActivationDistance: number;
   /** Read only after a fresh release measurement passes every correlation. */
   readonly readPositionRevision: () => Revision | null;
   /** Read only after the registry has atomically authorized an external move. */
   readonly readMoveRequest: () => RequestProviderSpareMove | null;
+  readonly readSparePieceDragStart: () => NotifyProviderSparePieceInteraction | null;
+  readonly readSparePiecePress: () => NotifyProviderSparePieceInteraction | null;
   readonly readSpareDragPermission: () => CanStartProviderSpareDrag | null;
 }
 
 /** Token-safe update for an existing committed registration. */
 export interface BoardLayoutUpdate {
   readonly available?: boolean;
+  readonly dragActivationDistance?: number;
   readonly geometry?: BoardLayoutGeometry;
   readonly measureInWindow?: MeasureBoardInWindow;
   readonly readPositionRevision?: () => Revision | null;
   readonly readMoveRequest?: () => RequestProviderSpareMove | null;
+  readonly readSparePieceDragStart?: () => NotifyProviderSparePieceInteraction | null;
+  readonly readSparePiecePress?: () => NotifyProviderSparePieceInteraction | null;
   readonly readSpareDragPermission?: () => CanStartProviderSpareDrag | null;
 }
 
@@ -194,6 +207,15 @@ export interface BoardLayoutRegistry {
   readonly getBoardSnapshot: (
     boardId: string,
   ) => Readonly<BoardLayoutSnapshot> | null;
+  readonly getSpareDragActivationDistance: (
+    targetBoardId: string,
+  ) => number | null;
+  /** Monotonic target/config identity used to reject retained native signals. */
+  readonly getSpareGestureConfigurationEpoch: (targetBoardId: string) => number;
+  readonly subscribeBoardConfiguration: (
+    targetBoardId: string,
+    listener: () => void,
+  ) => () => void;
   readonly beginDropSession: (
     options: BeginBoardDropSessionOptions,
   ) => BoardDropSessionToken;
@@ -215,6 +237,16 @@ export interface BoardLayoutRegistry {
     move: Readonly<ProviderSpareMove>,
   ) => boolean;
   readonly canStartSpareDrag: (
+    targetBoardId: string,
+    source: ProviderSpareSource,
+    piece: Readonly<PieceData>,
+  ) => boolean;
+  readonly notifySparePieceDragStart: (
+    targetBoardId: string,
+    source: ProviderSpareSource,
+    piece: Readonly<PieceData>,
+  ) => boolean;
+  readonly notifySparePiecePress: (
     targetBoardId: string,
     source: ProviderSpareSource,
     piece: Readonly<PieceData>,
@@ -245,8 +277,11 @@ interface RegistryEntry {
   readonly boardId: string;
   readonly owner: BoardLayoutOwnerToken;
   geometry: Readonly<NormalizedBoardLayoutGeometry>;
+  dragActivationDistance: number;
   measureInWindow: MeasureBoardInWindow;
   readMoveRequest: () => RequestProviderSpareMove | null;
+  readSparePieceDragStart: () => NotifyProviderSparePieceInteraction | null;
+  readSparePiecePress: () => NotifyProviderSparePieceInteraction | null;
   readSpareDragPermission: () => CanStartProviderSpareDrag | null;
   readPositionRevision: () => Revision | null;
   version: number | null;
@@ -282,6 +317,8 @@ interface PendingMeasurement {
 }
 
 const DEFAULT_VERIFICATION_TIMEOUT_MS = 250;
+const ABSENT_SPARE_GESTURE_CONFIGURATION_EPOCH = 0;
+const DISPOSED_SPARE_GESTURE_CONFIGURATION_EPOCH = -1;
 
 function validateNonNegativeSafeInteger(value: unknown, name: string): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
@@ -306,6 +343,15 @@ function validateTimeout(value: unknown): number {
   }
   if (value <= 0) {
     throw new RangeError('verificationTimeoutMs must be greater than zero.');
+  }
+  return value;
+}
+
+function validateDragActivationDistance(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new RangeError(
+      'dragActivationDistance must be a finite non-negative number.',
+    );
   }
   return value;
 }
@@ -423,6 +469,34 @@ function invokeMoveRequest(
   }
 }
 
+function invokeSparePieceInteraction(
+  readInteraction: () => NotifyProviderSparePieceInteraction | null,
+  source: ProviderSpareSource,
+  piece: Readonly<PieceData>,
+): boolean {
+  let interaction: NotifyProviderSparePieceInteraction | null;
+  try {
+    interaction = readInteraction();
+  } catch {
+    return false;
+  }
+  if (interaction === null) {
+    return false;
+  }
+  try {
+    const notified: unknown = interaction(
+      Object.freeze({ kind: 'spare', spareId: source.spareId }),
+      Object.freeze({
+        ...(piece.id === undefined ? {} : { id: piece.id }),
+        pieceType: piece.pieceType,
+      }),
+    );
+    return notified === true;
+  } catch {
+    return false;
+  }
+}
+
 function isFinitePoint(point: BoardWindowPoint): boolean {
   return Number.isFinite(point.x) && Number.isFinite(point.y);
 }
@@ -504,9 +578,37 @@ export function createBoardLayoutRegistry(
   let providerEpoch = Object.freeze({});
   let activeSession: ActiveDropSession | null = null;
   let disposed = false;
+  let nextSpareGestureConfigurationEpoch: number | null = 1;
   const entries = new Map<string, RegistryEntry>();
   const boardIdByOwner = new Map<BoardLayoutOwnerToken, string>();
   const pendingMeasurements = new Map<number, PendingMeasurement>();
+  const spareGestureConfigurationEpochs = new Map<string, number>();
+  const configurationListeners = new Map<string, Set<() => void>>();
+
+  const notifyConfigurationListeners = (boardId: string): void => {
+    const listeners = configurationListeners.get(boardId);
+    if (listeners === undefined) {
+      return;
+    }
+    for (const listener of [...listeners]) {
+      try {
+        listener();
+      } catch {
+        // One observer cannot prevent other targeted spares from refreshing.
+      }
+    }
+  };
+
+  const publishSpareGestureConfiguration = (boardId: string): void => {
+    const epoch = nextSpareGestureConfigurationEpoch;
+    if (epoch === null) {
+      throw new RangeError('Spare gesture configuration epoch exhausted.');
+    }
+    nextSpareGestureConfigurationEpoch =
+      epoch === Number.MAX_SAFE_INTEGER ? null : epoch + 1;
+    spareGestureConfigurationEpochs.set(boardId, epoch);
+    notifyConfigurationListeners(boardId);
+  };
 
   const allocateMeasurementToken = (): number | null => {
     const token = nextMeasurementToken;
@@ -572,11 +674,20 @@ export function createBoardLayoutRegistry(
     if (typeof registration.measureInWindow !== 'function') {
       throw new TypeError('measureInWindow must be a function.');
     }
+    const dragActivationDistance = validateDragActivationDistance(
+      registration.dragActivationDistance,
+    );
     if (typeof registration.readPositionRevision !== 'function') {
       throw new TypeError('readPositionRevision must be a function.');
     }
     if (typeof registration.readMoveRequest !== 'function') {
       throw new TypeError('readMoveRequest must be a function.');
+    }
+    if (typeof registration.readSparePieceDragStart !== 'function') {
+      throw new TypeError('readSparePieceDragStart must be a function.');
+    }
+    if (typeof registration.readSparePiecePress !== 'function') {
+      throw new TypeError('readSparePiecePress must be a function.');
     }
     if (typeof registration.readSpareDragPermission !== 'function') {
       throw new TypeError('readSpareDragPermission must be a function.');
@@ -602,11 +713,14 @@ export function createBoardLayoutRegistry(
     if (existing !== undefined) {
       update(boardId, registration.owner, {
         available: registration.available,
+        dragActivationDistance,
         geometry,
         measureInWindow: registration.measureInWindow,
         readMoveRequest: registration.readMoveRequest,
         readPositionRevision: registration.readPositionRevision,
         readSpareDragPermission: registration.readSpareDragPermission,
+        readSparePieceDragStart: registration.readSparePieceDragStart,
+        readSparePiecePress: registration.readSparePiecePress,
       });
       return Object.freeze({ boardId, status: 'registered' });
     }
@@ -616,15 +730,19 @@ export function createBoardLayoutRegistry(
       boardId,
       cachedBounds: null,
       cacheMeasurementToken: null,
+      dragActivationDistance,
       geometry,
       measureInWindow: registration.measureInWindow,
       owner: registration.owner,
       readMoveRequest: registration.readMoveRequest,
       readPositionRevision: registration.readPositionRevision,
       readSpareDragPermission: registration.readSpareDragPermission,
+      readSparePieceDragStart: registration.readSparePieceDragStart,
+      readSparePiecePress: registration.readSparePiecePress,
       version: 0,
     });
     boardIdByOwner.set(registration.owner, boardId);
+    publishSpareGestureConfiguration(boardId);
     return Object.freeze({ boardId, status: 'registered' });
   };
 
@@ -658,6 +776,18 @@ export function createBoardLayoutRegistry(
       throw new TypeError('readMoveRequest must be a function.');
     }
     if (
+      Object.hasOwn(updateInput, 'readSparePieceDragStart') &&
+      typeof updateInput.readSparePieceDragStart !== 'function'
+    ) {
+      throw new TypeError('readSparePieceDragStart must be a function.');
+    }
+    if (
+      Object.hasOwn(updateInput, 'readSparePiecePress') &&
+      typeof updateInput.readSparePiecePress !== 'function'
+    ) {
+      throw new TypeError('readSparePiecePress must be a function.');
+    }
+    if (
       Object.hasOwn(updateInput, 'readSpareDragPermission') &&
       typeof updateInput.readSpareDragPermission !== 'function'
     ) {
@@ -677,8 +807,15 @@ export function createBoardLayoutRegistry(
     const geometryChanged = !geometryMatches(entry.geometry, nextGeometry);
     const nextAvailable = updateInput.available ?? entry.available;
     const availabilityChanged = nextAvailable !== entry.available;
+    const nextDragActivationDistance =
+      updateInput.dragActivationDistance === undefined
+        ? entry.dragActivationDistance
+        : validateDragActivationDistance(updateInput.dragActivationDistance);
+    const configurationChanged =
+      nextDragActivationDistance !== entry.dragActivationDistance;
 
     entry.available = nextAvailable;
+    entry.dragActivationDistance = nextDragActivationDistance;
     entry.geometry = nextGeometry;
     if (updateInput.measureInWindow !== undefined) {
       entry.measureInWindow = updateInput.measureInWindow;
@@ -688,6 +825,12 @@ export function createBoardLayoutRegistry(
     }
     if (updateInput.readMoveRequest !== undefined) {
       entry.readMoveRequest = updateInput.readMoveRequest;
+    }
+    if (updateInput.readSparePieceDragStart !== undefined) {
+      entry.readSparePieceDragStart = updateInput.readSparePieceDragStart;
+    }
+    if (updateInput.readSparePiecePress !== undefined) {
+      entry.readSparePiecePress = updateInput.readSparePiecePress;
     }
     if (updateInput.readSpareDragPermission !== undefined) {
       entry.readSpareDragPermission = updateInput.readSpareDragPermission;
@@ -703,6 +846,9 @@ export function createBoardLayoutRegistry(
       );
       invalidateSessionForEntry(entry, 'stale');
     }
+    if (configurationChanged) {
+      publishSpareGestureConfiguration(boardId);
+    }
     return true;
   };
 
@@ -717,6 +863,7 @@ export function createBoardLayoutRegistry(
     }
     entries.delete(boardId);
     boardIdByOwner.delete(owner);
+    publishSpareGestureConfiguration(boardId);
     cancelPending(
       (pending) => pending.boardId === boardId && pending.owner === entry.owner,
       'stale',
@@ -854,6 +1001,50 @@ export function createBoardLayoutRegistry(
       geometry: copyGeometry(entry.geometry),
     });
   };
+
+  const getSpareDragActivationDistance: BoardLayoutRegistry['getSpareDragActivationDistance'] =
+    (targetBoardIdInput) => {
+      const targetBoardId = validateBoardId(targetBoardIdInput);
+      if (disposed) {
+        return null;
+      }
+      return entries.get(targetBoardId)?.dragActivationDistance ?? null;
+    };
+
+  const getSpareGestureConfigurationEpoch: BoardLayoutRegistry['getSpareGestureConfigurationEpoch'] =
+    (targetBoardIdInput) => {
+      const targetBoardId = validateBoardId(targetBoardIdInput);
+      if (disposed) {
+        return DISPOSED_SPARE_GESTURE_CONFIGURATION_EPOCH;
+      }
+      return (
+        spareGestureConfigurationEpochs.get(targetBoardId) ??
+        ABSENT_SPARE_GESTURE_CONFIGURATION_EPOCH
+      );
+    };
+
+  const subscribeBoardConfiguration: BoardLayoutRegistry['subscribeBoardConfiguration'] =
+    (targetBoardIdInput, listener) => {
+      const targetBoardId = validateBoardId(targetBoardIdInput);
+      if (typeof listener !== 'function') {
+        throw new TypeError('configuration listener must be a function.');
+      }
+      if (disposed) {
+        return () => undefined;
+      }
+      let listeners = configurationListeners.get(targetBoardId);
+      if (listeners === undefined) {
+        listeners = new Set();
+        configurationListeners.set(targetBoardId, listeners);
+      }
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+        if (listeners.size === 0) {
+          configurationListeners.delete(targetBoardId);
+        }
+      };
+    };
 
   const beginDropSession: BoardLayoutRegistry['beginDropSession'] = (
     sessionOptions,
@@ -1170,6 +1361,37 @@ export function createBoardLayoutRegistry(
     }
   };
 
+  const notifySparePieceDragStart: BoardLayoutRegistry['notifySparePieceDragStart'] =
+    (targetBoardIdInput, source, piece) => {
+      const targetBoardId = validateBoardId(targetBoardIdInput);
+      if (disposed) {
+        return false;
+      }
+      const entry = entries.get(targetBoardId);
+      return entry === undefined
+        ? false
+        : invokeSparePieceInteraction(
+            entry.readSparePieceDragStart,
+            source,
+            piece,
+          );
+    };
+
+  const notifySparePiecePress: BoardLayoutRegistry['notifySparePiecePress'] = (
+    targetBoardIdInput,
+    source,
+    piece,
+  ) => {
+    const targetBoardId = validateBoardId(targetBoardIdInput);
+    if (disposed) {
+      return false;
+    }
+    const entry = entries.get(targetBoardId);
+    return entry === undefined
+      ? false
+      : invokeSparePieceInteraction(entry.readSparePiecePress, source, piece);
+  };
+
   const endDropSession: BoardLayoutRegistry['endDropSession'] = (token) => {
     if (activeSession?.token !== token) {
       return false;
@@ -1192,9 +1414,13 @@ export function createBoardLayoutRegistry(
     }
     invalidateActiveSession('stale');
     cancelPending(() => true, 'stale');
+    const registeredBoardIds = [...entries.keys()];
     entries.clear();
     boardIdByOwner.clear();
     providerEpoch = Object.freeze({});
+    for (const boardId of registeredBoardIds) {
+      publishSpareGestureConfiguration(boardId);
+    }
   };
 
   const dispose: BoardLayoutRegistry['dispose'] = () => {
@@ -1204,8 +1430,14 @@ export function createBoardLayoutRegistry(
     disposed = true;
     invalidateActiveSession('disposed');
     cancelPending(() => true, 'disposed');
+    const registeredBoardIds = [...entries.keys()];
     entries.clear();
     boardIdByOwner.clear();
+    for (const boardId of registeredBoardIds) {
+      publishSpareGestureConfiguration(boardId);
+    }
+    spareGestureConfigurationEpochs.clear();
+    configurationListeners.clear();
   };
 
   return Object.freeze({
@@ -1217,11 +1449,16 @@ export function createBoardLayoutRegistry(
     endDropSession,
     getBoardSnapshot,
     getCachedHover,
+    getSpareDragActivationDistance,
+    getSpareGestureConfigurationEpoch,
+    notifySparePieceDragStart,
+    notifySparePiecePress,
     refreshCachedBounds,
     register,
     requestAccessibleSpare,
     requestVerifiedDrop,
     setProviderGeometryRevision,
+    subscribeBoardConfiguration,
     unregister,
     update,
     verifyDrop,

@@ -37,6 +37,7 @@ import {
   canDragCurrentPiece,
   resolveInteractionPermissions,
 } from '../internal/interaction-permissions';
+import { createPieceInteractionContext } from '../internal/piece-interaction';
 import type {
   InteractionInvalidationReason,
   MoveIntentLifecycle,
@@ -50,6 +51,7 @@ import { useMoveRequestRuntime } from '../internal/use-move-request-runtime';
 import { useAnnotationOperation } from '../internal/use-annotation-operation';
 import { useAnnotationInputRuntime } from '../internal/use-annotation-input-runtime';
 import { useSquareActivation } from '../internal/use-square-activation';
+import type { PieceInteractionCallbacks } from '../internal/use-piece-interaction';
 import { usePositionTransitionRuntime } from '../internal/use-position-transition-runtime';
 import type { ProviderBoardRegistration } from '../internal/provider-board-registration';
 import type {
@@ -108,6 +110,7 @@ interface MeasuredBoardSize extends BoardSize {
 }
 
 interface BoardSurfaceProps {
+  readonly activationDistance: number;
   readonly accessibility: ChessboardAccessibility | undefined;
   readonly annotationDraft?: Readonly<CorrelatedAnnotationDraft> | null;
   readonly annotationPolicies: AnnotationPolicies | undefined;
@@ -122,6 +125,8 @@ interface BoardSurfaceProps {
   readonly onAnnotationOperation: OnAnnotationOperation | undefined;
   readonly onMoveRequest: OnMoveRequest | undefined;
   readonly onSquareActivate: OnSquareActivate | undefined;
+  readonly pieceInteraction: Readonly<PieceInteractionCallbacks>;
+  readonly piecePressEnabled: boolean;
   readonly pieceRenderers: PieceRenderers;
   readonly providerGeometryRevision: Revision;
   readonly providerLifecycleRevision: Revision;
@@ -235,6 +240,7 @@ function invalidationReason(
 
 /** Responsive native host for measured visual board layers. */
 export function BoardSurface({
+  activationDistance,
   accessibility,
   annotationDraft = null,
   annotationPolicies,
@@ -249,6 +255,8 @@ export function BoardSurface({
   onAnnotationOperation,
   onMoveRequest,
   onSquareActivate,
+  pieceInteraction,
+  piecePressEnabled,
   pieceRenderers,
   providerGeometryRevision,
   providerLifecycleRevision,
@@ -299,13 +307,17 @@ export function BoardSurface({
   const dragEnabled = interactionReady && resolvedPermissions.drag;
   const squareActivationEnabled =
     interactionReady && typeof onSquareActivate === 'function';
+  const currentPiecePressEnabled = interactionReady && piecePressEnabled;
   const annotationBoardPressEnabled =
     interactionReady &&
     annotationPolicies?.clearOnBoardPress === true &&
     typeof onAnnotationOperation === 'function' &&
     model.annotations !== null &&
     model.annotations.value.length > 0;
-  const tapEnabled = squareActivationEnabled || annotationBoardPressEnabled;
+  const tapEnabled =
+    squareActivationEnabled ||
+    currentPiecePressEnabled ||
+    annotationBoardPressEnabled;
   const [activeDragSourceSquare, setActiveDragSourceSquare] = useState<
     string | null
   >(null);
@@ -493,7 +505,7 @@ export function BoardSurface({
     ): boolean => {
       const plan = planSquareActivation({
         action,
-        activationEnabled: squareActivationEnabled,
+        activationEnabled: squareActivationEnabled || currentPiecePressEnabled,
         input,
         model,
         moveEnabled:
@@ -505,8 +517,26 @@ export function BoardSurface({
       switch (plan.type) {
         case 'request-move':
           return moveInteraction.request(plan.request);
-        case 'emit-activation':
+        case 'emit-activation': {
+          if (
+            plan.request.action === 'activate' &&
+            plan.request.piece !== null &&
+            currentPiecePressEnabled
+          ) {
+            return pieceInteraction.press(
+              createPieceInteractionContext({
+                basePositionRevision: plan.request.basePositionRevision,
+                boardId: plan.request.boardId,
+                piece: plan.request.piece,
+                source: Object.freeze({
+                  kind: 'board' as const,
+                  square: plan.request.square,
+                }),
+              }),
+            );
+          }
           return squareActivation.emit(plan.request) !== null;
+        }
         case 'blocked':
         case 'fallback':
           return false;
@@ -517,6 +547,8 @@ export function BoardSurface({
       model,
       moveRequestEnabled,
       moveInteraction.request,
+      currentPiecePressEnabled,
+      pieceInteraction,
       squareActivation.emit,
       squareActivationEnabled,
     ],
@@ -562,9 +594,16 @@ export function BoardSurface({
           dispatchSquareActivation(square, 'accessibility'),
         clearSelection: (square: SquareId): boolean =>
           dispatchSquareActivation(square, 'accessibility', 'clear-selection'),
-        enabled: squareActivationEnabled && activeDragSourceSquare === null,
+        enabled:
+          (squareActivationEnabled || currentPiecePressEnabled) &&
+          activeDragSourceSquare === null,
       }),
-    [activeDragSourceSquare, dispatchSquareActivation, squareActivationEnabled],
+    [
+      activeDragSourceSquare,
+      currentPiecePressEnabled,
+      dispatchSquareActivation,
+      squareActivationEnabled,
+    ],
   );
   const selectedSpare: Readonly<ProviderSpareSelectionDescriptor> | null =
     providerRegistered &&
@@ -1148,7 +1187,7 @@ export function BoardSurface({
             type: 'clear',
           });
         }
-        if (squareActivationEnabled) {
+        if (squareActivationEnabled || currentPiecePressEnabled) {
           dispatchSquareActivation(candidate.square, 'touch');
         }
         return;
@@ -1198,6 +1237,7 @@ export function BoardSurface({
       model.position,
       model.selection?.revision,
       moveInteraction.request,
+      currentPiecePressEnabled,
       squareActivationEnabled,
       tapEnabled,
     ],
@@ -1315,6 +1355,7 @@ export function BoardSurface({
           {(!dragEnabled && !tapEnabled && !annotationGestureEnabled) ||
           gestureGeometry === null ? null : (
             <BoardInteractionController
+              activationDistance={activationDistance}
               {...(annotationGestureEnabled
                 ? {
                     annotationRuntime,
@@ -1328,6 +1369,7 @@ export function BoardSurface({
               geometry={gestureGeometry}
               onCandidate={handleGestureCandidate}
               onDragSourceChange={handleDragSourceChange}
+              onPieceDragStart={pieceInteraction.dragStart}
               onPressedSquareChange={setPressedSquare}
               pieceRenderers={pieceRenderers}
               pieceStyle={pieceStyle}

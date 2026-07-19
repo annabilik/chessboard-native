@@ -59,16 +59,31 @@ the board never turns it into a selected square or a position update. An
 explicit accessible `clear-selection` action is likewise a request for the
 consumer to publish a new selection prop, not an internal clear.
 
+`onPiecePress` and `onPieceDragStart` are narrower observational boundaries.
+Both receive one frozen `PieceInteractionContext` copied from the named board's
+current committed position revision. The source is explicitly either a board
+square or a targeted spare ID. Neither callback returns a decision, enables a
+move, or changes the controlled position or selection; exceptions are isolated
+from the input runtime. A targeted spare resolves the destination board's
+current callback and revision rather than capturing them when the palette
+renders.
+
 Ordinary controlled-selection activation uses one exclusive router evaluated
 against the current normalized props. For touch, when `onMoveRequest` exists,
 the target is an enabled declared destination, the selected source is enabled,
 and that source still contains a controlled piece, the board sends only a
 `MoveIntent` to `onMoveRequest`. Accessibility uses that move route only while
-its move permission is enabled. Otherwise, when `onSquareActivate` exists, the
-board sends only a `SquareActivationIntent`. It never invokes both callbacks
-for one activation, never infers destinations, and never retains the captured
-piece or selection as a render source. Disabled or stale activation fails
-closed.
+its move permission is enabled. Otherwise an occupied square routes to
+`onPiecePress` when supplied; only the remaining activation routes to
+`onSquareActivate`. It never invokes piece and square callbacks for one
+activation, never infers destinations, and never retains the captured piece or
+selection as a render source. Disabled or stale activation fails closed.
+
+`onPieceDragStart` fires once only after a board or spare pan passes current
+permissions and `canDragPiece` and actually activates. It does not fire for a
+denied source, movement that never reaches the threshold, or a pre-activation
+cancellation. The later drop remains exclusively an `onMoveRequest` concern;
+continuous pointer frames never become callback traffic.
 
 Every annotation callback emits a delta correlated to
 `baseAnnotationRevision`. Toggle and clear operations include only IDs observed
@@ -177,10 +192,10 @@ Async consumers can validate moves without granting the component ownership of
 game state. They must update controlled position after move acceptance, and any
 selection change resulting from activation or clearing must arrive through the
 controlled selection prop. The mounted move-request executor and
-square-activation router and provider registry preserve this boundary through
-cancellation, errors, timeouts, abandoned renders, stale selection correlation,
-duplicate identity, and late native measurements. Every later transition
-planner and external source must preserve it too.
+square/piece-activation router and provider registry preserve this boundary
+through cancellation, errors, timeouts, abandoned renders, stale selection
+correlation, duplicate identity, and late native measurements. Every later
+transition planner and external source must preserve it too.
 
 This decision owns invariants `CBN-INV-001`, `CBN-INV-002`, `CBN-INV-003`,
 `CBN-INV-004`, `CBN-INV-005`, `CBN-INV-008`, `CBN-INV-010`,
