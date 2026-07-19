@@ -99,7 +99,7 @@ function providerSpareMove(
 }
 
 function providerSpareRequest(
-  input: 'accessibility' | 'drag' = 'drag',
+  input: 'accessibility' | 'drag' | 'tap' = 'drag',
 ): Omit<ProviderSpareMove, 'targetSquare'> {
   return {
     input,
@@ -908,48 +908,48 @@ describe('board layout registry', () => {
     );
   });
 
-  it('routes an accessible spare through the commit-current adapter', () => {
-    const registry = createBoardLayoutRegistry();
-    const owner = createBoardLayoutOwnerToken();
-    const measurement = deferredMeasurement();
-    const readPositionRevision = jest.fn(() => 12);
-    const staleRequest = jest.fn(() => true);
-    const currentRequest: jest.MockedFunction<RequestProviderSpareMove> =
-      jest.fn((move) => {
-        void move;
-        return true;
-      });
-    const staleReader = jest.fn(() => staleRequest);
-    const currentReader = jest.fn(() => currentRequest);
-    registry.register(
-      registration({
-        measureInWindow: measurement.measureInWindow,
-        owner,
-        readMoveRequest: staleReader,
-        readPositionRevision,
-      }),
-    );
+  it.each(['accessibility', 'tap'] as const)(
+    'routes a selected-spare %s request through the commit-current adapter',
+    (input) => {
+      const registry = createBoardLayoutRegistry();
+      const owner = createBoardLayoutOwnerToken();
+      const measurement = deferredMeasurement();
+      const readPositionRevision = jest.fn(() => 12);
+      const staleRequest = jest.fn(() => true);
+      const currentRequest: jest.MockedFunction<RequestProviderSpareMove> =
+        jest.fn((move) => {
+          void move;
+          return true;
+        });
+      const staleReader = jest.fn(() => staleRequest);
+      const currentReader = jest.fn(() => currentRequest);
+      registry.register(
+        registration({
+          measureInWindow: measurement.measureInWindow,
+          owner,
+          readMoveRequest: staleReader,
+          readPositionRevision,
+        }),
+      );
 
-    expect(
-      registry.update('analysis', owner, { readMoveRequest: currentReader }),
-    ).toBe(true);
-    const move = providerSpareMove({
-      input: 'accessibility',
-      targetSquare: 'h1',
-    });
-    expect(registry.requestAccessibleSpare('analysis', move)).toBe(true);
-    expect(staleReader).not.toHaveBeenCalled();
-    expect(staleRequest).not.toHaveBeenCalled();
-    expect(currentReader).toHaveBeenCalledTimes(1);
-    expect(currentRequest).toHaveBeenCalledWith({
-      input: 'accessibility',
-      piece: { id: 'palette-queen', pieceType: 'wQ' },
-      source: { kind: 'spare', spareId: 'white-queen' },
-      targetSquare: 'h1',
-    });
-    expect(readPositionRevision).not.toHaveBeenCalled();
-    expect(registry.requestAccessibleSpare('missing', move)).toBe(false);
-  });
+      expect(
+        registry.update('analysis', owner, { readMoveRequest: currentReader }),
+      ).toBe(true);
+      const move = providerSpareMove({ input, targetSquare: 'h1' });
+      expect(registry.requestSelectedSpare('analysis', move)).toBe(true);
+      expect(staleReader).not.toHaveBeenCalled();
+      expect(staleRequest).not.toHaveBeenCalled();
+      expect(currentReader).toHaveBeenCalledTimes(1);
+      expect(currentRequest).toHaveBeenCalledWith({
+        input,
+        piece: { id: 'palette-queen', pieceType: 'wQ' },
+        source: { kind: 'spare', spareId: 'white-queen' },
+        targetSquare: 'h1',
+      });
+      expect(readPositionRevision).not.toHaveBeenCalled();
+      expect(registry.requestSelectedSpare('missing', move)).toBe(false);
+    },
+  );
 
   it('fails accessible spare routing closed when current adapter access throws', () => {
     const registry = createBoardLayoutRegistry();
@@ -966,7 +966,7 @@ describe('board layout registry', () => {
     );
 
     expect(
-      registry.requestAccessibleSpare(
+      registry.requestSelectedSpare(
         'analysis',
         providerSpareMove({ input: 'accessibility' }),
       ),
@@ -979,7 +979,7 @@ describe('board layout registry', () => {
       }),
     ).toBe(true);
     expect(
-      registry.requestAccessibleSpare(
+      registry.requestSelectedSpare(
         'analysis',
         providerSpareMove({ input: 'accessibility' }),
       ),

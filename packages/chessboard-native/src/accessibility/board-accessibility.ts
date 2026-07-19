@@ -35,6 +35,7 @@ import {
   reconcileAccessibilityCursor,
   type AccessibilityCursorAction,
 } from './cursor';
+import { formatPieceAccessibilityLabel } from './piece-label';
 
 const EMPTY_ACTIONS: readonly AccessibilityActionInfo[] = Object.freeze([]);
 
@@ -101,21 +102,6 @@ const INTERACTIVE_ACTION_LABELS: Readonly<
   'remove-piece': 'Remove piece',
   'start-arrow': 'Start arrow',
   'toggle-square-annotation': 'Toggle square annotation',
-});
-
-const STANDARD_PIECE_LABELS: Readonly<Record<string, string>> = Object.freeze({
-  bB: 'black bishop',
-  bK: 'black king',
-  bN: 'black knight',
-  bP: 'black pawn',
-  bQ: 'black queen',
-  bR: 'black rook',
-  wB: 'white bishop',
-  wK: 'white king',
-  wN: 'white knight',
-  wP: 'white pawn',
-  wQ: 'white queen',
-  wR: 'white rook',
 });
 
 export interface BoardAccessibilityProps {
@@ -194,7 +180,7 @@ function pieceLabel(piece: Readonly<PieceData> | null): string {
   if (piece === null) {
     return 'empty';
   }
-  return STANDARD_PIECE_LABELS[piece.pieceType] ?? `${piece.pieceType} piece`;
+  return formatPieceAccessibilityLabel(piece.pieceType);
 }
 
 /** English fallback used when the consumer does not supply a formatter. */

@@ -1,30 +1,75 @@
 import {
   Chessboard,
   ChessboardProvider,
+  defaultPieceRenderers,
   SparePiece,
+  type BoardDimensions,
+  type BoardOrientation,
   type ControlledPosition,
   type MoveIntent,
   type OnMoveRequest,
   type PieceData,
+  type PieceRenderer,
+  type PieceRenderers,
   type PositionObject,
 } from '@vibechess/chessboard-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 const BOARD_ID = 'spare-piece-editor';
 
-const INITIAL_POSITION = Object.freeze({
+const WIDE_DIMENSIONS = Object.freeze({
+  columns: 5,
+  rows: 3,
+}) satisfies BoardDimensions;
+const TALL_DIMENSIONS = Object.freeze({
+  columns: 3,
+  rows: 5,
+}) satisfies BoardDimensions;
+
+const WIDE_POSITION = Object.freeze({
   a1: Object.freeze({ id: 'white-king', pieceType: 'wK' }),
-  d4: Object.freeze({ id: 'center-pawn', pieceType: 'wP' }),
-  h8: Object.freeze({ id: 'black-king', pieceType: 'bK' }),
+  c2: Object.freeze({ id: 'guide', pieceType: 'fairy' }),
+  e3: Object.freeze({ id: 'black-king', pieceType: 'bK' }),
+}) satisfies PositionObject;
+const TALL_POSITION = Object.freeze({
+  a1: Object.freeze({ id: 'white-king', pieceType: 'wK' }),
+  b3: Object.freeze({ id: 'guide', pieceType: 'fairy' }),
+  c5: Object.freeze({ id: 'black-king', pieceType: 'bK' }),
 }) satisfies PositionObject;
 
-const WHITE_QUEEN = Object.freeze({ pieceType: 'wQ' });
-const BLACK_KNIGHT = Object.freeze({ pieceType: 'bN' });
-const PALETTE: Readonly<Record<string, Readonly<PieceData>>> = Object.freeze({
-  'black-knight': BLACK_KNIGHT,
-  'white-queen': WHITE_QUEEN,
-});
+const Fairy: PieceRenderer = ({ size }) => (
+  <View
+    style={{
+      alignItems: 'center',
+      height: size,
+      justifyContent: 'center',
+      width: size,
+    }}
+  >
+    <Text style={{ color: '#432a73', fontSize: size * 0.55 }}>F</Text>
+  </View>
+);
+
+const EDITOR_RENDERERS = Object.freeze({
+  ...defaultPieceRenderers,
+  fairy: Fairy,
+}) satisfies PieceRenderers;
+
+function createPalette(
+  generation: number,
+): Readonly<Record<string, Readonly<PieceData>>> {
+  return Object.freeze({
+    'black-knight': Object.freeze({
+      id: `black-knight-offer-${String(generation)}`,
+      pieceType: 'bN',
+    }),
+    fairy: Object.freeze({
+      id: `fairy-offer-${String(generation)}`,
+      pieceType: 'fairy',
+    }),
+  });
+}
 
 type DemoPosition = Omit<ControlledPosition, 'value'> & {
   readonly value: PositionObject;
@@ -46,6 +91,7 @@ function piecesMatch(
 function applyIntent(
   current: Readonly<DemoPosition>,
   intent: Readonly<MoveIntent>,
+  palette: Readonly<Record<string, Readonly<PieceData>>>,
 ): Readonly<DemoPosition> | null {
   if (
     intent.boardId !== BOARD_ID ||
@@ -55,7 +101,7 @@ function applyIntent(
   }
 
   if (intent.source.kind === 'spare') {
-    const palettePiece = PALETTE[intent.source.spareId];
+    const palettePiece = palette[intent.source.spareId];
     if (
       !piecesMatch(palettePiece, intent.piece) ||
       intent.targetSquare === null
@@ -93,13 +139,21 @@ function sourceLabel(intent: Readonly<MoveIntent>): string {
 }
 
 export default function SparePiecesExample() {
+  const [dimensions, setDimensions] =
+    useState<BoardDimensions>(WIDE_DIMENSIONS);
+  const [orientation, setOrientation] = useState<BoardOrientation>('black');
+  const [offerGeneration, setOfferGeneration] = useState(1);
   const [position, setPosition] = useState<DemoPosition>({
     revision: 0,
-    value: INITIAL_POSITION,
+    value: WIDE_POSITION,
   });
   const [decisionMode, setDecisionMode] = useState<DecisionMode>('accept');
   const [status, setStatus] = useState(
-    'Drag a spare onto the board, or activate it and use the board actions menu to place it.',
+    'Select a spare, then tap a square, drag it directly, or use the board actions menu.',
+  );
+  const palette = useMemo(
+    () => createPalette(offerGeneration),
+    [offerGeneration],
   );
 
   const onMoveRequest = useCallback<OnMoveRequest>(
@@ -111,7 +165,7 @@ export default function SparePiecesExample() {
         return { status: 'rejected', reason: 'Example rejection mode' };
       }
 
-      const next = applyIntent(position, intent);
+      const next = applyIntent(position, intent, palette);
       if (next === null) {
         setStatus(
           `Consumer rejected an obsolete, unknown, or off-board spare request from ${sourceLabel(intent)}.`,
@@ -120,13 +174,31 @@ export default function SparePiecesExample() {
       }
 
       setPosition(next);
+      if (intent.source.kind === 'spare') {
+        setOfferGeneration((current) => current + 1);
+      }
       setStatus(
         `Committed ${sourceLabel(intent)} → ${intent.targetSquare ?? 'off board'} as controlled revision ${String(next.revision)}.`,
       );
       return { status: 'accepted' };
     },
-    [decisionMode, position],
+    [decisionMode, palette, position],
   );
+
+  const switchDimensions = useCallback((): void => {
+    const nextIsTall = dimensions.columns === WIDE_DIMENSIONS.columns;
+    const nextDimensions = nextIsTall ? TALL_DIMENSIONS : WIDE_DIMENSIONS;
+    const nextValue = nextIsTall ? TALL_POSITION : WIDE_POSITION;
+    setDimensions(nextDimensions);
+    setPosition((current) => ({
+      revision: current.revision + 1,
+      value: nextValue,
+    }));
+    setOfferGeneration((current) => current + 1);
+    setStatus(
+      `Consumer atomically published the ${String(nextDimensions.columns)}×${String(nextDimensions.rows)} preset and a compatible object position.`,
+    );
+  }, [dimensions.columns]);
 
   return (
     <ScrollView
@@ -134,40 +206,44 @@ export default function SparePiecesExample() {
       contentInsetAdjustmentBehavior="automatic"
       style={styles.screen}
     >
-      <Text style={styles.eyebrow}>PHASE 2 · EXTERNAL PIECE SOURCES</Text>
-      <Text style={styles.title}>Controlled spare-piece placement</Text>
+      <Text style={styles.eyebrow}>PHASE 5 · VARIANT EDITOR HARDENING</Text>
+      <Text style={styles.title}>Controlled variant position editor</Text>
       <Text style={styles.description}>
-        Each spare names one target board. Dragging or accessible placement
-        emits the same move request against that board's current controlled
-        revision; neither path edits the position itself.
+        This rectangular, rules-free board combines a custom piece vocabulary,
+        reusable spare offers, orientation changes, and dimension presets. Every
+        piece edit is still a move request against the consumer's current
+        controlled revision.
       </Text>
 
       <ChessboardProvider>
         <View style={styles.paletteCard}>
           <Text style={styles.cardTitle}>Reusable palette</Text>
           <Text style={styles.instructions}>
-            For the non-drag path, activate a spare, focus the board, navigate
-            to a square, then choose “Place selected spare” from its actions
-            menu. “Cancel spare selection” leaves the position unchanged.
+            Tap a spare and then tap a board square, drag it directly, or use
+            the board's Place selected spare accessibility action. Each offered
+            piece has a fresh stable ID; after a successful placement the
+            palette publishes the next reusable offer.
           </Text>
           <View style={styles.paletteRow}>
             <View style={styles.spareOption}>
               <SparePiece
-                accessibilityHint="Select this reusable queen for placement on the editor board."
-                accessibilityLabel="White queen spare piece"
-                piece={WHITE_QUEEN}
+                accessibilityHint="Select this custom fairy offer for placement on the editor board."
+                accessibilityLabel="Fairy spare piece"
+                piece={palette.fairy}
+                pieceRenderers={EDITOR_RENDERERS}
                 size={64}
-                spareId="white-queen"
+                spareId="fairy"
                 style={styles.sparePiece}
                 targetBoardId={BOARD_ID}
               />
-              <Text style={styles.spareLabel}>White queen</Text>
+              <Text style={styles.spareLabel}>Fairy</Text>
             </View>
             <View style={styles.spareOption}>
               <SparePiece
                 accessibilityHint="Select this reusable knight for placement on the editor board."
                 accessibilityLabel="Black knight spare piece"
-                piece={BLACK_KNIGHT}
+                piece={palette['black-knight'] ?? { pieceType: 'bN' }}
+                pieceRenderers={EDITOR_RENDERERS}
                 size={64}
                 spareId="black-knight"
                 style={styles.sparePiece}
@@ -183,16 +259,20 @@ export default function SparePiecesExample() {
           <Chessboard
             accessibility={{
               boardHint:
-                'Navigate to a destination and use the actions menu to place or cancel the selected spare.',
-              boardLabel: 'Spare-piece editor board, white orientation',
+                'Tap a selected spare onto a square, or navigate to a destination and use the actions menu to place or cancel it.',
+              boardLabel: `Variant editor board, ${orientation} orientation`,
             }}
             boardId={BOARD_ID}
+            dimensions={dimensions}
             onMoveRequest={onMoveRequest}
+            orientation={orientation}
+            pieceRenderers={EDITOR_RENDERERS}
             position={position}
             reduceMotion="always"
           />
           <Text style={styles.status}>
-            Revision {position.revision} · next decision: {decisionMode}
+            {dimensions.columns}×{dimensions.rows} · {orientation} orientation ·
+            revision {position.revision} · next decision: {decisionMode}
             {`\n`}
             {status}
           </Text>
@@ -216,10 +296,37 @@ export default function SparePiecesExample() {
           <Pressable
             accessibilityRole="button"
             onPress={() => {
+              setOrientation((current) =>
+                current === 'white' ? 'black' : 'white',
+              );
+              setStatus(
+                'Consumer changed presentation orientation; canonical square IDs and position state were not rewritten.',
+              );
+            }}
+            style={styles.secondaryButton}
+          >
+            <Text style={styles.secondaryButtonText}>Toggle orientation</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={switchDimensions}
+            style={styles.secondaryButton}
+          >
+            <Text style={styles.secondaryButtonText}>
+              Switch 5×3 / 3×5 preset
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
               setPosition((current) => ({
                 revision: current.revision + 1,
-                value: INITIAL_POSITION,
+                value:
+                  dimensions.columns === WIDE_DIMENSIONS.columns
+                    ? WIDE_POSITION
+                    : TALL_POSITION,
               }));
+              setOfferGeneration((current) => current + 1);
               setStatus(
                 'Consumer published an unrelated controlled reset; no component-owned position was restored.',
               );
@@ -234,10 +341,10 @@ export default function SparePiecesExample() {
       </View>
 
       <Text style={styles.boundary}>
-        This route keeps the palette and board in one explicit provider and a
-        stable layout. The interaction-hardening route adds a deliberately
-        clipped palette, parent-ScrollView arbitration, lifecycle cancellation,
-        geometry invalidation, and observable render/callback counters.
+        Variant positions use sparse object positions; FEN remains 8×8-only.
+        Dimension changes publish a compatible object position and newer
+        revision together. Board moves preserve stable IDs, while every reusable
+        palette offer receives a fresh ID before it can be placed.
       </Text>
     </ScrollView>
   );

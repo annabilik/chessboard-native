@@ -123,8 +123,9 @@ changes position or selection; only the consumer's next controlled props can do
 that.
 `ChessboardProvider` adds provider-scoped board identity, one shared transient
 overlay, and stale-safe external-drop measurement. Its public `SparePiece`
-source supports drag and accessible placement on one named board while that
-board's controlled move callback remains the only position authority. A
+source supports drag, selected-spare tap placement, and accessible placement on
+one named board while that board's controlled move callback remains the only
+position authority. A
 visual-only `renderSquare` receives current controlled and transient context
 inside board-owned measured paint. Pure controlled-position transition planning
 validates exact-revision hints,
@@ -231,7 +232,7 @@ const onMoveRequest: OnMoveRequest = (intent) => {
 The required props are `spareId`, `targetBoardId`, and `piece`. `size` defaults
 to 48 points. `pieceRenderers` is the same whole-map visual replacement used by
 `Chessboard`; `style` paints the spare host without replacing its interaction
-geometry. `disabled` prevents drag and accessible selection. The source is an
+geometry. `disabled` prevents drag and placement selection. The source is an
 accessible button whose default label and hint can be replaced with
 `accessibilityLabel` and `accessibilityHint`.
 
@@ -239,25 +240,29 @@ Activating that button also calls the named target board's current
 `onPiecePress`, when present, with
 `source: { kind: 'spare', spareId }` and the board's current controlled position
 revision. This observation does not replace or commit the provider's transient
-accessible spare selection. Once a permitted spare pan actually activates, the
+spare selection. Once a permitted spare pan actually activates, the
 same target board receives one `onPieceDragStart` observation. A palette never
 captures its own semantic callback or revision.
 
-Drag and non-drag placement both call only the named board's current
+Drag, tap-to-place, and accessible placement all call only the named board's current
 `onMoveRequest`. The immutable intent carries that `boardId`, the board's
 current `basePositionRevision`, the detached `piece`, and
-`source: { kind: 'spare', spareId }`. Drag uses `input: 'drag'` and may report
-an off-board `targetSquare: null`; accessible placement uses
-`input: 'accessibility'` and the board cursor's current square. The board
-rechecks its current callback and interaction permissions at emission. Drag
+`source: { kind: 'spare', spareId }`. After activating a spare, an ordinary
+board tap uses `input: 'tap'` and the tapped canonical square before annotation,
+piece-press, or square-activation callbacks. Drag uses `input: 'drag'` and may
+report an off-board `targetSquare: null`; accessible placement uses
+`input: 'accessibility'` and the board cursor's current square. All paths
+recheck the board's current callback and interaction permissions at emission. Drag
 also rechecks `canDragPiece` with the spare source. A missing callback, denied
 permission, unavailable target, or stale release fails closed.
 
-Activating a spare selects one transient source in the provider. Only its
-matching target board exposes **Place selected spare** and
-**Cancel spare selection** actions. Placement is gated by the board's current
-move callback, accessible permission, pending lifecycle, and disabled cursor
-square; cancellation remains available if those placement gates disappear.
+Activating a spare selects one transient source in the provider. A tap on its
+matching target board requests placement unless that canonical square is
+controlled-disabled or another move is pending. The same board alone exposes
+**Place selected spare** and **Cancel spare selection** actions. Accessible
+placement is additionally gated by the current accessibility permission and
+cursor square; cancellation remains available if those placement gates
+disappear.
 Selecting another spare replaces the first; starting a physical drag from that
 selected source, successful request submission, explicit cancellation, source
 identity change, disablement or unmount, target unmount, and provider
@@ -265,6 +270,18 @@ deactivation clear the transient selection. This selection is not
 `ChessboardProps.selection` and does not edit the consumer's position. The
 consumer must accept or reject the ordinary move request and publish any
 resulting controlled position update.
+
+`piece.id` is actor identity, not palette identity. A reusable anonymous palette
+entry may omit it. When stable transition identity is desired, publish a fresh
+piece ID for each offered placement and preserve that exact ID from the emitted
+intent into the committed position; do not place one fixed ID more than once in
+the same position. Board-origin editor moves preserve the existing actor ID.
+
+For rectangular variants, use sparse object positions. FEN remains strict and
+8×8-only. When changing `dimensions`, publish a dimension-compatible object
+position in the same consumer update and advance its controlled revision. The
+board cancels stale interaction geometry but never prunes, relocates, or restores
+pieces on the consumer's behalf.
 
 The provider-level overlay can escape clipping inside a source palette, but it
 is not a native window portal. An ancestor that clips the provider's entire

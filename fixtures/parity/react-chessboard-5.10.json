@@ -2685,7 +2685,7 @@
       },
       "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B03",
-      "compatibilityNotes": "Spare pieces compose with one explicitly shared provider, route drag and accessible placement to a named board, and never own its position."
+      "compatibilityNotes": "Spare pieces compose with one explicitly shared provider, route drag, selected-spare tap, and accessible placement to a named board, and never own its position."
     },
     {
       "id": "behavior.b04-board-identity-and-dom-ids",

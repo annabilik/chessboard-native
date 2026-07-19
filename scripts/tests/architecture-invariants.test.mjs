@@ -25,7 +25,7 @@ const expectedStatements = [
   'Position changes during a gesture cancel the gesture and every associated timer/signal; late results are inert.',
   'Annotation drafts are visually distinguishable and never persisted.',
   'Annotation operations never replace a collection and cannot silently remove IDs created after their base revision.',
-  'Semantic board selection and destinations are consumer-owned; the provider may own only transient spare-source selection for accessible placement.',
+  'Semantic board selection and destinations are consumer-owned; the provider may own only transient spare-source selection for non-drag placement.',
   'Orientation changes coordinates, not canonical square names.',
   'Multiple board instances share no semantic, SVG, animation, or annotation state. Provider gesture infrastructure is shared transiently and must route all active state by stable `boardId` without leaking between boards.',
   'A provider owns transient cross-component dragging but no semantic board state.',

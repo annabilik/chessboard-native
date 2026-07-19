@@ -86,6 +86,8 @@ interface BoardInteractionControllerProps {
   readonly pieceStyle: Readonly<ViewStyle>;
   readonly position: NormalizedControlledValue<PositionObject>;
   readonly selectionRevision?: Revision | null;
+  /** Invalidates retained taps when the provider's selected spare changes. */
+  readonly spareSelectionRevision?: Revision;
   readonly tapEnabled?: boolean;
   readonly trackPress?: boolean;
 }
@@ -256,6 +258,7 @@ function BoardInteractionControllerContent({
   pieceStyle,
   position,
   selectionRevision = null,
+  spareSelectionRevision = 0,
   tapEnabled = false,
   trackPress = false,
 }: BoardInteractionControllerProps): ReactElement {
@@ -313,6 +316,7 @@ function BoardInteractionControllerContent({
     providerGeometryRevision,
     providerLifecycleRevision,
     providerResetRevision,
+    spareSelectionRevision,
     providerTransientRevision,
   ]);
   const gestureDetectorKey = createBoardGestureDetectorKey({
