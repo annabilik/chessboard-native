@@ -7,6 +7,7 @@ import {
   type AppStateStatus,
 } from 'react-native';
 import { getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
+import { getAnimatedStyle } from 'react-native-reanimated';
 import type { TestInstance } from 'test-renderer';
 
 import {
@@ -171,6 +172,7 @@ function moveRequestMock(
 
 function renderTarget(options: {
   readonly activationDistance?: number;
+  readonly allowDragOffBoard?: boolean;
   readonly canDragPiece?: CanDragPiece;
   readonly disabled?: boolean;
   readonly dimensions?: BoardDimensions;
@@ -184,6 +186,7 @@ function renderTarget(options: {
   readonly onPiecePress?: OnPiecePress;
   readonly orientation?: BoardOrientation;
   readonly positionRevision?: number;
+  readonly runtimeRef?: { current: ChessboardProviderRuntime | null };
   readonly showBoard?: boolean;
   readonly showSpare?: boolean;
   readonly size?: number;
@@ -194,6 +197,9 @@ function renderTarget(options: {
   const targetBoardId = options.targetBoardId ?? 'target-board';
   return (
     <ChessboardProvider geometryRevision={options.geometryRevision ?? 0}>
+      {options.runtimeRef === undefined ? null : (
+        <ProviderRuntimeProbe runtimeRef={options.runtimeRef} />
+      )}
       {options.showSpare === false ? null : (
         <SparePiece
           disabled={options.disabled ?? false}
@@ -214,9 +220,19 @@ function renderTarget(options: {
             ? {}
             : { canDragPiece: options.canDragPiece })}
           dimensions={options.dimensions ?? { columns: 2, rows: 2 }}
-          {...(options.activationDistance === undefined
+          {...(options.activationDistance === undefined &&
+          options.allowDragOffBoard === undefined
             ? {}
-            : { gesture: { activationDistance: options.activationDistance } })}
+            : {
+                gesture: {
+                  ...(options.activationDistance === undefined
+                    ? {}
+                    : { activationDistance: options.activationDistance }),
+                  ...(options.allowDragOffBoard === undefined
+                    ? {}
+                    : { allowDragOffBoard: options.allowDragOffBoard }),
+                },
+              })}
           {...(options.interactionPermissions === undefined
             ? {}
             : { interactionPermissions: options.interactionPermissions })}
@@ -569,6 +585,56 @@ describe('SparePiece', () => {
     expect(onMoveRequest).not.toHaveBeenCalled();
     expect(currentDragStart).toHaveBeenCalledTimes(1);
     expect(currentPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('[PARITY-OPTION-ALLOW-DRAG-OFF-BOARD] inherits target overlay bounds and cancels a stale policy generation', async () => {
+    mockBoardWindowBounds();
+    const runtimeRef: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    const onMoveRequest = moveRequestMock();
+    const result = await render(
+      renderTarget({
+        allowDragOffBoard: false,
+        onMoveRequest,
+        runtimeRef,
+      }),
+    );
+    await measureBoard(boardByLabel(result, 'target board'));
+    const boundedCallbacks = await beginSpareDrag('reserve');
+    const bounded = runtimeRef.current?.drag.getSnapshot().active?.bounds;
+    if (bounded?.kind !== 'window') {
+      throw new Error('Expected target-board window drag bounds.');
+    }
+    expect(bounded.ready.value).toBe(1);
+    expect({
+      height: bounded.height.value,
+      width: bounded.width.value,
+      x: bounded.x.value,
+      y: bounded.y.value,
+    }).toEqual(BOARD_BOUNDS);
+    expect(
+      getAnimatedStyle(
+        result.getByTestId(providerOverlayId('target-board'), {
+          includeHiddenElements: true,
+        }),
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        opacity: 1,
+        transform: [{ translateX: -24 }, { translateY: -24 }],
+      }),
+    );
+
+    await result.rerender(
+      renderTarget({ allowDragOffBoard: true, onMoveRequest, runtimeRef }),
+    );
+    expect(runtimeRef.current?.drag.getSnapshot().active).toBeNull();
+    await releaseSpareDrag(boundedCallbacks, { x: 125, y: 225 });
+    expect(onMoveRequest).not.toHaveBeenCalled();
+
+    await beginSpareDrag('reserve');
+    expect(runtimeRef.current?.drag.getSnapshot().active?.bounds).toBeNull();
   });
 
   it('invalidates a retained spare start when the same target id is replaced at the same effective default activation distance', async () => {

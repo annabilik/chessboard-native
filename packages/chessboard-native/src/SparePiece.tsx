@@ -28,6 +28,7 @@ import {
   useInteractionPresentationSharedValues,
 } from './internal/interaction-presentation';
 import { DEFAULT_DRAG_ACTIVATION_DISTANCE } from './internal/gesture-options';
+import type { DragOverlayBounds } from './internal/drag-overlay-bounds';
 import { useOptionalChessboardProvider } from './internal/provider-context';
 import type {
   ProviderDragOverlayDescriptor,
@@ -261,6 +262,12 @@ export function SparePiece({
       DEFAULT_DRAG_ACTIVATION_DISTANCE,
     [gestureConfigurationEpoch, provider.runtime.registry, targetBoardId],
   );
+  const allowDragOffBoard = useMemo(
+    () =>
+      provider.runtime.registry.getSpareAllowDragOffBoard(targetBoardId) ??
+      true,
+    [gestureConfigurationEpoch, provider.runtime.registry, targetBoardId],
+  );
   const presentation = useInteractionPresentationSharedValues();
   const hoverBoundsHeight = useSharedValue(0);
   const hoverBoundsWidth = useSharedValue(0);
@@ -297,6 +304,24 @@ export function SparePiece({
       hoverVisualSquares,
     ],
   );
+  const dragOverlayBounds = useMemo<Readonly<DragOverlayBounds>>(
+    () =>
+      Object.freeze({
+        height: hoverBoundsHeight,
+        kind: 'window' as const,
+        ready: hoverReady,
+        width: hoverBoundsWidth,
+        x: hoverBoundsX,
+        y: hoverBoundsY,
+      }),
+    [
+      hoverBoundsHeight,
+      hoverBoundsWidth,
+      hoverBoundsX,
+      hoverBoundsY,
+      hoverReady,
+    ],
+  );
   const owner = useRef<ProviderDragOwner>({});
   const activeDrag = useRef<Readonly<ActiveSpareDrag> | null>(null);
   const [providerResetRevision, setProviderResetRevision] = useState(0);
@@ -318,6 +343,7 @@ export function SparePiece({
     () => Object.freeze({}),
     [
       activationDistance,
+      allowDragOffBoard,
       disabled,
       gestureConfigurationEpoch,
       piece.id,
@@ -479,6 +505,7 @@ export function SparePiece({
         provider.runtime.drag.claim(
           Object.freeze({
             boardId: targetBoardId,
+            bounds: allowDragOffBoard ? null : dragOverlayBounds,
             gestureToken: signal.gestureToken,
             onCancel: () => {
               handleProviderCancellation(signal.gestureToken);
@@ -561,6 +588,8 @@ export function SparePiece({
     },
     [
       disabled,
+      allowDragOffBoard,
+      dragOverlayBounds,
       finishDrag,
       handleProviderCancellation,
       hover,
@@ -706,6 +735,7 @@ export function SparePiece({
   })();
   const gestureResetKey = JSON.stringify([
     activationDistance,
+    allowDragOffBoard,
     disabled,
     gestureConfigurationEpoch,
     piece.id ?? null,

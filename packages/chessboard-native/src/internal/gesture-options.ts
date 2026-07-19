@@ -6,11 +6,13 @@ export const DEFAULT_DRAG_ACTIVATION_DISTANCE = 4;
 /** Fully resolved, immutable native gesture configuration. */
 export interface NormalizedChessboardGestureOptions {
   readonly activationDistance: number;
+  readonly allowDragOffBoard: boolean;
 }
 
 const DEFAULT_GESTURE_OPTIONS: Readonly<NormalizedChessboardGestureOptions> =
   Object.freeze({
     activationDistance: DEFAULT_DRAG_ACTIVATION_DISTANCE,
+    allowDragOffBoard: true,
   });
 
 /** Validate the public partial gesture options once at the board boundary. */
@@ -26,6 +28,7 @@ export function normalizeChessboardGestureOptions(
   const options = value as Readonly<ChessboardGestureOptions>;
   const activationDistance =
     options.activationDistance ?? DEFAULT_DRAG_ACTIVATION_DISTANCE;
+  const allowDragOffBoard = options.allowDragOffBoard ?? true;
   if (
     typeof activationDistance !== 'number' ||
     !Number.isFinite(activationDistance) ||
@@ -35,5 +38,10 @@ export function normalizeChessboardGestureOptions(
       'Chessboard gesture.activationDistance must be a finite non-negative number.',
     );
   }
-  return Object.freeze({ activationDistance });
+  if (typeof allowDragOffBoard !== 'boolean') {
+    throw new TypeError(
+      'Chessboard gesture.allowDragOffBoard must be a boolean.',
+    );
+  }
+  return Object.freeze({ activationDistance, allowDragOffBoard });
 }

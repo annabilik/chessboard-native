@@ -796,7 +796,7 @@ describe('pure interaction reducer', () => {
     );
   });
 
-  it('[PARITY-BEHAVIOR-B24] cancels user, second-finger, accessibility, and unmount lifecycles with correlated cleanup', () => {
+  it('cancels user, second-finger, accessibility, and unmount lifecycles with correlated cleanup', () => {
     const reasons = [
       'user',
       'second-finger',

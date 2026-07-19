@@ -45,6 +45,8 @@ function geometry(revision: number): Readonly<BoardGestureGeometry> {
 }
 
 function dragSignal(options: {
+  readonly allowDragOffBoard?: boolean;
+  readonly allowDragOffBoardGeneration?: number;
   readonly geometryRevision?: number;
   readonly gestureToken: number;
   readonly positionRevision?: number;
@@ -52,6 +54,8 @@ function dragSignal(options: {
   readonly type: 'drag-start' | 'drag-end';
 }): Readonly<BoardGestureSignal> {
   return Object.freeze({
+    allowDragOffBoard: options.allowDragOffBoard ?? true,
+    allowDragOffBoardGeneration: options.allowDragOffBoardGeneration ?? 0,
     boardId: 'race-board',
     geometryRevision: options.geometryRevision ?? 5,
     gestureToken: options.gestureToken,
@@ -91,6 +95,8 @@ function dragTargetSignal(options: {
   readonly targetSquare: 'a2' | 'b1' | null;
 }): Readonly<BoardGestureSignal> {
   return Object.freeze({
+    allowDragOffBoard: true,
+    allowDragOffBoardGeneration: 0,
     boardId: 'race-board',
     geometryRevision: 5,
     gestureToken: options.gestureToken,
@@ -728,6 +734,204 @@ describe('board interaction controller races', () => {
     });
 
     expect(onCandidate).not.toHaveBeenCalled();
+    expect(onPieceDragStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('publishes board-local bounds and cancels only an active pan when the policy changes', async () => {
+    const runtime: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    const onCandidate = jest.fn();
+    function RuntimeProbe(): null {
+      runtime.current = useChessboardProvider().runtime;
+      return null;
+    }
+    const result = await render(
+      <ChessboardProvider>
+        <RuntimeProbe />
+        <BoardInteractionController
+          allowDragOffBoard={false}
+          boardId="race-board"
+          dragEnabled
+          geometry={geometry(5)}
+          onCandidate={onCandidate}
+          pieceRenderers={{}}
+          pieceStyle={{}}
+          position={controlledPosition(9)}
+        />
+      </ChessboardProvider>,
+    );
+    const retainedSignal = currentSignalHandler();
+
+    await act(() => {
+      retainedSignal(
+        dragSignal({
+          allowDragOffBoard: false,
+          gestureToken: 96,
+          type: 'drag-start',
+        }),
+      );
+    });
+    expect(runtime.current?.drag.getSnapshot().active?.bounds).toEqual({
+      height: 200,
+      kind: 'gesture',
+      width: 200,
+    });
+
+    await result.rerender(
+      <ChessboardProvider>
+        <RuntimeProbe />
+        <BoardInteractionController
+          allowDragOffBoard
+          boardId="race-board"
+          dragEnabled
+          geometry={geometry(5)}
+          onCandidate={onCandidate}
+          pieceRenderers={{}}
+          pieceStyle={{}}
+          position={controlledPosition(9)}
+        />
+      </ChessboardProvider>,
+    );
+
+    expect(runtime.current?.drag.getSnapshot().active).toBeNull();
+    await act(() => {
+      retainedSignal(
+        dragSignal({
+          allowDragOffBoard: false,
+          gestureToken: 96,
+          targetSquare: 'b1',
+          type: 'drag-end',
+        }),
+      );
+      currentSignalHandler()(
+        dragSignal({
+          allowDragOffBoardGeneration: 1,
+          gestureToken: 97,
+          type: 'drag-start',
+        }),
+      );
+    });
+    expect(onCandidate).not.toHaveBeenCalled();
+    expect(runtime.current?.drag.getSnapshot().active?.bounds).toBeNull();
+  });
+
+  it('rejects a queued drag start captured before an overlay-policy commit', async () => {
+    const onPieceDragStart = jest.fn(() => true);
+    const result = await render(
+      <BoardInteractionController
+        allowDragOffBoard={false}
+        boardId="race-board"
+        dragEnabled
+        geometry={geometry(5)}
+        onPieceDragStart={onPieceDragStart}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+      />,
+    );
+    const retainedSignal = currentSignalHandler();
+
+    await result.rerender(
+      <BoardInteractionController
+        allowDragOffBoard
+        boardId="race-board"
+        dragEnabled
+        geometry={geometry(5)}
+        onPieceDragStart={onPieceDragStart}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+      />,
+    );
+    await act(() => {
+      retainedSignal(
+        dragSignal({
+          allowDragOffBoard: false,
+          gestureToken: 98,
+          type: 'drag-start',
+        }),
+      );
+    });
+
+    expect(onPieceDragStart).not.toHaveBeenCalled();
+    expect(
+      result.queryAllByTestId(
+        'chessboard-native:race-board:provider-drag-overlay',
+        { includeHiddenElements: true },
+      ),
+    ).toEqual([]);
+  });
+
+  it('rejects an ABA-stale queued drag start after the overlay policy returns to its captured value', async () => {
+    const onPieceDragStart = jest.fn(() => true);
+    const result = await render(
+      <BoardInteractionController
+        allowDragOffBoard={false}
+        boardId="race-board"
+        dragEnabled
+        geometry={geometry(5)}
+        onPieceDragStart={onPieceDragStart}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+      />,
+    );
+    const retainedSignal = currentSignalHandler();
+
+    await result.rerender(
+      <BoardInteractionController
+        allowDragOffBoard
+        boardId="race-board"
+        dragEnabled
+        geometry={geometry(5)}
+        onPieceDragStart={onPieceDragStart}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+      />,
+    );
+    await result.rerender(
+      <BoardInteractionController
+        allowDragOffBoard={false}
+        boardId="race-board"
+        dragEnabled
+        geometry={geometry(5)}
+        onPieceDragStart={onPieceDragStart}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+      />,
+    );
+    await act(() => {
+      retainedSignal(
+        dragSignal({
+          allowDragOffBoard: false,
+          allowDragOffBoardGeneration: 0,
+          gestureToken: 99,
+          type: 'drag-start',
+        }),
+      );
+    });
+
+    expect(onPieceDragStart).not.toHaveBeenCalled();
+    expect(
+      result.queryAllByTestId(
+        'chessboard-native:race-board:provider-drag-overlay',
+        { includeHiddenElements: true },
+      ),
+    ).toEqual([]);
+
+    await act(() => {
+      currentSignalHandler()(
+        dragSignal({
+          allowDragOffBoard: false,
+          allowDragOffBoardGeneration: 2,
+          gestureToken: 100,
+          type: 'drag-start',
+        }),
+      );
+    });
     expect(onPieceDragStart).toHaveBeenCalledTimes(1);
   });
 

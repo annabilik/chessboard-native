@@ -1,5 +1,6 @@
 import {
   Chessboard,
+  type ChessboardActions,
   type ControlledPosition,
   type MoveIntent,
   type OnMoveRequest,
@@ -96,10 +97,12 @@ export default function MoveRequestExample() {
     value: INITIAL_POSITION,
   });
   const [decisionMode, setDecisionMode] = useState<DecisionMode>('accept');
+  const [allowDragOffBoard, setAllowDragOffBoard] = useState(true);
   const [status, setStatus] = useState(
     'Drag a white piece, or use the board actions to choose a source and target.',
   );
   const decisionModeRef = useRef(decisionMode);
+  const actionsRef = useRef<ChessboardActions | null>(null);
 
   useEffect(() => {
     decisionModeRef.current = decisionMode;
@@ -144,6 +147,7 @@ export default function MoveRequestExample() {
 
       <View style={styles.board}>
         <Chessboard
+          actionsRef={actionsRef}
           accessibility={{
             boardHint:
               'Navigate to a piece and activate it, then navigate to a target and activate again.',
@@ -151,6 +155,7 @@ export default function MoveRequestExample() {
           }}
           boardId="controlled-move-request"
           canDragPiece={canDragWhitePiece}
+          gesture={{ allowDragOffBoard }}
           interactionPermissions={{ accessibility: true, drag: true }}
           moveRequestTimeouts={{ commitMs: 1_500, decisionMs: 3_000 }}
           onMoveRequest={onMoveRequest}
@@ -163,6 +168,7 @@ export default function MoveRequestExample() {
         <Text style={styles.cardTitle}>Consumer controls</Text>
         <Text style={styles.status}>
           Revision {position.revision} · next decision: {decisionMode}
+          {`\n`}Overlay may leave board: {allowDragOffBoard ? 'yes' : 'no'}
           {`\n`}
           {status}
         </Text>
@@ -177,6 +183,37 @@ export default function MoveRequestExample() {
             style={styles.button}
           >
             <Text style={styles.buttonText}>Toggle accept / reject</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              const cancelled = actionsRef.current?.cancelMove() ?? false;
+              setStatus(
+                cancelled
+                  ? 'Cancelled the current transient move; controlled position is unchanged.'
+                  : 'There was no transient move to cancel.',
+              );
+            }}
+            style={styles.button}
+          >
+            <Text style={styles.buttonText}>Cancel transient move</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setAllowDragOffBoard((current) => {
+                const next = !current;
+                setStatus(
+                  next
+                    ? 'Overlay may leave the board; outside releases still have a null target.'
+                    : 'Overlay center is clamped; raw outside releases still have a null target.',
+                );
+                return next;
+              });
+            }}
+            style={styles.button}
+          >
+            <Text style={styles.buttonText}>Toggle overlay bounds</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -198,7 +235,8 @@ export default function MoveRequestExample() {
         Drag is permitted only for white pieces in this example. The adjustable
         control remains available for every occupied source, proving that drag
         always has a non-drag alternative. An off-board removal is the same
-        request with a null target.
+        request with a null target, even while the visible overlay is clamped.
+        The cancel button affects transient move work only.
       </Text>
     </ScrollView>
   );

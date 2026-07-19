@@ -93,6 +93,18 @@ board plane it also supplies same-square tap travel tolerance and two-finger
 annotation-pan activation distance. Changing it replaces current recognizer
 configuration and makes an obsolete native terminal signal inert.
 
+`ChessboardProps.gesture.allowDragOffBoard` is a visual overlay policy. It
+defaults to `true`; when false, the overlay center is clamped to the target
+board rectangle before lift and consumer transforms are composed. Board drags
+derive bounds from gesture-local measured geometry. Targeted spares inherit the
+named board's policy and use its shared cached window bounds. Missing or invalid
+cached bounds fail open visually, while release authorization independently
+remeasures and continues to fail closed. Raw pointer values and hit testing are
+never clamped, so an outside release still resolves to `targetSquare: null`.
+Changing the policy cancels an active pan and rejects its stale configuration,
+but does not invalidate a request that has already entered deciding or
+awaiting-commit.
+
 An empty, non-draggable, or otherwise denied board source fails before drag
 activation, leaving scrolling available. An enabled spare or current allowed
 board source can activate after the threshold and owns the rest of that native
@@ -311,6 +323,14 @@ the named target board; pressed and pending remain renderer state rather than
 separate style slots. Controlled destination, selected, and disabled square
 styles remain derived directly from the current selection prop, while current
 hover supplies the visual-only drop-target slot.
+
+The public `ChessboardActions.cancelMove()` boundary routes through the same
+board-scoped cancellation paths. It revokes an active provider lease, including
+a targeted spare's asynchronous release verification, and invalidates staged
+accessible or pending move work. It returns false when no such work exists.
+Mount-scoped action leases prevent a retained handle from cancelling a remount,
+and controlled state plus unrelated press, annotation, and transition work are
+outside its authority.
 
 P2.7 keeps continuous native pan updates out of JavaScript and adds explicit
 evidence at each observable boundary. Component instrumentation counts board

@@ -35,8 +35,10 @@ interface UseMoveRequestRuntimeOptions {
 }
 
 export interface MoveRequestInteraction {
-  readonly cancel: () => void;
-  readonly invalidate: (reason: InteractionInvalidationReason) => void;
+  readonly cancel: (
+    reason?: Extract<InteractionInvalidationReason, 'accessibility' | 'user'>,
+  ) => boolean;
+  readonly invalidate: (reason: InteractionInvalidationReason) => boolean;
   readonly lifecycle: Readonly<MoveIntentLifecycle> | null;
   readonly request: (draft: Readonly<MoveIntentRequest>) => boolean;
 }
@@ -154,14 +156,25 @@ export function useMoveRequestRuntime({
     [runtime],
   );
   const invalidate = useCallback(
-    (reason: InteractionInvalidationReason): void => {
+    (reason: InteractionInvalidationReason): boolean => {
+      const previous = runtime?.getState();
+      if (previous === undefined || previous.phase === 'idle') {
+        return false;
+      }
       runtime?.invalidate(reason);
+      return runtime?.getState() !== previous;
     },
     [runtime],
   );
-  const cancel = useCallback((): void => {
-    invalidate('accessibility');
-  }, [invalidate]);
+  const cancel = useCallback(
+    (
+      reason: Extract<
+        InteractionInvalidationReason,
+        'accessibility' | 'user'
+      > = 'accessibility',
+    ): boolean => invalidate(reason),
+    [invalidate],
+  );
 
   return useMemo(
     () => Object.freeze({ cancel, invalidate, lifecycle, request }),

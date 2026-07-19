@@ -15,6 +15,7 @@ import type { NormalizedControlledValue } from '../internal/controlled-domain';
 import type { AnnotationGestureCorrelation } from '../internal/annotation-gesture-adapter';
 import { canDragCurrentPiece } from '../internal/interaction-permissions';
 import { DEFAULT_DRAG_ACTIVATION_DISTANCE } from '../internal/gesture-options';
+import type { DragOverlayBounds } from '../internal/drag-overlay-bounds';
 import {
   createSquarePressContext,
   emitSquarePress,
@@ -63,6 +64,7 @@ import { resolvePieceRenderer } from './piece-layer';
 
 interface BoardInteractionControllerProps {
   readonly activationDistance?: number;
+  readonly allowDragOffBoard?: boolean;
   readonly annotationRuntime?: Readonly<AnnotationInputRuntime>;
   readonly boardId: string;
   readonly canDragPiece?: CanDragPiece;
@@ -90,6 +92,31 @@ interface BoardInteractionControllerProps {
 
 const EMPTY_OCCUPIED_SQUARES: readonly SquareId[] = Object.freeze([]);
 const REJECTED_SIGNAL_GENERATION: Readonly<object> = Object.freeze({});
+
+interface DragOverlayPolicyGeneration {
+  readonly allowDragOffBoard: boolean;
+  readonly generation: number;
+}
+
+function useDragOverlayPolicyGeneration(
+  allowDragOffBoard: boolean,
+): Readonly<DragOverlayPolicyGeneration> {
+  const [policy, setPolicy] = useState<Readonly<DragOverlayPolicyGeneration>>(
+    () => Object.freeze({ allowDragOffBoard, generation: 0 }),
+  );
+  if (policy.allowDragOffBoard === allowDragOffBoard) {
+    return policy;
+  }
+  if (policy.generation === Number.MAX_SAFE_INTEGER) {
+    throw new RangeError('Board drag overlay policy generation exhausted.');
+  }
+  const next = Object.freeze({
+    allowDragOffBoard,
+    generation: policy.generation + 1,
+  });
+  setPolicy(next);
+  return next;
+}
 
 function createSnapshot(options: {
   readonly boardId: string;
@@ -197,6 +224,12 @@ function signalMatchesActive(
   );
 }
 
+function isNativeDragSignal(
+  signal: Readonly<BoardGestureSignal>,
+): signal is Extract<BoardGestureSignal, { readonly type: `drag-${string}` }> {
+  return signal.type.startsWith('drag-');
+}
+
 /**
  * Board-private glue between native gesture boundaries and the pure lifecycle.
  *
@@ -205,6 +238,7 @@ function signalMatchesActive(
  */
 function BoardInteractionControllerContent({
   activationDistance = DEFAULT_DRAG_ACTIVATION_DISTANCE,
+  allowDragOffBoard = true,
   annotationRuntime,
   boardId,
   canDragPiece,
@@ -237,6 +271,8 @@ function BoardInteractionControllerContent({
   const presentation = useInteractionPresentationSharedValues();
   const [providerResetRevision, setProviderResetRevision] = useState(0);
   const providerOwner = useRef<ProviderDragOwner>({});
+  const dragOverlayPolicy = useDragOverlayPolicyGeneration(allowDragOffBoard);
+  const dragOverlayPolicyAtCommit = useRef(dragOverlayPolicy);
   const cancelFromProviderAtCommit = useRef<
     (reason: ProviderDragCancellationReason) => void
   >(() => undefined);
@@ -330,6 +366,15 @@ function BoardInteractionControllerContent({
     geometry.width / geometry.columns,
     geometry.height / geometry.rows,
   );
+  const dragOverlayBounds = useMemo<Readonly<DragOverlayBounds>>(
+    () =>
+      Object.freeze({
+        height: geometry.height,
+        kind: 'gesture' as const,
+        width: geometry.width,
+      }),
+    [geometry.height, geometry.width],
+  );
 
   const finishNativePress = useCallback(
     (signal?: Readonly<BoardGestureSignal>): boolean => {
@@ -371,6 +416,9 @@ function BoardInteractionControllerContent({
           providerRuntime.drag.claim(
             Object.freeze({
               boardId,
+              bounds: dragOverlayPolicyAtCommit.current.allowDragOffBoard
+                ? null
+                : dragOverlayBounds,
               gestureToken: active.correlation.token,
               onCancel: (reason: ProviderDragCancellationReason): void => {
                 cancelFromProviderAtCommit.current(reason);
@@ -412,6 +460,7 @@ function BoardInteractionControllerContent({
     },
     [
       boardId,
+      dragOverlayBounds,
       draggingPieceGhostStyle,
       draggingPieceStyle,
       pieceRenderers,
@@ -470,6 +519,15 @@ function BoardInteractionControllerContent({
         providerRuntime.getGeometryRevision() !== providerGeometryRevision ||
         providerRuntime.getTransientRevision() !== providerTransientRevision ||
         signal.boardId !== boardId
+      ) {
+        return;
+      }
+      if (
+        isNativeDragSignal(signal) &&
+        (signal.allowDragOffBoard !==
+          dragOverlayPolicyAtCommit.current.allowDragOffBoard ||
+          signal.allowDragOffBoardGeneration !==
+            dragOverlayPolicyAtCommit.current.generation)
       ) {
         return;
       }
@@ -754,6 +812,26 @@ function BoardInteractionControllerContent({
   ]);
 
   useLayoutEffect(() => {
+    const changed =
+      dragOverlayPolicyAtCommit.current.generation !==
+      dragOverlayPolicy.generation;
+    dragOverlayPolicyAtCommit.current = dragOverlayPolicy;
+    if (!changed || adapter.current.lifecycle.phase !== 'drag') {
+      return;
+    }
+    const active = providerRuntime.drag.getSnapshot().active;
+    if (active?.owner === providerOwner.current) {
+      providerRuntime.drag.cancel(
+        providerOwner.current,
+        active.gestureToken,
+        'user',
+      );
+      return;
+    }
+    cancelFromProviderAtCommit.current('user');
+  }, [dragOverlayPolicy, providerRuntime]);
+
+  useLayoutEffect(() => {
     const signalGenerationChanged =
       signalGenerationAtCommit.current !== signalGeneration;
     signalGenerationAtCommit.current = signalGeneration;
@@ -861,6 +939,8 @@ function BoardInteractionControllerContent({
   return (
     <BoardGestureLayer
       activationDistance={activationDistance}
+      allowDragOffBoard={dragOverlayPolicy.allowDragOffBoard}
+      allowDragOffBoardGeneration={dragOverlayPolicy.generation}
       annotationEnabled={annotationSnapshot !== null}
       annotationRevision={annotationSnapshot?.annotationRevision ?? null}
       boardId={boardId}

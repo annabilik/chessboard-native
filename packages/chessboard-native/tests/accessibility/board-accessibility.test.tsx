@@ -102,12 +102,12 @@ function accessibilityModel(options: {
 }
 
 function moveInteraction(options: {
-  readonly cancel?: () => void;
+  readonly cancel?: (reason?: 'accessibility' | 'user') => boolean;
   readonly lifecycle?: Readonly<MoveIntentLifecycle> | null;
   readonly request: (draft: Omit<MoveIntent, 'intentId'>) => boolean;
 }): BoardAccessibilityMoveInteraction {
   return {
-    cancel: options.cancel ?? (() => undefined),
+    cancel: options.cancel ?? (() => false),
     enabled: true,
     lifecycle: options.lifecycle ?? null,
     request: options.request,
@@ -241,6 +241,7 @@ describe('single-control board accessibility', () => {
     const announceCount = announce.mock.calls.length;
     const cancelPending = jest.fn(() => {
       AccessibilityInfo.announceForAccessibility('Move cancelled.');
+      return true;
     });
     await result.rerender(
       <MoveAccessibilityHarness
@@ -358,7 +359,7 @@ describe('single-control board accessibility', () => {
   });
 
   it('clears local targeting and delegates cancellation of a pending runtime', async () => {
-    const cancel = jest.fn();
+    const cancel = jest.fn(() => true);
     const request = jest.fn(() => true);
     const model = accessibilityModel({
       position: { a2: { id: 'pawn', pieceType: 'wP' } },

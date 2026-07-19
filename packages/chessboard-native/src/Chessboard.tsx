@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type ReactElement,
+  type Ref,
 } from 'react';
 import type { View } from 'react-native';
 
@@ -51,6 +52,7 @@ import type {
   BoardDimensions,
   BoardOrientation,
   CanDragPiece,
+  ChessboardActions,
   ChessboardAccessibility,
   ChessboardGestureOptions,
   ChessboardStyles,
@@ -76,6 +78,8 @@ import type {
 export interface ChessboardProps {
   /** Required stable identity for the mounted board. */
   readonly boardId: string;
+  /** Optional mount-scoped handle for cancelling transient move work. */
+  readonly actionsRef?: Ref<ChessboardActions>;
   /** The only canonical logical position. */
   readonly position: PositionProp;
   /** Defaults to an 8x8 board. */
@@ -119,7 +123,7 @@ export interface ChessboardProps {
   readonly onMoveRequest?: OnMoveRequest;
   /** Declarative input gates; no callback always means read-only. */
   readonly interactionPermissions?: InteractionPermissions;
-  /** Native gesture-recognition tuning shared with targeted spare sources. */
+  /** Native gesture and overlay tuning shared with targeted spare sources. */
   readonly gesture?: ChessboardGestureOptions;
   /** Synchronous current-snapshot gate for board and targeted spare dragging. */
   readonly canDragPiece?: CanDragPiece;
@@ -194,6 +198,7 @@ function useBoardModel(
 
 function useProviderBoardRegistration(options: {
   readonly activationDistance: number;
+  readonly allowDragOffBoard: boolean;
   readonly boardId: string | null;
   readonly development: boolean;
   readonly logError: ((error: ChessboardError) => void) | undefined;
@@ -209,6 +214,7 @@ function useProviderBoardRegistration(options: {
   const hostRef = useRef<View | null>(null);
   const positionRevisionAtCommit = useRef<number | null>(null);
   const activationDistanceAtCommit = useRef(options.activationDistance);
+  const allowDragOffBoardAtCommit = useRef(options.allowDragOffBoard);
   const pieceInteractionAtCommit = useRef(options.pieceInteraction);
   const [state, setState] =
     useState<Readonly<ProviderRegistrationState> | null>(null);
@@ -278,22 +284,29 @@ function useProviderBoardRegistration(options: {
     [notifySparePiecePress],
   );
   const cancelActiveDrag = useCallback(
-    (reason: ProviderDragCancellationReason): void => {
+    (reason: ProviderDragCancellationReason): boolean => {
       const boardId = options.boardId;
       const active = provider.runtime.drag.getSnapshot().active;
       if (boardId !== null && active?.boardId === boardId) {
-        provider.runtime.drag.cancel(active.owner, active.gestureToken, reason);
+        return provider.runtime.drag.cancel(
+          active.owner,
+          active.gestureToken,
+          reason,
+        );
       }
+      return false;
     },
     [options.boardId, provider.runtime],
   );
 
   useLayoutEffect(() => {
     activationDistanceAtCommit.current = options.activationDistance;
+    allowDragOffBoardAtCommit.current = options.allowDragOffBoard;
     pieceInteractionAtCommit.current = options.pieceInteraction;
     positionRevisionAtCommit.current = options.positionRevision;
   }, [
     options.activationDistance,
+    options.allowDragOffBoard,
     options.pieceInteraction,
     options.positionRevision,
   ]);
@@ -305,6 +318,7 @@ function useProviderBoardRegistration(options: {
     }
     const result = provider.runtime.registry.register({
       available: false,
+      allowDragOffBoard: allowDragOffBoardAtCommit.current,
       boardId,
       dragActivationDistance: activationDistanceAtCommit.current,
       geometry: {
@@ -395,12 +409,14 @@ function useProviderBoardRegistration(options: {
       return;
     }
     provider.runtime.registry.update(boardId, owner, {
+      allowDragOffBoard: options.allowDragOffBoard,
       dragActivationDistance: options.activationDistance,
     });
   }, [
     currentState?.activation,
     currentState?.status,
     options.activationDistance,
+    options.allowDragOffBoard,
     options.boardId,
     owner,
     provider.runtime.registry,
@@ -458,6 +474,7 @@ function ChessboardRuntimeContent({
   const provider = useChessboardProvider();
   const providerRegistration = useProviderBoardRegistration({
     activationDistance: gesture.activationDistance,
+    allowDragOffBoard: gesture.allowDragOffBoard,
     boardId: model.boardId,
     development,
     logError,
@@ -470,7 +487,9 @@ function ChessboardRuntimeContent({
     <ReducedMotionProvider preference={props.reduceMotion ?? 'system'}>
       <BoardSurface
         activationDistance={gesture.activationDistance}
+        allowDragOffBoard={gesture.allowDragOffBoard}
         accessibility={props.accessibility}
+        actionsRef={props.actionsRef}
         annotationPolicies={props.annotationPolicies}
         annotationStyle={props.annotationStyle ?? defaultAnnotationStyle}
         annotationTool={props.annotationTool}

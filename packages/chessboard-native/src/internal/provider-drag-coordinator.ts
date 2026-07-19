@@ -7,16 +7,19 @@ import type {
   PieceRenderer,
   SquareId,
 } from '../public-types';
+import type { DragOverlayBounds } from './drag-overlay-bounds';
 
 /** Opaque identity for one mounted provider drag source. */
 export type ProviderDragOwner = object;
 
 export type ProviderDragCancellationReason =
-  'app-background' | 'geometry-change' | 'replacement' | 'unmount';
+  'app-background' | 'geometry-change' | 'replacement' | 'unmount' | 'user';
 
 /** Transient artwork and correlation for the provider's only active drag. */
 export type ProviderDragOverlayDescriptor = {
   readonly boardId: string;
+  /** Null permits unrestricted visual movement outside the target board. */
+  readonly bounds: Readonly<DragOverlayBounds> | null;
   readonly gestureToken: number;
   readonly onCancel: (reason: ProviderDragCancellationReason) => void;
   readonly owner: ProviderDragOwner;

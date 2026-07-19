@@ -7,6 +7,7 @@
 import type { JSXElementConstructor } from 'react';
 import { ReactElement } from 'react';
 import { ReactNode } from 'react';
+import { Ref } from 'react';
 import { StyleProp } from 'react-native';
 import type { TextStyle } from 'react-native';
 import { ViewStyle } from 'react-native';
@@ -233,6 +234,11 @@ export interface ChessboardAccessibility {
 export type ChessboardAccessibilityAction = 'move-cursor-left' | 'move-cursor-right' | 'move-cursor-up' | 'move-cursor-down' | 'activate-square' | 'clear-selection' | 'cancel-move' | 'remove-piece' | 'place-spare' | 'cancel-spare' | 'start-arrow' | 'finish-arrow' | 'toggle-square-annotation' | 'cancel-annotation';
 
 // @public
+export interface ChessboardActions {
+    readonly cancelMove: () => boolean;
+}
+
+// @public
 export class ChessboardError extends Error {
     constructor(message: string, details: ChessboardErrorDetails, cause?: unknown);
     // (undocumented)
@@ -301,11 +307,13 @@ export type ChessboardErrorDomain = 'board' | 'dimensions' | 'position' | 'annot
 // @public
 export interface ChessboardGestureOptions {
     readonly activationDistance?: number;
+    readonly allowDragOffBoard?: boolean;
 }
 
 // @public
 export interface ChessboardProps {
     readonly accessibility?: ChessboardAccessibility;
+    readonly actionsRef?: Ref<ChessboardActions>;
     readonly annotationPolicies?: AnnotationPolicies;
     readonly annotations?: AnnotationsProp;
     readonly annotationStyle?: AnnotationStyle;

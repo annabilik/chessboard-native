@@ -179,10 +179,23 @@ export interface InteractionPermissions {
   readonly accessibility?: boolean;
 }
 
-/** Native gesture-recognition tuning shared by a board and targeted spares. @public */
+/** Native gesture and overlay tuning shared by a board and targeted spares. @public */
 export interface ChessboardGestureOptions {
   /** Activation distance in native points; defaults to 4. */
   readonly activationDistance?: number;
+  /** Allow the active overlay center to leave the board; defaults to true. */
+  readonly allowDragOffBoard?: boolean;
+}
+
+/** Mount-scoped imperative actions for transient board interaction only. @public */
+export interface ChessboardActions {
+  /**
+   * Cancel the board's current move interaction without changing controlled
+   * position, selection, or annotations.
+   *
+   * Returns true only when active transient move work was cancelled.
+   */
+  readonly cancelMove: () => boolean;
 }
 
 /** Consumer-owned arrow annotation. @public */
