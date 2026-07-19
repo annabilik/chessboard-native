@@ -8,7 +8,10 @@ import {
   useChessboardProvider,
   type ChessboardProviderRuntime,
 } from '../../src/internal/provider-context';
-import type { PositionObject } from '../../src/public-types';
+import type {
+  PositionObject,
+  SquarePressContext,
+} from '../../src/public-types';
 import { BoardInteractionController } from '../../src/render/board-interaction-controller';
 import {
   BoardGestureLayer,
@@ -221,13 +224,23 @@ describe('board interaction controller races', () => {
     expect(providerRuntime.drag.getSnapshot().active).toBe(replacement);
   });
 
-  it('clears only the current correlated press and invalidates it on a position commit', async () => {
+  it('pairs only the current correlated press and invalidates it once on a position commit', async () => {
     const onPressedSquareChange = jest.fn();
+    const events: string[] = [];
+    const contexts: Readonly<SquarePressContext>[] = [];
     const result = await render(
       <BoardInteractionController
         boardId="race-board"
         geometry={geometry(5)}
         onPressedSquareChange={onPressedSquareChange}
+        onSquarePressIn={(context) => {
+          events.push('in');
+          contexts.push(context);
+        }}
+        onSquarePressOut={(context) => {
+          events.push('out');
+          contexts.push(context);
+        }}
         pieceRenderers={{}}
         pieceStyle={{}}
         position={controlledPosition(9)}
@@ -238,17 +251,27 @@ describe('board interaction controller races', () => {
 
     await act(() => {
       retainedSignal(pressSignal({ gestureToken: 81, type: 'press-start' }));
+      retainedSignal(pressSignal({ gestureToken: 81, type: 'press-start' }));
       retainedSignal(pressSignal({ gestureToken: 80, type: 'press-end' }));
       retainedSignal(pressSignal({ gestureToken: 81, type: 'press-end' }));
       retainedSignal(pressSignal({ gestureToken: 82, type: 'press-start' }));
     });
     expect(onPressedSquareChange.mock.calls).toEqual([['a2'], [null], ['a2']]);
+    expect(events).toEqual(['in', 'out', 'in']);
 
     await result.rerender(
       <BoardInteractionController
         boardId="race-board"
         geometry={geometry(5)}
         onPressedSquareChange={onPressedSquareChange}
+        onSquarePressIn={(context) => {
+          events.push('in');
+          contexts.push(context);
+        }}
+        onSquarePressOut={(context) => {
+          events.push('out');
+          contexts.push(context);
+        }}
         pieceRenderers={{}}
         pieceStyle={{}}
         position={controlledPosition(10)}
@@ -256,6 +279,108 @@ describe('board interaction controller races', () => {
       />,
     );
     expect(onPressedSquareChange).toHaveBeenLastCalledWith(null);
+    expect(events).toEqual(['in', 'out', 'in', 'out']);
+    expect(contexts).toHaveLength(4);
+    expect(contexts.every((context) => Object.isFrozen(context))).toBe(true);
+    expect(contexts.every((context) => Object.isFrozen(context.piece))).toBe(
+      true,
+    );
+    expect(
+      contexts.map(({ basePositionRevision }) => basePositionRevision),
+    ).toEqual([9, 9, 9, 9]);
+  });
+
+  it('uses the latest committed terminal handler, drops removed handlers, and stays silent after unmount', async () => {
+    const onSquarePressIn = jest.fn();
+    const firstOut = jest.fn();
+    const replacementOut = jest.fn();
+    const result = await render(
+      <BoardInteractionController
+        boardId="race-board"
+        geometry={geometry(5)}
+        onSquarePressIn={onSquarePressIn}
+        onSquarePressOut={firstOut}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+        trackPress
+      />,
+    );
+    const retainedSignal = currentSignalHandler();
+
+    await act(() => {
+      retainedSignal(pressSignal({ gestureToken: 83, type: 'press-start' }));
+    });
+    await result.rerender(
+      <BoardInteractionController
+        boardId="race-board"
+        geometry={geometry(5)}
+        onSquarePressIn={onSquarePressIn}
+        onSquarePressOut={replacementOut}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+        trackPress
+      />,
+    );
+    await act(() => {
+      retainedSignal(pressSignal({ gestureToken: 83, type: 'press-end' }));
+      retainedSignal(pressSignal({ gestureToken: 84, type: 'press-start' }));
+    });
+
+    expect(firstOut).not.toHaveBeenCalled();
+    expect(replacementOut).toHaveBeenCalledTimes(1);
+    expect(onSquarePressIn).toHaveBeenCalledTimes(2);
+
+    await result.rerender(
+      <BoardInteractionController
+        boardId="race-board"
+        geometry={geometry(5)}
+        onSquarePressIn={onSquarePressIn}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+        trackPress
+      />,
+    );
+    await act(() => {
+      retainedSignal(pressSignal({ gestureToken: 84, type: 'press-end' }));
+      retainedSignal(pressSignal({ gestureToken: 85, type: 'press-start' }));
+    });
+    await result.unmount();
+
+    expect(firstOut).not.toHaveBeenCalled();
+    expect(replacementOut).toHaveBeenCalledTimes(1);
+    expect(onSquarePressIn).toHaveBeenCalledTimes(3);
+  });
+
+  it('closes an active press before a drag takeover observes its start', async () => {
+    const events: string[] = [];
+    await render(
+      <BoardInteractionController
+        boardId="race-board"
+        dragEnabled
+        geometry={geometry(5)}
+        onPieceDragStart={() => {
+          events.push('drag-start');
+          return true;
+        }}
+        onSquarePressIn={() => events.push('press-in')}
+        onSquarePressOut={() => events.push('press-out')}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+        trackPress
+      />,
+    );
+    const signal = currentSignalHandler();
+
+    await act(() => {
+      signal(pressSignal({ gestureToken: 86, type: 'press-start' }));
+      signal(dragSignal({ gestureToken: 87, type: 'drag-start' }));
+    });
+
+    expect(events).toEqual(['press-in', 'press-out', 'drag-start']);
   });
 
   it('rejects a replaced handler terminal by exact native token', async () => {

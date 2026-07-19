@@ -346,6 +346,20 @@ export type OnSquareActivate = (
   intent: Readonly<SquareActivationIntent>,
 ) => void;
 
+/** Current controlled context captured when one native square press begins. @public */
+export interface SquarePressContext {
+  readonly boardId: string;
+  readonly basePositionRevision: Revision;
+  readonly square: SquareId;
+  readonly piece: Readonly<PieceData> | null;
+}
+
+/** Non-committing notification when one current native square press begins. @public */
+export type OnSquarePressIn = (context: Readonly<SquarePressContext>) => void;
+
+/** Non-committing notification when one accepted native square press ends. @public */
+export type OnSquarePressOut = (context: Readonly<SquarePressContext>) => void;
+
 /** Derived logical square data used by visual renderers. @public */
 export interface BoardSquare {
   readonly square: SquareId;

@@ -228,6 +228,19 @@ or emitting. Geometry, position, or selection changes make a stale candidate
 fail closed, while a late foreign handler token cannot cancel newer work. No
 gesture, callback, or executor effect can mutate position or selection.
 
+The same tap recognizer can track a native press independently of semantic tap
+activation. `onSquarePressIn` and `onSquarePressOut` alone therefore mount the
+single hidden plane while keeping `tapEnabled` false. An accepted start captures
+one canonical square and detached current-position context. Exact board,
+recognizer token, position revision, geometry epoch, and provider revisions
+correlate its terminal. Native release, outside/failure, pan or annotation
+takeover, and mounted semantic or geometry invalidation finish it once;
+duplicate and stale terminals are inert, while unmount invokes no consumer
+code. Press-out is delivered before same-gesture activation or drag-start.
+Callback identity is deliberately absent from the detector key: only committed
+handler refs receive observations, replacement does not recreate the gesture,
+and removing a handler cannot leak a stale callback.
+
 Supplying `onSquareActivate` or `onPiecePress` opts into controlled same-square
 touch and accessibility activation; only the square callback covers empty
 squares. One exclusive router handles ordinary activation. When

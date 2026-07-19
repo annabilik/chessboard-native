@@ -322,6 +322,8 @@ export interface ChessboardProps {
     readonly onPieceDragStart?: OnPieceDragStart;
     readonly onPiecePress?: OnPiecePress;
     readonly onSquareActivate?: OnSquareActivate;
+    readonly onSquarePressIn?: OnSquarePressIn;
+    readonly onSquarePressOut?: OnSquarePressOut;
     readonly orientation?: BoardOrientation;
     readonly pieceRenderers?: PieceRenderers;
     readonly position: PositionProp;
@@ -519,6 +521,12 @@ export type OnPiecePress = (context: Readonly<PieceInteractionContext>) => void;
 export type OnSquareActivate = (intent: Readonly<SquareActivationIntent>) => void;
 
 // @public
+export type OnSquarePressIn = (context: Readonly<SquarePressContext>) => void;
+
+// @public
+export type OnSquarePressOut = (context: Readonly<SquarePressContext>) => void;
+
+// @public
 export function parseFenPosition(fen: string, dimensions?: BoardDimensions): PositionObject;
 
 // @public
@@ -702,6 +710,18 @@ export interface SquareAnnotation {
 
 // @public
 export type SquareId = string;
+
+// @public
+export interface SquarePressContext {
+    // (undocumented)
+    readonly basePositionRevision: Revision;
+    // (undocumented)
+    readonly boardId: string;
+    // (undocumented)
+    readonly piece: Readonly<PieceData> | null;
+    // (undocumented)
+    readonly square: SquareId;
+}
 
 // @public
 export type SquareRenderer = (props: SquareRendererProps) => ReactElement | null;

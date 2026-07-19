@@ -2509,9 +2509,9 @@
           "ChessboardProps.onSquarePressIn"
         ]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-OPTION-ON-SQUARE-MOUSE-DOWN",
-      "compatibilityNotes": "Mapped where supported to portable press-in data without React.MouseEvent."
+      "compatibilityNotes": "The primary onSquarePressIn callback now receives detached current-position native press data without React.MouseEvent; only the Phase 5 compatibility adapter remains open."
     },
     {
       "id": "option.on-square-mouse-up",
@@ -2543,9 +2543,9 @@
           "ChessboardProps.onSquarePressOut"
         ]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-OPTION-ON-SQUARE-MOUSE-UP",
-      "compatibilityNotes": "Mapped where supported to portable press-out data without React.MouseEvent."
+      "compatibilityNotes": "The primary onSquarePressOut callback now receives the originating detached press context once on release or mounted cancellation; only the Phase 5 compatibility adapter remains open."
     },
     {
       "id": "option.on-square-right-click",
@@ -3457,9 +3457,9 @@
           "ChessboardProps.onSquarePressOut"
         ]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B30",
-      "compatibilityNotes": "Portable press-in/out callbacks carry native data rather than React.MouseEvent."
+      "compatibilityNotes": "Portable press-in/out callbacks carry one detached current-position context, order out before activation or drag start, pair native and mounted cancellation once, and never expose React.MouseEvent."
     },
     {
       "id": "behavior.b31-context-menu-right-click-ordering",

@@ -188,11 +188,12 @@ export default function GalleryIndex() {
           square rendering and transient public style mappings now have a
           focused visual-customization lab. Piece press and drag-start
           observations plus shared board/spare activation-distance tuning have a
-          focused callback lab. Ordinary and special controlled transitions,
-          rapid-update continuity, geometry and orientation rebasing, reduced
-          motion, and pending-to-commit handoff now have a focused lab.
-          Controlled selection activation, move requests, provider coordination,
-          and external spare placement have focused examples. The
+          focused callback lab. Paired occupied/empty square press observations
+          have a separate callback-only lab. Ordinary and special controlled
+          transitions, rapid-update continuity, geometry and orientation
+          rebasing, reduced motion, and pending-to-commit handoff now have a
+          focused lab. Controlled selection activation, move requests, provider
+          coordination, and external spare placement have focused examples. The
           interaction-hardening lab adds native ScrollView, clipping, geometry,
           lifecycle, and render/callback evidence.
         </Text>
@@ -258,6 +259,14 @@ export default function GalleryIndex() {
         <Link asChild href="/piece-callbacks">
           <Pressable style={styles.routeLink}>
             <Text style={styles.routeLinkText}>Open piece-callback lab</Text>
+          </Pressable>
+        </Link>
+
+        <Link asChild href="/square-press-callbacks">
+          <Pressable style={styles.routeLink}>
+            <Text style={styles.routeLinkText}>
+              Open square-press callback lab
+            </Text>
           </Pressable>
         </Link>
 

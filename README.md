@@ -20,7 +20,9 @@ A controlled, rules-free React Native chessboard component.
 > annotations internally. Commit-current `onPiecePress` and
 > `onPieceDragStart` observations cover board and targeted-spare sources without
 > becoming move decisions, and a validated activation-distance option is shared
-> by each board and its targeted spares.
+> by each board and its targeted spares. Portable `onSquarePressIn` and
+> `onSquarePressOut` observations expose paired frozen current-position contexts
+> without enabling activation or exposing browser events.
 > `ChessboardProvider` supplies provider-scoped board identity, one shared
 > transient overlay, and stale-safe external-drop measurement for single- and
 > multi-board composition. Pure position-transition plans are deterministic and
@@ -125,6 +127,11 @@ drag activation. Both piece callbacks receive detached data from the named
 board's current controlled revision, ignore return values, and cannot commit
 state. `gesture.activationDistance` defaults to four native points and
 configures the board plus spares targeting it.
+`onSquarePressIn` and `onSquarePressOut` observe the board plane independently
+of activation. They receive one detached context captured from the controlled
+position at press-in, pair mounted release/cancellation exactly once, order out
+before activation or drag start, isolate callback failures, and never synthesize
+from accessibility input.
 Worklet hit testing and per-frame pointer updates stay in shared values; board
 identity, recognizer token, geometry epoch, position revision, selection
 revision, interaction epoch, and intent ID guard asynchronous boundaries.
@@ -133,8 +140,9 @@ and stale taps inert. Callback results never change semantic state. Consumers
 must publish the next controlled selection or position, using a newer position
 revision and matching `committedIntentId` when move correlation is required.
 Without either `onSquareActivate` or `onPiecePress`, no ordinary same-square tap
-recognizer is enabled; `onMoveRequest` retains its accessible transient
-source-target fallback.
+activation is enabled; square press callbacks may still mount a press-only
+recognizer, and `onMoveRequest` retains its accessible transient source-target
+fallback.
 Annotation touch input can independently mount that same hidden plane when its
 tool, collection, and callback gate is complete. With none of those input
 boundaries, the component mounts no native gesture hit plane and remains
@@ -198,7 +206,9 @@ standard vertical `ScrollView`, an intentionally clipped spare palette,
 geometry and unmount controls, and app-owned render/callback counters.
 The piece-callback lab records board/spare press and drag-start observations
 while switching the shared activation threshold, and deliberately rejects
-terminal moves so its controlled position remains unchanged.
+terminal moves so its controlled position remains unchanged. The square-press
+lab keeps activation disabled while recording paired occupied and empty
+press-in/out contexts across controlled position and orientation changes.
 
 ## Development
 

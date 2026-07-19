@@ -62,6 +62,8 @@ import type {
   OnPieceDragStart,
   OnPiecePress,
   OnSquareActivate,
+  OnSquarePressIn,
+  OnSquarePressOut,
   PieceRenderers,
   PositionProp,
   ReduceMotion,
@@ -106,6 +108,10 @@ export interface ChessboardProps {
   readonly selection?: SelectionProp;
   /** Emits a controlled square activation without changing selection. */
   readonly onSquareActivate?: OnSquareActivate;
+  /** Observes one native square press begin without changing controlled state. */
+  readonly onSquarePressIn?: OnSquarePressIn;
+  /** Observes the terminal boundary of one accepted native square press. */
+  readonly onSquarePressOut?: OnSquarePressOut;
   /**
    * Validates a move intent without committing it. Supplying this callback
    * opens the controlled move-request surface.
@@ -480,6 +486,8 @@ function ChessboardRuntimeContent({
         onAnnotationOperation={props.onAnnotationOperation}
         onMoveRequest={props.onMoveRequest}
         onSquareActivate={props.onSquareActivate}
+        onSquarePressIn={props.onSquarePressIn}
+        onSquarePressOut={props.onSquarePressOut}
         pieceInteraction={pieceInteraction}
         piecePressEnabled={typeof props.onPiecePress === 'function'}
         pieceRenderers={props.pieceRenderers ?? defaultPieceRenderers}

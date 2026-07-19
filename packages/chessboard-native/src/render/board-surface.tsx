@@ -77,6 +77,8 @@ import type {
   OnMoveRequest,
   OnAnnotationOperation,
   OnSquareActivate,
+  OnSquarePressIn,
+  OnSquarePressOut,
   PieceRenderers,
   SquareActivationIntent,
   SquareId,
@@ -125,6 +127,8 @@ interface BoardSurfaceProps {
   readonly onAnnotationOperation: OnAnnotationOperation | undefined;
   readonly onMoveRequest: OnMoveRequest | undefined;
   readonly onSquareActivate: OnSquareActivate | undefined;
+  readonly onSquarePressIn?: OnSquarePressIn | undefined;
+  readonly onSquarePressOut?: OnSquarePressOut | undefined;
   readonly pieceInteraction: Readonly<PieceInteractionCallbacks>;
   readonly piecePressEnabled: boolean;
   readonly pieceRenderers: PieceRenderers;
@@ -255,6 +259,8 @@ export function BoardSurface({
   onAnnotationOperation,
   onMoveRequest,
   onSquareActivate,
+  onSquarePressIn,
+  onSquarePressOut,
   pieceInteraction,
   piecePressEnabled,
   pieceRenderers,
@@ -308,6 +314,10 @@ export function BoardSurface({
   const squareActivationEnabled =
     interactionReady && typeof onSquareActivate === 'function';
   const currentPiecePressEnabled = interactionReady && piecePressEnabled;
+  const squarePressCallbackEnabled =
+    interactionReady &&
+    (typeof onSquarePressIn === 'function' ||
+      typeof onSquarePressOut === 'function');
   const annotationBoardPressEnabled =
     interactionReady &&
     annotationPolicies?.clearOnBoardPress === true &&
@@ -322,6 +332,14 @@ export function BoardSurface({
     string | null
   >(null);
   const [pressedSquare, setPressedSquare] = useState<SquareId | null>(null);
+  const handlePressedSquareChange = useCallback(
+    (square: SquareId | null): void => {
+      if (square === null || renderSquare !== undefined) {
+        setPressedSquare(square);
+      }
+    },
+    [renderSquare],
+  );
   const [
     accessibilitySourceResetRevision,
     setAccessibilitySourceResetRevision,
@@ -1258,8 +1276,9 @@ export function BoardSurface({
       ? providerDragSnapshot.active.targetSquare
       : null;
   const trackSquarePress =
-    renderSquare !== undefined &&
-    (dragEnabled || tapEnabled || annotationGestureEnabled);
+    squarePressCallbackEnabled ||
+    (renderSquare !== undefined &&
+      (dragEnabled || tapEnabled || annotationGestureEnabled));
 
   return (
     <View
@@ -1352,7 +1371,10 @@ export function BoardSurface({
               transition={positionTransition}
             />
           )}
-          {(!dragEnabled && !tapEnabled && !annotationGestureEnabled) ||
+          {(!dragEnabled &&
+            !tapEnabled &&
+            !annotationGestureEnabled &&
+            !trackSquarePress) ||
           gestureGeometry === null ? null : (
             <BoardInteractionController
               activationDistance={activationDistance}
@@ -1370,7 +1392,9 @@ export function BoardSurface({
               onCandidate={handleGestureCandidate}
               onDragSourceChange={handleDragSourceChange}
               onPieceDragStart={pieceInteraction.dragStart}
-              onPressedSquareChange={setPressedSquare}
+              onPressedSquareChange={handlePressedSquareChange}
+              {...(onSquarePressIn === undefined ? {} : { onSquarePressIn })}
+              {...(onSquarePressOut === undefined ? {} : { onSquarePressOut })}
               pieceRenderers={pieceRenderers}
               pieceStyle={pieceStyle}
               position={model.position}
