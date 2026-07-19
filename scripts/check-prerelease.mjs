@@ -14,7 +14,12 @@ const expectedPackageName = '@vibechess/chessboard-native';
 const expectedRepositoryUrl =
   'git+https://github.com/annabilik/chessboard-native.git';
 const expectedRepositoryDirectory = 'packages/chessboard-native';
-const expectedExportKeys = ['.', './package.json', './pieces'];
+const expectedExportKeys = [
+  '.',
+  './package.json',
+  './pieces',
+  './react-chessboard-compat',
+];
 const dependencyGroups = [
   'dependencies',
   'devDependencies',

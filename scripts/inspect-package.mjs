@@ -47,11 +47,14 @@ const requiredPackageFiles = new Set([
   'README.md',
   'lib/module/index.js',
   'lib/module/pieces/index.js',
+  'lib/module/react-chessboard-compat/index.js',
   'lib/typescript/src/index.d.ts',
   'lib/typescript/src/pieces/index.d.ts',
+  'lib/typescript/src/react-chessboard-compat/index.d.ts',
   'package.json',
   'src/index.ts',
   'src/pieces/index.ts',
+  'src/react-chessboard-compat/index.ts',
 ]);
 const forbiddenPackagePathPatterns = [
   /(?:^|\/)fixtures?(?:\/|$)/i,

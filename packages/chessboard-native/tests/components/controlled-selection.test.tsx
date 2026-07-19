@@ -529,7 +529,7 @@ describe('public controlled selection activation', () => {
     },
   );
 
-  it('[PARITY-OPTION-ON-PIECE-CLICK] routes occupied piece presses before square activation for touch and accessibility, while empty squares fall back', async () => {
+  it('routes occupied piece presses before square activation for touch and accessibility, while empty squares fall back', async () => {
     const positionValue = Object.freeze({
       a2: Object.freeze({ id: 'press-target', pieceType: 'token' }),
     });
@@ -651,7 +651,7 @@ describe('public controlled selection activation', () => {
     );
   });
 
-  it('[PARITY-OPTION-ON-SQUARE-CLICK] reports an empty square as a null-piece activation', async () => {
+  it('reports an empty square as a null-piece activation', async () => {
     const activations: SquareActivationIntent[] = [];
     const result = await render(
       <ChessboardRuntime

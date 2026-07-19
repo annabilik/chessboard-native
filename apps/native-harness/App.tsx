@@ -11,6 +11,7 @@ import {
   type SquareId,
 } from '@vibechess/chessboard-native';
 import { defaultPieceRenderers } from '@vibechess/chessboard-native/pieces';
+import { Chessboard as ReactChessboardCompat } from '@vibechess/chessboard-native/react-chessboard-compat';
 import { useCallback, useRef, useState } from 'react';
 import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -40,6 +41,7 @@ interface AppProps {
     | 'accessibility'
     | 'annotation-arrow'
     | 'annotation-square'
+    | 'compatibility'
     | 'interaction'
     | 'interaction-lifecycle';
 }
@@ -394,11 +396,44 @@ function InteractionFixture({
   );
 }
 
+function CompatibilityFixture() {
+  return (
+    <View style={styles.auditContent}>
+      <Text style={styles.title}>Packed compatibility fixture</Text>
+      <Text style={styles.description}>
+        Bare React Native resolves and renders the compatibility subpath.
+      </Text>
+      <View style={styles.board}>
+        <ReactChessboardCompat
+          options={{
+            arrows: [
+              {
+                color: '#d1495b',
+                endSquare: 'e4',
+                startSquare: 'e2',
+              },
+            ],
+            boardOrientation: 'black',
+            id: 'bare-react-chessboard-compat',
+            position: {
+              e2: { pieceType: 'wP' },
+              e7: { pieceType: 'bP' },
+            },
+            showAnimations: false,
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
 export default function App({ fixture = 'accessibility' }: AppProps) {
   return (
     <GestureHandlerRootView style={styles.root}>
       <StatusBar barStyle="dark-content" />
-      {fixture === 'annotation-arrow' || fixture === 'annotation-square' ? (
+      {fixture === 'compatibility' ? (
+        <CompatibilityFixture />
+      ) : fixture === 'annotation-arrow' || fixture === 'annotation-square' ? (
         <AnnotationFixture
           tool={fixture === 'annotation-arrow' ? 'arrow' : 'square'}
         />

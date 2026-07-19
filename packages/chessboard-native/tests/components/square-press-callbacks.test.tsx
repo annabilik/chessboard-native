@@ -79,7 +79,7 @@ async function press(
 }
 
 describe('public square press callbacks', () => {
-  it('[PARITY-OPTION-ON-SQUARE-MOUSE-DOWN] mounts a callback-only plane and emits one detached current occupied context', async () => {
+  it('mounts a callback-only plane and emits one detached current occupied context', async () => {
     const piece = Object.freeze({ id: 'white-pawn', pieceType: 'wP' });
     const value = Object.freeze({ a2: piece });
     const position = Object.freeze({
@@ -119,7 +119,7 @@ describe('public square press callbacks', () => {
     expect(position.value).toBe(value);
   });
 
-  it('[PARITY-OPTION-ON-SQUARE-MOUSE-UP] emits one paired empty context when the native press cancels outside', async () => {
+  it('emits one paired empty context when the native press cancels outside', async () => {
     const contexts: Readonly<SquarePressContext>[] = [];
     const result = await render(
       <ChessboardRuntime
