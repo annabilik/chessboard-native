@@ -6,7 +6,11 @@ import {
   View,
   type AppStateStatus,
 } from 'react-native';
-import { getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
+import { State } from 'react-native-gesture-handler';
+import {
+  fireGestureHandler,
+  getByGestureTestId,
+} from 'react-native-gesture-handler/jest-utils';
 import { getAnimatedStyle } from 'react-native-reanimated';
 import type { TestInstance } from 'test-renderer';
 
@@ -17,10 +21,13 @@ import {
   type BoardDimensions,
   type BoardOrientation,
   type CanDragPiece,
+  type ControlledPosition,
   type MoveDecision,
   type OnMoveRequest,
   type OnPieceDragStart,
   type OnPiecePress,
+  type OnSquareActivate,
+  type PieceData,
   type PieceRendererProps,
   type PieceRenderers,
 } from '../src';
@@ -29,6 +36,7 @@ import {
   type ChessboardProviderRuntime,
 } from '../src/internal/provider-context';
 import { getSparePieceGestureTestId } from '../src/render/spare-piece-gesture-layer';
+import { getBoardGestureTestIds } from '../src/render/board-gesture-layer';
 
 type SpareRenderResult = Awaited<ReturnType<typeof render>>;
 
@@ -53,6 +61,18 @@ interface PanCallbacks {
   ) => void;
   readonly onStart?: (event: Readonly<Record<string, number>>) => void;
   readonly onUpdate?: (event: Readonly<Record<string, number>>) => void;
+}
+
+interface TapCallbacks {
+  readonly onBegin?: (event: Readonly<Record<string, number>>) => void;
+  readonly onEnd?: (
+    event: Readonly<Record<string, number>>,
+    success: boolean,
+  ) => void;
+  readonly onFinalize?: (
+    event: Readonly<Record<string, number>>,
+    success: boolean,
+  ) => void;
 }
 
 interface MeasureInWindowView {
@@ -104,6 +124,28 @@ async function measureBoard(board: TestInstance): Promise<void> {
       layout: { height: BOARD_SIZE, width: BOARD_SIZE, x: 0, y: 0 },
     },
   });
+}
+
+async function tapBoard(
+  boardId: string,
+  point: Readonly<{ x: number; y: number }>,
+): Promise<void> {
+  const tap = getByGestureTestId(getBoardGestureTestIds(boardId).tap);
+  await act(() => {
+    fireGestureHandler(tap, [
+      { state: State.BEGAN, ...point },
+      { state: State.END, ...point },
+    ]);
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+}
+
+function boardTapCallbacks(boardId: string): Readonly<TapCallbacks> {
+  const tap = getByGestureTestId(getBoardGestureTestIds(boardId).tap);
+  return (tap as unknown as Readonly<{ handlers: Readonly<TapCallbacks> }>)
+    .handlers;
 }
 
 function sparePanCallbacks(spareId: string): Readonly<PanCallbacks> {
@@ -360,6 +402,123 @@ describe('SparePiece', () => {
     );
   });
 
+  it.each(['constructor', 'toString', '__proto__'])(
+    'uses an own-key-safe default label for custom piece type %s',
+    async (pieceType) => {
+      const result = await render(
+        <ChessboardProvider>
+          <SparePiece
+            piece={{ pieceType }}
+            spareId={`custom-${pieceType}`}
+            targetBoardId="custom-target"
+          />
+        </ChessboardProvider>,
+      );
+
+      expect(
+        result.getByRole('button', {
+          includeHiddenElements: true,
+          name: `${pieceType} piece spare`,
+        }),
+      ).toBeDefined();
+    },
+  );
+
+  it('snapshots each own spare-piece field once into a detached frozen value', async () => {
+    let pieceTypeReads = 0;
+    let idReads = 0;
+    let currentPieceType = 'custom';
+    let currentId = 'custom-actor';
+    const piece: Record<string, unknown> = {};
+    Object.defineProperty(piece, 'pieceType', {
+      enumerable: true,
+      get: () => {
+        pieceTypeReads += 1;
+        return currentPieceType;
+      },
+    });
+    Object.defineProperty(piece, 'id', {
+      enumerable: true,
+      get: () => {
+        idReads += 1;
+        return currentId;
+      },
+    });
+    const renderPiece = jest.fn<ReactElement, [PieceRendererProps]>(() => (
+      <View />
+    ));
+    const renderers = Object.freeze({ custom: renderPiece });
+    await render(
+      <ChessboardProvider>
+        <SparePiece
+          piece={piece as Readonly<{ pieceType: string }>}
+          pieceRenderers={renderers}
+          spareId="snapshot-source"
+          targetBoardId="snapshot-target"
+        />
+      </ChessboardProvider>,
+    );
+
+    expect(pieceTypeReads).toBe(1);
+    expect(idReads).toBe(1);
+    currentPieceType = 'changed';
+    currentId = 'changed-actor';
+    expect(renderPiece.mock.calls.at(-1)?.[0].piece).toEqual({
+      id: 'custom-actor',
+      pieceType: 'custom',
+    });
+    expect(Object.isFrozen(renderPiece.mock.calls.at(-1)?.[0].piece)).toBe(
+      true,
+    );
+  });
+
+  it('ignores inherited spare-piece ids', async () => {
+    let idReads = 0;
+    const prototype = Object.defineProperty({}, 'id', {
+      get: () => {
+        idReads += 1;
+        throw new Error('inherited id should not be read');
+      },
+    });
+    const piece = Object.assign(Object.create(prototype), {
+      pieceType: 'custom',
+    }) as Readonly<PieceData>;
+    const renderPiece = jest.fn<ReactElement, [PieceRendererProps]>(() => (
+      <View />
+    ));
+    const renderers = Object.freeze({ custom: renderPiece });
+    await render(
+      <ChessboardProvider>
+        <SparePiece
+          piece={piece}
+          pieceRenderers={renderers}
+          spareId="inherited-id-source"
+          targetBoardId="inherited-id-target"
+        />
+      </ChessboardProvider>,
+    );
+
+    expect(idReads).toBe(0);
+    expect(renderPiece.mock.calls.at(-1)?.[0].piece).toEqual({
+      pieceType: 'custom',
+    });
+  });
+
+  it('rejects inherited piece types at the public spare boundary', async () => {
+    const inherited = Object.create({ pieceType: 'wQ' }) as Readonly<PieceData>;
+    await expect(
+      render(
+        <ChessboardProvider>
+          <SparePiece
+            piece={inherited}
+            spareId="inherited-piece"
+            targetBoardId="target"
+          />
+        </ChessboardProvider>,
+      ),
+    ).rejects.toThrow('SparePiece piece.pieceType must be a string.');
+  });
+
   it('[PARITY-BEHAVIOR-B03] composes an accessible spare selection with only its named board control', async () => {
     const targetMove = moveRequestMock();
     const otherMove = moveRequestMock();
@@ -448,6 +607,304 @@ describe('SparePiece', () => {
       disabled: false,
       selected: false,
     });
+  });
+
+  it('does not reset an unrelated board gesture when a spare is selected for another board', async () => {
+    const onLeftSquareActivate = jest.fn<
+      ReturnType<OnSquareActivate>,
+      Parameters<OnSquareActivate>
+    >();
+    const result = await render(
+      <ChessboardProvider>
+        <SparePiece
+          piece={SPARE_PIECE}
+          spareId="right-reserve"
+          targetBoardId="right-target"
+        />
+        <Chessboard
+          accessibility={{ boardLabel: 'left gesture board' }}
+          boardId="left-gesture"
+          dimensions={{ columns: 2, rows: 2 }}
+          onSquareActivate={onLeftSquareActivate}
+          position={{ revision: 3, value: {} }}
+          reduceMotion="always"
+        />
+        <Chessboard
+          accessibility={{ boardLabel: 'right target board' }}
+          boardId="right-target"
+          dimensions={{ columns: 2, rows: 2 }}
+          onMoveRequest={moveRequestMock()}
+          position={{ revision: 7, value: {} }}
+          reduceMotion="always"
+        />
+      </ChessboardProvider>,
+    );
+    await measureBoard(boardByLabel(result, 'left gesture board'));
+    await measureBoard(boardByLabel(result, 'right target board'));
+
+    const retainedLeftTap = boardTapCallbacks('left-gesture');
+    await act(() => {
+      retainedLeftTap.onBegin?.({ x: 20, y: 20 });
+    });
+    await fireEvent.press(result.getByRole('button'));
+    await act(() => {
+      retainedLeftTap.onEnd?.({ x: 20, y: 20 }, true);
+      retainedLeftTap.onFinalize?.({ x: 20, y: 20 }, true);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(onLeftSquareActivate).toHaveBeenCalledTimes(1);
+    expect(onLeftSquareActivate.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        basePositionRevision: 3,
+        boardId: 'left-gesture',
+        input: 'touch',
+        square: 'a2',
+      }),
+    );
+    expect(result.getByRole('button')).toHaveProp('accessibilityState', {
+      disabled: false,
+      selected: true,
+    });
+  });
+
+  it('routes a selected spare tap through the current board while accessible moves are disabled', async () => {
+    const boardId = 'variant-editor';
+    const fairy = Object.freeze({ id: 'fairy-offer-1', pieceType: 'fairy' });
+    const variantRenderers = Object.freeze({
+      blocker: () => <View />,
+      fairy: () => <View />,
+    });
+    const stalePosition = Object.freeze({
+      revision: 17,
+      value: Object.freeze({
+        c1: Object.freeze({ id: 'occupied-c1', pieceType: 'blocker' }),
+      }),
+    }) satisfies ControlledPosition;
+    const staleMoveRequest = moveRequestMock({ status: 'accepted' });
+    const currentMoveRequest = moveRequestMock({ status: 'accepted' });
+    const onAnnotationOperation = jest.fn();
+    const onPiecePress = jest.fn<
+      ReturnType<OnPiecePress>,
+      Parameters<OnPiecePress>
+    >();
+    const onSquareActivate = jest.fn();
+    const renderEditor = (
+      onMoveRequest: OnMoveRequest,
+      position: ControlledPosition,
+    ): ReactElement => (
+      <ChessboardProvider>
+        <SparePiece
+          piece={fairy}
+          pieceRenderers={variantRenderers}
+          spareId="fairy-offer"
+          targetBoardId={boardId}
+        />
+        <Chessboard
+          accessibility={{ boardLabel: 'variant editor board' }}
+          annotations={{
+            revision: 3,
+            value: [
+              {
+                color: '#ef4444',
+                id: 'existing-mark',
+                square: 'c1',
+                type: 'square',
+              },
+            ],
+          }}
+          annotationPolicies={{ clearOnBoardPress: true }}
+          annotationTool={{ color: '#ef4444', type: 'arrow' }}
+          boardId={boardId}
+          dimensions={{ columns: 3, rows: 2 }}
+          interactionPermissions={{ accessibility: false }}
+          onAnnotationOperation={onAnnotationOperation}
+          onMoveRequest={onMoveRequest}
+          onPiecePress={onPiecePress}
+          onSquareActivate={onSquareActivate}
+          orientation="black"
+          pieceRenderers={variantRenderers}
+          position={position}
+          reduceMotion="always"
+        />
+      </ChessboardProvider>
+    );
+    const result = await render(renderEditor(staleMoveRequest, stalePosition));
+    const board = boardByLabel(result, 'variant editor board');
+    await measureBoard(board);
+    const spare = result.getByRole('button');
+
+    await fireEvent.press(spare);
+    expect(onPiecePress).toHaveBeenCalledTimes(1);
+    onPiecePress.mockClear();
+    expect(
+      actionNames(boardByLabel(result, 'variant editor board')),
+    ).not.toContain('place-spare');
+
+    const currentPosition = Object.freeze({
+      revision: 23,
+      value: stalePosition.value,
+    }) satisfies ControlledPosition;
+    await result.rerender(renderEditor(currentMoveRequest, currentPosition));
+
+    // Black orientation maps the visual top-left cell to canonical c1.
+    await tapBoard(boardId, { x: 20, y: 20 });
+
+    expect(staleMoveRequest).not.toHaveBeenCalled();
+    expect(currentMoveRequest).toHaveBeenCalledTimes(1);
+    expect(currentMoveRequest.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        basePositionRevision: 23,
+        boardId,
+        input: 'tap',
+        piece: fairy,
+        source: { kind: 'spare', spareId: 'fairy-offer' },
+        targetSquare: 'c1',
+      }),
+    );
+    expect(currentMoveRequest.mock.calls[0]?.[1].signal).toBeInstanceOf(
+      AbortSignal,
+    );
+    expect(onAnnotationOperation).not.toHaveBeenCalled();
+    expect(onPiecePress).not.toHaveBeenCalled();
+    expect(onSquareActivate).not.toHaveBeenCalled();
+    expect(currentPosition.value).toEqual({
+      c1: { id: 'occupied-c1', pieceType: 'blocker' },
+    });
+    expect(boardByLabel(result, 'variant editor board')).toHaveProp(
+      'accessibilityValue',
+      expect.objectContaining({
+        text: 'c1, blocker piece',
+      }),
+    );
+    expect(result.getByRole('button')).toHaveProp('accessibilityState', {
+      disabled: false,
+      selected: false,
+    });
+
+    const intent = currentMoveRequest.mock.calls[0]?.[0];
+    if (intent === undefined) {
+      throw new Error('Expected the selected-spare tap intent.');
+    }
+    await result.rerender(
+      renderEditor(
+        currentMoveRequest,
+        Object.freeze({
+          committedIntentId: intent.intentId,
+          revision: 24,
+          value: Object.freeze({ c1: fairy }),
+        }),
+      ),
+    );
+    expect(boardByLabel(result, 'variant editor board')).toHaveProp(
+      'accessibilityValue',
+      expect.objectContaining({ text: 'c1, fairy piece' }),
+    );
+  });
+
+  it('keeps a selected spare when its tapped target is controlled-disabled', async () => {
+    const onMoveRequest = moveRequestMock({ status: 'accepted' });
+    const result = await render(
+      <ChessboardProvider>
+        <SparePiece
+          piece={SPARE_PIECE}
+          spareId="disabled-target-spare"
+          targetBoardId="disabled-target-board"
+        />
+        <Chessboard
+          accessibility={{ boardLabel: 'disabled target board' }}
+          boardId="disabled-target-board"
+          dimensions={{ columns: 3, rows: 2 }}
+          onMoveRequest={onMoveRequest}
+          orientation="black"
+          position={{ revision: 4, value: {} }}
+          reduceMotion="always"
+          selection={{
+            disabledSquares: ['c1'],
+            revision: 2,
+            selectedSquare: null,
+          }}
+        />
+      </ChessboardProvider>,
+    );
+    await measureBoard(boardByLabel(result, 'disabled target board'));
+
+    await fireEvent.press(result.getByRole('button'));
+    await tapBoard('disabled-target-board', { x: 20, y: 20 });
+
+    expect(onMoveRequest).not.toHaveBeenCalled();
+    expect(result.getByRole('button')).toHaveProp('accessibilityState', {
+      disabled: false,
+      selected: true,
+    });
+  });
+
+  it('rejects a retained tap after another spare replaces its selection epoch', async () => {
+    const boardId = 'selection-epoch-board';
+    const onMoveRequest = moveRequestMock({ status: 'accepted' });
+    const result = await render(
+      <ChessboardProvider>
+        <SparePiece
+          piece={{ id: 'first-offer', pieceType: 'wN' }}
+          spareId="first-offer"
+          targetBoardId={boardId}
+        />
+        <SparePiece
+          piece={{ id: 'second-offer', pieceType: 'bB' }}
+          spareId="second-offer"
+          targetBoardId={boardId}
+        />
+        <Chessboard
+          accessibility={{ boardLabel: 'selection epoch board' }}
+          boardId={boardId}
+          dimensions={{ columns: 3, rows: 2 }}
+          onMoveRequest={onMoveRequest}
+          orientation="black"
+          position={{ revision: 9, value: {} }}
+          reduceMotion="always"
+        />
+      </ChessboardProvider>,
+    );
+    await measureBoard(boardByLabel(result, 'selection epoch board'));
+    const first = result.getByRole('button', {
+      name: 'white knight spare',
+    });
+    const second = result.getByRole('button', {
+      name: 'black bishop spare',
+    });
+
+    await fireEvent.press(first);
+    const retained = boardTapCallbacks(boardId);
+    await act(() => {
+      retained.onBegin?.({ x: 20, y: 20 });
+    });
+    await fireEvent.press(second);
+    await act(() => {
+      retained.onEnd?.({ x: 20, y: 20 }, true);
+      retained.onFinalize?.({ x: 20, y: 20 }, true);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(onMoveRequest).not.toHaveBeenCalled();
+    expect(second).toHaveProp('accessibilityState', {
+      disabled: false,
+      selected: true,
+    });
+
+    await tapBoard(boardId, { x: 20, y: 20 });
+    expect(onMoveRequest).toHaveBeenCalledTimes(1);
+    expect(onMoveRequest.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        input: 'tap',
+        piece: { id: 'second-offer', pieceType: 'bB' },
+        source: { kind: 'spare', spareId: 'second-offer' },
+        targetSquare: 'c1',
+      }),
+    );
   });
 
   it('[PARITY-BEHAVIOR-B32] uses the target board current callback and revision and preserves null off-board drag targets', async () => {

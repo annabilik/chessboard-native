@@ -196,6 +196,27 @@ describe('single-control board accessibility', () => {
     );
   });
 
+  it.each(['constructor', 'toString', '__proto__'])(
+    'announces custom piece type %s without inherited label lookup',
+    async (pieceType) => {
+      const result = await render(
+        <Chessboard
+          boardId={`custom-label-${pieceType}`}
+          dimensions={{ columns: 1, rows: 1 }}
+          position={{ a1: { pieceType } }}
+          reduceMotion="always"
+        />,
+      );
+
+      expect(rootOf(result)).toHaveProp('accessibilityValue', {
+        max: 0,
+        min: 0,
+        now: 0,
+        text: `a1, ${pieceType} piece`,
+      });
+    },
+  );
+
   it('announces the committed cursor value after Android adjustable and custom actions', async () => {
     jest.replaceProperty(Platform, 'OS', 'android');
     const announce = jest

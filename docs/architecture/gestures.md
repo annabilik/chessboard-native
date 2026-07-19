@@ -111,14 +111,17 @@ board source can activate after the threshold and owns the rest of that native
 gesture cycle. Arbitration never implies automatic scrolling: the package does
 not discover or programmatically move arbitrary ancestor scroll views.
 
-Accessible spare placement uses the same provider routing without measurement.
-Activating a `SparePiece` publishes one detached transient source selection;
-only its named target board exposes place and cancel actions. Placement reads
-the target's current accessibility permission, callback, revision, and cursor
-square at activation, then submits the ordinary move runtime. Cancellation,
-replacement, successful submission, source or target unmount, and provider
-deactivation clear the transient selection. It is neither semantic board
-selection nor proof that the consumer accepted a move.
+Selected-spare placement uses the same provider routing without measurement.
+Activating a `SparePiece` publishes one detached transient source selection.
+An ordinary tap on its named target reads the current callback, position
+revision, selection epoch, and canonical square, then submits the move runtime
+with `input: "tap"`. That route precedes annotation, piece-press, and square
+activation callbacks and fails closed for a disabled target or pending move.
+The same named board alone exposes accessible place and cancel actions;
+placement additionally reads its current accessibility permission and cursor
+square. Replacement, successful submission, source or target unmount, and
+provider deactivation clear the transient selection. It is neither semantic
+board selection nor proof that the consumer accepted a move.
 
 Explicit activation, long-press pan, two-finger pan, and the adjustable board's
 annotation actions are input adapters over one annotation reducer and operation
@@ -273,7 +276,7 @@ captured selection revision and the current normalized position and selection
 are rechecked immediately before routing, so callbacks from abandoned renders
 and stale taps are inert. `onPiecePress` receives a detached frozen board-source
 context at this terminal boundary. Activating a public `SparePiece` both retains
-its existing provider-scoped accessible selection behavior and asks its named
+its provider-scoped placement selection and asks its named
 board's commit-current `onPiecePress` observer with a spare-source context.
 
 Without either `onSquareActivate` or `onPiecePress`, the ordinary same-square

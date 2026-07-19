@@ -91,7 +91,7 @@
     },
     {
       "id": "CBN-INV-012",
-      "statement": "Semantic board selection and destinations are consumer-owned; the provider may own only transient spare-source selection for accessible placement.",
+      "statement": "Semantic board selection and destinations are consumer-owned; the provider may own only transient spare-source selection for non-drag placement.",
       "contractTestIds": ["CBN-CONTRACT-012-SELECTION-CONSUMER-OWNED"],
       "adrs": [
         "docs/architecture/controlled-state.md",

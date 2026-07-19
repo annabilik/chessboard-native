@@ -299,6 +299,12 @@ export function BoardSurface({
     [interactionPermissions, onMoveRequest],
   );
   const providerRegistered = providerRegistration?.registered === true;
+  const selectedSpare: Readonly<ProviderSpareSelectionDescriptor> | null =
+    providerRegistered &&
+    model.boardId !== null &&
+    spareSelectionSnapshot.active?.targetBoardId === model.boardId
+      ? spareSelectionSnapshot.active
+      : null;
   const interactionReady =
     providerRegistered &&
     model.status === 'ready' &&
@@ -311,6 +317,7 @@ export function BoardSurface({
   const annotationGestureEnabled =
     interactionReady &&
     model.annotations !== null &&
+    selectedSpare === null &&
     normalizedAnnotationTool !== null &&
     typeof onAnnotationOperation === 'function';
   const moveRequestEnabled =
@@ -332,6 +339,7 @@ export function BoardSurface({
     model.annotations !== null &&
     model.annotations.value.length > 0;
   const tapEnabled =
+    (selectedSpare !== null && moveRequestEnabled) ||
     squareActivationEnabled ||
     currentPiecePressEnabled ||
     annotationBoardPressEnabled;
@@ -630,12 +638,6 @@ export function BoardSurface({
       squareActivationEnabled,
     ],
   );
-  const selectedSpare: Readonly<ProviderSpareSelectionDescriptor> | null =
-    providerRegistered &&
-    model.boardId !== null &&
-    spareSelectionSnapshot.active?.targetBoardId === model.boardId
-      ? spareSelectionSnapshot.active
-      : null;
   const cancelSelectedSpare = useCallback((): boolean => {
     const current = providerRuntime.spareSelection.getSnapshot().active;
     if (current !== null && current.targetBoardId === model.boardId) {
@@ -647,16 +649,25 @@ export function BoardSurface({
     return false;
   }, [model.boardId, providerRuntime.spareSelection]);
   const placeSelectedSpare = useCallback(
-    (square: SquareId): boolean => {
+    (
+      square: SquareId,
+      input: 'accessibility' | 'tap',
+      expected: Readonly<ProviderSpareSelectionDescriptor>,
+    ): boolean => {
       const boardId = model.boardId;
       const current = providerRuntime.spareSelection.getSnapshot().active;
-      if (boardId === null || current?.targetBoardId !== boardId) {
+      if (
+        boardId === null ||
+        current?.targetBoardId !== boardId ||
+        current.owner !== expected.owner ||
+        current.selectionToken !== expected.selectionToken
+      ) {
         return false;
       }
-      const requested = providerRuntime.registry.requestAccessibleSpare(
+      const requested = providerRuntime.registry.requestSelectedSpare(
         boardId,
         Object.freeze({
-          input: 'accessibility',
+          input,
           piece: current.piece,
           source: Object.freeze({
             kind: 'spare' as const,
@@ -682,7 +693,10 @@ export function BoardSurface({
       Object.freeze({
         cancel: cancelSelectedSpare,
         enabled: accessibilityMoveEnabled && activeDragSourceSquare === null,
-        place: placeSelectedSpare,
+        place: (square: SquareId): boolean =>
+          selectedSpare === null
+            ? false
+            : placeSelectedSpare(square, 'accessibility', selectedSpare),
         selection: selectedSpare,
       }),
     [
@@ -1218,6 +1232,16 @@ export function BoardSurface({
         ) {
           return;
         }
+        if (selectedSpare !== null) {
+          const targetDisabled =
+            model.selection?.value.disabledSquares?.includes(
+              candidate.square,
+            ) ?? false;
+          if (pendingLifecycle === null && !targetDisabled) {
+            placeSelectedSpare(candidate.square, 'tap', selectedSpare);
+          }
+          return;
+        }
         if (annotationBoardPressEnabled) {
           annotationOperation.emit({
             annotationIdsAtBase: Object.freeze(
@@ -1278,7 +1302,11 @@ export function BoardSurface({
       model.boardId,
       model.position,
       model.selection?.revision,
+      model.selection?.value.disabledSquares,
       moveInteraction.request,
+      pendingLifecycle,
+      placeSelectedSpare,
+      selectedSpare,
       currentPiecePressEnabled,
       squareActivationEnabled,
       tapEnabled,
@@ -1424,6 +1452,9 @@ export function BoardSurface({
               pieceStyle={pieceStyle}
               position={model.position}
               selectionRevision={model.selection?.revision ?? null}
+              spareSelectionRevision={
+                selectedSpare === null ? 0 : spareSelectionSnapshot.revision
+              }
               tapEnabled={tapEnabled}
               trackPress={trackSquarePress}
             />

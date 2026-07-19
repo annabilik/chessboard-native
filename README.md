@@ -14,10 +14,11 @@ A controlled, rules-free React Native chessboard component.
 > annotations, revision-safe annotation operations, controlled selection
 > styling, and one adjustable accessibility control. Its optional
 > interaction surface supports board-piece drag, controlled
-> touch/accessibility square activation, public spare-piece drag and accessible
-> placement, accessible move/removal/clearing/cancellation, and accessible
-> arrow/square annotation actions without committing position, selection, or
-> annotations internally. Commit-current `onPiecePress` and
+> touch/accessibility square activation, public spare-piece drag,
+> selected-spare tap placement, accessible placement, accessible
+> move/removal/clearing/cancellation, and accessible arrow/square annotation
+> actions without committing position, selection, or annotations internally.
+> Commit-current `onPiecePress` and
 > `onPieceDragStart` observations cover board and targeted-spare sources without
 > becoming move decisions, and a validated activation-distance option is shared
 > by each board and its targeted spares. Portable `onSquarePressIn` and
@@ -156,10 +157,11 @@ read-only. Boards register by a required, mount-stable `boardId` in their neares
 Provider identity is token-safe across duplicates, remounts, Strict Mode, and
 abandoned renders. Public `SparePiece` sources require an explicit provider and
 name exactly one `targetBoardId`. Drag release remeasures that current target;
-accessible activation selects one transient provider-scoped spare for placement
-from the matching board control. Both paths emit an ordinary `MoveIntent` with
-`source: { kind: 'spare', spareId }` against the target board's current
-controlled revision. They never edit a position or semantic selection. The
+activation selects one transient provider-scoped spare for placement by a
+canonical board tap or the matching board control. All paths emit an ordinary
+`MoveIntent` with `source: { kind: 'spare', spareId }` against the target
+board's current controlled revision. They never edit a position or semantic
+selection. The
 provider projects one pointerless overlay after its children and keeps it
 visible through asynchronous release verification. This provider-level host
 escapes clipping inside a source palette without introducing semantic state.

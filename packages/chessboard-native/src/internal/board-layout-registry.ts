@@ -52,7 +52,7 @@ export type ProviderSpareSource = Readonly<{
 }>;
 
 export interface ProviderSpareMove {
-  readonly input: Extract<MoveInput, 'drag' | 'accessibility'>;
+  readonly input: Extract<MoveInput, 'drag' | 'tap' | 'accessibility'>;
   readonly piece: Readonly<PieceData>;
   readonly source: ProviderSpareSource;
   readonly targetSquare: SquareId | null;
@@ -236,7 +236,7 @@ export interface BoardLayoutRegistry {
     verification: Readonly<AcceptedBoardDropVerification>,
     move: Omit<ProviderSpareMove, 'targetSquare'>,
   ) => boolean;
-  readonly requestAccessibleSpare: (
+  readonly requestSelectedSpare: (
     targetBoardId: string,
     move: Readonly<ProviderSpareMove>,
   ) => boolean;
@@ -1353,15 +1353,17 @@ export function createBoardLayoutRegistry(
     });
   };
 
-  const requestAccessibleSpare: BoardLayoutRegistry['requestAccessibleSpare'] =
-    (targetBoardIdInput, move) => {
-      const targetBoardId = validateBoardId(targetBoardIdInput);
-      if (disposed) {
-        return false;
-      }
-      const entry = entries.get(targetBoardId);
-      return entry === undefined ? false : invokeMoveRequest(entry, move);
-    };
+  const requestSelectedSpare: BoardLayoutRegistry['requestSelectedSpare'] = (
+    targetBoardIdInput,
+    move,
+  ) => {
+    const targetBoardId = validateBoardId(targetBoardIdInput);
+    if (disposed) {
+      return false;
+    }
+    const entry = entries.get(targetBoardId);
+    return entry === undefined ? false : invokeMoveRequest(entry, move);
+  };
 
   const canStartSpareDrag: BoardLayoutRegistry['canStartSpareDrag'] = (
     targetBoardIdInput,
@@ -1488,7 +1490,7 @@ export function createBoardLayoutRegistry(
     notifySparePiecePress,
     refreshCachedBounds,
     register,
-    requestAccessibleSpare,
+    requestSelectedSpare,
     requestVerifiedDrop,
     setProviderGeometryRevision,
     subscribeBoardConfiguration,

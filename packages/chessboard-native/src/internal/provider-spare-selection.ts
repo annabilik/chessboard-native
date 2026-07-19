@@ -10,7 +10,7 @@ export type ProviderSpareSelectionToken = Readonly<{
   [providerSpareSelectionTokenBrand]: true;
 }>;
 
-/** Detached transient source selected for accessible board placement. */
+/** Detached transient source selected for tap or accessible board placement. */
 export interface ProviderSpareSelectionDescriptor {
   readonly owner: ProviderSpareSelectionOwner;
   readonly piece: Readonly<PieceData>;
@@ -118,7 +118,7 @@ export function createProviderSpareSelectionToken(): ProviderSpareSelectionToken
 }
 
 /**
- * Create the provider's transient accessible spare-source selection store.
+ * Create the provider's transient spare-source placement selection store.
  *
  * It owns only detached source correlation. In particular it contains no
  * board position, position revision, semantic board selection, or callback.

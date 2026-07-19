@@ -202,7 +202,10 @@ built-in English message when it returns empty text or throws.
 provider-scoped source and announces that selection. The source must name an
 explicit `targetBoardId`; only the matching registered board exposes **Place
 selected spare** and **Cancel spare selection**. Boards with another ID keep
-their ordinary action set. Selecting a second spare replaces the first.
+their ordinary action set. Selecting a second spare replaces the first. The
+same selection may also be placed by an ordinary touch tap on the named board;
+that touch path does not create another accessibility element or semantic
+selection.
 
 The same button activation calls the target board's current `onPiecePress`,
 when supplied, with a spare-source context and that board's current position
@@ -210,8 +213,8 @@ revision. This observational callback neither replaces nor commits the
 transient spare selection. Its result is ignored and its failure cannot prevent
 the accessible place/cancel flow.
 
-Placement uses the matching board's current virtual-cursor square and emits the
-same controlled request lifecycle as other moves:
+The accessible place action uses the matching board's current virtual-cursor
+square and emits the same controlled request lifecycle as other moves:
 
 - `source` is `{ kind: 'spare', spareId }` rather than a fake square.
 - `piece` is the detached spare payload.

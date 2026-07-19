@@ -386,8 +386,9 @@ correlation tests. P2.5 tests add private-versus-explicit provider composition,
 provider-scoped identity enforcement, token-safe registration cleanup,
 multi-board isolation, one shared overlay, and fresh release-measurement race
 coverage. P2.6 tests add source-discriminated custom renderers, public spare
-composition, fresh target-board payloads, transient accessible selection, and
-place/cancel routing without a semantic position copy. P2.7 tests add
+composition, fresh target-board payloads, transient tap/accessibility placement
+selection, and place/cancel routing without a semantic position copy. P2.7
+tests add
 parent-ScrollView arbitration, AppState and geometry invalidation,
 provider-level clipping remediation, long-pan render/callback counters,
 cancellation reuse, and packed Android/iOS board-scroll/lifecycle scenarios.

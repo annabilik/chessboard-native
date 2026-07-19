@@ -18,6 +18,7 @@ import {
 import { useSharedValue } from 'react-native-reanimated';
 
 import { useReducedMotion } from './accessibility/reduced-motion';
+import { formatPieceAccessibilityLabel } from './accessibility/piece-label';
 import { generateBoardGeometry } from './core/coordinates';
 import type {
   BoardDropSessionToken,
@@ -68,7 +69,7 @@ export interface SparePieceProps {
   readonly pieceRenderers?: PieceRenderers;
   /** Visual paint; interaction geometry and structural positioning stay owned. */
   readonly style?: StyleProp<ViewStyle>;
-  /** Disables drag and accessible selection without removing the source. */
+  /** Disables drag and tap/accessibility selection without removing the source. */
   readonly disabled?: boolean;
   /** Accessible button label; defaults from the piece type. */
   readonly accessibilityLabel?: string;
@@ -144,21 +145,6 @@ function configureHoverSharedValues(
   return true;
 }
 
-const STANDARD_PIECE_LABELS: Readonly<Record<string, string>> = Object.freeze({
-  bB: 'black bishop',
-  bK: 'black king',
-  bN: 'black knight',
-  bP: 'black pawn',
-  bQ: 'black queen',
-  bR: 'black rook',
-  wB: 'white bishop',
-  wK: 'white king',
-  wN: 'white knight',
-  wP: 'white pawn',
-  wQ: 'white queen',
-  wR: 'white rook',
-});
-
 function validateId(value: unknown, name: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new TypeError(`SparePiece ${name} must be a non-empty string.`);
@@ -178,20 +164,26 @@ function copyPiece(value: unknown): Readonly<PieceData> {
     throw new TypeError('SparePiece piece must be an object.');
   }
   const record = value as Readonly<Record<string, unknown>>;
-  if (typeof record['pieceType'] !== 'string') {
+  if (!Object.hasOwn(record, 'pieceType')) {
     throw new TypeError('SparePiece piece.pieceType must be a string.');
   }
-  if (record['id'] !== undefined && typeof record['id'] !== 'string') {
+  const pieceType = record['pieceType'];
+  if (typeof pieceType !== 'string') {
+    throw new TypeError('SparePiece piece.pieceType must be a string.');
+  }
+  const hasId = Object.hasOwn(record, 'id');
+  if (!hasId) {
+    return Object.freeze({ pieceType });
+  }
+  const id = record['id'];
+  if (typeof id !== 'string') {
     throw new TypeError('SparePiece piece.id must be a string when present.');
   }
-  return Object.freeze({
-    ...(record['id'] === undefined ? {} : { id: record['id'] }),
-    pieceType: record['pieceType'],
-  });
+  return Object.freeze({ id, pieceType });
 }
 
 function defaultAccessibilityLabel(pieceType: string): string {
-  return `${STANDARD_PIECE_LABELS[pieceType] ?? `${pieceType} piece`} spare`;
+  return `${formatPieceAccessibilityLabel(pieceType)} spare`;
 }
 
 /**
@@ -224,11 +216,7 @@ export function SparePiece({
   const spareId = validateId(spareIdProp, 'spareId');
   const targetBoardId = validateId(targetBoardIdProp, 'targetBoardId');
   const size = validateSize(sizeProp);
-  const validatedPiece = copyPiece(pieceProp);
-  const piece = useMemo(
-    () => validatedPiece,
-    [validatedPiece.id, validatedPiece.pieceType],
-  );
+  const piece = useMemo(() => copyPiece(pieceProp), [pieceProp]);
   const visualStyle = useMemo<Readonly<ViewStyle>>(
     () => Object.freeze({ ...StyleSheet.flatten(style) }),
     [style],
@@ -378,7 +366,7 @@ export function SparePiece({
     accessibilityLabelProp ?? defaultAccessibilityLabel(piece.pieceType);
   const resolvedAccessibilityHint =
     accessibilityHint ??
-    `Activate to select this spare for placement on board ${targetBoardId}, or drag it to that board.`;
+    `Activate to select this spare, then tap board ${targetBoardId} or use its actions menu to place it; you can also drag it to that board.`;
 
   const finishDrag = useCallback(
     (drag: Readonly<ActiveSpareDrag>, releaseLease: boolean): void => {
@@ -609,7 +597,7 @@ export function SparePiece({
     ],
   );
 
-  const selectForAccessibility = useCallback((): void => {
+  const selectForPlacement = useCallback((): void => {
     if (disabled) {
       return;
     }
@@ -777,7 +765,7 @@ export function SparePiece({
           accessibilityRole="button"
           accessibilityState={{ disabled, selected }}
           disabled={disabled}
-          onPress={selectForAccessibility}
+          onPress={selectForPlacement}
           style={[
             internalStyles.pressable,
             activeSourceGhost === null ? null : internalStyles.hiddenSource,
