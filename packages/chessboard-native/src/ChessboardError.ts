@@ -71,8 +71,11 @@ export type ChessboardErrorCode = ChessboardErrorDetails['code'];
 
 /** Metadata supplied to a production error callback. @public */
 export interface ChessboardErrorContext {
+  /** Stable affected board identity, or null when identity was invalid. */
   readonly boardId: string | null;
+  /** Atomic controlled domain recovered after the failure. */
   readonly domain: ChessboardErrorDomain;
+  /** Offending semantic revision, or null when none was valid. */
   readonly revision: Revision | null;
 }
 
@@ -108,10 +111,15 @@ const errorDomainByCode = {
  * @public
  */
 export class ChessboardError extends Error {
+  /** Stable error class name. */
   override readonly name = 'ChessboardError';
+  /** Machine-readable contract violation code. */
   readonly code: ChessboardErrorCode;
+  /** Atomic controlled domain recovered after the failure. */
   readonly domain: ChessboardErrorDomain;
+  /** Stable affected board identity, or null when identity was invalid. */
   readonly boardId: string | null;
+  /** Offending semantic revision, or null when none was valid. */
   readonly revision: Revision | null;
 
   constructor(

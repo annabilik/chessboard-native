@@ -54,19 +54,25 @@ export type PositionInput = string | PositionObject;
 
 /** Supported board dimensions: 1..99 rows and 1..26 columns. @public */
 export interface BoardDimensions {
+  /** Number of canonical ranks in the board. */
   readonly rows: number;
+  /** Number of canonical files in the board. */
   readonly columns: number;
 }
 
 /** Board-local coordinates measured from the top-left of the board. @public */
 export interface BoardPoint {
+  /** Horizontal offset in native layout points. */
   readonly x: number;
+  /** Vertical offset in native layout points. */
   readonly y: number;
 }
 
 /** Positive measured content size of a board. @public */
 export interface BoardSize {
+  /** Measured board width in native layout points. */
   readonly width: number;
+  /** Measured board height in native layout points. */
   readonly height: number;
 }
 
@@ -99,16 +105,23 @@ export interface BoardTransition {
 
 /** Revisioned position envelope for commit correlation and transition hints. @public */
 export interface ControlledPosition {
+  /** Current canonical position value. */
   readonly value: PositionInput;
+  /** Monotonic revision for this position snapshot. */
   readonly revision: Revision;
+  /** Move intent committed by this revision, when the update is correlated. */
   readonly committedIntentId?: string;
+  /** Optional presentation hint for the exact preceding revision. */
   readonly transition?: BoardTransition;
 }
 
 /** Plain controlled selection presentation. @public */
 export interface PlainSelection {
+  /** Currently selected canonical square, or null when no square is selected. */
   readonly selectedSquare: SquareId | null;
+  /** Canonical squares presented as destinations for the current selection. */
   readonly destinationSquares?: readonly SquareId[];
+  /** Canonical squares presented as disabled. */
   readonly disabledSquares?: readonly SquareId[];
   /** Discriminates this plain form from a revisioned selection. */
   readonly revision?: never;
@@ -116,9 +129,13 @@ export interface PlainSelection {
 
 /** Revisioned controlled selection presentation with an inline revision. @public */
 export interface ControlledSelection {
+  /** Currently selected canonical square, or null when no square is selected. */
   readonly selectedSquare: SquareId | null;
+  /** Canonical squares presented as destinations for the current selection. */
   readonly destinationSquares?: readonly SquareId[];
+  /** Canonical squares presented as disabled. */
   readonly disabledSquares?: readonly SquareId[];
+  /** Monotonic revision for this selection snapshot. */
   readonly revision: Revision;
 }
 
@@ -138,12 +155,19 @@ export type MoveInput = 'drag' | 'tap' | 'keyboard' | 'accessibility';
 
 /** A request to change consumer-owned position state. @public */
 export interface MoveIntent {
+  /** Unique identifier used to correlate a later controlled commit. */
   readonly intentId: string;
+  /** Stable identity of the board receiving the request. */
   readonly boardId: string;
+  /** Position revision against which the request was created. */
   readonly basePositionRevision: Revision;
+  /** Board square or external spare that supplies the piece. */
   readonly source: MoveSource;
+  /** Requested destination, or null for an off-board removal. */
   readonly targetSquare: SquareId | null;
+  /** Detached piece payload observed at request creation. */
   readonly piece: PieceData;
+  /** Input modality that created the request. */
   readonly input: MoveInput;
 }
 
@@ -205,14 +229,24 @@ export interface ArrowAnnotation {
    * within one controlled annotation revision lineage.
    */
   readonly id: string;
+  /** Annotation discriminator. */
   readonly type: 'arrow';
+  /** Canonical source square. */
   readonly from: SquareId;
+  /** Canonical destination square. */
   readonly to: SquareId;
+  /** Native color used for the arrow shaft and marker-free head. */
   readonly color: string;
   /** Optional stroke width in the fixed 2048-wide annotation coordinate space. */
   readonly width?: number;
+  /** Optional opacity; must be within the inclusive range 0..1. */
   readonly opacity?: number;
+  /**
+   * Straight or right-angle knight path. When omitted, 1x2 endpoints infer a
+   * knight path and all other endpoints use a straight path.
+   */
   readonly shape?: 'straight' | 'knight';
+  /** Annotation plane; defaults to above pieces for arrows. */
   readonly layer?: 'belowPieces' | 'abovePieces';
 }
 
@@ -223,10 +257,15 @@ export interface SquareAnnotation {
    * within one controlled annotation revision lineage.
    */
   readonly id: string;
+  /** Annotation discriminator. */
   readonly type: 'square';
+  /** Canonical square receiving the annotation. */
   readonly square: SquareId;
+  /** Native color used to paint the square annotation. */
   readonly color: string;
+  /** Square mark shape; defaults to fill. */
   readonly shape?: 'fill' | 'circle' | 'dot' | 'border';
+  /** Annotation plane; defaults to below pieces for square marks. */
   readonly layer?: 'belowPieces' | 'abovePieces';
 }
 
@@ -243,6 +282,7 @@ export type AnnotationDraft =
       readonly color: string;
       /** Optional stroke width in the fixed 2048-wide annotation coordinate space. */
       readonly width?: number;
+      /** Optional opacity; must be within the inclusive range 0..1. */
       readonly opacity?: number;
       readonly shape?: 'straight' | 'knight';
       readonly layer?: 'belowPieces' | 'abovePieces';
@@ -258,7 +298,9 @@ export type AnnotationDraft =
 
 /** Revisioned controlled annotation collection. @public */
 export interface ControlledAnnotations {
+  /** Current persistent annotation collection in semantic render order. */
   readonly value: readonly BoardAnnotation[];
+  /** Monotonic revision for this annotation snapshot. */
   readonly revision: Revision;
 }
 
@@ -268,9 +310,13 @@ export type AnnotationsProp =
 
 /** Correlation shared by every annotation delta. @public */
 export interface AnnotationOperationBase {
+  /** Unique identity for this emitted operation. */
   readonly operationId: string;
+  /** Stable identity of the board that emitted the operation. */
   readonly boardId: string;
+  /** Annotation revision against which the operation was created. */
   readonly baseAnnotationRevision: Revision;
+  /** Input or policy path that emitted the operation. */
   readonly input: 'touch' | 'keyboard' | 'accessibility' | 'policy';
 }
 
@@ -331,6 +377,7 @@ export type AnnotationTool =
       readonly color: string;
       /** Optional stroke width in the fixed 2048-wide annotation coordinate space. */
       readonly width?: number;
+      /** Optional opacity; must be within the inclusive range 0..1. */
       readonly opacity?: number;
     }
   | {
@@ -342,15 +389,28 @@ export type AnnotationTool =
 
 /** A consumer-owned square activation request. @public */
 export interface SquareActivationIntent {
+  /** Unique identity for this activation request. */
   readonly intentId: string;
+  /** Stable identity of the board receiving the activation. */
   readonly boardId: string;
+  /** Position revision observed when activation began. */
   readonly basePositionRevision: Revision;
+  /**
+   * Selection revision observed at activation, or null when no current
+   * selection domain exists. A plain selection receives a derived revision.
+   */
   readonly baseSelectionRevision: Revision | null;
+  /** Canonical activated square. */
   readonly square: SquareId;
+  /** Detached current piece at the square, or null when it is empty. */
   readonly piece: PieceData | null;
+  /** Current controlled selected square observed by the activation. */
   readonly selectedSquare: SquareId | null;
+  /** Whether the square is a current controlled destination. */
   readonly isDestination: boolean;
+  /** Requested activation or explicit selection clear. */
   readonly action: 'activate' | 'clear-selection';
+  /** Input modality that created the request. */
   readonly input: 'touch' | 'keyboard' | 'accessibility';
 }
 
@@ -361,9 +421,13 @@ export type OnSquareActivate = (
 
 /** Current controlled context captured when one native square press begins. @public */
 export interface SquarePressContext {
+  /** Stable identity of the pressed board. */
   readonly boardId: string;
+  /** Position revision captured at press-in. */
   readonly basePositionRevision: Revision;
+  /** Canonical pressed square. */
   readonly square: SquareId;
+  /** Detached piece captured at press-in, or null when the square was empty. */
   readonly piece: Readonly<PieceData> | null;
 }
 
@@ -375,7 +439,9 @@ export type OnSquarePressOut = (context: Readonly<SquarePressContext>) => void;
 
 /** Derived logical square data used by visual renderers. @public */
 export interface BoardSquare {
+  /** Canonical square identity. */
   readonly square: SquareId;
+  /** Whether the square uses the light-square paint. */
   readonly isLight: boolean;
 }
 
@@ -409,21 +475,33 @@ export type CanDragPiece = (
 
 /** Visual interaction flags for a square renderer. @public */
 export interface SquareVisualState {
+  /** Square is the current controlled selection. */
   readonly isSelected: boolean;
+  /** Square is a current controlled destination. */
   readonly isDestination: boolean;
+  /** Square is current controlled disabled presentation. */
   readonly isDisabled: boolean;
+  /** A native press currently owns this square. */
   readonly isPressed: boolean;
+  /** Active drag pointer currently resolves to this square. */
   readonly isDropTarget: boolean;
+  /** Square supplies the piece for a pending accepted move. */
   readonly isPendingSource: boolean;
+  /** Square is the destination for a pending accepted move. */
   readonly isPendingTarget: boolean;
 }
 
 /** Visual interaction flags for a piece renderer. @public */
 export interface PieceVisualState {
+  /** Piece currently has native pressed presentation. */
   readonly isPressed: boolean;
+  /** Piece is rendered in the active drag overlay. */
   readonly isDragging: boolean;
+  /** Piece is the source ghost retained during an active drag. */
   readonly isGhost: boolean;
+  /** Piece participates in a pending accepted move presentation. */
   readonly isPending: boolean;
+  /** Piece participates in a controlled position transition. */
   readonly isTransitioning: boolean;
 }
 
@@ -502,11 +580,17 @@ export type SquareStyles = Readonly<
 
 /** Visual-only square renderer input; it intentionally exposes no handlers. @public */
 export interface SquareRendererProps {
+  /** Stable identity of the owning board. */
   readonly boardId: string;
+  /** Canonical square being rendered. */
   readonly square: SquareId;
+  /** Current controlled piece on the square, or null when empty. */
   readonly piece: PieceData | null;
+  /** Current measured square width in native layout points. */
   readonly size: number;
+  /** Current controlled and transient visual flags. */
   readonly state: SquareVisualState;
+  /** Fully resolved board-owned square paint. */
   readonly style: Readonly<ViewStyle>;
 }
 
@@ -549,13 +633,15 @@ export type PieceRenderers = Readonly<
 /**
  * Whole-value annotation geometry and presentation configuration.
  *
- * The three colors are defaults for future annotation tools. Persistent
- * controlled annotations always render their own required `color` value.
+ * `color` supplies the compatibility adapter's default drawing color;
+ * secondary and tertiary colors remain reserved for future tools. Persistent
+ * controlled annotations always render their own required `color` value, and
+ * the primary drawing API takes its color from `annotationTool`.
  *
  * @public
  */
 export interface AnnotationStyle {
-  /** Default color reserved for future consumer drawing tools. */
+  /** Default drawing color used by compatibility arrow input. */
   readonly color: string;
   /** Secondary color reserved for future consumer drawing tools. */
   readonly secondaryColor: string;
@@ -567,11 +653,11 @@ export interface AnnotationStyle {
   readonly sameTargetArrowLengthReducerDenominator: number;
   /** Default stroke-width divisor relative to one square; must be greater than zero. */
   readonly arrowWidthDenominator: number;
-  /** Width multiplier reserved for a future active drawing draft; must be greater than zero. */
+  /** Width multiplier applied to an active arrow draft; must be greater than zero. */
   readonly activeArrowWidthMultiplier: number;
-  /** Default persistent-arrow opacity, clamped to the inclusive range 0..1. */
+  /** Default persistent-arrow opacity; must be within the inclusive range 0..1. */
   readonly opacity: number;
-  /** Opacity reserved for a future active drawing draft, clamped to 0..1. */
+  /** Active drawing-draft opacity; must be within the inclusive range 0..1. */
   readonly activeOpacity: number;
   /** Shaft start offset as a fraction of one square; zero starts at its center. */
   readonly arrowStartOffset: number;
@@ -582,14 +668,23 @@ export type ReduceMotion = 'system' | 'always' | 'never';
 
 /** Data supplied to the square accessibility value formatter. @public */
 export interface SquareAccessibilityContext {
+  /** Stable identity of the board being described. */
   readonly boardId: string;
+  /** Current visual orientation. */
   readonly orientation: BoardOrientation;
+  /** Canonical square under the virtual cursor. */
   readonly square: SquareId;
+  /** Current controlled piece at the square, or null when empty. */
   readonly piece: PieceData | null;
+  /** Whether the square is the current controlled selection. */
   readonly isSelected: boolean;
+  /** Whether the square is current controlled disabled presentation. */
   readonly isDisabled: boolean;
+  /** Whether the square is a current controlled destination. */
   readonly isDestination: boolean;
+  /** Whether the square supplies a pending accepted move. */
   readonly isPendingSource: boolean;
+  /** Whether the square is the destination of a pending accepted move. */
   readonly isPendingTarget: boolean;
 }
 
@@ -612,16 +707,23 @@ export type ChessboardAccessibilityAction =
 
 /** Data supplied to a board accessibility action-label formatter. @public */
 export interface BoardActionAccessibilityContext {
+  /** Stable identity of the board exposing the action. */
   readonly boardId: string;
+  /** Action whose accessible label is being formatted. */
   readonly action: ChessboardAccessibilityAction;
+  /** Canonical square under the virtual cursor. */
   readonly square: SquareId;
+  /** Current controlled piece at the cursor, or null when empty. */
   readonly piece: PieceData | null;
 }
 
 /** Data supplied after a move request reaches a terminal presentation state. @public */
 export interface MoveOutcomeAccessibilityContext {
+  /** Original controlled move intent. */
   readonly intent: MoveIntent;
+  /** Terminal outcome presented by the board. */
   readonly outcome: 'committed' | 'rejected' | 'cancelled' | 'timed-out';
+  /** Optional consumer or runtime explanation for the outcome. */
   readonly reason?: string;
 }
 
@@ -637,6 +739,7 @@ export interface ChessboardAccessibility {
   readonly formatActionLabel?: (
     context: BoardActionAccessibilityContext,
   ) => string;
+  /** Formats terminal move announcements; null suppresses the announcement. */
   readonly formatMoveOutcome?: (
     context: MoveOutcomeAccessibilityContext,
   ) => string | null;

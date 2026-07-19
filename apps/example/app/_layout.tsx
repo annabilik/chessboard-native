@@ -4,52 +4,21 @@ import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { GALLERY_ROUTES } from '../src/gallery-routes';
+
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <Stack>
           <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="accessibility"
-            options={{ title: 'Accessibility prototype' }}
-          />
-          <Stack.Screen
-            name="move-request"
-            options={{ title: 'Controlled move requests' }}
-          />
-          <Stack.Screen
-            name="rules-owned-moves"
-            options={{ title: 'Promotion and premoves' }}
-          />
-          <Stack.Screen
-            name="react-chessboard-compat"
-            options={{ title: 'react-chessboard compatibility' }}
-          />
-          <Stack.Screen
-            name="controlled-selection"
-            options={{ title: 'Controlled selection' }}
-          />
-          <Stack.Screen
-            name="controlled-annotations"
-            options={{ title: 'Controlled annotations' }}
-          />
-          <Stack.Screen
-            name="provider-coordination"
-            options={{ title: 'Provider coordination' }}
-          />
-          <Stack.Screen
-            name="spare-pieces"
-            options={{ title: 'Spare pieces' }}
-          />
-          <Stack.Screen
-            name="interaction-hardening"
-            options={{ title: 'Interaction hardening' }}
-          />
-          <Stack.Screen
-            name="transitions"
-            options={{ title: 'Controlled transitions' }}
-          />
+          {GALLERY_ROUTES.map((route) => (
+            <Stack.Screen
+              key={route.name}
+              name={route.name}
+              options={{ title: route.title }}
+            />
+          ))}
         </Stack>
         <StatusBar style="dark" />
       </SafeAreaProvider>

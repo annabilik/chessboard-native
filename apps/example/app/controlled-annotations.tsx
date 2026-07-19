@@ -1,8 +1,10 @@
 import {
   applyAnnotationOperation,
   Chessboard,
+  defaultAnnotationStyle,
   findMatchingAnnotationIds,
   type AnnotationOperation,
+  type AnnotationStyle,
   type AnnotationTool,
   type BoardActionAccessibilityContext,
   type ChessboardAccessibility,
@@ -79,6 +81,15 @@ const annotationAccessibility = Object.freeze({
   },
 }) satisfies ChessboardAccessibility;
 
+const COMPACT_ANNOTATION_STYLE = Object.freeze({
+  ...defaultAnnotationStyle,
+  arrowLengthReducerDenominator: 4,
+  arrowStartOffset: 0.12,
+  arrowWidthDenominator: 9,
+  opacity: 0.9,
+  sameTargetArrowLengthReducerDenominator: 2.5,
+}) satisfies AnnotationStyle;
+
 export default function ControlledAnnotationsRoute() {
   const [annotations, setAnnotations] =
     useState<ControlledAnnotations>(INITIAL_ANNOTATIONS);
@@ -87,6 +98,9 @@ export default function ControlledAnnotationsRoute() {
     useState<ControlledPosition>(INITIAL_POSITION);
   const [annotationTool, setAnnotationTool] =
     useState<AnnotationTool>(ARROW_TOOL);
+  const [annotationStyleMode, setAnnotationStyleMode] = useState<
+    'compact' | 'default'
+  >('default');
   const [labEpoch, setLabEpoch] = useState(0);
   const [operationLog, setOperationLog] = useState<readonly string[]>([]);
   const nextIdentity = useRef(1);
@@ -243,6 +257,7 @@ export default function ControlledAnnotationsRoute() {
     publishAnnotations(INITIAL_ANNOTATIONS);
     setPosition(INITIAL_POSITION);
     setAnnotationTool(ARROW_TOOL);
+    setAnnotationStyleMode('default');
     setOperationLog([]);
     setLabEpoch((current) => current + 1);
   }, [publishAnnotations]);
@@ -284,10 +299,38 @@ export default function ControlledAnnotationsRoute() {
           />
         </View>
 
+        <Text style={styles.sectionTitle}>Arrow geometry</Text>
+        <View style={styles.toolControls}>
+          <LabButton
+            label="Published default"
+            onPress={() => {
+              setAnnotationStyleMode('default');
+            }}
+            selected={annotationStyleMode === 'default'}
+          />
+          <LabButton
+            label="Compact custom"
+            onPress={() => {
+              setAnnotationStyleMode('compact');
+            }}
+            selected={annotationStyleMode === 'compact'}
+          />
+        </View>
+        <Text style={styles.help}>
+          Published default passes defaultAnnotationStyle unchanged. Compact
+          custom passes a complete annotationStyle with narrower, shorter,
+          offset arrows and stronger opacity.
+        </Text>
+
         <View style={styles.boardContainer}>
           <Chessboard
             accessibility={annotationAccessibility}
             annotationPolicies={annotationPolicies}
+            annotationStyle={
+              annotationStyleMode === 'default'
+                ? defaultAnnotationStyle
+                : COMPACT_ANNOTATION_STYLE
+            }
             annotations={annotations}
             annotationTool={annotationTool}
             boardId={BOARD_ID}
@@ -299,8 +342,8 @@ export default function ControlledAnnotationsRoute() {
 
         <Text style={styles.status}>
           Annotation revision {annotations.revision} · position revision{' '}
-          {position.revision} · tool {annotationTool?.type ?? 'off'} ·{' '}
-          {annotations.value.length} persistent items
+          {position.revision} · tool {annotationTool?.type ?? 'off'} · style{' '}
+          {annotationStyleMode} · {annotations.value.length} persistent items
         </Text>
 
         <Text style={styles.help}>
@@ -483,6 +526,7 @@ const styles = StyleSheet.create({
   },
   toolControls: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
     marginTop: 10,
   },
