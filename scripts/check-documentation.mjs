@@ -1,6 +1,6 @@
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -100,16 +100,59 @@ function extractSecondLevelHeadings(source) {
   return headings;
 }
 
-function extractInlineCodeIdentifiers(source) {
+export function extractInlineCodeValues(source) {
+  const values = new Set();
+  const pattern = /`([^`\n]+)`/g;
+  for (const match of source.matchAll(pattern)) {
+    values.add(match[1]);
+  }
+  return values;
+}
+
+function extractInlineCodeIdentifiers(values) {
   const identifiers = new Set();
-  const inlineCodePattern = /`([^`\n]+)`/g;
   const identifierPattern = /\b[A-Za-z_$][A-Za-z0-9_$]*\b/g;
-  for (const inlineCode of source.matchAll(inlineCodePattern)) {
-    for (const identifier of inlineCode[1].matchAll(identifierPattern)) {
+  for (const value of values) {
+    for (const identifier of value.matchAll(identifierPattern)) {
       identifiers.add(identifier[0]);
     }
   }
   return identifiers;
+}
+
+export function extractMarkdownLinkDestinations(source) {
+  const destinations = [];
+  const pattern =
+    /(?<!!)\[[^\]\n]*\]\(\s*(?:<([^>\n]+)>|([^\s)\n]+))(?:\s+(?:"[^"\n]*"|'[^'\n]*'))?\s*\)/g;
+  for (const match of source.matchAll(pattern)) {
+    destinations.push(match[1] ?? match[2]);
+  }
+  return destinations;
+}
+
+function linkPath(destination) {
+  let value = destination;
+  try {
+    value = new URL(destination).pathname;
+  } catch {
+    // Relative Markdown destinations are paths rather than absolute URLs.
+  }
+  const withoutFragment = value.split('#', 1)[0].split('?', 1)[0];
+  try {
+    return decodeURIComponent(withoutFragment).replace(/^\.\//, '');
+  } catch {
+    return withoutFragment.replace(/^\.\//, '');
+  }
+}
+
+function linksTo(destinations, expectedPath) {
+  return destinations.some((destination) => {
+    const destinationPath = linkPath(destination);
+    return (
+      destinationPath === expectedPath ||
+      destinationPath.endsWith(`/${expectedPath}`)
+    );
+  });
 }
 
 export function validateDocumentationSnapshot({
@@ -156,7 +199,10 @@ export function validateDocumentationSnapshot({
     );
   }
 
-  const apiReferenceSymbols = extractInlineCodeIdentifiers(apiReference);
+  const apiReferenceInlineCode = extractInlineCodeValues(apiReference);
+  const apiReferenceSymbols = extractInlineCodeIdentifiers(
+    apiReferenceInlineCode,
+  );
   const missingApiReferenceSymbols = requiredApiReferenceSymbols.filter(
     (symbol) => !apiReferenceSymbols.has(symbol),
   );
@@ -166,15 +212,18 @@ export function validateDocumentationSnapshot({
     );
   }
 
+  const docsIndexLinks = extractMarkdownLinkDestinations(docsIndex);
+  const rootReadmeLinks = extractMarkdownLinkDestinations(rootReadme);
+  const packageReadmeLinks = extractMarkdownLinkDestinations(packageReadme);
   for (const guidePath of requiredGuidePaths) {
     const basename = path.basename(guidePath);
-    if (!docsIndex.includes(basename)) {
+    if (!linksTo(docsIndexLinks, basename)) {
       failures.push(`docs/README.md does not link ${basename}`);
     }
-    if (!rootReadme.includes(guidePath)) {
+    if (!linksTo(rootReadmeLinks, guidePath)) {
       failures.push(`README.md does not link ${guidePath}`);
     }
-    if (!packageReadme.includes(basename)) {
+    if (!linksTo(packageReadmeLinks, guidePath)) {
       failures.push(`package README does not link ${basename}`);
     }
   }
@@ -191,11 +240,12 @@ export function validateDocumentationSnapshot({
       );
     }
   }
+  const supportMatrixInlineCode = extractInlineCodeValues(supportMatrix);
   for (const specifier of publicImportSpecifiers) {
-    if (!apiReference.includes(specifier)) {
+    if (!apiReferenceInlineCode.has(specifier)) {
       failures.push(`API reference does not contain entry point ${specifier}`);
     }
-    if (!supportMatrix.includes(specifier)) {
+    if (!supportMatrixInlineCode.has(specifier)) {
       failures.push(`support matrix does not contain entry point ${specifier}`);
     }
   }

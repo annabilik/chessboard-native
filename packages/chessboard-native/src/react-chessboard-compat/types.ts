@@ -94,7 +94,7 @@ export interface ReactChessboardOptions {
 
   /** Whole-map native piece renderer replacement. */
   readonly pieces?: PieceRenderers;
-  /** Controlled position; defaults to the starting 8x8 position. */
+  /** Controlled position; defaults to the starting position on 8x8 boards and empty otherwise. */
   readonly position?: string | ReactChessboardPosition;
 
   /** Visual orientation; defaults to white at the bottom. */
@@ -134,7 +134,7 @@ export interface ReactChessboardOptions {
 
   /** Controlled-position transition duration in milliseconds; defaults to 300. */
   readonly animationDurationInMs?: number;
-  /** Enable controlled-position transitions; defaults to true. */
+  /** False forces reduced motion; true or omission follows the system setting. */
   readonly showAnimations?: boolean;
 
   /** Enable move drag input when `onPieceDrop` is supplied; defaults to true. */

@@ -3,6 +3,8 @@ import test from 'node:test';
 
 import {
   extractCatalogRouteNames,
+  extractInlineCodeValues,
+  extractMarkdownLinkDestinations,
   requiredApiReferenceSections,
   requiredApiReferenceSymbols,
   validateDocumentationSnapshot,
@@ -22,29 +24,38 @@ function validSnapshot() {
     apiReference: [
       ...requiredApiReferenceSections.map((section) => `## ${section}`),
       ...requiredApiReferenceSymbols.map((symbol) => `\`${symbol}\``),
-      packageName,
-      `${packageName}/pieces`,
-      `${packageName}/react-chessboard-compat`,
+      `\`${packageName}\``,
+      `\`${packageName}/pieces\``,
+      `\`${packageName}/react-chessboard-compat\``,
     ].join('\n'),
     apiReports: { compatibility: 'documented', primary: 'documented' },
     catalogSource: "name: 'alpha'\nname: 'beta'\n",
     comparison:
       '[ledger](parity/react-chessboard-5.10.md) react-chessboard@5.10.0',
-    docsIndex: guideNames.join('\n'),
+    docsIndex: guideNames
+      .map((guideName) => `[${guideName}](${guideName})`)
+      .join('\n'),
     manifest: {
       peerDependencies: { react: '19.2.x', 'react-native': '0.86.x' },
     },
     migration:
       '[ledger](parity/react-chessboard-5.10.md) react-chessboard@5.10.0',
-    packageReadme: guideNames.join('\n'),
-    rootReadme: guidePaths.join('\n'),
+    packageReadme: guidePaths
+      .map(
+        (guidePath) =>
+          `[${guidePath}](https://github.com/example/repository/blob/main/${guidePath})`,
+      )
+      .join('\n'),
+    rootReadme: guidePaths
+      .map((guidePath) => `[${guidePath}](./${guidePath})`)
+      .join('\n'),
     routeNames: ['alpha', 'beta'],
     supportMatrix: [
       'react 19.2.x',
       'react-native 0.86.x',
-      packageName,
-      `${packageName}/pieces`,
-      `${packageName}/react-chessboard-compat`,
+      `\`${packageName}\``,
+      `\`${packageName}/pieces\``,
+      `\`${packageName}/react-chessboard-compat\``,
     ].join('\n'),
   };
 }
@@ -55,6 +66,19 @@ test('extracts canonical route names from the gallery catalog', () => {
       "name: 'first-route', title: 'First'\nname: \"second-route\"",
     ),
     ['first-route', 'second-route'],
+  );
+});
+
+test('extracts actual Markdown destinations and exact inline code values', () => {
+  assert.deepEqual(
+    extractMarkdownLinkDestinations(
+      '[relative](./docs/api-reference.md) [absolute](<https://example.com/a b>) bare.md',
+    ),
+    ['./docs/api-reference.md', 'https://example.com/a b'],
+  );
+  assert.deepEqual(
+    [...extractInlineCodeValues('`root` and `root/subpath`')],
+    ['root', 'root/subpath'],
   );
 });
 
@@ -102,6 +126,36 @@ test('rejects an API reference with a missing public symbol or entry point', () 
   );
 });
 
+test('rejects bare guide filenames that are not Markdown links', () => {
+  const snapshot = validSnapshot();
+  const guideNames = guidePaths.map((guidePath) => guidePath.split('/').at(-1));
+  snapshot.docsIndex = guideNames.join('\n');
+  snapshot.rootReadme = guidePaths.join('\n');
+  snapshot.packageReadme = guideNames.join('\n');
+
+  assert.throws(
+    () => validateDocumentationSnapshot(snapshot),
+    /docs\/README\.md does not link api-reference\.md.*README\.md does not link docs\/api-reference\.md.*package README does not link api-reference\.md/s,
+  );
+});
+
+test('rejects a missing root entry point despite documented subpaths', () => {
+  const snapshot = validSnapshot();
+  snapshot.apiReference = snapshot.apiReference.replace(
+    `\`${packageName}\``,
+    'root package entry point',
+  );
+  snapshot.supportMatrix = snapshot.supportMatrix.replace(
+    `\`${packageName}\``,
+    'root package entry point',
+  );
+
+  assert.throws(
+    () => validateDocumentationSnapshot(snapshot),
+    /API reference does not contain entry point @vibechess\/chessboard-native.*support matrix does not contain entry point @vibechess\/chessboard-native/s,
+  );
+});
+
 test('rejects duplicate catalog routes and stale support versions', () => {
   const snapshot = validSnapshot();
   snapshot.catalogSource = "name: 'alpha'\nname: 'alpha'\nname: 'beta'";
@@ -115,12 +169,12 @@ test('rejects duplicate catalog routes and stale support versions', () => {
 
 test('requires every guide to be discoverable from both READMEs and the docs index', () => {
   const snapshot = validSnapshot();
-  snapshot.docsIndex = snapshot.docsIndex.replace('comparison.md', '');
-  snapshot.rootReadme = snapshot.rootReadme.replace(
+  snapshot.docsIndex = snapshot.docsIndex.replaceAll('comparison.md', '');
+  snapshot.rootReadme = snapshot.rootReadme.replaceAll(
     'docs/support-matrix.md',
     '',
   );
-  snapshot.packageReadme = snapshot.packageReadme.replace(
+  snapshot.packageReadme = snapshot.packageReadme.replaceAll(
     'migrating-from-react-chessboard.md',
     '',
   );

@@ -241,7 +241,10 @@ export interface ArrowAnnotation {
   readonly width?: number;
   /** Optional opacity; must be within the inclusive range 0..1. */
   readonly opacity?: number;
-  /** Straight or right-angle knight path; defaults to straight. */
+  /**
+   * Straight or right-angle knight path. When omitted, 1x2 endpoints infer a
+   * knight path and all other endpoints use a straight path.
+   */
   readonly shape?: 'straight' | 'knight';
   /** Annotation plane; defaults to above pieces for arrows. */
   readonly layer?: 'belowPieces' | 'abovePieces';
@@ -630,13 +633,15 @@ export type PieceRenderers = Readonly<
 /**
  * Whole-value annotation geometry and presentation configuration.
  *
- * The three colors are defaults for future annotation tools. Persistent
- * controlled annotations always render their own required `color` value.
+ * `color` supplies the compatibility adapter's default drawing color;
+ * secondary and tertiary colors remain reserved for future tools. Persistent
+ * controlled annotations always render their own required `color` value, and
+ * the primary drawing API takes its color from `annotationTool`.
  *
  * @public
  */
 export interface AnnotationStyle {
-  /** Default color reserved for future consumer drawing tools. */
+  /** Default drawing color used by compatibility arrow input. */
   readonly color: string;
   /** Secondary color reserved for future consumer drawing tools. */
   readonly secondaryColor: string;
@@ -648,7 +653,7 @@ export interface AnnotationStyle {
   readonly sameTargetArrowLengthReducerDenominator: number;
   /** Default stroke-width divisor relative to one square; must be greater than zero. */
   readonly arrowWidthDenominator: number;
-  /** Width multiplier reserved for a future active drawing draft; must be greater than zero. */
+  /** Width multiplier applied to an active arrow draft; must be greater than zero. */
   readonly activeArrowWidthMultiplier: number;
   /** Default persistent-arrow opacity; must be within the inclusive range 0..1. */
   readonly opacity: number;

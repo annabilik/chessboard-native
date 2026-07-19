@@ -143,30 +143,34 @@ import {
   type ReactChessboardArrow,
 } from '@vibechess/chessboard-native/react-chessboard-compat';
 
-const [position, setPosition] = useState<Record<string, { pieceType: string }>>(
-  { d4: { pieceType: 'wN' }, d5: { pieceType: 'bP' } },
-);
-const [arrows, setArrows] = useState<readonly ReactChessboardArrow[]>([]);
+export function CompatibilityBoard() {
+  const [position, setPosition] = useState<
+    Record<string, { pieceType: string }>
+  >({ d4: { pieceType: 'wN' }, d5: { pieceType: 'bP' } });
+  const [arrows, setArrows] = useState<readonly ReactChessboardArrow[]>([]);
 
-<Chessboard
-  options={{
-    id: 'analysis',
-    position,
-    arrows,
-    boardOrientation: 'white',
-    onPieceDrop: ({ piece, sourceSquare, targetSquare }) => {
-      if (piece.isSparePiece || targetSquare === null) return false;
-      setPosition((current) => {
-        const next = { ...current };
-        delete next[sourceSquare];
-        next[targetSquare] = { pieceType: piece.pieceType };
-        return next;
-      });
-      return true;
-    },
-    onArrowsChange: ({ arrows: next }) => setArrows(next),
-  }}
-/>;
+  return (
+    <Chessboard
+      options={{
+        id: 'analysis',
+        position,
+        arrows,
+        boardOrientation: 'white',
+        onPieceDrop: ({ piece, sourceSquare, targetSquare }) => {
+          if (piece.isSparePiece || targetSquare === null) return false;
+          setPosition((current) => {
+            const next = { ...current };
+            delete next[sourceSquare];
+            next[targetSquare] = { pieceType: piece.pieceType };
+            return next;
+          });
+          return true;
+        },
+        onArrowsChange: ({ arrows: next }) => setArrows(next),
+      }}
+    />
+  );
+}
 ```
 
 The subpath adapts option names, not browser primitives. Style fields accept
@@ -859,36 +863,40 @@ import {
 } from '@vibechess/chessboard-native';
 import { useState } from 'react';
 
-const [position, setPosition] = useState<ControlledPosition>({
-  revision: 0,
-  value: { e2: { id: 'pawn', pieceType: 'wP' } },
-});
+export function ControlledMoveBoard() {
+  const [position, setPosition] = useState<ControlledPosition>({
+    revision: 0,
+    value: { e2: { id: 'pawn', pieceType: 'wP' } },
+  });
 
-const onMoveRequest: OnMoveRequest = async (intent, { signal }) => {
-  const accepted = await validateInYourApplication(intent, signal);
-  if (!accepted || signal.aborted) {
-    return { status: 'rejected', reason: 'Move not accepted' };
-  }
+  const onMoveRequest: OnMoveRequest = async (intent, { signal }) => {
+    const accepted = await validateInYourApplication(intent, signal);
+    if (!accepted || signal.aborted) {
+      return { status: 'rejected', reason: 'Move not accepted' };
+    }
 
-  setPosition((current) =>
-    current.revision !== intent.basePositionRevision
-      ? current
-      : {
-          committedIntentId: intent.intentId,
-          revision: current.revision + 1,
-          value: applyIntentInYourStore(current.value, intent),
-        },
+    setPosition((current) =>
+      current.revision !== intent.basePositionRevision
+        ? current
+        : {
+            committedIntentId: intent.intentId,
+            revision: current.revision + 1,
+            value: applyIntentInYourStore(current.value, intent),
+          },
+    );
+    return { status: 'accepted' };
+  };
+
+  return (
+    <Chessboard
+      boardId="playground"
+      interactionPermissions={{ accessibility: true, drag: true }}
+      moveRequestTimeouts={{ commitMs: 1_500, decisionMs: 10_000 }}
+      onMoveRequest={onMoveRequest}
+      position={position}
+    />
   );
-  return { status: 'accepted' };
-};
-
-<Chessboard
-  boardId="playground"
-  interactionPermissions={{ accessibility: true, drag: true }}
-  moveRequestTimeouts={{ commitMs: 1_500, decisionMs: 10_000 }}
-  onMoveRequest={onMoveRequest}
-  position={position}
-/>;
+}
 ```
 
 The board does not check turns, legal moves, promotion, or game state. That is
@@ -921,18 +929,25 @@ import {
   type ChessboardActions,
 } from '@vibechess/chessboard-native';
 import { useRef } from 'react';
+import { Button } from 'react-native';
 
-const actionsRef = useRef<ChessboardActions | null>(null);
+export function CancellableBoard() {
+  const actionsRef = useRef<ChessboardActions | null>(null);
+  const cancelMove = () => actionsRef.current?.cancelMove() ?? false;
 
-<Chessboard
-  actionsRef={actionsRef}
-  boardId="playground"
-  gesture={{ allowDragOffBoard: false }}
-  onMoveRequest={onMoveRequest}
-  position={position}
-/>;
-
-const cancelled = actionsRef.current?.cancelMove() ?? false;
+  return (
+    <>
+      <Chessboard
+        actionsRef={actionsRef}
+        boardId="playground"
+        gesture={{ allowDragOffBoard: false }}
+        onMoveRequest={onMoveRequest}
+        position={position}
+      />
+      <Button onPress={cancelMove} title="Cancel current move" />
+    </>
+  );
+}
 ```
 
 Cancellation never edits controlled position, selection, annotations, or

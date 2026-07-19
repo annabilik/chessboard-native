@@ -308,9 +308,9 @@ Callback and timeout semantics never depend on reduced motion.
 
 Run the Expo gallery and test **Accessibility** first, then repeat the
 interaction-specific steps on **Controlled move requests** and **Provider
-coordination**, followed by **Spare pieces**, **Controlled annotation
-annotations**, **Piece callbacks**, **Square press callbacks**, and **Interaction
-hardening**. Test Android and iOS separately:
+coordination**, followed by **Spare pieces**, **Controlled annotations**,
+**Piece callbacks**, **Square press callbacks**, and **Interaction hardening**.
+Test Android and iOS separately:
 
 1. Enable TalkBack or VoiceOver and focus the board.
 2. Confirm the board is one focus target and visual squares are not separate

@@ -188,35 +188,39 @@ import {
 } from '@vibechess/chessboard-native';
 import { useState } from 'react';
 
-const [position, setPosition] = useState<ControlledPosition>({
-  revision: 0,
-  value: { e2: { id: 'white-pawn', pieceType: 'wP' } },
-});
-
-const onMoveRequest: OnMoveRequest = async (intent, { signal }) => {
-  const accepted = await validateMoveInApplicationState(intent, signal);
-  if (!accepted || signal.aborted) {
-    return { status: 'rejected' };
-  }
-
-  setPosition((current) => {
-    if (current.revision !== intent.basePositionRevision) {
-      return current;
-    }
-    return {
-      committedIntentId: intent.intentId,
-      revision: current.revision + 1,
-      value: applyMoveInApplicationState(current.value, intent),
-    };
+export function PrimaryControlledBoard() {
+  const [position, setPosition] = useState<ControlledPosition>({
+    revision: 0,
+    value: { e2: { id: 'white-pawn', pieceType: 'wP' } },
   });
-  return { status: 'accepted' };
-};
 
-<Chessboard
-  boardId="analysis"
-  onMoveRequest={onMoveRequest}
-  position={position}
-/>;
+  const onMoveRequest: OnMoveRequest = async (intent, { signal }) => {
+    const accepted = await validateMoveInApplicationState(intent, signal);
+    if (!accepted || signal.aborted) {
+      return { status: 'rejected' };
+    }
+
+    setPosition((current) => {
+      if (current.revision !== intent.basePositionRevision) {
+        return current;
+      }
+      return {
+        committedIntentId: intent.intentId,
+        revision: current.revision + 1,
+        value: applyMoveInApplicationState(current.value, intent),
+      };
+    });
+    return { status: 'accepted' };
+  };
+
+  return (
+    <Chessboard
+      boardId="analysis"
+      onMoveRequest={onMoveRequest}
+      position={position}
+    />
+  );
+}
 ```
 
 Acceptance controls only transient pending or snapback presentation. It never
