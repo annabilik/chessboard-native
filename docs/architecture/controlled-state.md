@@ -118,8 +118,17 @@ lifecycle, tool semantics, callback availability, replacement gesture, and
 unmount all invalidate the correlation. Annotation input is routed exclusively
 before board-press clearing and ordinary square activation, so one touch cannot
 request two semantic outcomes. Only the consumer's later `annotations` prop can
-make the toggle persistent. Keyboard and accessibility annotation actions are a
-separate later input adapter over the same operation boundary.
+make the toggle persistent.
+
+P4.5 adds accessibility annotation actions to the same board-scoped transient
+runtime and operation emitter. The measured gate still requires the current
+annotation domain, non-null tool, and committed handler. Arrow start retains
+only a correlated source draft while the virtual cursor navigates; finish emits
+one toggle and cancellation emits nothing. A square action emits one toggle at
+the cursor. Both paths use `input: 'accessibility'`, and neither changes the
+controlled collection. Annotation mode replaces ordinary move and square
+activation, while provider spare selection and an already-pending move retain
+precedence. Keyboard annotation input remains future work.
 
 ## Revisions and invalid input
 

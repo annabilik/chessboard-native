@@ -4,6 +4,8 @@ import {
   findMatchingAnnotationIds,
   type AnnotationOperation,
   type AnnotationTool,
+  type BoardActionAccessibilityContext,
+  type ChessboardAccessibility,
   type ControlledAnnotations,
   type ControlledPosition,
   type OnAnnotationOperation,
@@ -55,6 +57,27 @@ const annotationPolicies = Object.freeze({
   clearOnBoardPress: true,
   clearOnPositionChange: true,
 });
+
+const annotationAccessibility = Object.freeze({
+  boardHint:
+    'Navigate the board, then use the available annotation action for the current square.',
+  formatActionLabel: ({ action, square }: BoardActionAccessibilityContext) => {
+    switch (action) {
+      case 'start-arrow':
+        return `Start arrow at ${square}`;
+      case 'finish-arrow':
+        return `Finish arrow at ${square}`;
+      case 'toggle-square-annotation':
+        return `Toggle square annotation at ${square}`;
+      case 'cancel-annotation':
+        return 'Cancel annotation';
+      default: {
+        const label = action.replaceAll('-', ' ');
+        return `${label.slice(0, 1).toUpperCase()}${label.slice(1)}`;
+      }
+    }
+  },
+}) satisfies ChessboardAccessibility;
 
 export default function ControlledAnnotationsRoute() {
   const [annotations, setAnnotations] =
@@ -228,11 +251,12 @@ export default function ControlledAnnotationsRoute() {
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.eyebrow}>PHASE 4 · CONTROLLED ANNOTATIONS</Text>
-        <Text style={styles.title}>Revision-safe annotation gestures</Text>
+        <Text style={styles.title}>Revision-safe annotation input</Text>
         <Text style={styles.description}>
-          Touch input emits deltas only. This route applies each operation
-          against the latest consumer-owned envelope and publishes the returned
-          value as the next controlled prop.
+          Touch and accessibility input emit deltas through one transient
+          runtime. This route applies each operation against the latest
+          consumer-owned envelope and publishes the returned value as the next
+          controlled prop.
         </Text>
 
         <Text style={styles.sectionTitle}>Drawing tool</Text>
@@ -262,6 +286,7 @@ export default function ControlledAnnotationsRoute() {
 
         <View style={styles.boardContainer}>
           <Chessboard
+            accessibility={annotationAccessibility}
             annotationPolicies={annotationPolicies}
             annotations={annotations}
             annotationTool={annotationTool}
@@ -284,7 +309,9 @@ export default function ControlledAnnotationsRoute() {
           Square selected, tap a square or finish a pan over it. Each completed
           path requests one controlled toggle. Turn the tool off and tap the
           board to test policy clearing; advancing the position tests the
-          independent position-change policy.
+          independent position-change policy. With TalkBack or VoiceOver, choose
+          Start arrow, navigate, then Finish arrow or Cancel annotation. The
+          square tool exposes one immediate Toggle square annotation action.
         </Text>
 
         <Text style={styles.sectionTitle}>Store operations and races</Text>
@@ -316,8 +343,9 @@ export default function ControlledAnnotationsRoute() {
         <Text style={styles.pending}>
           The visible drawing draft is transient and never enters this store.
           Persistent changes appear only after the callback publishes the next
-          annotation revision. Keyboard and accessibility annotation actions,
-          plus physical Android and iOS validation, remain P4.5 work.
+          annotation revision. Touch and accessibility share that draft and
+          report their input in the operation log. Keyboard annotation input
+          remains future work.
         </Text>
       </ScrollView>
     </SafeAreaView>

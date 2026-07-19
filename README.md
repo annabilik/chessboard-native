@@ -15,8 +15,9 @@ A controlled, rules-free React Native chessboard component.
 > styling, and one adjustable accessibility control. Its optional
 > interaction surface supports board-piece drag, controlled
 > touch/accessibility square activation, public spare-piece drag and accessible
-> placement, and accessible move, removal, clearing, and cancellation without
-> committing position or selection internally.
+> placement, accessible move/removal/clearing/cancellation, and accessible
+> arrow/square annotation actions without committing position, selection, or
+> annotations internally.
 > `ChessboardProvider` supplies provider-scoped board identity, one shared
 > transient overlay, and stale-safe external-drop measurement for single- and
 > multi-board composition. Pure position-transition plans are deterministic and
@@ -92,8 +93,12 @@ draft and operation boundary to three touch paths selected by a non-null
 They request one revision-correlated toggle and never edit the controlled
 collection; stale semantic, geometry, provider, and gesture correlations fail
 closed. Annotation input is exclusive with board-press clearing and ordinary
-square activation for the consumed touch. Keyboard and accessibility annotation
-actions plus physical native and visual validation remain P4.5 work.
+square activation for the consumed touch. P4.5 routes arrow
+start/navigation/finish/cancel and immediate square toggles through that same
+measured runtime with `input: "accessibility"`. Annotation actions replace
+ordinary accessible move/square activation, while selected spares and already
+pending moves retain precedence. The consumer's next annotation prop remains
+the only persistent result. Keyboard annotation input remains future work.
 Controlled destination, selected, and disabled square paint now follows
 canonical `squareStyles` without changing hit geometry. Custom square renderers
 remain later work.
@@ -168,7 +173,10 @@ The accessibility control and manual TalkBack/VoiceOver pass are documented in
 [`docs/accessibility.md`](./docs/accessibility.md).
 The checked-in bare harness also runs deterministic Espresso and XCUITest
 accessibility and interaction audits against the exact packed package used by
-native CI. The Expo gallery includes a controlled-transition lab for special
+native CI. Android's packed annotation fixtures invoke the arrow and square
+actions; iOS verifies the one-host annotation surface and retains physical
+VoiceOver action execution as a manual release gate. The Expo gallery includes
+a controlled-transition lab for special
 moves, interruption, geometry/orientation rebase, reduced motion, and correlated
 pending commits, plus an interaction-hardening lab with a
 standard vertical `ScrollView`, an intentionally clipped spare palette,

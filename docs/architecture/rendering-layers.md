@@ -172,8 +172,10 @@ multiplier and opacity and remain exempt from shared-target shortening. The
 draft is pointerless, accessibility-hidden, and has no persistent consumer ID.
 
 Notation now occupies its own decorative plane above both annotation planes.
-Custom square rendering, additional transient interaction styling, and
-the native gestures that produce annotation drafts remain later slices.
+P4.4 touch gestures and P4.5 accessibility actions feed the same correlated
+draft slot and operation boundary; neither adds a visual or semantic layer.
+Custom square rendering and additional transient interaction styling remain
+later slices.
 
 P3.2 promotes the piece plane to stable `Animated.View` hosts. The latest
 controlled position still creates every current host; a detached transition
@@ -283,7 +285,12 @@ exposes cancel while the selection matches. The spare source remains a separate
 accessible button; its renderer descendants and drag overlay are decorative.
 Board-press and position-change annotation policies now emit controlled
 operations without changing this accessibility tree or the rendered collection.
-Accessible annotation creation and cancellation actions remain P4.5 work.
+When the measured annotation tool/collection/handler gate is complete, the same
+host exposes arrow start/finish/cancel or immediate square-toggle actions while
+keeping cursor navigation. Those actions are exclusive with ordinary move and
+square activation; provider-selected spare and pending-move cancellation keep
+precedence. The annotation draft remains decorative and only consumer feedback
+can change the persistent planes.
 Consumer announcements are correlated by ID and deduplicated per mounted board.
 The centralized reduced-motion provider follows `system`, `always`, or `never`
 without remounting this host or its cursor.
@@ -326,7 +333,9 @@ paths, target shortening, explicit marker-free heads, below/piece/above/notation
 ordering, and multi-board isolation. P4.1/P4.3 tests add controlled-operation
 emission, stale-base application, independent policy clearing, single-draft
 composition, active styling, exact correlation invalidation, and persistent
-collection isolation. Later slices must verify custom square renderer behavior.
+collection isolation. P4.4/P4.5 add shared touch/accessibility session,
+exclusive action routing, current-callback, native-action, and controlled
+feedback coverage. Later slices must verify custom square renderer behavior.
 P2.2 tests add rectangular worklet hit
 testing, tap/pan boundary correlation, zero per-frame JS signals,
 disabled-by-default mounting, reducer adapter stale-event guards, and transient

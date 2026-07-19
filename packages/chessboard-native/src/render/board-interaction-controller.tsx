@@ -11,17 +11,7 @@ import type { ViewStyle } from 'react-native';
 import { useReducedMotion } from '../accessibility/reduced-motion';
 import { ChessboardProvider } from '../ChessboardProvider';
 import type { NormalizedControlledValue } from '../internal/controlled-domain';
-import {
-  createAnnotationGestureAdapterState,
-  normalizeAnnotationTool,
-  reduceAnnotationGestureAdapter,
-  type AnnotationGestureAdapterReduction,
-  type AnnotationGestureAdapterState,
-  type AnnotationGestureCandidate,
-  type AnnotationGestureCorrelation,
-  type AnnotationGestureSnapshot,
-} from '../internal/annotation-gesture-adapter';
-import type { CorrelatedAnnotationDraft } from '../internal/annotation-draft-presentation';
+import type { AnnotationGestureCorrelation } from '../internal/annotation-gesture-adapter';
 import { canDragCurrentPiece } from '../internal/interaction-permissions';
 import {
   createBoardGestureAdapterState,
@@ -46,10 +36,9 @@ import type {
   ProviderDragCancellationReason,
   ProviderDragOwner,
 } from '../internal/provider-drag-coordinator';
+import type { AnnotationInputRuntime } from '../internal/use-annotation-input-runtime';
 import type {
   CanDragPiece,
-  BoardAnnotation,
-  AnnotationTool,
   PieceRenderers,
   PositionObject,
   Revision,
@@ -63,22 +52,13 @@ import {
 import { resolvePieceRenderer } from './piece-layer';
 
 interface BoardInteractionControllerProps {
-  readonly annotations?: NormalizedControlledValue<
-    readonly Readonly<BoardAnnotation>[]
-  > | null;
-  readonly annotationTool?: AnnotationTool | undefined;
+  readonly annotationRuntime?: Readonly<AnnotationInputRuntime>;
   readonly boardId: string;
   readonly canDragPiece?: CanDragPiece;
   readonly dragEnabled?: boolean;
   readonly geometry: Readonly<BoardGestureGeometry>;
   readonly onCandidate?: (
     candidate: Readonly<BoardGestureIntentCandidate>,
-  ) => void;
-  readonly onAnnotationCandidate?: (
-    candidate: Readonly<AnnotationGestureCandidate>,
-  ) => void;
-  readonly onAnnotationDraftChange?: (
-    draft: Readonly<CorrelatedAnnotationDraft> | null,
   ) => void;
   readonly onDragSourceChange?: (sourceSquare: SquareId | null) => void;
   readonly pieceRenderers: PieceRenderers;
@@ -119,30 +99,40 @@ function createCorrelation(
   });
 }
 
-function createAnnotationCorrelation(
-  signal: Readonly<
-    Extract<
-      BoardGestureSignal,
-      {
-        readonly type:
-          | 'annotation-start'
-          | 'annotation-update'
-          | 'annotation-end'
-          | 'annotation-cancel';
-      }
-    >
-  >,
-  snapshot: Readonly<AnnotationGestureSnapshot>,
-): Readonly<AnnotationGestureCorrelation> {
-  return Object.freeze({
-    annotationRevision: signal.annotationRevision,
-    boardId: signal.boardId,
-    geometryEpoch: signal.geometryRevision,
-    positionRevision: signal.positionRevision,
-    providerGeometryRevision: snapshot.providerGeometryRevision,
-    providerLifecycleRevision: snapshot.providerLifecycleRevision,
-    token: signal.gestureToken,
-  });
+type NativeAnnotationSignal = Extract<
+  BoardGestureSignal,
+  {
+    readonly type:
+      | 'annotation-start'
+      | 'annotation-update'
+      | 'annotation-end'
+      | 'annotation-cancel';
+  }
+>;
+
+interface ActiveNativeAnnotationSignal {
+  readonly annotationRevision: Revision;
+  readonly boardId: string;
+  readonly correlation: Readonly<AnnotationGestureCorrelation>;
+  readonly geometryRevision: Revision;
+  readonly gestureToken: number;
+  readonly positionRevision: Revision;
+  readonly sourceSquare: SquareId;
+}
+
+function nativeAnnotationSignalMatches(
+  active: Readonly<ActiveNativeAnnotationSignal> | null,
+  signal: Readonly<NativeAnnotationSignal>,
+): active is Readonly<ActiveNativeAnnotationSignal> {
+  return (
+    active !== null &&
+    active.annotationRevision === signal.annotationRevision &&
+    active.boardId === signal.boardId &&
+    active.geometryRevision === signal.geometryRevision &&
+    active.gestureToken === signal.gestureToken &&
+    active.positionRevision === signal.positionRevision &&
+    active.sourceSquare === signal.sourceSquare
+  );
 }
 
 function signalMatchesActive(
@@ -167,14 +157,11 @@ function signalMatchesActive(
  * executor, but cannot mutate position or retain a semantic snapshot.
  */
 function BoardInteractionControllerContent({
-  annotations = null,
-  annotationTool = null,
+  annotationRuntime,
   boardId,
   canDragPiece,
   dragEnabled = false,
   geometry,
-  onAnnotationCandidate,
-  onAnnotationDraftChange,
   onCandidate,
   onDragSourceChange,
   pieceRenderers,
@@ -200,38 +187,7 @@ function BoardInteractionControllerContent({
     () => createSnapshot({ boardId, geometry, position, selectionRevision }),
     [boardId, geometry, position, selectionRevision],
   );
-  const normalizedAnnotationTool = useMemo(
-    () => normalizeAnnotationTool(annotationTool),
-    [annotationTool],
-  );
-  const annotationSnapshot =
-    useMemo<Readonly<AnnotationGestureSnapshot> | null>(() => {
-      if (
-        annotations === null ||
-        normalizedAnnotationTool === null ||
-        typeof onAnnotationCandidate !== 'function'
-      ) {
-        return null;
-      }
-      return Object.freeze({
-        annotationRevision: annotations.revision,
-        boardId,
-        geometryEpoch: geometry.revision,
-        positionRevision: position.revision,
-        providerGeometryRevision,
-        providerLifecycleRevision,
-        tool: normalizedAnnotationTool,
-      });
-    }, [
-      annotations,
-      boardId,
-      geometry.revision,
-      normalizedAnnotationTool,
-      onAnnotationCandidate,
-      position.revision,
-      providerGeometryRevision,
-      providerLifecycleRevision,
-    ]);
+  const annotationSnapshot = annotationRuntime?.snapshot ?? null;
   const occupiedSquares = useMemo(() => {
     const occupied = geometry.visualSquares.filter((square) =>
       Object.hasOwn(position.value, square),
@@ -267,9 +223,9 @@ function BoardInteractionControllerContent({
       positionRevision: position.revision,
     }),
   );
-  const annotationAdapter = useRef<Readonly<AnnotationGestureAdapterState>>(
-    createAnnotationGestureAdapterState({ boardId }),
-  );
+  const activeNativeAnnotationSignal =
+    useRef<Readonly<ActiveNativeAnnotationSignal> | null>(null);
+  const annotationRuntimeAtCommit = useRef(annotationRuntime);
   const acceptingSignals = useRef(true);
   const annotationEnabledAtCommit = useRef(annotationSnapshot !== null);
   const annotationSnapshotAtCommit = useRef(annotationSnapshot);
@@ -278,8 +234,6 @@ function BoardInteractionControllerContent({
   const interactionEnabledAtCommit = useRef(
     dragEnabled || tapEnabled || annotationSnapshot !== null,
   );
-  const onAnnotationCandidateAtCommit = useRef(onAnnotationCandidate);
-  const onAnnotationDraftChangeAtCommit = useRef(onAnnotationDraftChange);
   const tapEnabledAtCommit = useRef(tapEnabled);
   const onCandidateAtCommit = useRef(onCandidate);
   const onDragSourceChangeAtCommit = useRef(onDragSourceChange);
@@ -353,27 +307,9 @@ function BoardInteractionControllerContent({
     ],
   );
 
-  const applyAnnotationReduction = useCallback(
-    (reduction: Readonly<AnnotationGestureAdapterReduction>): void => {
-      const previousPresentation = annotationAdapter.current.presentation;
-      annotationAdapter.current = reduction.state;
-      if (reduction.state.presentation !== previousPresentation) {
-        onAnnotationDraftChangeAtCommit.current?.(reduction.state.presentation);
-      }
-      if (reduction.candidate !== null) {
-        onAnnotationCandidateAtCommit.current?.(reduction.candidate);
-      }
-    },
-    [],
-  );
-
   const cancelAnnotation = useCallback((): void => {
-    applyAnnotationReduction(
-      reduceAnnotationGestureAdapter(annotationAdapter.current, {
-        type: 'cancel',
-      }),
-    );
-  }, [applyAnnotationReduction]);
+    annotationRuntimeAtCommit.current?.cancel();
+  }, []);
 
   const cancelFromProvider = useCallback(
     (reason: ProviderDragCancellationReason): void => {
@@ -504,24 +440,10 @@ function BoardInteractionControllerContent({
             ) {
               return;
             }
-            applyAnnotationReduction(
-              reduceAnnotationGestureAdapter(annotationAdapter.current, {
-                correlation: Object.freeze({
-                  annotationRevision: signal.annotationRevision,
-                  boardId: signal.boardId,
-                  geometryEpoch: signal.geometryRevision,
-                  positionRevision: signal.positionRevision,
-                  providerGeometryRevision:
-                    currentAnnotationSnapshot.providerGeometryRevision,
-                  providerLifecycleRevision:
-                    currentAnnotationSnapshot.providerLifecycleRevision,
-                  token: signal.gestureToken,
-                }),
-                input: 'touch',
-                snapshot: currentAnnotationSnapshot,
-                square: signal.targetSquare,
-                type: 'activate',
-              }),
+            activeNativeAnnotationSignal.current = null;
+            annotationRuntimeAtCommit.current?.activate(
+              'touch',
+              signal.targetSquare,
             );
             return;
           }
@@ -566,77 +488,61 @@ function BoardInteractionControllerContent({
               }),
             );
           }
-          applyAnnotationReduction(
-            reduceAnnotationGestureAdapter(annotationAdapter.current, {
-              correlation: createAnnotationCorrelation(
-                signal,
-                currentAnnotationSnapshot,
-              ),
-              input: 'touch',
-              path: signal.gestureKind,
-              snapshot: currentAnnotationSnapshot,
-              sourceSquare: signal.sourceSquare,
-              targetSquare: signal.targetSquare,
-              type: 'start',
-            }),
+          const correlation = annotationRuntimeAtCommit.current?.start(
+            'touch',
+            signal.gestureKind,
+            signal.sourceSquare,
+            signal.targetSquare,
           );
+          activeNativeAnnotationSignal.current =
+            correlation === null || correlation === undefined
+              ? null
+              : Object.freeze({
+                  annotationRevision: signal.annotationRevision,
+                  boardId: signal.boardId,
+                  correlation,
+                  geometryRevision: signal.geometryRevision,
+                  gestureToken: signal.gestureToken,
+                  positionRevision: signal.positionRevision,
+                  sourceSquare: signal.sourceSquare,
+                });
           return;
         }
         case 'annotation-update': {
-          const currentAnnotationSnapshot = annotationSnapshotAtCommit.current;
-          if (currentAnnotationSnapshot === null) {
+          const active = activeNativeAnnotationSignal.current;
+          if (!nativeAnnotationSignalMatches(active, signal)) {
             return;
           }
-          applyAnnotationReduction(
-            reduceAnnotationGestureAdapter(annotationAdapter.current, {
-              correlation: createAnnotationCorrelation(
-                signal,
-                currentAnnotationSnapshot,
-              ),
-              targetSquare: signal.targetSquare,
-              type: 'update',
-            }),
+          annotationRuntimeAtCommit.current?.update(
+            active.correlation,
+            signal.targetSquare,
           );
           return;
         }
         case 'annotation-end': {
-          const currentAnnotationSnapshot = annotationSnapshotAtCommit.current;
-          if (currentAnnotationSnapshot === null) {
+          const active = activeNativeAnnotationSignal.current;
+          if (!nativeAnnotationSignalMatches(active, signal)) {
             return;
           }
-          applyAnnotationReduction(
-            reduceAnnotationGestureAdapter(annotationAdapter.current, {
-              correlation: createAnnotationCorrelation(
-                signal,
-                currentAnnotationSnapshot,
-              ),
-              snapshot: currentAnnotationSnapshot,
-              targetSquare: signal.targetSquare,
-              type: 'finalize',
-            }),
+          activeNativeAnnotationSignal.current = null;
+          annotationRuntimeAtCommit.current?.finalize(
+            active.correlation,
+            signal.targetSquare,
           );
           return;
         }
         case 'annotation-cancel': {
-          const currentAnnotationSnapshot = annotationSnapshotAtCommit.current;
-          if (currentAnnotationSnapshot === null) {
+          const active = activeNativeAnnotationSignal.current;
+          if (!nativeAnnotationSignalMatches(active, signal)) {
             return;
           }
-          applyAnnotationReduction(
-            reduceAnnotationGestureAdapter(annotationAdapter.current, {
-              correlation: createAnnotationCorrelation(
-                signal,
-                currentAnnotationSnapshot,
-              ),
-              type: 'cancel',
-            }),
-          );
+          activeNativeAnnotationSignal.current = null;
+          annotationRuntimeAtCommit.current?.cancel(active.correlation);
         }
       }
     },
     [
       applyReduction,
-      applyAnnotationReduction,
       boardId,
       cancelAnnotation,
       providerGeometryRevision,
@@ -646,18 +552,11 @@ function BoardInteractionControllerContent({
   );
 
   useLayoutEffect(() => {
+    annotationRuntimeAtCommit.current = annotationRuntime;
     cancelFromProviderAtCommit.current = cancelFromProvider;
-    onAnnotationCandidateAtCommit.current = onAnnotationCandidate;
-    onAnnotationDraftChangeAtCommit.current = onAnnotationDraftChange;
     onCandidateAtCommit.current = onCandidate;
     onDragSourceChangeAtCommit.current = onDragSourceChange;
-  }, [
-    cancelFromProvider,
-    onAnnotationCandidate,
-    onAnnotationDraftChange,
-    onCandidate,
-    onDragSourceChange,
-  ]);
+  }, [annotationRuntime, cancelFromProvider, onCandidate, onDragSourceChange]);
 
   useLayoutEffect(() => {
     snapshotAtCommit.current = snapshot;
@@ -668,12 +567,6 @@ function BoardInteractionControllerContent({
     interactionEnabledAtCommit.current =
       dragEnabled || tapEnabled || annotationSnapshot !== null;
     tapEnabledAtCommit.current = tapEnabled;
-    applyAnnotationReduction(
-      reduceAnnotationGestureAdapter(annotationAdapter.current, {
-        snapshot: annotationSnapshot,
-        type: 'synchronize',
-      }),
-    );
     let reduction = reduceBoardGestureAdapter(adapter.current, {
       snapshot,
       type: 'synchronize',
@@ -700,7 +593,6 @@ function BoardInteractionControllerContent({
     applyReduction(reduction);
   }, [
     annotationSnapshot,
-    applyAnnotationReduction,
     applyReduction,
     dragEnabled,
     draggableSquares,
@@ -725,14 +617,8 @@ function BoardInteractionControllerContent({
           type: 'cancel',
         }).state;
       }
-      const annotationPresentation = annotationAdapter.current.presentation;
-      annotationAdapter.current = reduceAnnotationGestureAdapter(
-        annotationAdapter.current,
-        { type: 'cancel' },
-      ).state;
-      if (annotationPresentation !== null) {
-        onAnnotationDraftChangeAtCommit.current?.(null);
-      }
+      activeNativeAnnotationSignal.current = null;
+      annotationRuntimeAtCommit.current?.cancel();
       const active = providerRuntime.drag.getSnapshot().active;
       if (active?.owner === providerOwner.current) {
         providerRuntime.drag.release(

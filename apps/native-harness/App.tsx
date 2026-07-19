@@ -1,12 +1,17 @@
 import {
+  applyAnnotationOperation,
   Chessboard,
   ChessboardProvider,
   SparePiece,
+  type AnnotationOperation,
+  type AnnotationTool,
+  type ControlledAnnotations,
+  type OnAnnotationOperation,
   type OnMoveRequest,
   type SquareId,
 } from '@vibechess/chessboard-native';
 import { defaultPieceRenderers } from '@vibechess/chessboard-native/pieces';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -14,6 +19,7 @@ const AUDIT_BOARD_LABEL = 'Accessibility audit board, white orientation';
 const AUDIT_BOARD_HINT =
   'Swipe up or down through squares, or use directional accessibility actions.';
 const INTERACTION_BOARD_LABEL = 'Interaction test board, white orientation';
+const ANNOTATION_BOARD_LABEL = 'Annotation test board, white orientation';
 const INTERACTION_POSITION = Object.freeze({
   revision: 7,
   value: Object.freeze({
@@ -30,8 +36,33 @@ const rejectAuditMove: OnMoveRequest = () => ({
 });
 
 interface AppProps {
-  readonly fixture?: 'accessibility' | 'interaction' | 'interaction-lifecycle';
+  readonly fixture?:
+    | 'accessibility'
+    | 'annotation-arrow'
+    | 'annotation-square'
+    | 'interaction'
+    | 'interaction-lifecycle';
 }
+
+const EMPTY_ANNOTATIONS = Object.freeze({
+  revision: 0,
+  value: Object.freeze([]),
+}) satisfies ControlledAnnotations;
+
+const ANNOTATION_TOOLS = Object.freeze({
+  arrow: Object.freeze({
+    color: '#d1495b',
+    opacity: 0.8,
+    type: 'arrow' as const,
+  }),
+  square: Object.freeze({
+    color: '#3066be',
+    shape: 'border' as const,
+    type: 'square' as const,
+  }),
+}) satisfies Readonly<
+  Record<'arrow' | 'square', Exclude<AnnotationTool, null>>
+>;
 
 function AccessibilityFixture() {
   return (
@@ -59,6 +90,150 @@ function AccessibilityFixture() {
         />
       </View>
     </View>
+  );
+}
+
+function annotationDescription(operation: Readonly<AnnotationOperation>): {
+  readonly from: string;
+  readonly square: string;
+  readonly to: string;
+} {
+  if (operation.type !== 'toggle') {
+    return { from: 'none', square: 'none', to: 'none' };
+  }
+  return operation.annotation.type === 'arrow'
+    ? {
+        from: operation.annotation.from,
+        square: 'none',
+        to: operation.annotation.to,
+      }
+    : {
+        from: 'none',
+        square: operation.annotation.square,
+        to: 'none',
+      };
+}
+
+function AnnotationFixture({ tool }: { readonly tool: 'arrow' | 'square' }) {
+  const [annotations, setAnnotations] =
+    useState<ControlledAnnotations>(EMPTY_ANNOTATIONS);
+  const annotationsRef = useRef<ControlledAnnotations>(EMPTY_ANNOTATIONS);
+  const [operationCount, setOperationCount] = useState(0);
+  const [lastOperation, setLastOperation] = useState<
+    Readonly<{
+      readonly from: string;
+      readonly input: string;
+      readonly square: string;
+      readonly to: string;
+      readonly type: string;
+    }>
+  >({
+    from: 'none',
+    input: 'none',
+    square: 'none',
+    to: 'none',
+    type: 'none',
+  });
+  const onAnnotationOperation = useCallback<OnAnnotationOperation>(
+    (operation) => {
+      const result = applyAnnotationOperation({
+        boardId: 'native-annotation-audit',
+        current: annotationsRef.current,
+        operation,
+      });
+      if (result.status === 'rejected') {
+        return;
+      }
+      annotationsRef.current = result.next;
+      setAnnotations(result.next);
+      setOperationCount((count) => count + 1);
+      setLastOperation({
+        ...annotationDescription(operation),
+        input: operation.input,
+        type: operation.type,
+      });
+    },
+    [],
+  );
+
+  return (
+    <View style={styles.auditContent}>
+      <Text style={styles.title}>Native annotation audit</Text>
+      <Text style={styles.description}>
+        Controlled {tool} annotations · packed Release
+      </Text>
+      <View style={styles.board} testID="annotation:board-host">
+        <Chessboard
+          accessibility={{ boardLabel: ANNOTATION_BOARD_LABEL }}
+          annotations={annotations}
+          annotationTool={ANNOTATION_TOOLS[tool]}
+          boardId="native-annotation-audit"
+          dimensions={{ columns: 2, rows: 2 }}
+          onAnnotationOperation={onAnnotationOperation}
+          pieceRenderers={defaultPieceRenderers}
+          position={{ revision: 3, value: {} }}
+          reduceMotion="always"
+        />
+      </View>
+      <View style={styles.annotationStatus}>
+        <AuditStatus
+          label="Operation count"
+          testID="annotation:operation-count"
+          value={String(operationCount)}
+        />
+        <AuditStatus
+          label="Annotation revision"
+          testID="annotation:revision"
+          value={String(annotations.revision)}
+        />
+        <AuditStatus
+          label="Annotation count"
+          testID="annotation:count"
+          value={String(annotations.value.length)}
+        />
+        <AuditStatus
+          label="Last input"
+          testID="annotation:last-input"
+          value={lastOperation.input}
+        />
+        <AuditStatus
+          label="Last type"
+          testID="annotation:last-type"
+          value={lastOperation.type}
+        />
+        <AuditStatus
+          label="Last from"
+          testID="annotation:last-from"
+          value={lastOperation.from}
+        />
+        <AuditStatus
+          label="Last to"
+          testID="annotation:last-to"
+          value={lastOperation.to}
+        />
+        <AuditStatus
+          label="Last square"
+          testID="annotation:last-square"
+          value={lastOperation.square}
+        />
+      </View>
+    </View>
+  );
+}
+
+function AuditStatus({
+  label,
+  testID,
+  value,
+}: {
+  readonly label: string;
+  readonly testID: string;
+  readonly value: string;
+}) {
+  return (
+    <Text accessibilityLabel={`${label}: ${value}`} testID={testID}>
+      {label}: {value}
+    </Text>
   );
 }
 
@@ -223,7 +398,11 @@ export default function App({ fixture = 'accessibility' }: AppProps) {
   return (
     <GestureHandlerRootView style={styles.root}>
       <StatusBar barStyle="dark-content" />
-      {fixture === 'interaction' || fixture === 'interaction-lifecycle' ? (
+      {fixture === 'annotation-arrow' || fixture === 'annotation-square' ? (
+        <AnnotationFixture
+          tool={fixture === 'annotation-arrow' ? 'arrow' : 'square'}
+        />
+      ) : fixture === 'interaction' || fixture === 'interaction-lifecycle' ? (
         <InteractionFixture
           pendingUntilAbort={fixture === 'interaction-lifecycle'}
         />
@@ -244,6 +423,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     padding: 24,
+  },
+  annotationStatus: {
+    alignSelf: 'stretch',
+    gap: 2,
+    marginTop: 20,
+    maxWidth: 480,
   },
   title: {
     color: '#282520',

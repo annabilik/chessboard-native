@@ -2064,7 +2064,7 @@
       },
       "status": "implemented",
       "contractTestId": "PARITY-OPTION-ALLOW-DRAWING-ARROWS",
-      "compatibilityNotes": "Drawing is enabled only by a current annotation collection, a non-null controlled native tool, and an operation handler; the board emits toggles without owning an annotation list.",
+      "compatibilityNotes": "Touch and accessibility drawing are enabled only by a measured board, current annotation collection, non-null controlled native tool, and operation handler; both emit toggles without owning an annotation list.",
       "rationale": "The upstream gate controls an internal arrow list; native drawing must emit revisioned operations without accepting semantic state inside the component.",
       "documentation": "docs/parity/react-chessboard-5.10.md#option-allow-drawing-arrows"
     },
@@ -2271,7 +2271,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-OPTION-ON-ARROWS-CHANGE",
-      "compatibilityNotes": "Board-press and position-change clears plus explicit, long-press, and two-finger toggle drawing emit one immutable operation at their causal boundary for reduction against the latest controlled annotations; only the Phase 5 compatibility adapter remains open.",
+      "compatibilityNotes": "Board-press and position-change clears plus explicit, long-press, two-finger, and accessibility toggles emit one immutable operation at their causal boundary for reduction against the latest controlled annotations; only the Phase 5 compatibility adapter remains open.",
       "rationale": "Emitting whole internal-arrow snapshots on effects can overwrite concurrent controlled updates and fires even for the initial empty state.",
       "documentation": "docs/parity/react-chessboard-5.10.md#option-on-arrows-change"
     },
@@ -3621,7 +3621,7 @@
       },
       "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B35",
-      "compatibilityNotes": "Explicit activation, long-press pan, and two-finger pan share one correlated draft lifecycle and emit exactly one controlled toggle without retaining persistent annotations."
+      "compatibilityNotes": "Explicit activation, long-press pan, two-finger pan, and the one-board-control accessibility actions share one correlated draft lifecycle and emit exactly one controlled toggle without retaining persistent annotations."
     },
     {
       "id": "behavior.b36-modifier-color-precedence",
@@ -3706,7 +3706,7 @@
       },
       "status": "in-progress",
       "contractTestId": "PARITY-BEHAVIOR-B38",
-      "compatibilityNotes": "Board-press and position-change clears plus explicit, long-press, and two-finger toggle drawing emit at their causal boundary and require controlled feedback; only the Phase 5 compatibility adapter remains open.",
+      "compatibilityNotes": "Board-press and position-change clears plus explicit, long-press, two-finger, and accessibility toggle drawing emit at their causal boundary and require controlled feedback; only the Phase 5 compatibility adapter remains open.",
       "rationale": "Effect-driven snapshots fire for the initial empty list and can overwrite controlled annotations that arrived after a gesture began.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b38-on-arrows-change-effect-lifecycle"
     },
@@ -4063,9 +4063,9 @@
         "surface": "root",
         "symbols": ["Chessboard", "ChessboardAccessibility"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B50",
-      "compatibilityNotes": "View, RNGH, Reanimated, and RN SVG replace browser primitives; one adjustable board control now covers navigation and controlled non-drag move requests while visual and gesture descendants stay hidden.",
+      "compatibilityNotes": "View, RNGH, Reanimated, and RN SVG replace browser primitives; one adjustable board control covers navigation, controlled non-drag move requests, and controlled arrow/square annotation actions while visual and gesture descendants stay hidden.",
       "rationale": "Copying DOM, CSS, dnd-kit sensors, and absent accessibility semantics would not produce a native component or satisfy TalkBack and VoiceOver contracts.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b50-dom-css-dnd-kit-and-accessibility-absence"
     }

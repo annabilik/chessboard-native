@@ -72,6 +72,14 @@ export interface AnnotationGestureAdapterState {
   readonly presentation: Readonly<CorrelatedAnnotationDraft> | null;
 }
 
+export type AnnotationGestureInteractionMode =
+  'idle' | 'armed-arrow' | 'drawing';
+
+export interface AnnotationGestureInteractionStatus {
+  readonly mode: AnnotationGestureInteractionMode;
+  readonly sourceSquare: SquareId | null;
+}
+
 export type AnnotationGestureAdapterEvent =
   | {
       readonly snapshot: Readonly<AnnotationGestureSnapshot> | null;
@@ -235,6 +243,22 @@ export function createAnnotationGestureAdapterState(options: {
     throw new RangeError('boardId must be non-empty.');
   }
   return freezeState(options.boardId, null, null);
+}
+
+const IDLE_INTERACTION_STATUS: Readonly<AnnotationGestureInteractionStatus> =
+  Object.freeze({ mode: 'idle', sourceSquare: null });
+
+/** Project the transient interaction without exposing reducer internals. */
+export function annotationGestureInteractionStatus(
+  state: Readonly<AnnotationGestureAdapterState>,
+): Readonly<AnnotationGestureInteractionStatus> {
+  const interaction = state.interaction;
+  return interaction === null
+    ? IDLE_INTERACTION_STATUS
+    : Object.freeze({
+        mode: interaction.kind,
+        sourceSquare: interaction.sourceSquare,
+      });
 }
 
 function metadataIsValid(

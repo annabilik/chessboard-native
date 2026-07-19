@@ -23,6 +23,36 @@ final class ChessboardNativeHarnessAccessibilityUITests: XCTestCase {
 
     try app.performAccessibilityAudit()
   }
+
+  func testPackedAnnotationAccessibilitySurface() throws {
+    let app = XCUIApplication()
+    app.launchArguments += [
+      "-AppleLanguages", "(en)",
+      "-AppleLocale", "en_US",
+      "--fixture", "annotation-arrow",
+    ]
+    app.launch()
+
+    let boards = app.descendants(matching: .any).matching(
+      NSPredicate(format: "label == %@", "Annotation test board, white orientation")
+    )
+    let board = boards.firstMatch
+
+    XCTAssertTrue(board.waitForExistence(timeout: 30))
+    XCTAssertEqual(boards.count, 1)
+    XCTAssertTrue(board.isEnabled)
+    XCTAssertEqual(board.value as? String, "a2, empty")
+    XCTAssertEqual(board.descendants(matching: .any).count, 0)
+    XCTAssertEqual(app.staticTexts["annotation:operation-count"].label, "Operation count: 0")
+    XCTAssertEqual(app.staticTexts["annotation:revision"].label, "Annotation revision: 0")
+    XCTAssertEqual(app.staticTexts["annotation:count"].label, "Annotation count: 0")
+
+    try app.performAccessibilityAudit()
+    let screenshot = XCTAttachment(screenshot: board.screenshot())
+    screenshot.name = "annotation-arrow-initial"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+  }
 }
 
 final class ChessboardNativeHarnessInteractionUITests: XCTestCase {

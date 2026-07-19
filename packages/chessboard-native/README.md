@@ -109,8 +109,11 @@ request controlled deltas. A non-null `annotationTool` additionally enables
 explicit tap, long-press-pan, and two-finger-pan drawing when a current
 annotation collection and `onAnnotationOperation` are present. Every completed
 path requests one controlled toggle; it never edits the collection inside the
-board. Selection
-styling follows the controlled selection prop, and `onSquareActivate` can opt
+board. The same measured gate adds accessible arrow start/finish/cancel and
+square-toggle actions to the one adjustable board. Their operations use
+`input: 'accessibility'`, and only the consumer's next annotation prop persists
+the result. Selection styling follows the controlled selection prop, and
+`onSquareActivate` can opt
 the board into controlled touch and accessibility activation. Supplying
 `onMoveRequest` opens the controlled move-request surface: board/spare-piece
 drag and the adjustable control's source, target, removal, and cancellation
@@ -121,9 +124,8 @@ that.
 overlay, and stale-safe external-drop measurement. Its public `SparePiece`
 source supports drag and accessible placement on one named board while that
 board's controlled move callback remains the only position authority. Custom
-square rendering plus accessible annotation actions and physical annotation
-validation remain future work. Pure controlled-position transition planning
-validates exact-revision hints,
+square rendering remains future work. Pure controlled-position transition
+planning validates exact-revision hints,
 prefers stable piece IDs, and treats ambiguous anonymous matches as exits and
 enters. The mounted Reanimated runtime consumes only those detached operations,
 samples presentation-only continuity across interruption and geometry changes,
@@ -482,9 +484,19 @@ same accessibility-hidden board plane. Changes to the position or annotation
 revision, tool semantics, geometry, provider lifecycle, callback availability,
 or mount lifetime cancel the transient session. Callback results are ignored,
 and a persistent annotation appears or disappears only after the consumer
-publishes the next `annotations` prop. Keyboard and accessibility annotation
-actions arrive with the P4.5 accessibility and physical native-validation
-slice.
+publishes the next `annotations` prop.
+
+The same gate adds annotation actions to the single adjustable board. With an
+arrow tool, **Start arrow** arms the cursor square, navigation keeps the border
+draft visible, **Finish arrow** on a different square emits one toggle, and
+**Cancel annotation** emits nothing. With a square tool, **Toggle square
+annotation** emits immediately at the cursor. Operations use
+`input: "accessibility"` and share the exact session, revision checks, matching
+IDs, and committed callback with touch; either input can finish a source begun
+by the other. Annotation actions replace ordinary accessible move and square
+activation, while a selected spare and an already-pending move keep precedence.
+`accessibility.formatActionLabel` receives all four annotation action names.
+Keyboard annotation input remains future work.
 
 Omitted arrow shape automatically selects an L path only for an integer
 one-by-two canonical move. `shape="straight"` always overrides that choice;
@@ -786,9 +798,12 @@ reduced motion and `never` explicitly permits it. When move interaction is
 enabled, the same control can activate a source and target, remove the source
 with a null-target intent, or cancel pending work. A selected `SparePiece`
 temporarily gives only its named board the place/cancel actions described above.
-Annotation actions remain a later slice. `formatMoveOutcome` customizes the
-correlated committed, rejected, cancelled, or timed-out announcement; returning
-`null` suppresses it.
+When the measured annotation gate is complete, arrow
+start/finish/cancel or immediate square-toggle actions replace ordinary move and
+square activation while keeping cursor navigation. Every emitted toggle remains
+consumer-controlled. `formatActionLabel` can localize those action names, and
+`formatMoveOutcome` customizes the correlated committed, rejected, cancelled,
+or timed-out announcement; returning `null` suppresses it.
 
 When `onSquareActivate` is present, activating the current square uses the
 exclusive controlled-selection router described above, and a selected board

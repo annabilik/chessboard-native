@@ -9,10 +9,11 @@ assistive technology.
 The Phase 1 prototype established navigation, values, labels, announcements,
 focus identity, and reduced motion. Phase 2 adds controlled source, target,
 removal, cancellation, square activation, and selection-clearing actions
-plus spare-source selection and placement without turning the cursor into
-semantic selection or creating square-level accessibility targets. A public
-`SparePiece` is its own accessible button; its visual renderer descendants
-remain decorative.
+plus spare-source selection and placement. Phase 4 adds controlled arrow and
+square annotation actions. None of these paths turns the cursor into semantic
+selection or creates square-level accessibility targets. A public `SparePiece`
+is its own accessible button; its visual renderer descendants remain
+decorative.
 
 `ChessboardProvider` is compositional coordination, not an accessibility
 control. It contributes no focus target, while its shared drag overlay is
@@ -84,16 +85,19 @@ fallback while accessible move input is permitted. An occupied cursor square
 exposes source activation and removal. Activating a source stores only transient
 interaction context; after moving the cursor, activation submits the target.
 Removal submits the same intent with `targetSquare: null`, and cancellation
-clears source targeting or active async work. If an external spare is selected
-for this board, its place/cancel actions replace these ordinary interaction
-actions until the spare selection ends. Annotation actions remain a later
-phase.
+clears source targeting or active async work. A provider-selected spare takes
+precedence over every board-local interaction action until placement or
+cancellation. An already-pending move likewise keeps only its cancel action
+ahead of a newly enabled annotation tool. Otherwise, a complete annotation gate
+replaces ordinary move and square-activation actions while leaving cursor
+navigation available.
 
 `accessibility.formatActionLabel` formats directional and every available
-interaction action. Labels must be non-empty and unique on a board state
-because iOS uses the displayed label to resolve a custom action. The component
-deterministically replaces an empty or duplicate result with a unique English
-fallback.
+interaction action, including `start-arrow`, `finish-arrow`,
+`toggle-square-annotation`, and `cancel-annotation`. Labels must be non-empty
+and unique on a board state because iOS uses the displayed label to resolve a
+custom action. The component deterministically replaces an empty or duplicate
+result with a unique English fallback.
 
 The default board label includes the current orientation. A supplied
 `accessibility.boardLabel` is a full, verbatim override so localized consumers
@@ -196,6 +200,37 @@ values never enter `ChessboardProps.selection`.
 `accessibility.formatActionLabel` receives `place-spare` and `cancel-spare` with
 the spare piece in its action context, so consumers can localize both labels.
 
+## Accessible annotation actions
+
+Annotation actions use the same measured, board-scoped runtime as touch. They
+are enabled only when the board is ready and measured, has a current annotation
+domain and non-null `annotationTool`, and has a committed
+`onAnnotationOperation` callback. An empty controlled collection is a valid
+domain. Removing any part of that gate cancels an armed action and removes the
+annotation actions.
+
+With an arrow tool, **Start arrow** captures the current cursor square and
+shows the same transient border draft used by explicit touch input. Cursor
+navigation remains available. On a different square, **Finish arrow** emits one
+immutable toggle; on the source square only **Cancel annotation** is offered.
+Cancellation clears the transient source and emits nothing. With a square
+tool, **Toggle square annotation** emits one toggle for the current cursor
+square immediately.
+
+Every emitted operation has `input: 'accessibility'`, the exact current base
+annotation revision, current matching IDs, and a stable candidate annotation
+ID. The callback result is ignored. The draft may disappear after a terminal
+action, but a persistent arrow or square appears or disappears only when the
+consumer applies the operation and publishes a later `annotations` prop. Touch
+and accessibility share one transient annotation session, so either input can
+finish a source started by the other without creating a second annotation
+store.
+
+Annotation mode is exclusive with ordinary accessible move and square actions.
+A provider-selected spare has higher precedence, and an already-pending move
+continues to expose cancellation before annotation input can begin. These
+rules prevent one native action from requesting two semantic outcomes.
+
 ## Correlated announcements
 
 Consumers may request an announcement with
@@ -237,8 +272,8 @@ Callback and timeout semantics never depend on reduced motion.
 
 Run the Expo gallery and test **Accessibility prototype** first, then repeat the
 interaction-specific steps on **Controlled move requests** and **Provider
-coordination**, followed by **Spare pieces** and **Interaction hardening**. Test
-Android and iOS separately:
+coordination**, followed by **Spare pieces**, **Controlled annotation
+gestures**, and **Interaction hardening**. Test Android and iOS separately:
 
 1. Enable TalkBack or VoiceOver and focus the board.
 2. Confirm the board is one focus target and visual squares are not separate
@@ -257,8 +292,8 @@ Android and iOS separately:
 9. Cycle through `system`, `always`, and `never` with delayed changes; confirm
    the board remains the same focus target and cursor state is preserved.
 10. On the accessibility prototype, confirm there is no activation, move,
-    removal, or annotation action because it has neither `onMoveRequest` nor
-    `onSquareActivate`.
+    removal, or annotation action because it has no matching callback boundary
+    and no complete annotation tool/collection/handler gate.
 11. On the controlled-selection route, activate an ordinary occupied or empty
     square. Confirm exactly one activation callback occurs and the visual
     selection changes only after the example publishes its next selection prop.
@@ -287,16 +322,32 @@ Android and iOS separately:
 18. Select a different spare and choose cancel. Confirm the palette selection
     clears, the board position does not change, and an unrelated board never
     exposes either spare action.
-19. On the interaction-hardening route, confirm the clipped source palette and
+19. On the controlled-annotation route with the arrow tool, choose **Start
+    arrow**, navigate to a different square, and choose **Finish arrow**.
+    Confirm one `toggle/accessibility` operation is logged and the persistent
+    arrow appears only after the example publishes the next annotation prop.
+20. Start another arrow and choose **Cancel annotation**. Confirm no operation
+    is logged and no persistent annotation is added. Repeat on the source
+    square and confirm **Finish arrow** is not offered there.
+21. Select the square tool and choose **Toggle square annotation** twice on the
+    same cursor square. Confirm the consumer-owned collection adds and then
+    removes the square through two revisioned operations while the board stays
+    one focus target.
+22. While annotation mode is enabled, confirm ordinary activation, removal,
+    and source/target move actions are absent.
+23. On the interaction-hardening route, confirm the clipped source palette and
     provider overlay add no focus target. Select the spare, background and
     resume the app, then confirm the transient selection is gone and the board
     remains one adjustable control.
-20. Repeat after starting a board or spare drag. Confirm no overlay remains
+24. Repeat after starting a board or spare drag. Confirm no overlay remains
     focused or visible after resume and the next non-drag accessible placement
     still emits exactly one controlled request.
 
 The automated component and native contracts do not replace this
-assistive-technology pass.
+assistive-technology pass. In particular, XCUITest can audit the static iOS
+annotation surface but cannot reliably invoke named custom actions as VoiceOver
+would. The physical VoiceOver steps above are therefore the authoritative iOS
+action-discoverability and execution check.
 
 ## Automated native audits
 
@@ -307,11 +358,15 @@ read-only contract:
 - Android runs Espresso Accessibility Test Framework checks from the full
   screen root, verifies that exactly one board host exposes the adjustable
   range and expected navigation/move actions, exercises them, and checks that
-  the gesture plane and visual layers hide their descendants.
+  the gesture plane and visual layers hide their descendants. Packed arrow and
+  square fixtures additionally invoke the named annotation actions and verify
+  controlled revisions, payload input, and add/remove results.
 - iOS locates exactly one aggregated board element, verifies its current value
   and enabled state in the enabled path, checks that it has no accessible
   descendants, and runs `XCUIApplication.performAccessibilityAudit()` without
-  broad suppressions.
+  broad suppressions. Its packed annotation fixture also captures the initial
+  one-host visual surface; named custom-action execution remains a physical
+  VoiceOver check.
 - Android and iOS launch a separate packed interaction fixture inside a native
   `ScrollView`. A drag from the controlled piece stays with the board and emits
   one rejected request, while an empty-square swipe moves the parent without a
@@ -320,6 +375,9 @@ read-only contract:
   verify that obsolete work cannot commit. Android interrupts an active pointer
   stream and proves the next gesture remains usable; iOS backgrounds pending
   callback work and verifies its abort signal.
+- Component coverage separately verifies that a provider-selected spare and an
+  already-pending move retain action precedence when an annotation tool becomes
+  available.
 
 Both targets use a Release fixture with embedded JavaScript. CI installs the
 single inspected npm archive into a fresh copy of the harness before running
