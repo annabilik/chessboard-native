@@ -874,6 +874,25 @@ transition inputs, and it does not synthesize consumer callbacks. A retained
 handle becomes an inert, false-returning capability after its board unmounts;
 it cannot address a later board that reuses the same `boardId`.
 
+### Promotion and premoves belong to the consumer
+
+`Chessboard` reports coordinates and current controlled context; it does not
+choose a promotion piece or own a premove queue. A promotion picker can keep an
+`onMoveRequest` promise pending in application state, listen to its
+`AbortSignal`, and reject any chooser result whose base revision is no longer
+current. After a choice, publish a greater `ControlledPosition.revision`, copy
+the request's `intentId` to `committedIntentId`, retain the actor's stable ID,
+and provide an exact `transition.promotion` hint for the chosen target type.
+
+A premove should not be represented by returning `accepted` and leaving the
+board waiting for a future commit. Queue it in application state instead. Use
+controlled `selection` and `annotations` for its presentation, then revalidate
+the queued source and target against the latest position after the opponent's
+update. Applying a still-valid premove is an ordinary new controlled position
+revision; an invalid queue is simply cleared. The Expo gallery's
+`rules-owned-moves` route demonstrates both workflows without adding a rules
+engine or another board source of truth.
+
 ## Controlled position transitions
 
 Every valid position prop is authoritative as soon as it renders. When the
@@ -948,12 +967,12 @@ const promotionBefore = {
 };
 const promotionAfter = {
   revision: 12,
-  value: { h8: { id: 'pawn-1', pieceType: 'wQ' } },
+  value: { g8: { id: 'pawn-1', pieceType: 'wQ' } },
   transition: {
     from: 'g7',
     fromRevision: 11,
     promotion: 'wQ',
-    to: 'h8',
+    to: 'g8',
     toRevision: 12,
   },
 };

@@ -19,6 +19,10 @@ export default function RootLayout() {
             options={{ title: 'Controlled move requests' }}
           />
           <Stack.Screen
+            name="rules-owned-moves"
+            options={{ title: 'Promotion and premoves' }}
+          />
+          <Stack.Screen
             name="controlled-selection"
             options={{ title: 'Controlled selection' }}
           />

@@ -92,7 +92,7 @@ function requiredNode(
 }
 
 describe('Chessboard controlled boundary', () => {
-  it('renders one responsive adjustable host with decorative visual layers', async () => {
+  it('[PARITY-EXPORT-CHESSBOARD] renders one responsive adjustable host with decorative visual layers', async () => {
     const result = await render(
       <Chessboard boardId="diagram" position="8/8/8/8/8/8/8/8" />,
     );

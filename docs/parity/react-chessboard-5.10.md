@@ -29,7 +29,7 @@ The source-derived counts are checked from the vendored TypeScript AST. The beha
 
 | Kind | Rows | Dispositions | Statuses |
 | --- | ---: | --- | --- |
-| export | 39 | keep: 1<br>adapt: 31<br>redesign: 5<br>drop: 2 | planned: 3<br>in-progress: 2<br>implemented: 34 |
+| export | 39 | keep: 1<br>adapt: 31<br>redesign: 5<br>drop: 2 | planned: 3<br>in-progress: 1<br>implemented: 35 |
 | option | 42 | keep: 1<br>adapt: 29<br>redesign: 8<br>drop: 4 | planned: 4<br>in-progress: 7<br>implemented: 31 |
 | behavior | 50 | keep: 2<br>adapt: 23<br>redesign: 21<br>drop: 4 | planned: 4<br>in-progress: 2<br>implemented: 44 |
 
@@ -38,7 +38,7 @@ The source-derived counts are checked from the vendored TypeScript AST. The beha
 | ID | Upstream | Disposition | Native mapping | Status | Contract | Source | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `export.arrow` | `Arrow` | adapt | `ReactChessboardArrow`<br>`ArrowAnnotation` | in-progress | `PARITY-EXPORT-ARROW` | [src/types.ts:1-5](../../fixtures/parity/upstream-b74704a/src/types.ts#L1-L5) | Compatibility arrows map to ID-bearing controlled native annotations. |
-| `export.chessboard` | `Chessboard` | adapt | `Chessboard` | in-progress | `PARITY-EXPORT-CHESSBOARD` | [src/Chessboard.tsx:12-23](../../fixtures/parity/upstream-b74704a/src/Chessboard.tsx#L12-L23) | The native component keeps the standalone entry point but uses direct controlled props instead of an options object. |
+| `export.chessboard` | `Chessboard` | adapt | `Chessboard` | implemented | `PARITY-EXPORT-CHESSBOARD` | [src/Chessboard.tsx:12-23](../../fixtures/parity/upstream-b74704a/src/Chessboard.tsx#L12-L23) | The root named export renders one responsive standalone native board and uses direct controlled props instead of an options object. |
 | `export.chessboard-options` | `ChessboardOptions` | adapt | `ReactChessboardOptions` | planned | `PARITY-EXPORT-CHESSBOARD-OPTIONS` | [src/ChessboardProvider.tsx:136-206](../../fixtures/parity/upstream-b74704a/src/ChessboardProvider.tsx#L136-L206) | The exact options object belongs only to the future react-chessboard compatibility subpath; the primary API uses direct props. |
 | `export.chessboard-provider` | `ChessboardProvider` | adapt | `ChessboardProvider` | implemented | `PARITY-EXPORT-CHESSBOARD-PROVIDER` | [src/ChessboardProvider.tsx:208-730](../../fixtures/parity/upstream-b74704a/src/ChessboardProvider.tsx#L208-L730) | The compositional native provider owns a token-safe board registry, one shared transient overlay, and external-drop measurement coordination without owning semantic board state. |
 | `export.chess-column-to-column-index` | `chessColumnToColumnIndex` | adapt | `fileToColumnIndex` | implemented | `PARITY-EXPORT-CHESS-COLUMN-TO-COLUMN-INDEX` | [src/utils.ts:49-57](../../fixtures/parity/upstream-b74704a/src/utils.ts#L49-L57) | The inverse conversion remains pure and validates canonical file identifiers. |
