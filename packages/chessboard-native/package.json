@@ -21,6 +21,12 @@
       "import": "./lib/module/pieces/index.js",
       "default": "./lib/module/pieces/index.js"
     },
+    "./react-chessboard-compat": {
+      "types": "./lib/typescript/src/react-chessboard-compat/index.d.ts",
+      "react-native": "./src/react-chessboard-compat/index.ts",
+      "import": "./lib/module/react-chessboard-compat/index.js",
+      "default": "./lib/module/react-chessboard-compat/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

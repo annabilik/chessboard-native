@@ -144,6 +144,68 @@ import { Chessboard } from '@vibechess/chessboard-native';
 />;
 ```
 
+## `react-chessboard` compatibility subpath
+
+Applications migrating from `react-chessboard@5.10` can keep its single
+`options` object and familiar option names through a separate entry point:
+
+```tsx
+import { useState } from 'react';
+import {
+  Chessboard,
+  type ReactChessboardArrow,
+} from '@vibechess/chessboard-native/react-chessboard-compat';
+
+const [position, setPosition] = useState<Record<string, { pieceType: string }>>(
+  { d4: { pieceType: 'wN' }, d5: { pieceType: 'bP' } },
+);
+const [arrows, setArrows] = useState<readonly ReactChessboardArrow[]>([]);
+
+<Chessboard
+  options={{
+    id: 'analysis',
+    position,
+    arrows,
+    boardOrientation: 'white',
+    onPieceDrop: ({ piece, sourceSquare, targetSquare }) => {
+      if (piece.isSparePiece || targetSquare === null) return false;
+      setPosition((current) => {
+        const next = { ...current };
+        delete next[sourceSquare];
+        next[targetSquare] = { pieceType: piece.pieceType };
+        return next;
+      });
+      return true;
+    },
+    onArrowsChange: ({ arrows: next }) => setArrows(next),
+  }}
+/>;
+```
+
+The subpath adapts option names, not browser primitives. Style fields accept
+React Native `StyleProp` values, piece and square renderers use the native
+visual-only contracts, and square press callbacks do not receive a synthetic
+`React.MouseEvent`. Pointer hover, right-click, ancestor auto-scroll, DOM
+helpers, and the upstream context hook are unavailable on Android and iOS.
+The standard 8×8 board keeps the upstream starting-position default;
+nonstandard dimensions default to an empty position unless `position` is
+supplied explicitly.
+
+Position and arrows remain app-owned. Returning `true` from `onPieceDrop`
+accepts the request but does not move a piece; publish the next `position`
+through `options`. Likewise, `onArrowsChange` proposes a complete next array,
+and only a later `options.arrows` value persists it. The adapter never stores a
+shadow position or arrow collection and never fires `onArrowsChange` merely
+because it mounted. Without `onPieceDrop`, move input stays read-only; without
+`onArrowsChange`, supplied arrows render read-only and drawing/clear policies
+stay disabled.
+
+The compatibility surface uses plain controlled values. Choose the primary
+entry point when an application needs revisioned positions, exact
+`committedIntentId` correlation, asynchronous move decisions, stable annotation
+IDs, square annotations, selection, accessibility customization, multiple
+board coordination, or targeted spare pieces.
+
 ## Providers and multiple boards
 
 `boardId` is required, non-empty, stable for the mounted lifetime, and unique

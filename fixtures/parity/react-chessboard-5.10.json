@@ -942,9 +942,9 @@
         "surface": "compat",
         "symbols": ["ReactChessboardOptions"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-CHESSBOARD-OPTIONS",
-      "compatibilityNotes": "The exact options object belongs only to the future react-chessboard compatibility subpath; the primary API uses direct props."
+      "compatibilityNotes": "The react-chessboard-compat subpath exports the pinned option names with native value and callback types, while the primary root API remains direct controlled props."
     },
     {
       "id": "export.arrow",
@@ -966,9 +966,9 @@
         "surface": "compat",
         "symbols": ["ReactChessboardArrow", "ArrowAnnotation"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-ARROW",
-      "compatibilityNotes": "Compatibility arrows map to ID-bearing controlled native annotations."
+      "compatibilityNotes": "The compatibility subpath exports the upstream-shaped arrow value and maps each current controlled arrow to an ID-bearing native annotation."
     },
     {
       "id": "export.square-data-type",
@@ -2266,12 +2266,13 @@
         "surface": "compat",
         "symbols": [
           "ReactChessboardOptions.onArrowsChange",
-          "ChessboardProps.onAnnotationOperation"
+          "ChessboardProps.onAnnotationOperation",
+          "applyAnnotationOperation"
         ]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ON-ARROWS-CHANGE",
-      "compatibilityNotes": "Board-press and position-change clears plus explicit, long-press, two-finger, and accessibility toggles emit one immutable operation at their causal boundary for reduction against the latest controlled annotations; only the Phase 5 compatibility adapter remains open.",
+      "compatibilityNotes": "The compatibility adapter reduces one causal native operation against the current controlled arrows and reports one detached complete arrow candidate; it never fires an initial effect or owns a persistent arrow list.",
       "rationale": "Emitting whole internal-arrow snapshots on effects can overwrite concurrent controlled updates and fires even for the initial empty state.",
       "documentation": "docs/parity/react-chessboard-5.10.md#option-on-arrows-change"
     },
@@ -2371,9 +2372,9 @@
           "ChessboardProps.onPiecePress"
         ]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ON-PIECE-CLICK",
-      "compatibilityNotes": "The root onPiecePress callback now observes one detached current-snapshot board or targeted-spare context without bubbling into onSquareActivate; only the Phase 5 compatibility adapter remains open."
+      "compatibilityNotes": "The compatibility adapter translates the root current-snapshot board or targeted-spare press into one detached upstream-shaped piece callback without bubbling into square activation."
     },
     {
       "id": "option.on-piece-drag",
@@ -2405,9 +2406,9 @@
           "ChessboardProps.onPieceDragStart"
         ]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ON-PIECE-DRAG",
-      "compatibilityNotes": "The root onPieceDragStart callback now observes one detached current-snapshot board or targeted-spare context after native drag activation; only the Phase 5 compatibility adapter remains open."
+      "compatibilityNotes": "After native drag activation, the compatibility adapter translates the root current-snapshot board or targeted-spare context into one detached upstream-shaped callback."
     },
     {
       "id": "option.on-piece-drop",
@@ -2433,15 +2434,15 @@
       },
       "disposition": "redesign",
       "native": {
-        "surface": "root",
+        "surface": "compat",
         "symbols": [
           "ChessboardProps.onMoveRequest",
           "ReactChessboardOptions.onPieceDrop"
         ]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ON-PIECE-DROP",
-      "compatibilityNotes": "The primary onMoveRequest callback is async, cancellable, timeout-bounded, and live; the future compatibility adapter must still map Boolean results exactly once.",
+      "compatibilityNotes": "The compatibility adapter calls the upstream-shaped Boolean drop callback exactly once and maps strict true or false into the primary cancellable move-decision lifecycle without committing position state.",
       "rationale": "A synchronous Boolean result cannot correlate acceptance with a later controlled commit, cancel stale promises, or handle timeouts deterministically.",
       "documentation": "docs/parity/react-chessboard-5.10.md#option-on-piece-drop"
     },
@@ -2475,9 +2476,9 @@
           "ChessboardProps.onSquareActivate"
         ]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ON-SQUARE-CLICK",
-      "compatibilityNotes": "The root onSquareActivate callback now receives orientation-aware touch and accessibility activation intents; the ReactChessboardOptions compatibility adapter remains future work."
+      "compatibilityNotes": "The compatibility adapter translates one root orientation-aware touch or accessibility activation into a detached upstream-shaped square callback."
     },
     {
       "id": "option.on-square-mouse-down",
@@ -2509,9 +2510,9 @@
           "ChessboardProps.onSquarePressIn"
         ]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ON-SQUARE-MOUSE-DOWN",
-      "compatibilityNotes": "The primary onSquarePressIn callback now receives detached current-position native press data without React.MouseEvent; only the Phase 5 compatibility adapter remains open."
+      "compatibilityNotes": "The compatibility adapter translates native press-in into detached current-position square data and intentionally manufactures no React.MouseEvent."
     },
     {
       "id": "option.on-square-mouse-up",
@@ -2543,9 +2544,9 @@
           "ChessboardProps.onSquarePressOut"
         ]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ON-SQUARE-MOUSE-UP",
-      "compatibilityNotes": "The primary onSquarePressOut callback now receives the originating detached press context once on release or mounted cancellation; only the Phase 5 compatibility adapter remains open."
+      "compatibilityNotes": "The compatibility adapter translates the originating detached press context once on release or mounted cancellation and intentionally manufactures no React.MouseEvent."
     },
     {
       "id": "option.on-square-right-click",
@@ -3221,9 +3222,9 @@
           "ReactChessboardOptions.onPieceDrop"
         ]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B22",
-      "compatibilityNotes": "The mounted runtime executes onMoveRequest and correlates acceptance, rejection, errors, decision timeout, and controlled-commit timeout. Compatibility Boolean mapping remains future work.",
+      "compatibilityNotes": "The compatibility adapter maps one strict Boolean callback result into the mounted request runtime, whose accepted, rejected, failed, timed-out, and later controlled-update paths remain correlated without treating the result as a commit.",
       "rationale": "The upstream callback cannot represent pending validation or correlate a true result with the later authoritative position update.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b22-on-board-boolean-drop-decision"
     },
@@ -3702,15 +3703,16 @@
       },
       "disposition": "redesign",
       "native": {
-        "surface": "root",
+        "surface": "compat",
         "symbols": [
           "ChessboardProps.onAnnotationOperation",
-          "ReactChessboardOptions.onArrowsChange"
+          "ReactChessboardOptions.onArrowsChange",
+          "applyAnnotationOperation"
         ]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B38",
-      "compatibilityNotes": "Board-press and position-change clears plus explicit, long-press, two-finger, and accessibility toggle drawing emit at their causal boundary and require controlled feedback; only the Phase 5 compatibility adapter remains open.",
+      "compatibilityNotes": "Board-press, position-change, drawing, and accessibility operations are reduced at their causal boundary into one detached arrow candidate callback; initial mount emits nothing and only later controlled feedback renders a change.",
       "rationale": "Effect-driven snapshots fire for the initial empty list and can overwrite controlled annotations that arrived after a gesture began.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b38-on-arrows-change-effect-lifecycle"
     },

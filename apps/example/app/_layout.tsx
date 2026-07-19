@@ -23,6 +23,10 @@ export default function RootLayout() {
             options={{ title: 'Promotion and premoves' }}
           />
           <Stack.Screen
+            name="react-chessboard-compat"
+            options={{ title: 'react-chessboard compatibility' }}
+          />
+          <Stack.Screen
             name="controlled-selection"
             options={{ title: 'Controlled selection' }}
           />

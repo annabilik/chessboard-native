@@ -195,8 +195,18 @@ export default function GalleryIndex() {
           focused lab. Controlled selection activation, move requests, provider
           coordination, and external spare placement have focused examples. The
           interaction-hardening lab adds native ScrollView, clipping, geometry,
-          lifecycle, and render/callback evidence.
+          lifecycle, and render/callback evidence. A compatibility route proves
+          the familiar react-chessboard options object over the same controlled
+          native pipeline.
         </Text>
+
+        <Link asChild href="/react-chessboard-compat">
+          <Pressable style={styles.routeLink}>
+            <Text style={styles.routeLinkText}>
+              Open react-chessboard compatibility
+            </Text>
+          </Pressable>
+        </Link>
 
         <Link asChild href="/controlled-annotations">
           <Pressable style={styles.routeLink}>

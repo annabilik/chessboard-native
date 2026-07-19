@@ -671,7 +671,7 @@ describe('pure interaction reducer', () => {
     }
   });
 
-  it('[PARITY-BEHAVIOR-B22] models accept, reject, decision-timeout, and commit-timeout outcomes', () => {
+  it('models accept, reject, decision-timeout, and commit-timeout outcomes', () => {
     const accepted = accept(request(moveIntent('accepted')).state);
     expect(accepted.state.phase).toBe('awaiting-commit');
 

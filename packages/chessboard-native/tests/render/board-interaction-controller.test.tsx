@@ -38,7 +38,7 @@ const CONTROLLED_POSITION: NormalizedControlledValue<PositionObject> =
   });
 
 describe('board interaction controller', () => {
-  it('[PARITY-OPTION-ON-PIECE-DRAG] emits one detached drag-start callback only after a draggable piece activates', async () => {
+  it('emits one detached drag-start callback only after a draggable piece activates', async () => {
     const starts: Readonly<PieceInteractionContext>[] = [];
     const canDragPiece = jest.fn(() => true);
     await render(

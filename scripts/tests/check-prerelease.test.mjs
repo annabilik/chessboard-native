@@ -128,7 +128,14 @@ test('rejects incorrect repository metadata', async (t) => {
   assertFailure(runCheck(manifestPath), /repository\.url must be/);
 });
 
-test('rejects missing or additional package exports', async (t) => {
+test('rejects a missing supported package export', async (t) => {
+  const { manifestPath } = await createManifest(t, (manifest) => {
+    delete manifest.exports['./react-chessboard-compat'];
+  });
+  assertFailure(runCheck(manifestPath), /exports must contain exactly/);
+});
+
+test('rejects an additional private package export', async (t) => {
   const { manifestPath } = await createManifest(t, (manifest) => {
     manifest.exports['./internal'] = './src/internal.ts';
   });

@@ -10,8 +10,8 @@
   },
   "packageManager": "pnpm@11.11.0",
   "scripts": {
-    "api:check": "api-extractor run --config packages/chessboard-native/api-extractor.json --typescript-compiler-folder node_modules/typescript",
-    "api:update": "pnpm build && api-extractor run --local --config packages/chessboard-native/api-extractor.json --typescript-compiler-folder node_modules/typescript",
+    "api:check": "api-extractor run --config packages/chessboard-native/api-extractor.json --typescript-compiler-folder node_modules/typescript && api-extractor run --config packages/chessboard-native/api-extractor.react-chessboard-compat.json --typescript-compiler-folder node_modules/typescript",
+    "api:update": "pnpm build && api-extractor run --local --config packages/chessboard-native/api-extractor.json --typescript-compiler-folder node_modules/typescript && api-extractor run --local --config packages/chessboard-native/api-extractor.react-chessboard-compat.json --typescript-compiler-folder node_modules/typescript",
     "build": "pnpm --filter @vibechess/chessboard-native build",
     "changeset": "changeset",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:ci && pnpm test:tooling && pnpm parity:check --results coverage/parity/jest.parity.json",
