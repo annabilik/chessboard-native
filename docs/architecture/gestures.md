@@ -266,13 +266,16 @@ source data to the nearest provider, which grants exactly one overlay lease
 across all registered boards and external sources. The provider projects that
 lease once as a pointerless, accessibility-hidden absolute sibling; a board
 source ghost stays board-local. `SparePiece` uses its own one-pointer pan
-recognizer, crosses to JS only for activation/release/cancellation, and leaves
-the shared presentation active through fresh drop verification. Replacing or
-cancelling the active epoch removes the prior overlay without retaining a
-position snapshot. Pending decision and commit phases are reducer presentation
-only; public pressed/dragging/pending style options remain later work.
-Controlled destination, selected, and disabled square styles are already
-derived directly from the current selection prop.
+recognizer, crosses to JS for activation, canonical hover-square boundaries,
+release, and cancellation, and leaves the shared presentation active through
+fresh drop verification. Continuous pointer frames remain on the UI thread.
+Replacing or cancelling the active epoch removes the prior overlay without
+retaining a position snapshot. Pending decision and commit phases are reducer
+presentation only. Public drag-overlay and source-ghost styles now resolve from
+the named target board; pressed and pending remain renderer state rather than
+separate style slots. Controlled destination, selected, and disabled square
+styles remain derived directly from the current selection prop, while current
+hover supplies the visual-only drop-target slot.
 
 P2.7 keeps continuous native pan updates out of JavaScript and adds explicit
 evidence at each observable boundary. Component instrumentation counts board

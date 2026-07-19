@@ -15,15 +15,23 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import { useSharedValue } from 'react-native-reanimated';
 
 import { useReducedMotion } from './accessibility/reduced-motion';
-import type { BoardDropSessionToken } from './internal/board-layout-registry';
+import { generateBoardGeometry } from './core/coordinates';
+import type {
+  BoardDropSessionToken,
+  BoardLayoutSnapshot,
+} from './internal/board-layout-registry';
 import {
   resetInteractionPresentationSharedValues,
   useInteractionPresentationSharedValues,
 } from './internal/interaction-presentation';
 import { useOptionalChessboardProvider } from './internal/provider-context';
-import type { ProviderDragOwner } from './internal/provider-drag-coordinator';
+import type {
+  ProviderDragOverlayDescriptor,
+  ProviderDragOwner,
+} from './internal/provider-drag-coordinator';
 import { createProviderSpareSelectionToken } from './internal/provider-spare-selection';
 import { defaultPieceRenderers } from './pieces';
 import type {
@@ -32,11 +40,13 @@ import type {
   PieceRendererProps,
   PieceRenderers,
   PieceVisualState,
+  SquareId,
 } from './public-types';
 import { PIECE_HOST_STRUCTURAL_RESET } from './render/piece-host-style';
 import { resolvePieceRenderer } from './render/piece-layer';
 import {
   SparePieceGestureLayer,
+  type SparePieceHoverSharedValues,
   type SparePieceGestureSignal,
 } from './render/spare-piece-gesture-layer';
 
@@ -81,6 +91,56 @@ const PRESSED_SPARE_STATE: Readonly<PieceVisualState> = Object.freeze({
   ...STATIC_SPARE_STATE,
   isPressed: true,
 });
+
+const SOURCE_GHOST_STATE: Readonly<PieceVisualState> = Object.freeze({
+  isDragging: false,
+  isGhost: true,
+  isPending: false,
+  isPressed: false,
+  isTransitioning: false,
+});
+
+const EMPTY_VISUAL_SQUARES: readonly SquareId[] = Object.freeze([]);
+
+function resetHoverSharedValues(
+  hover: Readonly<SparePieceHoverSharedValues>,
+): void {
+  // Disable first so a concurrent worklet cannot observe a partial geometry.
+  hover.ready.value = 0;
+  hover.candidateSquare.value = null;
+  hover.boundsX.value = 0;
+  hover.boundsY.value = 0;
+  hover.boundsWidth.value = 0;
+  hover.boundsHeight.value = 0;
+  hover.columns.value = 0;
+  hover.rows.value = 0;
+  hover.visualSquares.value = EMPTY_VISUAL_SQUARES;
+}
+
+function configureHoverSharedValues(
+  hover: Readonly<SparePieceHoverSharedValues>,
+  snapshot: Readonly<BoardLayoutSnapshot> | null,
+): boolean {
+  resetHoverSharedValues(hover);
+  if (!snapshot?.available || snapshot.cachedBounds === null) {
+    return false;
+  }
+  const { cachedBounds, geometry } = snapshot;
+  const visualSquares = Object.freeze(
+    generateBoardGeometry(geometry.dimensions, geometry.orientation).flatMap(
+      (row) => row.map(({ square }) => square),
+    ),
+  );
+  hover.boundsX.value = cachedBounds.x;
+  hover.boundsY.value = cachedBounds.y;
+  hover.boundsWidth.value = cachedBounds.width;
+  hover.boundsHeight.value = cachedBounds.height;
+  hover.columns.value = geometry.dimensions.columns;
+  hover.rows.value = geometry.dimensions.rows;
+  hover.visualSquares.value = visualSquares;
+  hover.ready.value = 1;
+  return true;
+}
 
 const STANDARD_PIECE_LABELS: Readonly<Record<string, string>> = Object.freeze({
   bB: 'black bishop',
@@ -175,6 +235,41 @@ export function SparePiece({
   const reducedMotion = useReducedMotion();
   const providerTransientRevision = provider.runtime.getTransientRevision();
   const presentation = useInteractionPresentationSharedValues();
+  const hoverBoundsHeight = useSharedValue(0);
+  const hoverBoundsWidth = useSharedValue(0);
+  const hoverBoundsX = useSharedValue(0);
+  const hoverBoundsY = useSharedValue(0);
+  const hoverCandidateSquare = useSharedValue<SquareId | null>(null);
+  const hoverColumns = useSharedValue(0);
+  const hoverReady = useSharedValue(0);
+  const hoverRows = useSharedValue(0);
+  const hoverVisualSquares =
+    useSharedValue<readonly SquareId[]>(EMPTY_VISUAL_SQUARES);
+  const hover = useMemo<Readonly<SparePieceHoverSharedValues>>(
+    () =>
+      Object.freeze({
+        boundsHeight: hoverBoundsHeight,
+        boundsWidth: hoverBoundsWidth,
+        boundsX: hoverBoundsX,
+        boundsY: hoverBoundsY,
+        candidateSquare: hoverCandidateSquare,
+        columns: hoverColumns,
+        ready: hoverReady,
+        rows: hoverRows,
+        visualSquares: hoverVisualSquares,
+      }),
+    [
+      hoverBoundsHeight,
+      hoverBoundsWidth,
+      hoverBoundsX,
+      hoverBoundsY,
+      hoverCandidateSquare,
+      hoverColumns,
+      hoverReady,
+      hoverRows,
+      hoverVisualSquares,
+    ],
+  );
   const owner = useRef<ProviderDragOwner>({});
   const activeDrag = useRef<Readonly<ActiveSpareDrag> | null>(null);
   const [providerResetRevision, setProviderResetRevision] = useState(0);
@@ -213,6 +308,11 @@ export function SparePiece({
     provider.runtime.spareSelection.getSnapshot,
     provider.runtime.spareSelection.getSnapshot,
   );
+  const dragSnapshot = useSyncExternalStore(
+    provider.runtime.drag.subscribe,
+    provider.runtime.drag.getSnapshot,
+    provider.runtime.drag.getSnapshot,
+  );
   const selected = selectionSnapshot.active?.owner === owner.current;
   const source = useMemo(
     () => Object.freeze({ kind: 'spare' as const, spareId }),
@@ -234,9 +334,42 @@ export function SparePiece({
       if (releaseLease) {
         provider.runtime.drag.release(owner.current, drag.gestureToken);
       }
+      resetHoverSharedValues(hover);
       resetInteractionPresentationSharedValues(presentation);
     },
-    [presentation, provider.runtime],
+    [hover, presentation, provider.runtime],
+  );
+
+  const publishHover = useCallback(
+    (
+      drag: Readonly<ActiveSpareDrag>,
+      targetSquare: SquareId | null,
+    ): boolean => {
+      if (activeDrag.current !== drag) {
+        return false;
+      }
+      const active = provider.runtime.drag.getSnapshot().active;
+      if (
+        active?.owner !== owner.current ||
+        active.gestureToken !== drag.gestureToken ||
+        active.boardId !== targetBoardId ||
+        active.source.kind !== 'spare' ||
+        active.source.spareId !== spareId
+      ) {
+        return false;
+      }
+      presentation.targetSquare.value = targetSquare;
+      if (active.targetSquare === targetSquare) {
+        return true;
+      }
+      const next: Readonly<ProviderDragOverlayDescriptor> = Object.freeze({
+        ...active,
+        targetSquare,
+      });
+      provider.runtime.drag.claim(next);
+      return true;
+    },
+    [presentation, provider.runtime.drag, spareId, targetBoardId],
   );
 
   const handleProviderCancellation = useCallback(
@@ -286,6 +419,7 @@ export function SparePiece({
             piece,
           )
         ) {
+          resetHoverSharedValues(hover);
           resetInteractionPresentationSharedValues(presentation);
           return;
         }
@@ -299,6 +433,17 @@ export function SparePiece({
           session,
         });
         activeDrag.current = drag;
+        configureHoverSharedValues(
+          hover,
+          provider.runtime.registry.getBoardSnapshot(targetBoardId),
+        );
+        const initialHover = provider.runtime.registry.getCachedHover(session, {
+          x: signal.pointerWindowX,
+          y: signal.pointerWindowY,
+        });
+        const targetSquare = initialHover?.targetSquare ?? null;
+        hover.candidateSquare.value = targetSquare;
+        presentation.targetSquare.value = targetSquare;
         provider.runtime.drag.claim(
           Object.freeze({
             boardId: targetBoardId,
@@ -312,9 +457,11 @@ export function SparePiece({
             reducedMotion,
             renderer,
             size,
+            sourceGhostStyle: visualStyle,
             source,
             square: null,
             style: visualStyle,
+            targetSquare,
           }),
         );
         return;
@@ -322,6 +469,24 @@ export function SparePiece({
 
       const drag = activeDrag.current;
       if (drag?.gestureToken !== signal.gestureToken) {
+        return;
+      }
+      if (signal.type === 'hover') {
+        if (signal.targetSquare === null) {
+          publishHover(drag, null);
+          return;
+        }
+        const cached = provider.runtime.registry.getCachedHover(drag.session, {
+          x: signal.pointerWindowX,
+          y: signal.pointerWindowY,
+        });
+        if (cached?.targetSquare !== signal.targetSquare) {
+          // A non-null UI hint that no longer correlates to the active cached
+          // session is stale geometry, not permission to keep dragging.
+          finishDrag(drag, true);
+          return;
+        }
+        publishHover(drag, cached.targetSquare);
         return;
       }
       if (signal.type === 'cancel') {
@@ -361,11 +526,13 @@ export function SparePiece({
       disabled,
       finishDrag,
       handleProviderCancellation,
+      hover,
       piece,
       presentation,
       provider.runtime,
       provider.geometryRevision,
       providerTransientRevision,
+      publishHover,
       reducedMotion,
       renderer,
       size,
@@ -428,6 +595,14 @@ export function SparePiece({
     };
   }, [finishDrag, signalGeneration]);
 
+  const activeSourceGhost =
+    dragSnapshot.active?.source.kind === 'spare' &&
+    dragSnapshot.active.source.spareId === spareId &&
+    dragSnapshot.active.boardId === targetBoardId &&
+    activeDrag.current?.gestureToken === dragSnapshot.active.gestureToken
+      ? dragSnapshot.active
+      : null;
+
   const renderPiece = useCallback(
     (pressed: boolean): ReactElement | null => {
       if (renderer === null) {
@@ -457,6 +632,34 @@ export function SparePiece({
     },
     [piece, renderer, size, source, targetBoardId, visualStyle],
   );
+  const sourceGhost = (() => {
+    if (
+      activeSourceGhost?.source.kind !== 'spare' ||
+      activeSourceGhost.renderer === null
+    ) {
+      return null;
+    }
+    const Renderer = activeSourceGhost.renderer;
+    return (
+      <View
+        accessibilityElementsHidden
+        accessible={false}
+        importantForAccessibility="no-hide-descendants"
+        pointerEvents="none"
+        style={internalStyles.sourceGhost}
+      >
+        <Renderer
+          boardId={activeSourceGhost.boardId}
+          piece={activeSourceGhost.piece}
+          size={activeSourceGhost.size}
+          source={activeSourceGhost.source}
+          square={null}
+          state={SOURCE_GHOST_STATE}
+          style={activeSourceGhost.sourceGhostStyle}
+        />
+      </View>
+    );
+  })();
   const gestureResetKey = JSON.stringify([
     disabled,
     piece.id ?? null,
@@ -476,7 +679,7 @@ export function SparePiece({
     <View
       pointerEvents="box-none"
       style={[
-        visualStyle,
+        activeSourceGhost?.sourceGhostStyle ?? visualStyle,
         PIECE_HOST_STRUCTURAL_RESET,
         internalStyles.host,
         { height: size, width: size },
@@ -485,6 +688,7 @@ export function SparePiece({
     >
       <SparePieceGestureLayer
         enabled={!disabled}
+        hover={hover}
         onSignal={handleGestureSignal}
         presentation={presentation}
         resetKey={gestureResetKey}
@@ -497,11 +701,15 @@ export function SparePiece({
           accessibilityState={{ disabled, selected }}
           disabled={disabled}
           onPress={selectForAccessibility}
-          style={internalStyles.pressable}
+          style={[
+            internalStyles.pressable,
+            activeSourceGhost === null ? null : internalStyles.hiddenSource,
+          ]}
         >
           {({ pressed }) => renderPiece(pressed)}
         </Pressable>
       </SparePieceGestureLayer>
+      {sourceGhost}
     </View>
   );
 }
@@ -514,6 +722,17 @@ const internalStyles = StyleSheet.create({
   },
   pressable: {
     height: '100%',
+    width: '100%',
+  },
+  hiddenSource: {
+    opacity: 0,
+  },
+  sourceGhost: {
+    height: '100%',
+    left: 0,
+    pointerEvents: 'none',
+    position: 'absolute',
+    top: 0,
     width: '100%',
   },
   visual: {

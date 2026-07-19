@@ -78,6 +78,7 @@ import type {
   PieceRenderers,
   SquareActivationIntent,
   SquareId,
+  SquareRenderer,
   SquareStyles,
   Revision,
 } from '../public-types';
@@ -95,7 +96,12 @@ import { BoardNotationLayer } from './board-notation-layer';
 import { PendingMoveLayer } from './pending-move-layer';
 import { PieceLayer } from './piece-layer';
 import { SquareLayer } from './square-layer';
-import { resolveBoardStyle, resolvePieceStyle } from './style-resolution';
+import {
+  resolveBoardStyle,
+  resolveDraggingPieceGhostStyle,
+  resolveDraggingPieceStyle,
+  resolvePieceStyle,
+} from './style-resolution';
 
 interface MeasuredBoardSize extends BoardSize {
   readonly aspectRatio: number;
@@ -120,6 +126,7 @@ interface BoardSurfaceProps {
   readonly providerGeometryRevision: Revision;
   readonly providerLifecycleRevision: Revision;
   readonly providerRegistration: Readonly<ProviderBoardRegistration> | null;
+  readonly renderSquare?: SquareRenderer | undefined;
   readonly showNotation: boolean;
   readonly squareStyles: SquareStyles | undefined;
   readonly styles: ChessboardStyles | undefined;
@@ -246,6 +253,7 @@ export function BoardSurface({
   providerGeometryRevision,
   providerLifecycleRevision,
   providerRegistration,
+  renderSquare,
   showNotation,
   squareStyles,
   styles,
@@ -259,6 +267,11 @@ export function BoardSurface({
     providerRuntime.spareSelection.subscribe,
     providerRuntime.spareSelection.getSnapshot,
     providerRuntime.spareSelection.getSnapshot,
+  );
+  const providerDragSnapshot = useSyncExternalStore(
+    providerRuntime.drag.subscribe,
+    providerRuntime.drag.getSnapshot,
+    providerRuntime.drag.getSnapshot,
   );
   const resolvedPermissions = useMemo(
     () => resolveInteractionPermissions(onMoveRequest, interactionPermissions),
@@ -296,6 +309,7 @@ export function BoardSurface({
   const [activeDragSourceSquare, setActiveDragSourceSquare] = useState<
     string | null
   >(null);
+  const [pressedSquare, setPressedSquare] = useState<SquareId | null>(null);
   const [
     accessibilitySourceResetRevision,
     setAccessibilitySourceResetRevision,
@@ -631,6 +645,41 @@ export function BoardSurface({
     () => resolvePieceStyle(theme, styles),
     [styles, theme],
   );
+  const draggingPieceStyle = useMemo(
+    () => resolveDraggingPieceStyle(theme, styles),
+    [styles, theme],
+  );
+  const draggingPieceGhostStyle = useMemo(
+    () => resolveDraggingPieceGhostStyle(theme, styles),
+    [styles, theme],
+  );
+  useLayoutEffect(() => {
+    const active = providerRuntime.drag.getSnapshot().active;
+    if (
+      !providerRegistered ||
+      active === null ||
+      model.boardId === null ||
+      active.boardId !== model.boardId ||
+      (active.style === draggingPieceStyle &&
+        active.sourceGhostStyle === draggingPieceGhostStyle)
+    ) {
+      return;
+    }
+    providerRuntime.drag.claim(
+      Object.freeze({
+        ...active,
+        sourceGhostStyle: draggingPieceGhostStyle,
+        style: draggingPieceStyle,
+      }),
+    );
+  }, [
+    draggingPieceGhostStyle,
+    draggingPieceStyle,
+    model.boardId,
+    providerDragSnapshot.revision,
+    providerRegistered,
+    providerRuntime.drag,
+  ]);
 
   const handleLayout = useCallback(
     (event: LayoutChangeEvent): void => {
@@ -1157,6 +1206,20 @@ export function BoardSurface({
     pendingLifecycle?.intent.source.kind !== 'board'
       ? null
       : pendingLifecycle.intent.source.square;
+  const pendingTargetSquare = pendingLifecycle?.intent.targetSquare ?? null;
+  const providerDropTargetSquare =
+    providerRegistered &&
+    model.boardId !== null &&
+    providerDragSnapshot.active?.boardId === model.boardId &&
+    providerDragSnapshot.active.targetSquare !== null &&
+    gestureGeometry?.visualSquares.includes(
+      providerDragSnapshot.active.targetSquare,
+    )
+      ? providerDragSnapshot.active.targetSquare
+      : null;
+  const trackSquarePress =
+    renderSquare !== undefined &&
+    (dragEnabled || tapEnabled || annotationGestureEnabled);
 
   return (
     <View
@@ -1196,7 +1259,14 @@ export function BoardSurface({
       {layout === null ? null : (
         <>
           <SquareLayer
+            boardId={model.boardId ?? ''}
+            dropTargetSquare={providerDropTargetSquare}
             layout={layout}
+            pendingSourceSquare={pendingSourceSquare}
+            pendingTargetSquare={pendingTargetSquare}
+            position={model.position}
+            pressedSquare={pressedSquare}
+            renderSquare={renderSquare}
             selection={model.selection}
             squareStyles={squareStyles}
             styles={styles}
@@ -1212,6 +1282,7 @@ export function BoardSurface({
             <PieceLayer
               boardId={model.boardId}
               dragSourceSquare={activeDragSourceSquare}
+              draggingPieceGhostStyle={draggingPieceGhostStyle}
               layout={layout}
               pendingSourceSquare={pendingSourceSquare}
               pieceRenderers={pieceRenderers}
@@ -1252,14 +1323,18 @@ export function BoardSurface({
               boardId={model.boardId}
               {...(canDragPiece === undefined ? {} : { canDragPiece })}
               dragEnabled={dragEnabled}
+              draggingPieceGhostStyle={draggingPieceGhostStyle}
+              draggingPieceStyle={draggingPieceStyle}
               geometry={gestureGeometry}
               onCandidate={handleGestureCandidate}
               onDragSourceChange={handleDragSourceChange}
+              onPressedSquareChange={setPressedSquare}
               pieceRenderers={pieceRenderers}
               pieceStyle={pieceStyle}
               position={model.position}
               selectionRevision={model.selection?.revision ?? null}
               tapEnabled={tapEnabled}
+              trackPress={trackSquarePress}
             />
           )}
         </>

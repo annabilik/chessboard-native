@@ -386,9 +386,9 @@
         "surface": "root",
         "symbols": ["defaultTheme.dropTarget"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-DEFAULT-DROP-SQUARE-STYLE",
-      "compatibilityNotes": "The CSS inset shadow becomes a native drop-target state style."
+      "compatibilityNotes": "The CSS inset shadow is preserved as the native theme's final named drop-target square state."
     },
     {
       "id": "export.default-dark-square-notation-style",
@@ -506,9 +506,9 @@
         "surface": "root",
         "symbols": ["defaultTheme.draggingPiece"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-DEFAULT-DRAGGING-PIECE-STYLE",
-      "compatibilityNotes": "The lift transform becomes a Reanimated drag-overlay style."
+      "compatibilityNotes": "The default 1.2 lift scale is composed after pointer translation on the Reanimated drag overlay."
     },
     {
       "id": "export.default-dragging-piece-ghost-style",
@@ -530,9 +530,9 @@
         "surface": "root",
         "symbols": ["defaultTheme.draggingPieceGhost"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-DEFAULT-DRAGGING-PIECE-GHOST-STYLE",
-      "compatibilityNotes": "The source ghost opacity remains configurable in the native theme."
+      "compatibilityNotes": "The default 0.5 opacity is exposed through the named target board's native source-ghost theme slot."
     },
     {
       "id": "export.default-arrow-options",
@@ -1596,9 +1596,9 @@
         "surface": "root",
         "symbols": ["ChessboardProps.styles.dropTarget"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-DROP-SQUARE-STYLE",
-      "compatibilityNotes": "The drop-target state is exposed to native styles/renderers."
+      "compatibilityNotes": "Current board and spare drag hover is exposed through the final named native square style and renderer state."
     },
     {
       "id": "option.dragging-piece-style",
@@ -1628,9 +1628,9 @@
         "surface": "root",
         "symbols": ["ChessboardProps.styles.draggingPiece"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-DRAGGING-PIECE-STYLE",
-      "compatibilityNotes": "The active overlay style is animated on the UI thread."
+      "compatibilityNotes": "The active provider overlay resolves the static piece chain followed by the drag slot; its transform is composed on the UI thread."
     },
     {
       "id": "option.dragging-piece-ghost-style",
@@ -1660,9 +1660,9 @@
         "surface": "root",
         "symbols": ["ChessboardProps.styles.draggingPieceGhost"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-DRAGGING-PIECE-GHOST-STYLE",
-      "compatibilityNotes": "The source ghost style remains configurable."
+      "compatibilityNotes": "The named target board resolves its static piece chain followed by the configurable ghost slot for board- and spare-origin drags."
     },
     {
       "id": "option.dark-square-notation-style",
@@ -2607,9 +2607,9 @@
         "surface": "root",
         "symbols": ["ChessboardProps.renderSquare"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-SQUARE-RENDERER",
-      "compatibilityNotes": "The visual-only native renderer receives piece, square, size, styles, and interaction state but cannot own gestures or accessibility."
+      "compatibilityNotes": "The visual-only native renderer receives frozen piece, square, size, resolved style, and current interaction state inside board-owned pointerless, accessibility-hidden paint."
     },
     {
       "id": "behavior.b01-standalone-and-provider-nesting",
@@ -3330,11 +3330,15 @@
       "disposition": "adapt",
       "native": {
         "surface": "internal",
-        "symbols": ["DragOverlay", "PendingMovePresentation"]
+        "symbols": [
+          "DragOverlay",
+          "InteractionPresentation",
+          "PendingMoveLayer"
+        ]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B26",
-      "compatibilityNotes": "The live drag path projects lift, source ghost, one provider-level pointerless overlay that escapes source-child clipping, and decision/commit pending state without retaining a position snapshot. An exactly correlated controlled commit now crossfades the pending target in place; public transient styles remain future work."
+      "compatibilityNotes": "The live drag path projects a configurable lifted provider overlay, configurable source ghost, hover target, and decision/commit pending state without retaining a position snapshot. An exactly correlated controlled commit crossfades the pending target in place."
     },
     {
       "id": "behavior.b27-piece-and-square-click-bubbling",
@@ -3923,9 +3927,9 @@
         "surface": "root",
         "symbols": ["ChessboardProps.theme", "ChessboardProps.styles"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B45",
-      "compatibilityNotes": "A documented React Native StyleProp order replaces CSS object spread precedence."
+      "compatibilityNotes": "Documented React Native StyleProp chains replace CSS spread order; drop-target paint is the final named square state, and drag/ghost paint follows the complete static piece chain."
     },
     {
       "id": "behavior.b46-notation-placement-and-style-precedence",
@@ -3972,9 +3976,9 @@
           "ChessboardProps.squareStyles"
         ]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B47",
-      "compatibilityNotes": "The visual-only renderer receives resolved style, size, piece, and interaction state under explicit layer precedence.",
+      "compatibilityNotes": "The visual-only renderer receives frozen resolved style, size, current piece, and interaction state while board-owned fallback paint remains present even when the renderer returns null.",
       "rationale": "Upstream custom square rendering bypasses squareStyles and can own DOM children/handlers, making styling and interaction behavior dependent on fallback selection.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b47-square-styles-and-square-renderer-fallback"
     },

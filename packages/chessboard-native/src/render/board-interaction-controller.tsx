@@ -56,16 +56,20 @@ interface BoardInteractionControllerProps {
   readonly boardId: string;
   readonly canDragPiece?: CanDragPiece;
   readonly dragEnabled?: boolean;
+  readonly draggingPieceGhostStyle?: Readonly<ViewStyle>;
+  readonly draggingPieceStyle?: Readonly<ViewStyle>;
   readonly geometry: Readonly<BoardGestureGeometry>;
   readonly onCandidate?: (
     candidate: Readonly<BoardGestureIntentCandidate>,
   ) => void;
   readonly onDragSourceChange?: (sourceSquare: SquareId | null) => void;
+  readonly onPressedSquareChange?: (square: SquareId | null) => void;
   readonly pieceRenderers: PieceRenderers;
   readonly pieceStyle: Readonly<ViewStyle>;
   readonly position: NormalizedControlledValue<PositionObject>;
   readonly selectionRevision?: Revision | null;
   readonly tapEnabled?: boolean;
+  readonly trackPress?: boolean;
 }
 
 const EMPTY_OCCUPIED_SQUARES: readonly SquareId[] = Object.freeze([]);
@@ -120,6 +124,31 @@ interface ActiveNativeAnnotationSignal {
   readonly sourceSquare: SquareId;
 }
 
+interface ActiveNativePressSignal {
+  readonly boardId: string;
+  readonly geometryRevision: Revision;
+  readonly gestureToken: number;
+  readonly positionRevision: Revision;
+  readonly providerGeometryRevision: Revision;
+  readonly providerLifecycleRevision: Revision;
+  readonly providerTransientRevision: Revision;
+  readonly sourceSquare: SquareId;
+}
+
+function nativePressSignalMatches(
+  active: Readonly<ActiveNativePressSignal> | null,
+  signal: Readonly<BoardGestureSignal>,
+): active is Readonly<ActiveNativePressSignal> {
+  return (
+    active !== null &&
+    active.boardId === signal.boardId &&
+    active.geometryRevision === signal.geometryRevision &&
+    active.gestureToken === signal.gestureToken &&
+    active.positionRevision === signal.positionRevision &&
+    active.sourceSquare === signal.sourceSquare
+  );
+}
+
 function nativeAnnotationSignalMatches(
   active: Readonly<ActiveNativeAnnotationSignal> | null,
   signal: Readonly<NativeAnnotationSignal>,
@@ -161,15 +190,21 @@ function BoardInteractionControllerContent({
   boardId,
   canDragPiece,
   dragEnabled = false,
+  draggingPieceGhostStyle: draggingPieceGhostStyleProp,
+  draggingPieceStyle: draggingPieceStyleProp,
   geometry,
   onCandidate,
   onDragSourceChange,
+  onPressedSquareChange,
   pieceRenderers,
   pieceStyle,
   position,
   selectionRevision = null,
   tapEnabled = false,
+  trackPress = false,
 }: BoardInteractionControllerProps): ReactElement {
+  const draggingPieceStyle = draggingPieceStyleProp ?? pieceStyle;
+  const draggingPieceGhostStyle = draggingPieceGhostStyleProp ?? pieceStyle;
   const {
     geometryRevision: providerGeometryRevision,
     lifecycleRevision: providerLifecycleRevision,
@@ -225,6 +260,8 @@ function BoardInteractionControllerContent({
   );
   const activeNativeAnnotationSignal =
     useRef<Readonly<ActiveNativeAnnotationSignal> | null>(null);
+  const activeNativePressSignal =
+    useRef<Readonly<ActiveNativePressSignal> | null>(null);
   const annotationRuntimeAtCommit = useRef(annotationRuntime);
   const acceptingSignals = useRef(true);
   const annotationEnabledAtCommit = useRef(annotationSnapshot !== null);
@@ -232,11 +269,12 @@ function BoardInteractionControllerContent({
   const dragEnabledAtCommit = useRef(dragEnabled);
   const draggableSquaresAtCommit = useRef(draggableSquares);
   const interactionEnabledAtCommit = useRef(
-    dragEnabled || tapEnabled || annotationSnapshot !== null,
+    dragEnabled || tapEnabled || trackPress || annotationSnapshot !== null,
   );
   const tapEnabledAtCommit = useRef(tapEnabled);
   const onCandidateAtCommit = useRef(onCandidate);
   const onDragSourceChangeAtCommit = useRef(onDragSourceChange);
+  const onPressedSquareChangeAtCommit = useRef(onPressedSquareChange);
   const snapshotAtCommit = useRef(snapshot);
   const pieceSize = Math.min(
     geometry.width / geometry.columns,
@@ -272,12 +310,14 @@ function BoardInteractionControllerContent({
               reducedMotion,
               renderer: resolvePieceRenderer(pieceRenderers, piece.pieceType),
               size: pieceSize,
+              sourceGhostStyle: draggingPieceGhostStyle,
               source: Object.freeze({
                 kind: 'board' as const,
                 square: sourceSquare,
               }),
               square: sourceSquare,
-              style: pieceStyle,
+              style: draggingPieceStyle,
+              targetSquare: lifecycle.targetSquare,
             }),
           );
           onDragSourceChangeAtCommit.current?.(sourceSquare);
@@ -298,9 +338,10 @@ function BoardInteractionControllerContent({
     },
     [
       boardId,
+      draggingPieceGhostStyle,
+      draggingPieceStyle,
       pieceRenderers,
       pieceSize,
-      pieceStyle,
       presentation,
       providerRuntime,
       reducedMotion,
@@ -408,6 +449,23 @@ function BoardInteractionControllerContent({
           );
           return;
         }
+        case 'drag-target': {
+          if (!signalMatchesActive(adapter.current, signal)) {
+            return;
+          }
+          const correlation = adapter.current.active?.correlation;
+          if (correlation === undefined) {
+            return;
+          }
+          applyReduction(
+            reduceBoardGestureAdapter(adapter.current, {
+              correlation,
+              targetSquare: signal.targetSquare,
+              type: 'drag-update',
+            }),
+          );
+          return;
+        }
         case 'drag-cancel': {
           if (!signalMatchesActive(adapter.current, signal)) {
             return;
@@ -462,6 +520,38 @@ function BoardInteractionControllerContent({
               type: 'tap',
             }),
           );
+          return;
+        }
+        case 'press-start': {
+          if (
+            !trackPress ||
+            signal.geometryRevision !== currentSnapshot.geometryEpoch ||
+            signal.positionRevision !== currentSnapshot.positionRevision ||
+            !geometry.visualSquares.includes(signal.sourceSquare)
+          ) {
+            return;
+          }
+          activeNativePressSignal.current = Object.freeze({
+            boardId: signal.boardId,
+            geometryRevision: signal.geometryRevision,
+            gestureToken: signal.gestureToken,
+            positionRevision: signal.positionRevision,
+            providerGeometryRevision,
+            providerLifecycleRevision,
+            providerTransientRevision,
+            sourceSquare: signal.sourceSquare,
+          });
+          onPressedSquareChangeAtCommit.current?.(signal.sourceSquare);
+          return;
+        }
+        case 'press-end': {
+          if (
+            !nativePressSignalMatches(activeNativePressSignal.current, signal)
+          ) {
+            return;
+          }
+          activeNativePressSignal.current = null;
+          onPressedSquareChangeAtCommit.current?.(null);
           return;
         }
         case 'annotation-start': {
@@ -548,6 +638,8 @@ function BoardInteractionControllerContent({
       providerGeometryRevision,
       providerRuntime,
       providerTransientRevision,
+      geometry.visualSquares,
+      trackPress,
     ],
   );
 
@@ -556,7 +648,14 @@ function BoardInteractionControllerContent({
     cancelFromProviderAtCommit.current = cancelFromProvider;
     onCandidateAtCommit.current = onCandidate;
     onDragSourceChangeAtCommit.current = onDragSourceChange;
-  }, [annotationRuntime, cancelFromProvider, onCandidate, onDragSourceChange]);
+    onPressedSquareChangeAtCommit.current = onPressedSquareChange;
+  }, [
+    annotationRuntime,
+    cancelFromProvider,
+    onCandidate,
+    onDragSourceChange,
+    onPressedSquareChange,
+  ]);
 
   useLayoutEffect(() => {
     snapshotAtCommit.current = snapshot;
@@ -565,8 +664,22 @@ function BoardInteractionControllerContent({
     dragEnabledAtCommit.current = dragEnabled;
     draggableSquaresAtCommit.current = draggableSquares;
     interactionEnabledAtCommit.current =
-      dragEnabled || tapEnabled || annotationSnapshot !== null;
+      dragEnabled || tapEnabled || trackPress || annotationSnapshot !== null;
     tapEnabledAtCommit.current = tapEnabled;
+    const activePress = activeNativePressSignal.current;
+    if (
+      activePress !== null &&
+      (!trackPress ||
+        activePress.boardId !== snapshot.boardId ||
+        activePress.geometryRevision !== snapshot.geometryEpoch ||
+        activePress.positionRevision !== snapshot.positionRevision ||
+        activePress.providerGeometryRevision !== providerGeometryRevision ||
+        activePress.providerLifecycleRevision !== providerLifecycleRevision ||
+        activePress.providerTransientRevision !== providerTransientRevision)
+    ) {
+      activeNativePressSignal.current = null;
+      onPressedSquareChangeAtCommit.current?.(null);
+    }
     let reduction = reduceBoardGestureAdapter(adapter.current, {
       snapshot,
       type: 'synchronize',
@@ -598,6 +711,10 @@ function BoardInteractionControllerContent({
     draggableSquares,
     snapshot,
     tapEnabled,
+    trackPress,
+    providerGeometryRevision,
+    providerLifecycleRevision,
+    providerTransientRevision,
   ]);
 
   useLayoutEffect(() => {
@@ -618,6 +735,8 @@ function BoardInteractionControllerContent({
         }).state;
       }
       activeNativeAnnotationSignal.current = null;
+      activeNativePressSignal.current = null;
+      onPressedSquareChangeAtCommit.current?.(null);
       annotationRuntimeAtCommit.current?.cancel();
       const active = providerRuntime.drag.getSnapshot().active;
       if (active?.owner === providerOwner.current) {
@@ -650,6 +769,8 @@ function BoardInteractionControllerContent({
       ])}
       selectionRevision={selectionRevision}
       tapEnabled={tapEnabled || annotationSnapshot !== null}
+      trackDragTarget={dragEnabled}
+      trackPress={trackPress}
     />
   );
 }

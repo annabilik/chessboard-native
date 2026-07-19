@@ -432,7 +432,7 @@ describe('interaction presentation foundation', () => {
     expect(getAnimatedStyle(overlay)).toEqual(
       expect.objectContaining({
         opacity: 0,
-        transform: [{ translateX: -24 }, { translateY: -24 }, { scale: 1 }],
+        transform: [{ translateX: -24 }, { translateY: -24 }],
       }),
     );
     expect(harnessRenderCount).toBe(1);
@@ -470,17 +470,48 @@ describe('interaction presentation foundation', () => {
     expect(rendererCalls).toHaveLength(1);
   });
 
+  it('composes the resolved dragging-piece transform after pointer translation without changing hit data', () => {
+    const values = testPresentationSharedValues();
+    const targetBefore = values.targetSquare.value;
+
+    expect(
+      resolveDragOverlayAnimatedStyle(values, 40, false, 20, 30, 1, [
+        { scale: 1.35 },
+        { rotate: '8deg' },
+      ]),
+    ).toEqual({
+      opacity: 1,
+      transform: [
+        { translateX: 180 },
+        { translateY: 130 },
+        { scale: 1.35 },
+        { rotate: '8deg' },
+      ],
+    });
+    expect(values.targetSquare.value).toBe(targetBefore);
+    expect(values.pointerWindowX.value).toBe(220);
+    expect(values.pointerWindowY.value).toBe(180);
+  });
+
   it.each([
-    { expectedScale: 1, preference: 'always' as const },
+    { expectedTransform: [] as const, preference: 'always' as const },
     {
-      expectedScale: DRAG_OVERLAY_LIFT_SCALE,
+      expectedTransform: [{ scale: 50 }] as const,
       preference: 'never' as const,
     },
   ])(
-    'uses scale $expectedScale when reduced motion is $preference',
-    async ({ expectedScale, preference }) => {
+    'uses the resolved outer transform when reduced motion is $preference',
+    async ({ expectedTransform, preference }) => {
       const presentation = testPresentationSharedValues();
-      const Renderer: PieceRenderer = () => <View testID="policy-art" />;
+      const rendererCalls: PieceRendererProps[] = [];
+      const Renderer: PieceRenderer = (props) => {
+        rendererCalls.push(props);
+        return <View testID="policy-art" />;
+      };
+      const draggingStyle = Object.freeze<ViewStyle>({
+        opacity: 0.7,
+        transform: [{ scale: 50 }],
+      });
       const result = await render(
         <ReducedMotionProvider preference={preference}>
           <DragOverlay
@@ -492,7 +523,7 @@ describe('interaction presentation foundation', () => {
             size={40}
             source={{ kind: 'board', square: 'b1' }}
             square="b1"
-            style={{ transform: [{ scale: 50 }] }}
+            style={draggingStyle}
             testID={`overlay-${preference}`}
           />
         </ReducedMotionProvider>,
@@ -507,9 +538,14 @@ describe('interaction presentation foundation', () => {
           transform: [
             { translateX: 200 },
             { translateY: 160 },
-            { scale: expectedScale },
+            ...expectedTransform,
           ],
         }),
+      );
+      expect(rendererCalls).toHaveLength(1);
+      expect(rendererCalls[0]?.style).toBe(draggingStyle);
+      expect(rendererCalls[0]?.state).toEqual(
+        expect.objectContaining({ isDragging: true }),
       );
       const artwork = result.getByTestId('policy-art', {
         includeHiddenElements: true,

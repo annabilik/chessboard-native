@@ -1,8 +1,13 @@
 import { act, render } from '@testing-library/react-native';
 import { startTransition, Suspense, useState, type ReactElement } from 'react';
 
+import { ChessboardProvider } from '../../src/ChessboardProvider';
 import type { BoardGestureIntentCandidate } from '../../src/internal/board-gesture-adapter';
 import type { NormalizedControlledValue } from '../../src/internal/controlled-domain';
+import {
+  useChessboardProvider,
+  type ChessboardProviderRuntime,
+} from '../../src/internal/provider-context';
 import type { PositionObject } from '../../src/public-types';
 import { BoardInteractionController } from '../../src/render/board-interaction-controller';
 import {
@@ -78,6 +83,36 @@ function tapSignal(options: {
   });
 }
 
+function dragTargetSignal(options: {
+  readonly gestureToken: number;
+  readonly targetSquare: 'a2' | 'b1' | null;
+}): Readonly<BoardGestureSignal> {
+  return Object.freeze({
+    boardId: 'race-board',
+    geometryRevision: 5,
+    gestureToken: options.gestureToken,
+    positionRevision: 9,
+    sourceSquare: 'a2',
+    targetSquare: options.targetSquare,
+    type: 'drag-target',
+  });
+}
+
+function pressSignal(options: {
+  readonly gestureToken: number;
+  readonly positionRevision?: number;
+  readonly type: 'press-start' | 'press-end';
+}): Readonly<BoardGestureSignal> {
+  return Object.freeze({
+    boardId: 'race-board',
+    geometryRevision: 5,
+    gestureToken: options.gestureToken,
+    positionRevision: options.positionRevision ?? 9,
+    sourceSquare: 'a2',
+    type: options.type,
+  });
+}
+
 type GestureLayerProps = Parameters<typeof BoardGestureLayer>[0];
 
 function currentSignalHandler(): GestureLayerProps['onSignal'] {
@@ -89,6 +124,90 @@ function currentSignalHandler(): GestureLayerProps['onSignal'] {
 }
 
 describe('board interaction controller races', () => {
+  it('publishes only correlated drag-target boundaries to the provider lease', async () => {
+    const runtime: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    function RuntimeProbe(): null {
+      runtime.current = useChessboardProvider().runtime;
+      return null;
+    }
+
+    await render(
+      <ChessboardProvider>
+        <RuntimeProbe />
+        <BoardInteractionController
+          boardId="race-board"
+          dragEnabled
+          draggingPieceGhostStyle={{ opacity: 0.25 }}
+          draggingPieceStyle={{ transform: [{ scale: 1.15 }] }}
+          geometry={geometry(5)}
+          pieceRenderers={{}}
+          pieceStyle={{}}
+          position={controlledPosition(9)}
+        />
+      </ChessboardProvider>,
+    );
+    const signal = currentSignalHandler();
+
+    await act(() => {
+      signal(dragSignal({ gestureToken: 71, type: 'drag-start' }));
+      signal(dragTargetSignal({ gestureToken: 71, targetSquare: 'b1' }));
+      signal(dragTargetSignal({ gestureToken: 70, targetSquare: null }));
+    });
+
+    if (runtime.current === null) {
+      throw new Error('Expected the provider runtime probe to commit.');
+    }
+    const active = runtime.current.drag.getSnapshot().active;
+    expect(active).toEqual(
+      expect.objectContaining({
+        boardId: 'race-board',
+        gestureToken: 71,
+        sourceGhostStyle: { opacity: 0.25 },
+        style: { transform: [{ scale: 1.15 }] },
+        targetSquare: 'b1',
+      }),
+    );
+  });
+
+  it('clears only the current correlated press and invalidates it on a position commit', async () => {
+    const onPressedSquareChange = jest.fn();
+    const result = await render(
+      <BoardInteractionController
+        boardId="race-board"
+        geometry={geometry(5)}
+        onPressedSquareChange={onPressedSquareChange}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+        trackPress
+      />,
+    );
+    const retainedSignal = currentSignalHandler();
+
+    await act(() => {
+      retainedSignal(pressSignal({ gestureToken: 81, type: 'press-start' }));
+      retainedSignal(pressSignal({ gestureToken: 80, type: 'press-end' }));
+      retainedSignal(pressSignal({ gestureToken: 81, type: 'press-end' }));
+      retainedSignal(pressSignal({ gestureToken: 82, type: 'press-start' }));
+    });
+    expect(onPressedSquareChange.mock.calls).toEqual([['a2'], [null], ['a2']]);
+
+    await result.rerender(
+      <BoardInteractionController
+        boardId="race-board"
+        geometry={geometry(5)}
+        onPressedSquareChange={onPressedSquareChange}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(10)}
+        trackPress
+      />,
+    );
+    expect(onPressedSquareChange).toHaveBeenLastCalledWith(null);
+  });
+
   it('rejects a replaced handler terminal by exact native token', async () => {
     const candidates: Readonly<BoardGestureIntentCandidate>[] = [];
     await render(

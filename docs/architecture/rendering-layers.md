@@ -46,22 +46,27 @@ accessibility handlers. Piece props also discriminate a board source from a
 provider spare source. A board visual has
 `source: { kind: 'board', square }` and a non-null `square`; a spare visual has
 `source: { kind: 'spare', spareId }` and a nullable square. The public external
-source and its overlay pass `square: null`; a pending spare visual projected
-inside its target board carries that canonical target. P1.4 activates this
-contract for piece renderers only; custom square rendering remains deferred.
-Renderer content is
-contained by a pointerless, accessibility-hidden board- or spare-owned wrapper
-and cannot become an alternate event surface.
+source and its source ghost pass `square: null`; its active provider overlay
+passes the current canonical target while over a board and `null` off-board. A
+pending spare visual projected inside its target board likewise carries that
+canonical target. `renderSquare` receives the current controlled piece or
+`null`, canonical square, measured size, resolved frozen style, and frozen
+square state. The board always paints its resolved square first, so an omitted
+renderer or a `null` result retains the same fallback paint. Renderer content
+is contained by a pointerless, accessibility-hidden board- or spare-owned
+wrapper and cannot become an alternate event surface.
 
 Static theme and style precedence is fixed as built-in defaults, `theme`,
-instance `styles`, then canonical `squareStyles`. Controlled square paint then
-applies in the fixed order destination, selected, and disabled. Within each
-state slot, the built-in default is followed by `theme` and instance `styles`
-before the next slot starts. Later layers override earlier layers. The state
-paint is derived only from the current normalized selection and cannot replace
-board-owned square geometry. Pressed, drop-target, pending, dragging, ghost,
-and transition styling remain later work. Custom piece renderers receive the
-resolved piece value rather than performing a second merge.
+instance `styles`, then canonical `squareStyles`. Named square-state paint then
+applies in the fixed order destination, selected, disabled, and drop target.
+Within each state slot, the built-in default is followed by `theme` and instance
+`styles` before the next slot starts. Later layers override earlier layers. The
+first three states derive from the current normalized selection; drop target is
+correlated transient hover presentation and never authorizes a move. Pressed
+and pending source/target flags are renderer context, not semantic state or
+separate public paint slots. None can replace board-owned square geometry.
+Custom piece and square renderers receive the resolved style rather than
+performing a second merge.
 
 The P1.3 static boundary consists of private `BoardSurface`, `SquareLayer`, and
 `NotationLayer` components. `BoardSurface` fills the available parent width and
@@ -109,18 +114,39 @@ from a selected renderer is intentional and does not fall back to the default
 set.
 
 `defaultTheme` supplies board, square, light/dark square, controlled
-destination/selected/disabled square, notation, and piece defaults. `theme`
-overrides those defaults, `styles` applies instance-level overrides, and
-`squareStyles` applies the final static square override by canonical square ID
-before the controlled state slots. The built-in controlled styles use inset
-shadow or opacity without altering layout. File/rank notation retains its
+destination/selected/disabled square, drop target, dragging piece, source
+ghost, notation, and piece defaults. `theme` overrides those
+defaults, `styles` applies instance-level overrides, and `squareStyles` applies
+the final static square override by canonical square ID before the controlled
+and transient square-state slots. The built-in state styles use inset shadow or
+opacity without altering layout. File/rank notation retains its
 measured placement while accepting resolved native text styles. Static board
 piece renderers receive their resolved native style, measured size, non-null
 square, board source, piece, board ID, and all-false interaction state. The
 board-owned piece wrapper applies the resolved `ViewStyle` once; the renderer
 receives the same frozen value for inspection or derived non-View artwork and
 must not merge it onto the wrapper a second time.
-Board-local measurement and absolute cell geometry remain owned by the renderer
+
+For ordinary piece paint the chain is built-in `piece`, `theme.piece`, then
+`styles.piece`. Active drag-overlay paint appends built-in,
+`theme.draggingPiece`, and `styles.draggingPiece`; its transform is appended
+after pointer translations by the overlay worklet and is omitted under reduced
+motion. The active source ghost instead appends the corresponding
+`draggingPieceGhost` chain. The named target board's resolved transient styles
+apply to both board-origin and spare-origin active drags. A spare's own `style`
+remains its resting base paint until the provider lease is active; the target
+board then owns overlay and ghost presentation.
+
+Each measured square gets one frozen `SquareRendererProps` value. Selection
+flags come from current controlled selection, pressed/drop-target flags from
+the current correlated gesture, and pending source/target flags from the current
+move lifecycle. Square-boundary changes, rather than per-frame pointer samples,
+cross to React for transient square projection. Stale gesture, geometry,
+provider, or mount correlation clears or ignores that presentation. The
+renderer receives no handlers; the board applies the resolved style once to its
+paint wrapper before mounting the renderer as content.
+
+Board-local measurement and absolute cell geometry remain owned by the board
 rather than custom content. Host layout fields such as display, width, height,
 aspect ratio, flex sizing, margins, insets, and padding are removed from resolved
 board paint; board transforms, box sizing, and border widths are removed for the
@@ -174,8 +200,8 @@ draft is pointerless, accessibility-hidden, and has no persistent consumer ID.
 Notation now occupies its own decorative plane above both annotation planes.
 P4.4 touch gestures and P4.5 accessibility actions feed the same correlated
 draft slot and operation boundary; neither adds a visual or semantic layer.
-Custom square rendering and additional transient interaction styling remain
-later slices.
+P5.1 adds visual-only square content and the public drop-target,
+dragging-piece, and source-ghost paint slots without changing layer ownership.
 
 P3.2 promotes the piece plane to stable `Animated.View` hosts. The latest
 controlled position still creates every current host; a detached transition
@@ -236,9 +262,11 @@ to its nearest provider. The provider-level overlay sibling uses a direct
 animated transform, so frame updates do not rerender custom artwork or commit
 React state. Exactly one overlay can be active in a provider even when multiple
 boards and spare sources are present; source ghost and pending projection remain
-routed to the owning board ID and mount token. Controlled destination, selected,
-and disabled paint is public; drag, pending, pressed, ghost, and transition
-style slots remain future work.
+routed to the owning board ID and mount token. P5.1 resolves public drag-overlay
+and source-ghost styles after the static piece chain. Board and spare drag
+target-square changes update the public drop-target paint and square-renderer
+state only when the canonical hover square changes. Pending and pressed remain
+renderer state; transition-specific public styling remains future work.
 
 P2.6 adds a `SparePiece` source host with one visual-only piece renderer, one
 accessible button, and one board-external pan recognizer. Its visual root fixes
@@ -335,8 +363,10 @@ emission, stale-base application, independent policy clearing, single-draft
 composition, active styling, exact correlation invalidation, and persistent
 collection isolation. P4.4/P4.5 add shared touch/accessibility session,
 exclusive action routing, current-callback, native-action, and controlled
-feedback coverage. Later slices must verify custom square renderer behavior.
-P2.2 tests add rectangular worklet hit
+feedback coverage. P5.1 tests add frozen square-renderer context, fallback
+paint, board-owned pointer/accessibility containment, transient state clearing,
+drop-target precedence, and drag/ghost style projection. P2.2 tests add
+rectangular worklet hit
 testing, tap/pan boundary correlation, zero per-frame JS signals,
 disabled-by-default mounting, reducer adapter stale-event guards, and transient
 piece presentation. P2.3 tests add public permission gates, drag overlay

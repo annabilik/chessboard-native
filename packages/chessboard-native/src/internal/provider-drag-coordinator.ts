@@ -25,7 +25,10 @@ export type ProviderDragOverlayDescriptor = {
   readonly renderer: PieceRenderer | null;
   readonly reducedMotion: boolean;
   readonly size: number;
+  readonly sourceGhostStyle: Readonly<ViewStyle>;
   readonly style: Readonly<ViewStyle>;
+  /** Live, presentation-only destination correlation. Never authorizes a move. */
+  readonly targetSquare: SquareId | null;
 } & (
   | {
       readonly source: Extract<MoveSource, { readonly kind: 'board' }>;

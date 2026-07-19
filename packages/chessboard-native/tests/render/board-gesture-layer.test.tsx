@@ -48,6 +48,8 @@ interface HarnessProps {
   readonly onRender?: () => void;
   readonly onSignal: (signal: Readonly<BoardGestureSignal>) => void;
   readonly selectionRevision?: number | null;
+  readonly trackDragTarget?: boolean;
+  readonly trackPress?: boolean;
 }
 
 function Harness({
@@ -61,6 +63,8 @@ function Harness({
   onRender,
   onSignal,
   selectionRevision = 11,
+  trackDragTarget = false,
+  trackPress = false,
 }: HarnessProps) {
   onRender?.();
   const presentation = useInteractionPresentationSharedValues();
@@ -80,6 +84,8 @@ function Harness({
         resetKey="test-reset"
         selectionRevision={selectionRevision}
         tapEnabled={enabled ?? false}
+        trackDragTarget={trackDragTarget}
+        trackPress={trackPress}
       />
     </GestureHandlerRootView>
   );
@@ -404,6 +410,97 @@ describe('board-level native gesture plane', () => {
     );
   });
 
+  it('emits drag-target only when the canonical hover square changes', async () => {
+    const signals: Readonly<BoardGestureSignal>[] = [];
+    await render(
+      <Harness
+        enabled
+        onSignal={(signal) => {
+          signals.push(signal);
+        }}
+        trackDragTarget
+      />,
+    );
+    const pan = getByGestureTestId(getBoardGestureTestIds('gesture-board').pan);
+    const callbacks = gestureCallbacks(pan);
+    const handlerTag = (pan as unknown as Readonly<{ handlerTag: number }>)
+      .handlerTag;
+
+    await act(() => {
+      callbacks.onBegin?.({ handlerTag, x: 25, y: 25 });
+      callbacks.onStart?.({ handlerTag, x: 30, y: 25 });
+      callbacks.onUpdate?.({ handlerTag, x: 35, y: 30 });
+      callbacks.onUpdate?.({ handlerTag, x: 125, y: 25 });
+      callbacks.onUpdate?.({ handlerTag, x: 150, y: 50 });
+      callbacks.onUpdate?.({ handlerTag, x: 225, y: 25 });
+      callbacks.onUpdate?.({ handlerTag, x: 225, y: 75 });
+      callbacks.onUpdate?.({ handlerTag, x: 125, y: 125 });
+      callbacks.onEnd?.({ handlerTag, x: 125, y: 125 }, true);
+      callbacks.onFinalize?.({ handlerTag, x: 125, y: 125 }, true);
+    });
+
+    expect(signals.map((signal) => signal.type)).toEqual([
+      'drag-start',
+      'drag-target',
+      'drag-target',
+      'drag-target',
+      'drag-end',
+    ]);
+    expect(
+      signals
+        .filter((signal) => signal.type === 'drag-target')
+        .map((signal) => signal.targetSquare),
+    ).toEqual(['b2', null, 'b1']);
+    expect(
+      new Set(signals.map((signal) => signal.gestureToken)),
+    ).toHaveProperty('size', 1);
+  });
+
+  it('emits correlated press state without enabling activation', async () => {
+    const signals: Readonly<BoardGestureSignal>[] = [];
+    await render(
+      <Harness
+        enabled={false}
+        onSignal={(signal) => {
+          signals.push(signal);
+        }}
+        trackPress
+      />,
+    );
+    const ids = getBoardGestureTestIds('gesture-board');
+    expect(gestureConfig(getByGestureTestId(ids.pan))['enabled']).toBe(false);
+    const tap = getByGestureTestId(ids.tap);
+
+    await act(() => {
+      fireGestureHandler(tap, [
+        { state: State.BEGAN, x: 25, y: 25 },
+        { state: State.END, x: 25, y: 25 },
+      ]);
+      fireGestureHandler(tap, [
+        { state: State.BEGAN, x: 125, y: 25 },
+        { state: State.CANCELLED, x: 125, y: 25 },
+      ]);
+    });
+
+    expect(signals.map((signal) => signal.type)).toEqual([
+      'press-start',
+      'press-end',
+      'press-start',
+      'press-end',
+    ]);
+    expect(signals).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'tap' })]),
+    );
+    expect(signals[0]).toEqual(
+      expect.objectContaining({ sourceSquare: 'a2', type: 'press-start' }),
+    );
+    expect(signals[1]?.gestureToken).toBe(signals[0]?.gestureToken);
+    expect(signals[2]).toEqual(
+      expect.objectContaining({ sourceSquare: 'b2', type: 'press-start' }),
+    );
+    expect(signals[3]?.gestureToken).toBe(signals[2]?.gestureToken);
+  });
+
   it('[PARITY-BEHAVIOR-B28] emits same-square occupied and empty activation while ignoring moved, outside, and cancelled taps in both orientations', async () => {
     for (const fixture of [
       {
@@ -572,6 +669,48 @@ describe('board-level native gesture plane', () => {
         type: 'tap',
       }),
     ]);
+  });
+
+  it('preserves press correlation while invalidating activation across a selection commit', async () => {
+    const signals: Readonly<BoardGestureSignal>[] = [];
+    const result = await render(
+      <Harness
+        enabled
+        onSignal={(signal) => {
+          signals.push(signal);
+        }}
+        selectionRevision={12}
+        trackPress
+      />,
+    );
+    const tap = getByGestureTestId(getBoardGestureTestIds('gesture-board').tap);
+    const callbacks = gestureCallbacks(tap);
+    const handlerTag = (tap as unknown as Readonly<{ handlerTag: number }>)
+      .handlerTag;
+
+    await act(() => {
+      callbacks.onBegin?.({ handlerTag, x: 25, y: 25 });
+    });
+    await result.rerender(
+      <Harness
+        enabled
+        onSignal={(signal) => {
+          signals.push(signal);
+        }}
+        selectionRevision={13}
+        trackPress
+      />,
+    );
+    await act(() => {
+      callbacks.onEnd?.({ handlerTag, x: 25, y: 25 }, true);
+      callbacks.onFinalize?.({ handlerTag, x: 25, y: 25 }, true);
+    });
+
+    expect(signals.map((signal) => signal.type)).toEqual([
+      'press-start',
+      'press-end',
+    ]);
+    expect(signals[1]?.gestureToken).toBe(signals[0]?.gestureToken);
   });
 
   it('configures long-press and two-finger annotation pans on the existing single plane', async () => {

@@ -36,6 +36,7 @@ export interface BoardPieceLayout {
 interface PieceLayerProps {
   readonly boardId: string;
   readonly dragSourceSquare?: SquareId | null;
+  readonly draggingPieceGhostStyle: Readonly<ViewStyle>;
   readonly layout: Readonly<BoardSurfaceLayout>;
   readonly pieceRenderers: PieceRenderers;
   readonly pendingSourceSquare?: SquareId | null;
@@ -297,6 +298,7 @@ function pieceLayerPropsAreEqual(
   return (
     previous.boardId === next.boardId &&
     previous.dragSourceSquare === next.dragSourceSquare &&
+    previous.draggingPieceGhostStyle === next.draggingPieceGhostStyle &&
     previous.layout === next.layout &&
     previous.pieceRenderers === next.pieceRenderers &&
     previous.pendingSourceSquare === next.pendingSourceSquare &&
@@ -368,6 +370,7 @@ function visualState(
 
 interface BoardPieceHostProps {
   readonly boardId: string;
+  readonly draggingPieceGhostStyle: Readonly<ViewStyle>;
   readonly isDragSource: boolean;
   readonly isPendingSource: boolean;
   readonly layout: Readonly<BoardPieceLayout>;
@@ -379,6 +382,7 @@ interface BoardPieceHostProps {
 
 function BoardPieceHost({
   boardId,
+  draggingPieceGhostStyle,
   isDragSource,
   isPendingSource,
   layout,
@@ -387,11 +391,12 @@ function BoardPieceHost({
   style,
   transition,
 }: BoardPieceHostProps): ReactElement {
+  const resolvedStyle = isDragSource ? draggingPieceGhostStyle : style;
   const baseOpacity =
-    isDragSource || isPendingSource
+    isPendingSource && !isDragSource
       ? 0.45
-      : typeof style.opacity === 'number'
-        ? style.opacity
+      : typeof resolvedStyle.opacity === 'number'
+        ? resolvedStyle.opacity
         : 1;
   const animatedStyle = useAnimatedStyle(
     () =>
@@ -412,7 +417,7 @@ function BoardPieceHost({
     }),
     square: layout.square,
     state: visualState(isDragSource, isPendingSource, transition !== null),
-    style,
+    style: resolvedStyle,
   };
 
   return (
@@ -422,7 +427,7 @@ function BoardPieceHost({
       importantForAccessibility="no-hide-descendants"
       pointerEvents="none"
       style={[
-        style,
+        resolvedStyle,
         PIECE_HOST_STRUCTURAL_RESET,
         {
           height: layout.rect.height,
@@ -430,7 +435,6 @@ function BoardPieceHost({
           top: layout.rect.top,
           width: layout.rect.width,
         },
-        isDragSource || isPendingSource ? styles.sourceGhost : undefined,
         animatedStyle,
       ]}
     >
@@ -443,6 +447,7 @@ function BoardPieceHost({
 export const PieceLayer = memo(function PieceLayer({
   boardId,
   dragSourceSquare = null,
+  draggingPieceGhostStyle,
   layout,
   pieceRenderers,
   pendingSourceSquare = null,
@@ -472,6 +477,7 @@ export const PieceLayer = memo(function PieceLayer({
         return Renderer === null ? null : (
           <BoardPieceHost
             boardId={boardId}
+            draggingPieceGhostStyle={draggingPieceGhostStyle}
             isDragSource={false}
             isPendingSource={false}
             key={pieceLayout.key}
@@ -491,6 +497,7 @@ export const PieceLayer = memo(function PieceLayer({
         return Renderer === null ? null : (
           <BoardPieceHost
             boardId={boardId}
+            draggingPieceGhostStyle={draggingPieceGhostStyle}
             isDragSource={false}
             isPendingSource={false}
             key={pieceLayout.key}
@@ -517,6 +524,7 @@ export const PieceLayer = memo(function PieceLayer({
         return (
           <BoardPieceHost
             boardId={boardId}
+            draggingPieceGhostStyle={draggingPieceGhostStyle}
             isDragSource={isDragSource}
             isPendingSource={isPendingSource}
             key={pieceLayout.key}
@@ -542,8 +550,5 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     zIndex: 20,
-  },
-  sourceGhost: {
-    opacity: 0.45,
   },
 });

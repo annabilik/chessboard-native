@@ -6,13 +6,25 @@ import type {
   ChessboardStyles,
   ChessboardTheme,
   PlainSelection,
+  PositionObject,
+  SquareId,
+  SquareRenderer,
+  SquareRendererProps,
   SquareStyles,
+  SquareVisualState,
 } from '../public-types';
 import type { BoardSurfaceLayout } from './board-layout';
 import { resolveSquareStyle } from './style-resolution';
 
 interface SquareLayerProps {
+  readonly boardId: string;
+  readonly dropTargetSquare?: SquareId | null | undefined;
   readonly layout: Readonly<BoardSurfaceLayout>;
+  readonly pendingSourceSquare?: SquareId | null | undefined;
+  readonly pendingTargetSquare?: SquareId | null | undefined;
+  readonly position: NormalizedControlledValue<PositionObject> | null;
+  readonly pressedSquare?: SquareId | null | undefined;
+  readonly renderSquare?: SquareRenderer | undefined;
   readonly selection: NormalizedControlledValue<
     Readonly<PlainSelection>
   > | null;
@@ -21,9 +33,16 @@ interface SquareLayerProps {
   readonly theme?: ChessboardTheme | undefined;
 }
 
-/** Measured, visual-only background and notation layer. */
+/** Measured, visual-only canonical square paint and custom content layer. */
 export const SquareLayer = memo(function SquareLayer({
+  boardId,
+  dropTargetSquare = null,
   layout,
+  pendingSourceSquare = null,
+  pendingTargetSquare = null,
+  position,
+  pressedSquare = null,
+  renderSquare,
   selection,
   squareStyles,
   styles,
@@ -32,6 +51,7 @@ export const SquareLayer = memo(function SquareLayer({
   const controlledSelection = selection?.value;
   const destinationSquares = new Set(controlledSelection?.destinationSquares);
   const disabledSquares = new Set(controlledSelection?.disabledSquares);
+  const Renderer = renderSquare;
 
   return (
     <View
@@ -42,18 +62,34 @@ export const SquareLayer = memo(function SquareLayer({
       style={StyleSheet.absoluteFill}
     >
       {layout.cells.map((cell) => {
+        const state: Readonly<SquareVisualState> = Object.freeze({
+          isDestination: destinationSquares.has(cell.square),
+          isDisabled: disabledSquares.has(cell.square),
+          isDropTarget: dropTargetSquare === cell.square,
+          isPendingSource: pendingSourceSquare === cell.square,
+          isPendingTarget: pendingTargetSquare === cell.square,
+          isPressed: pressedSquare === cell.square,
+          isSelected: controlledSelection?.selectedSquare === cell.square,
+        });
         const squareStyle = resolveSquareStyle({
           isLight: cell.isLight,
           square: cell.square,
           squareStyles,
-          state: {
-            isDestination: destinationSquares.has(cell.square),
-            isDisabled: disabledSquares.has(cell.square),
-            isSelected: controlledSelection?.selectedSquare === cell.square,
-          },
+          state,
           styles,
           theme,
         });
+        const rendererProps: Readonly<SquareRendererProps> | null =
+          Renderer === undefined
+            ? null
+            : Object.freeze({
+                boardId,
+                piece: position?.value[cell.square] ?? null,
+                size: Math.min(cell.rect.height, cell.rect.width),
+                square: cell.square,
+                state,
+                style: squareStyle,
+              });
 
         return (
           <View
@@ -68,7 +104,11 @@ export const SquareLayer = memo(function SquareLayer({
               importantForAccessibility="no-hide-descendants"
               pointerEvents="none"
               style={[squareStyle, internalStyles.squarePaint]}
-            />
+            >
+              {Renderer === undefined || rendererProps === null ? null : (
+                <Renderer {...rendererProps} />
+              )}
+            </View>
           </View>
         );
       })}

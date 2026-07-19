@@ -73,9 +73,11 @@ function descriptor(options: {
     reducedMotion: false,
     renderer: () => null,
     size: 40,
+    sourceGhostStyle: Object.freeze({ opacity: 0.4 }),
     source: Object.freeze({ kind: 'board' as const, square: 'a2' }),
     square: 'a2',
     style: Object.freeze({ opacity: 1 }),
+    targetSquare: 'b1',
   });
 }
 
@@ -99,6 +101,12 @@ describe('provider drag coordinator', () => {
     expect(coordinator.getSnapshot().active).not.toHaveProperty('position');
     expect(coordinator.getSnapshot().active).not.toHaveProperty('selection');
     expect(coordinator.getSnapshot().active).not.toHaveProperty('annotations');
+    expect(coordinator.getSnapshot().active).toEqual(
+      expect.objectContaining({
+        sourceGhostStyle: { opacity: 0.4 },
+        targetSquare: 'b1',
+      }),
+    );
     expect(listener).toHaveBeenCalledTimes(1);
 
     unsubscribe();

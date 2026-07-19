@@ -318,6 +318,7 @@ export interface ChessboardProps {
     readonly pieceRenderers?: PieceRenderers;
     readonly position: PositionProp;
     readonly reduceMotion?: ReduceMotion;
+    readonly renderSquare?: SquareRenderer;
     readonly selection?: SelectionProp;
     readonly showNotation?: boolean;
     readonly squareStyles?: SquareStyles;
@@ -342,6 +343,9 @@ export interface ChessboardStyles {
     readonly darkSquareNotation?: StyleProp<TextStyle>;
     readonly destinationSquare?: StyleProp<ViewStyle>;
     readonly disabledSquare?: StyleProp<ViewStyle>;
+    readonly draggingPiece?: StyleProp<ViewStyle>;
+    readonly draggingPieceGhost?: StyleProp<ViewStyle>;
+    readonly dropTarget?: StyleProp<ViewStyle>;
     readonly fileNotation?: StyleProp<TextStyle>;
     readonly lightSquare?: StyleProp<ViewStyle>;
     readonly lightSquareNotation?: StyleProp<TextStyle>;
@@ -358,6 +362,9 @@ export interface ChessboardTheme {
     readonly darkSquareNotation?: StyleProp<TextStyle>;
     readonly destinationSquare?: StyleProp<ViewStyle>;
     readonly disabledSquare?: StyleProp<ViewStyle>;
+    readonly draggingPiece?: StyleProp<ViewStyle>;
+    readonly draggingPieceGhost?: StyleProp<ViewStyle>;
+    readonly dropTarget?: StyleProp<ViewStyle>;
     readonly fileNotation?: StyleProp<TextStyle>;
     readonly lightSquare?: StyleProp<ViewStyle>;
     readonly lightSquareNotation?: StyleProp<TextStyle>;
