@@ -26,7 +26,7 @@ import {
 const PROMOTION_BOARD_ID = 'rules-owned-promotion';
 const PREMOVE_BOARD_ID = 'rules-owned-premove';
 const PROMOTION_SOURCE = 'g7';
-const PROMOTION_TARGET = 'h8';
+const PROMOTION_TARGET = 'g8';
 const PREMOVE_SOURCE = 'e2';
 const PREMOVE_TARGET = 'e4';
 
@@ -135,7 +135,7 @@ export default function RulesOwnedMovesScreen() {
   const [pendingPromotion, setPendingPromotion] =
     useState<Readonly<MoveIntent> | null>(null);
   const [promotionStatus, setPromotionStatus] = useState(
-    'Move the pawn from g7 to h8, then choose its new piece in consumer UI.',
+    'Move the pawn from g7 to g8, then choose its new piece in consumer UI.',
   );
   const promotionActionsRef = useRef<ChessboardActions | null>(null);
   const promotionRequestRef = useRef<PromotionRequest | null>(null);
@@ -173,7 +173,7 @@ export default function RulesOwnedMovesScreen() {
           'The consumer rejected a stale request or a move outside this focused promotion recipe.',
         );
         return {
-          reason: 'This example accepts only the current g7 to h8 promotion.',
+          reason: 'This example accepts only the current g7 to g8 promotion.',
           status: 'rejected',
         };
       }
@@ -267,7 +267,7 @@ export default function RulesOwnedMovesScreen() {
       });
       settlePromotion(request, { status: 'accepted' });
       setPromotionStatus(
-        `The consumer committed ${pieceType} at h8 with the matching intent and exact promotion transition.`,
+        `The consumer committed ${pieceType} at g8 with the matching intent and exact promotion transition.`,
       );
     },
     [promotionPosition, settlePromotion],
@@ -511,7 +511,7 @@ export default function RulesOwnedMovesScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Consumer-owned promotion</Text>
         <Text style={styles.sectionBody}>
-          Drag g7 to h8 or use the board actions. The request remains pending
+          Drag g7 to g8 or use the board actions. The request remains pending
           while these ordinary app buttons choose the piece. Cancelling the move
           aborts the chooser and makes a late result inert.
         </Text>
@@ -520,7 +520,7 @@ export default function RulesOwnedMovesScreen() {
             actionsRef={promotionActionsRef}
             accessibility={{
               boardHint:
-                'Choose the pawn on g7, then h8. Choose the promotion piece with the buttons below.',
+                'Choose the pawn on g7, then g8. Choose the promotion piece with the buttons below.',
               boardLabel: 'Consumer-owned promotion board',
             }}
             boardId={PROMOTION_BOARD_ID}

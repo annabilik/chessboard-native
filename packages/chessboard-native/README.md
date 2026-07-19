@@ -967,12 +967,12 @@ const promotionBefore = {
 };
 const promotionAfter = {
   revision: 12,
-  value: { h8: { id: 'pawn-1', pieceType: 'wQ' } },
+  value: { g8: { id: 'pawn-1', pieceType: 'wQ' } },
   transition: {
     from: 'g7',
     fromRevision: 11,
     promotion: 'wQ',
-    to: 'h8',
+    to: 'g8',
     toRevision: 12,
   },
 };
