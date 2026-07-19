@@ -62,6 +62,7 @@ function descriptor(options: {
 }): Readonly<ProviderDragOverlayDescriptor> {
   return Object.freeze({
     boardId: options.boardId,
+    bounds: null,
     gestureToken: options.gestureToken,
     onCancel: options.onCancel,
     owner: options.owner,

@@ -57,6 +57,7 @@ export type {
   BoardSquare,
   BoardTransition,
   CanDragPiece,
+  ChessboardActions,
   ChessboardAccessibility,
   ChessboardAccessibilityAction,
   ChessboardGestureOptions,

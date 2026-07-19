@@ -1,3 +1,4 @@
+import { createRef } from 'react';
 import { StyleSheet } from 'react-native';
 
 import { defaultAnnotationStyle, defaultTheme } from '../../src/index';
@@ -13,6 +14,7 @@ import type {
   BoardSquare,
   BoardTransition,
   CanDragPiece,
+  ChessboardActions,
   ChessboardAccessibility,
   ChessboardGestureOptions,
   ChessboardProps,
@@ -52,6 +54,23 @@ import type {
 } from '../../src/index';
 
 describe('public data contracts', () => {
+  it('exposes a separate mount-scoped board action handle', () => {
+    const actionsRef = createRef<ChessboardActions>();
+    const actions = Object.freeze({
+      cancelMove: (): boolean => true,
+    }) satisfies ChessboardActions;
+    const props = {
+      actionsRef,
+      boardId: 'actions',
+      position: {},
+    } satisfies ChessboardProps;
+
+    actionsRef.current = actions;
+
+    expect(props.actionsRef.current?.cancelMove()).toBe(true);
+    expect(Object.isFrozen(actions)).toBe(true);
+  });
+
   it('publishes one complete immutable native default theme', () => {
     expect(Object.keys(defaultTheme).sort()).toEqual([
       'board',
@@ -191,6 +210,7 @@ describe('public data contracts', () => {
   it('composes gesture tuning and piece callbacks for board and targeted spare contexts', () => {
     const gesture = {
       activationDistance: 6,
+      allowDragOffBoard: false,
     } satisfies ChessboardGestureOptions;
     const observed: PieceInteractionContext[] = [];
     const onPiecePress: OnPiecePress = (context) => {
@@ -654,6 +674,8 @@ describe('public data contracts', () => {
       interaction.piece.pieceType = 'bP';
       // @ts-expect-error Gesture configuration is immutable consumer input.
       gesture.activationDistance = 10;
+      // @ts-expect-error Gesture overlay policy is immutable consumer input.
+      gesture.allowDragOffBoard = true;
     };
 
     expect(invalidDraft).toBe(persistent);

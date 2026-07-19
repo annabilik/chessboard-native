@@ -11,23 +11,31 @@ describe('chessboard gesture options', () => {
     expect(first).toBe(second);
     expect(first).toEqual({
       activationDistance: DEFAULT_DRAG_ACTIVATION_DISTANCE,
+      allowDragOffBoard: true,
     });
     expect(Object.isFrozen(first)).toBe(true);
   });
 
   it('accepts custom and zero activation distances without retaining the input', () => {
-    const input: { activationDistance?: number } = {
+    const input: {
+      activationDistance?: number;
+      allowDragOffBoard?: boolean;
+    } = {
       activationDistance: 12.5,
+      allowDragOffBoard: false,
     };
     const custom = normalizeChessboardGestureOptions(input);
     const zero = normalizeChessboardGestureOptions({ activationDistance: 0 });
 
     input.activationDistance = 2;
 
-    expect(custom).toEqual({ activationDistance: 12.5 });
+    expect(custom).toEqual({
+      activationDistance: 12.5,
+      allowDragOffBoard: false,
+    });
     expect(custom).not.toBe(input);
     expect(Object.isFrozen(custom)).toBe(true);
-    expect(zero).toEqual({ activationDistance: 0 });
+    expect(zero).toEqual({ activationDistance: 0, allowDragOffBoard: true });
     expect(Object.isFrozen(zero)).toBe(true);
   });
 
@@ -49,4 +57,17 @@ describe('chessboard gesture options', () => {
       );
     },
   );
+
+  it('validates the visual overlay-bounds policy', () => {
+    expect(
+      normalizeChessboardGestureOptions({ allowDragOffBoard: false }),
+    ).toEqual({
+      activationDistance: DEFAULT_DRAG_ACTIVATION_DISTANCE,
+      allowDragOffBoard: false,
+    });
+
+    expect(() =>
+      normalizeChessboardGestureOptions({ allowDragOffBoard: 'false' }),
+    ).toThrow('Chessboard gesture.allowDragOffBoard must be a boolean.');
+  });
 });

@@ -768,6 +768,15 @@ plane it also sets same-square tap travel tolerance and two-finger annotation
 pan activation distance. Changing it replaces the current recognizer
 configuration; it never changes position, selection, or annotations.
 
+`gesture.allowDragOffBoard` defaults to `true`. Set it to `false` to clamp the
+active overlay's center to the board rectangle. The board applies that policy
+to its own pieces and every `SparePiece` targeting it. This is presentation
+only: raw pointer hit testing and release verification are unchanged, so a
+release outside the board still emits `targetSquare: null`. Changing the policy
+cancels an active pan so its gesture and visual bounds cannot disagree, but
+does not cancel a move request that is already deciding or awaiting a
+controlled commit.
+
 ## Controlled move requests
 
 `onMoveRequest` asks the consumer to accept or reject one rules-free intent.
@@ -831,6 +840,39 @@ than `true` denies the drag. Without `onMoveRequest`, no move-request pan
 recognizer is mounted; `onSquareActivate` or `onPiecePress` may still enable
 controlled tap input. The default decision timeout is 10 seconds; after
 acceptance, the default controlled-commit timeout is 1.5 seconds.
+
+### Cancelling transient move work
+
+Pass `actionsRef` to obtain one mount-scoped `ChessboardActions` handle. Its
+`cancelMove()` method cancels current board or targeted-spare dragging,
+release verification, an accessible staged source or spare selection, and a
+move request that is deciding or awaiting a controlled commit. It returns
+`true` only when at least one of those transient interactions was cancelled.
+
+```tsx
+import {
+  Chessboard,
+  type ChessboardActions,
+} from '@vibechess/chessboard-native';
+import { useRef } from 'react';
+
+const actionsRef = useRef<ChessboardActions | null>(null);
+
+<Chessboard
+  actionsRef={actionsRef}
+  boardId="playground"
+  gesture={{ allowDragOffBoard: false }}
+  onMoveRequest={onMoveRequest}
+  position={position}
+/>;
+
+const cancelled = actionsRef.current?.cancelMove() ?? false;
+```
+
+Cancellation never edits controlled position, selection, annotations, or
+transition inputs, and it does not synthesize consumer callbacks. A retained
+handle becomes an inert, false-returning capability after its board unmounts;
+it cannot address a later board that reuses the same `boardId`.
 
 ## Controlled position transitions
 

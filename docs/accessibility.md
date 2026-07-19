@@ -184,6 +184,13 @@ confirms an accepted request with a newer position revision and the matching
 `committedIntentId`. Position, orientation, dimension, permission, or unmount
 changes cancel obsolete work; late callback and timer results are inert.
 
+`ChessboardActions.cancelMove()` clears the same board-scoped captured source,
+selected targeted spare, physical drag, or pending request from application
+controls outside the board. It does not add a second accessibility action,
+move the virtual cursor, clear controlled selection, or invoke a move callback.
+The board's existing **Cancel move** and **Cancel spare selection** actions
+remain the direct assistive-technology paths.
+
 Terminal committed, rejected, cancelled, and timed-out outcomes use one
 reducer-correlated announcement. `accessibility.formatMoveOutcome` can return a
 localized replacement, return `null` to suppress it, or fall back to the

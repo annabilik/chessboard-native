@@ -62,6 +62,7 @@ export function ProviderDragOverlay(): ReactElement | null {
 
   const shared = {
     boardId: active.boardId,
+    bounds: active.bounds,
     piece: active.piece,
     presentation: active.presentation,
     reducedMotion: active.reducedMotion,

@@ -87,6 +87,8 @@ export interface BoardLayoutGeometry {
 export interface BoardLayoutRegistration {
   /** Identity may be reserved before layout, but drops fail closed until true. */
   readonly available: boolean;
+  /** Visual overlay policy inherited by targeted spare sources. */
+  readonly allowDragOffBoard: boolean;
   readonly boardId: string;
   readonly owner: BoardLayoutOwnerToken;
   readonly geometry: BoardLayoutGeometry;
@@ -105,6 +107,7 @@ export interface BoardLayoutRegistration {
 /** Token-safe update for an existing committed registration. */
 export interface BoardLayoutUpdate {
   readonly available?: boolean;
+  readonly allowDragOffBoard?: boolean;
   readonly dragActivationDistance?: number;
   readonly geometry?: BoardLayoutGeometry;
   readonly measureInWindow?: MeasureBoardInWindow;
@@ -210,6 +213,7 @@ export interface BoardLayoutRegistry {
   readonly getSpareDragActivationDistance: (
     targetBoardId: string,
   ) => number | null;
+  readonly getSpareAllowDragOffBoard: (targetBoardId: string) => boolean | null;
   /** Monotonic target/config identity used to reject retained native signals. */
   readonly getSpareGestureConfigurationEpoch: (targetBoardId: string) => number;
   readonly subscribeBoardConfiguration: (
@@ -273,6 +277,7 @@ interface CachedBoundsRecord {
 }
 
 interface RegistryEntry {
+  allowDragOffBoard: boolean;
   available: boolean;
   readonly boardId: string;
   readonly owner: BoardLayoutOwnerToken;
@@ -352,6 +357,13 @@ function validateDragActivationDistance(value: unknown): number {
     throw new RangeError(
       'dragActivationDistance must be a finite non-negative number.',
     );
+  }
+  return value;
+}
+
+function validateAllowDragOffBoard(value: unknown): boolean {
+  if (typeof value !== 'boolean') {
+    throw new TypeError('allowDragOffBoard must be a boolean.');
   }
   return value;
 }
@@ -671,6 +683,9 @@ export function createBoardLayoutRegistry(
       throw new Error('Board layout registry is disposed.');
     }
     const boardId = validateBoardId(registration.boardId);
+    const allowDragOffBoard = validateAllowDragOffBoard(
+      registration.allowDragOffBoard,
+    );
     if (typeof registration.measureInWindow !== 'function') {
       throw new TypeError('measureInWindow must be a function.');
     }
@@ -713,6 +728,7 @@ export function createBoardLayoutRegistry(
     if (existing !== undefined) {
       update(boardId, registration.owner, {
         available: registration.available,
+        allowDragOffBoard,
         dragActivationDistance,
         geometry,
         measureInWindow: registration.measureInWindow,
@@ -726,6 +742,7 @@ export function createBoardLayoutRegistry(
     }
 
     entries.set(boardId, {
+      allowDragOffBoard,
       available: registration.available,
       boardId,
       cachedBounds: null,
@@ -807,13 +824,19 @@ export function createBoardLayoutRegistry(
     const geometryChanged = !geometryMatches(entry.geometry, nextGeometry);
     const nextAvailable = updateInput.available ?? entry.available;
     const availabilityChanged = nextAvailable !== entry.available;
+    const nextAllowDragOffBoard =
+      updateInput.allowDragOffBoard === undefined
+        ? entry.allowDragOffBoard
+        : validateAllowDragOffBoard(updateInput.allowDragOffBoard);
     const nextDragActivationDistance =
       updateInput.dragActivationDistance === undefined
         ? entry.dragActivationDistance
         : validateDragActivationDistance(updateInput.dragActivationDistance);
     const configurationChanged =
+      nextAllowDragOffBoard !== entry.allowDragOffBoard ||
       nextDragActivationDistance !== entry.dragActivationDistance;
 
+    entry.allowDragOffBoard = nextAllowDragOffBoard;
     entry.available = nextAvailable;
     entry.dragActivationDistance = nextDragActivationDistance;
     entry.geometry = nextGeometry;
@@ -1009,6 +1032,15 @@ export function createBoardLayoutRegistry(
         return null;
       }
       return entries.get(targetBoardId)?.dragActivationDistance ?? null;
+    };
+
+  const getSpareAllowDragOffBoard: BoardLayoutRegistry['getSpareAllowDragOffBoard'] =
+    (targetBoardIdInput) => {
+      const targetBoardId = validateBoardId(targetBoardIdInput);
+      if (disposed) {
+        return null;
+      }
+      return entries.get(targetBoardId)?.allowDragOffBoard ?? null;
     };
 
   const getSpareGestureConfigurationEpoch: BoardLayoutRegistry['getSpareGestureConfigurationEpoch'] =
@@ -1449,6 +1481,7 @@ export function createBoardLayoutRegistry(
     endDropSession,
     getBoardSnapshot,
     getCachedHover,
+    getSpareAllowDragOffBoard,
     getSpareDragActivationDistance,
     getSpareGestureConfigurationEpoch,
     notifySparePieceDragStart,

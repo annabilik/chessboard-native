@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { AccessibilityInfo, Platform } from 'react-native';
 import type {
   AccessibilityActionEvent,
@@ -116,6 +123,8 @@ export interface BoardAccessibilityProps {
   readonly accessibilityHint: string;
   readonly accessibilityLabel: string;
   readonly accessibilityValue: Readonly<AccessibilityValue>;
+  /** Cancel a staged source and the current request with the given cause. */
+  readonly cancelMove: (reason: 'accessibility' | 'user') => boolean;
   readonly onAccessibilityAction: (event: AccessibilityActionEvent) => void;
 }
 
@@ -124,7 +133,7 @@ export interface BoardAccessibilityMoveInteraction {
   readonly enabled: boolean;
   readonly lifecycle: Readonly<MoveIntentLifecycle> | null;
   readonly request: (draft: Omit<MoveIntent, 'intentId'>) => boolean;
-  readonly cancel: () => void;
+  readonly cancel: (reason?: 'accessibility' | 'user') => boolean;
   readonly sourceResetRevision?: number;
 }
 
@@ -481,17 +490,26 @@ export function useBoardAccessibility(
   );
   const [storedMoveSource, setStoredMoveSource] =
     useState<Readonly<AccessibilityMoveSource> | null>(null);
+  const storedMoveSourceAtCommit =
+    useRef<Readonly<AccessibilityMoveSource> | null>(null);
+  const publishMoveSource = useCallback(
+    (source: Readonly<AccessibilityMoveSource> | null): void => {
+      storedMoveSourceAtCommit.current = source;
+      setStoredMoveSource(source);
+    },
+    [],
+  );
   const sourceResetRevision = moveInteraction?.sourceResetRevision;
   useEffect(() => {
-    setStoredMoveSource(null);
-  }, [sourceResetRevision]);
+    publishMoveSource(null);
+  }, [publishMoveSource, sourceResetRevision]);
   const squareActivationEnabled = squareInteraction?.enabled === true;
   const annotationEnabled = annotationInteraction?.enabled === true;
   useEffect(() => {
     if (squareActivationEnabled || annotationEnabled) {
-      setStoredMoveSource(null);
+      publishMoveSource(null);
     }
-  }, [annotationEnabled, squareActivationEnabled]);
+  }, [annotationEnabled, publishMoveSource, squareActivationEnabled]);
   const dimensions = model.dimensions;
   const orientation = model.orientation;
   const preferredSquare = preferredCursorSquare(model);
@@ -538,9 +556,27 @@ export function useBoardAccessibility(
 
   useEffect(() => {
     if (storedMoveSource !== null && activeMoveSource === null) {
-      setStoredMoveSource(null);
+      publishMoveSource(null);
     }
-  }, [activeMoveSource, storedMoveSource]);
+  }, [activeMoveSource, publishMoveSource, storedMoveSource]);
+  useLayoutEffect(() => {
+    storedMoveSourceAtCommit.current = activeMoveSource;
+    return () => {
+      storedMoveSourceAtCommit.current = null;
+    };
+  }, [activeMoveSource]);
+
+  const cancelMove = useCallback(
+    (reason: 'accessibility' | 'user'): boolean => {
+      const cancelledSource = storedMoveSourceAtCommit.current !== null;
+      if (cancelledSource) {
+        publishMoveSource(null);
+      }
+      const cancelledRequest = moveInteraction?.cancel(reason) ?? false;
+      return cancelledSource || cancelledRequest;
+    },
+    [moveInteraction, publishMoveSource],
+  );
 
   const disabled = model.status === 'disabled' || cursor === null;
   const lifecycleProjection = pendingLifecycleProjection(
@@ -918,7 +954,7 @@ export function useBoardAccessibility(
 
         if (hasPendingLifecycle && moveEnabled) {
           if (actionName === 'cancel-move') {
-            moveInteraction.cancel();
+            cancelMove('accessibility');
           }
           return;
         }
@@ -985,8 +1021,7 @@ export function useBoardAccessibility(
 
         if (actionName === 'cancel-move') {
           if (activeMoveSource !== null || hasPendingLifecycle) {
-            setStoredMoveSource(null);
-            moveInteraction.cancel();
+            cancelMove('accessibility');
             if (!hasPendingLifecycle) {
               requestExplicitFeedback();
             }
@@ -1005,7 +1040,7 @@ export function useBoardAccessibility(
             }
             const source = createMoveSource(model, cursor);
             if (source !== null) {
-              setStoredMoveSource(source);
+              publishMoveSource(source);
               requestExplicitFeedback();
             }
             return;
@@ -1016,7 +1051,7 @@ export function useBoardAccessibility(
           if (
             moveInteraction.request(createMoveDraft(activeMoveSource, cursor))
           ) {
-            setStoredMoveSource(null);
+            publishMoveSource(null);
             requestExplicitFeedback();
           }
           return;
@@ -1029,7 +1064,7 @@ export function useBoardAccessibility(
             !isControlledSquareDisabled(model, source.square) &&
             moveInteraction.request(createMoveDraft(source, null))
           ) {
-            setStoredMoveSource(null);
+            publishMoveSource(null);
             requestExplicitFeedback();
           }
         }
@@ -1075,6 +1110,7 @@ export function useBoardAccessibility(
       activeSpareSelection,
       annotationEnabled,
       annotationInteraction,
+      cancelMove,
       cursor,
       controlledSelectedSquare,
       dimensions,
@@ -1085,6 +1121,7 @@ export function useBoardAccessibility(
       moveInteraction,
       orientation,
       preferredSquare,
+      publishMoveSource,
       requestExplicitFeedback,
       selectedSourceDisabled,
       squareActivationEnabled,
@@ -1099,6 +1136,7 @@ export function useBoardAccessibility(
     accessibilityHint: boardHint(accessibility, disabled),
     accessibilityLabel: boardLabel(accessibility, model),
     accessibilityValue: value,
+    cancelMove,
     onAccessibilityAction,
   };
 }

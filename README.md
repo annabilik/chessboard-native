@@ -126,7 +126,12 @@ accessible selection clearing remains a square-activation intent.
 drag activation. Both piece callbacks receive detached data from the named
 board's current controlled revision, ignore return values, and cannot commit
 state. `gesture.activationDistance` defaults to four native points and
-configures the board plus spares targeting it.
+configures the board plus spares targeting it. The visual-only
+`gesture.allowDragOffBoard` policy defaults to `true`; setting it to `false`
+keeps the active overlay's center inside the target board without changing raw
+hit testing or the nullable off-board move intent. A mount-scoped `actionsRef`
+exposes `cancelMove()` for current transient move work while leaving controlled
+position, selection, annotations, and transitions untouched.
 `onSquarePressIn` and `onSquarePressOut` observe the board plane independently
 of activation. They receive one detached context captured from the controlled
 position at press-in, pair mounted release/cancellation exactly once, order out

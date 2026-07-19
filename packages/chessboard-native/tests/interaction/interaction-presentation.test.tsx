@@ -493,6 +493,29 @@ describe('interaction presentation foundation', () => {
     expect(values.pointerWindowY.value).toBe(180);
   });
 
+  it('[PARITY-BEHAVIOR-B25] clamps the overlay center before composing consumer paint transforms', () => {
+    const values = testPresentationSharedValues();
+
+    expect(
+      resolveDragOverlayAnimatedStyle(
+        values,
+        40,
+        false,
+        20,
+        30,
+        1,
+        [{ scale: 1.35 }],
+        Object.freeze({ height: 100, kind: 'gesture', width: 100 }),
+      ),
+    ).toEqual({
+      opacity: 1,
+      transform: [{ translateX: 160 }, { translateY: 130 }, { scale: 1.35 }],
+    });
+    expect(values.pointerWindowX.value).toBe(220);
+    expect(values.pointerWindowY.value).toBe(180);
+    expect(values.targetSquare.value).toBe('e4');
+  });
+
   it.each([
     { expectedTransform: [] as const, preference: 'always' as const },
     {

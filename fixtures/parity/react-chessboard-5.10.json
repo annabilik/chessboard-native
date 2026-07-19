@@ -1961,9 +1961,9 @@
         "surface": "root",
         "symbols": ["ChessboardProps.gesture.allowDragOffBoard"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ALLOW-DRAG-OFF-BOARD",
-      "compatibilityNotes": "This remains a visual drag-overlay bounds policy; it does not decide whether a null-target move intent is accepted."
+      "compatibilityNotes": "ChessboardProps.gesture.allowDragOffBoard defaults to true; false clamps board and targeted-spare overlay centers on the UI thread without changing raw pointer hit testing or nullable off-board move intents."
     },
     {
       "id": "option.allow-auto-scroll",
@@ -3276,9 +3276,9 @@
         "surface": "root",
         "symbols": ["ChessboardActions.cancelMove"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B24",
-      "compatibilityNotes": "Gesture cancellation, including a second pointer, plus accessibility, permission, position, geometry, AppState, and unmount cancellation are correlated across targeting, deciding, and awaiting-commit phases. Public ChessboardActions remain future work."
+      "compatibilityNotes": "Gesture cancellation, including a second pointer, plus accessibility, permission, position, geometry, AppState, unmount, and public ChessboardActions.cancelMove cancellation are correlated across targeting, deciding, and awaiting-commit phases."
     },
     {
       "id": "behavior.b25-drag-off-board-visual-clamp",
@@ -3304,9 +3304,9 @@
         "surface": "internal",
         "symbols": ["DragOverlayBounds", "BoardLayoutRegistry"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B25",
-      "compatibilityNotes": "The public spare source verifies fresh native bounds and resolves an out-of-bounds release to a null target. Configurable allowDragOffBoard visual clamping remains future work."
+      "compatibilityNotes": "Board and targeted-spare overlays optionally clamp their centers to board bounds on the UI thread, while raw pointers remain free and freshly verified out-of-bounds releases still resolve to a null target."
     },
     {
       "id": "behavior.b26-clone-and-ghost-drag-presentation",

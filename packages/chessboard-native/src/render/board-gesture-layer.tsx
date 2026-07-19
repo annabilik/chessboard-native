@@ -41,6 +41,13 @@ interface BoardGestureSignalBase {
   readonly sourceSquare: SquareId;
 }
 
+interface DragGestureSignalBase extends BoardGestureSignalBase {
+  /** Visual-policy value captured when this native pan began. */
+  readonly allowDragOffBoard: boolean;
+  /** Monotonic visual-policy generation captured with the value. */
+  readonly allowDragOffBoardGeneration: number;
+}
+
 export type AnnotationGestureKind = 'long-press' | 'two-finger';
 
 interface AnnotationGestureSignalBase extends BoardGestureSignalBase {
@@ -51,23 +58,23 @@ interface AnnotationGestureSignalBase extends BoardGestureSignalBase {
 
 /** JS boundaries; per-frame pan updates intentionally are not included. */
 export type BoardGestureSignal =
-  | (BoardGestureSignalBase & {
+  | (DragGestureSignalBase & {
       readonly pointerX: number;
       readonly pointerY: number;
       readonly targetSquare: SquareId | null;
       readonly type: 'drag-start';
     })
-  | (BoardGestureSignalBase & {
+  | (DragGestureSignalBase & {
       readonly pointerX: number;
       readonly pointerY: number;
       readonly targetSquare: SquareId | null;
       readonly type: 'drag-end';
     })
-  | (BoardGestureSignalBase & {
+  | (DragGestureSignalBase & {
       readonly targetSquare: SquareId | null;
       readonly type: 'drag-target';
     })
-  | (BoardGestureSignalBase & {
+  | (DragGestureSignalBase & {
       readonly reason: 'second-finger' | 'user';
       readonly type: 'drag-cancel';
     })
@@ -103,6 +110,8 @@ export interface BoardGestureTestIds {
 
 interface BoardGestureLayerProps {
   readonly activationDistance?: number;
+  readonly allowDragOffBoard?: boolean;
+  readonly allowDragOffBoardGeneration?: number;
   readonly annotationEnabled?: boolean;
   readonly annotationRevision?: Revision | null;
   readonly boardId: string;
@@ -158,6 +167,8 @@ function createBoardGestures(options: {
   readonly onSignal: (signal: Readonly<BoardGestureSignal>) => void;
   readonly positionRevision: Revision;
   readonly presentation: InteractionPresentationSharedValues;
+  readonly currentAllowDragOffBoard: { value: boolean };
+  readonly currentAllowDragOffBoardGeneration: { value: number };
   readonly currentAnnotationRevision: { value: Revision | null };
   readonly currentSelectionRevision: { value: Revision | null };
   readonly longPressActive: { value: number };
@@ -168,6 +179,8 @@ function createBoardGestures(options: {
   readonly longPressTargetSquare: { value: SquareId | null };
   readonly nextGestureToken: { value: number | null };
   readonly panActive: { value: number };
+  readonly panAllowDragOffBoard: { value: boolean };
+  readonly panAllowDragOffBoardGeneration: { value: number };
   readonly panCancelReason: { value: number };
   readonly panGestureToken: { value: number | null };
   readonly panSourceSquare: { value: SquareId | null };
@@ -196,6 +209,8 @@ function createBoardGestures(options: {
     draggableSquares,
     geometry,
     onSignal,
+    currentAllowDragOffBoard,
+    currentAllowDragOffBoardGeneration,
     currentAnnotationRevision,
     currentSelectionRevision,
     longPressActive,
@@ -206,6 +221,8 @@ function createBoardGestures(options: {
     longPressTargetSquare,
     nextGestureToken,
     panActive,
+    panAllowDragOffBoard,
+    panAllowDragOffBoardGeneration,
     panCancelReason,
     panGestureToken,
     panSourceSquare,
@@ -305,6 +322,9 @@ function createBoardGestures(options: {
       }
       const sourceSquare = hitTest(touch.x, touch.y);
       const draggable = includesGestureSquare(sourceSquare, draggableSquares);
+      panAllowDragOffBoard.value = currentAllowDragOffBoard.value;
+      panAllowDragOffBoardGeneration.value =
+        currentAllowDragOffBoardGeneration.value;
       panCancelReason.value = 0;
       panSourceSquare.value = draggable ? sourceSquare : null;
       if (!draggable) {
@@ -314,6 +334,9 @@ function createBoardGestures(options: {
     .onBegin((event) => {
       'worklet';
       panGestureToken.value = allocateGestureToken();
+      panAllowDragOffBoard.value = currentAllowDragOffBoard.value;
+      panAllowDragOffBoardGeneration.value =
+        currentAllowDragOffBoardGeneration.value;
       const sourceSquare = hitTest(event.x, event.y);
       const draggable = includesGestureSquare(sourceSquare, draggableSquares);
       panCancelReason.value = 0;
@@ -334,6 +357,8 @@ function createBoardGestures(options: {
       presentation.targetSquare.value = targetSquare;
       updatePointer(event.x, event.y, event.absoluteX, event.absoluteY);
       scheduleOnRN(onSignal, {
+        allowDragOffBoard: panAllowDragOffBoard.value,
+        allowDragOffBoardGeneration: panAllowDragOffBoardGeneration.value,
         boardId,
         geometryRevision: geometry.revision,
         gestureToken,
@@ -360,6 +385,8 @@ function createBoardGestures(options: {
       const gestureToken = panGestureToken.value;
       if (trackDragTarget && sourceSquare !== null && gestureToken !== null) {
         scheduleOnRN(onSignal, {
+          allowDragOffBoard: panAllowDragOffBoard.value,
+          allowDragOffBoardGeneration: panAllowDragOffBoardGeneration.value,
           boardId,
           geometryRevision: geometry.revision,
           gestureToken,
@@ -388,6 +415,8 @@ function createBoardGestures(options: {
       presentation.targetSquare.value = targetSquare;
       panActive.value = 0;
       scheduleOnRN(onSignal, {
+        allowDragOffBoard: panAllowDragOffBoard.value,
+        allowDragOffBoardGeneration: panAllowDragOffBoardGeneration.value,
         boardId,
         geometryRevision: geometry.revision,
         gestureToken,
@@ -411,6 +440,8 @@ function createBoardGestures(options: {
       ) {
         panActive.value = 0;
         scheduleOnRN(onSignal, {
+          allowDragOffBoard: panAllowDragOffBoard.value,
+          allowDragOffBoardGeneration: panAllowDragOffBoardGeneration.value,
           boardId,
           geometryRevision: geometry.revision,
           gestureToken,
@@ -898,6 +929,8 @@ function createBoardGestures(options: {
  */
 export function BoardGestureLayer({
   activationDistance = DEFAULT_DRAG_ACTIVATION_DISTANCE,
+  allowDragOffBoard = true,
+  allowDragOffBoardGeneration = 0,
   annotationEnabled = false,
   annotationRevision = null,
   boardId,
@@ -913,6 +946,10 @@ export function BoardGestureLayer({
   trackDragTarget = false,
   trackPress = false,
 }: BoardGestureLayerProps): ReactElement | null {
+  const currentAllowDragOffBoard = useSharedValue(allowDragOffBoard);
+  const currentAllowDragOffBoardGeneration = useSharedValue(
+    allowDragOffBoardGeneration,
+  );
   const currentAnnotationRevision = useSharedValue<Revision | null>(
     annotationRevision,
   );
@@ -927,6 +964,10 @@ export function BoardGestureLayer({
   const longPressTargetSquare = useSharedValue<SquareId | null>(null);
   const nextGestureToken = useSharedValue<number | null>(0);
   const panActive = useSharedValue(0);
+  const panAllowDragOffBoard = useSharedValue(allowDragOffBoard);
+  const panAllowDragOffBoardGeneration = useSharedValue(
+    allowDragOffBoardGeneration,
+  );
   const panCancelReason = useSharedValue(0);
   const panGestureToken = useSharedValue<number | null>(null);
   const panSourceSquare = useSharedValue<SquareId | null>(null);
@@ -970,6 +1011,8 @@ export function BoardGestureLayer({
       draggableSquares,
       geometry,
       onSignal,
+      currentAllowDragOffBoard,
+      currentAllowDragOffBoardGeneration,
       currentAnnotationRevision,
       currentSelectionRevision,
       longPressActive,
@@ -980,6 +1023,8 @@ export function BoardGestureLayer({
       longPressTargetSquare,
       nextGestureToken,
       panActive,
+      panAllowDragOffBoard,
+      panAllowDragOffBoardGeneration,
       panCancelReason,
       panGestureToken,
       panSourceSquare,
@@ -1010,6 +1055,8 @@ export function BoardGestureLayer({
     draggableSquares,
     geometry,
     onSignal,
+    currentAllowDragOffBoard,
+    currentAllowDragOffBoardGeneration,
     currentAnnotationRevision,
     currentSelectionRevision,
     longPressActive,
@@ -1020,6 +1067,8 @@ export function BoardGestureLayer({
     longPressTargetSquare,
     nextGestureToken,
     panActive,
+    panAllowDragOffBoard,
+    panAllowDragOffBoardGeneration,
     panCancelReason,
     panGestureToken,
     panSourceSquare,
@@ -1041,6 +1090,16 @@ export function BoardGestureLayer({
     twoFingerTargetSquare,
     trackDragTarget,
     trackPress,
+  ]);
+
+  useLayoutEffect(() => {
+    currentAllowDragOffBoard.value = allowDragOffBoard;
+    currentAllowDragOffBoardGeneration.value = allowDragOffBoardGeneration;
+  }, [
+    allowDragOffBoard,
+    allowDragOffBoardGeneration,
+    currentAllowDragOffBoard,
+    currentAllowDragOffBoardGeneration,
   ]);
 
   useLayoutEffect(() => {

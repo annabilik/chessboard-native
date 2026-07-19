@@ -51,6 +51,7 @@ function geometry(
 }
 
 function registration(options: {
+  readonly allowDragOffBoard?: boolean;
   readonly available?: boolean;
   readonly boardId?: string;
   readonly geometry?: BoardLayoutGeometry;
@@ -64,6 +65,7 @@ function registration(options: {
   readonly readSpareDragPermission?: () => CanStartProviderSpareDrag | null;
 }): BoardLayoutRegistration {
   return {
+    allowDragOffBoard: options.allowDragOffBoard ?? true,
     available: options.available ?? true,
     boardId: options.boardId ?? 'analysis',
     dragActivationDistance: options.dragActivationDistance ?? 4,
@@ -1304,6 +1306,7 @@ describe('board layout registry', () => {
     registry.subscribeBoardConfiguration('variation', variationListener);
 
     expect(registry.getSpareDragActivationDistance('analysis')).toBeNull();
+    expect(registry.getSpareAllowDragOffBoard('analysis')).toBeNull();
     expect(registry.getSpareGestureConfigurationEpoch('analysis')).toBe(0);
     expect(() =>
       registry.register(
@@ -1314,6 +1317,7 @@ describe('board layout registry', () => {
       registry.getSpareGestureConfigurationEpoch('analysis');
     expect(registeredEpoch).toBeGreaterThan(0);
     expect(registry.getSpareDragActivationDistance('analysis')).toBe(4);
+    expect(registry.getSpareAllowDragOffBoard('analysis')).toBe(true);
     expect(listener).toHaveBeenCalledTimes(1);
     expect(variationListener).not.toHaveBeenCalled();
 
@@ -1361,6 +1365,7 @@ describe('board layout registry', () => {
       registry.getSpareGestureConfigurationEpoch('analysis');
     expect(unregisteredEpoch).toBeGreaterThan(updatedEpoch);
     expect(registry.getSpareDragActivationDistance('analysis')).toBeNull();
+    expect(registry.getSpareAllowDragOffBoard('analysis')).toBeNull();
     expect(listener).toHaveBeenCalledTimes(4);
 
     unsubscribe();
@@ -1376,6 +1381,43 @@ describe('board layout registry', () => {
       registry.getSpareGestureConfigurationEpoch('analysis'),
     ).toBeGreaterThan(unregisteredEpoch);
     expect(listener).toHaveBeenCalledTimes(4);
+  });
+
+  it('publishes only real target drag-bounds policy changes', () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    const listener = jest.fn();
+    registry.subscribeBoardConfiguration('analysis', listener);
+    registry.register(
+      registration({ measureInWindow: measurement.measureInWindow, owner }),
+    );
+    const registeredEpoch =
+      registry.getSpareGestureConfigurationEpoch('analysis');
+
+    expect(registry.getSpareAllowDragOffBoard('analysis')).toBe(true);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(
+      registry.update('analysis', owner, { allowDragOffBoard: false }),
+    ).toBe(true);
+    const updatedEpoch = registry.getSpareGestureConfigurationEpoch('analysis');
+    expect(updatedEpoch).toBeGreaterThan(registeredEpoch);
+    expect(registry.getSpareAllowDragOffBoard('analysis')).toBe(false);
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    expect(
+      registry.update('analysis', owner, { allowDragOffBoard: false }),
+    ).toBe(true);
+    expect(registry.getSpareGestureConfigurationEpoch('analysis')).toBe(
+      updatedEpoch,
+    );
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    expect(() =>
+      registry.update('analysis', owner, {
+        allowDragOffBoard: 'false' as never,
+      }),
+    ).toThrow('allowDragOffBoard must be a boolean.');
   });
 
   it('routes targeted spare press and drag-start notifications through current readers with detached inputs', () => {

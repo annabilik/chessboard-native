@@ -46,6 +46,16 @@ that request only when it has a newer revision and a matching
 `committedIntentId`. A newer update without that correlation is still the
 authoritative position, but it cancels the pending request as unrelated.
 
+`ChessboardProps.actionsRef` exposes one mount-scoped `ChessboardActions`
+capability for transient move cancellation. `cancelMove()` clears any active
+board or targeted-spare drag, release verification, accessible staged source,
+provider spare selection, or deciding/awaiting-commit request owned by that
+board. It reports whether it actually cancelled work. The handle is published
+only after commit, remains stable when the consumer replaces the ref identity,
+and is revoked on unmount, so a retained handle cannot address a later mount
+with the same board ID. The action cannot edit controlled position, selection,
+annotations, or transition inputs and does not synthesize semantic callbacks.
+
 Plain positions remain valid for simple controlled rendering and can still
 replace the board after a request. Their derived revisions cannot carry a
 committed intent ID, so they cannot report a correlated committed outcome.

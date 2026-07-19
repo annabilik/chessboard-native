@@ -137,6 +137,13 @@ apply to both board-origin and spare-origin active drags. A spare's own `style`
 remains its resting base paint until the provider lease is active; the target
 board then owns overlay and ghost presentation.
 
+When `gesture.allowDragOffBoard` is false, that same overlay worklet clamps its
+center to the target board before subtracting the provider host origin and
+before appending the lift or consumer transform. Board sources use local
+gesture geometry; targeted spares use shared target-window bounds. The raw
+pointer, hover hit test, and release point remain untouched, so the rendering
+constraint cannot authorize or redirect a move.
+
 Each measured square gets one frozen `SquareRendererProps` value. Selection
 flags come from current controlled selection, pressed/drop-target flags from
 the current correlated gesture, and pending source/target flags from the current

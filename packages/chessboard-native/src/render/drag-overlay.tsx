@@ -7,6 +7,10 @@ import Animated, {
 
 import type { InteractionPresentationSharedValues } from '../internal/interaction-presentation';
 import { INTERACTION_PRESENTATION_PHASE } from '../internal/interaction-presentation';
+import {
+  resolveDragOverlayCenter,
+  type DragOverlayBounds,
+} from '../internal/drag-overlay-bounds';
 import type {
   MoveSource,
   PieceData,
@@ -29,6 +33,7 @@ export interface DragOverlayWindowOrigin {
 
 type DragOverlayProps = {
   readonly boardId: string;
+  readonly bounds?: Readonly<DragOverlayBounds> | null;
   readonly piece: Readonly<PieceData>;
   readonly presentation: Readonly<InteractionPresentationSharedValues>;
   readonly reducedMotion: boolean;
@@ -60,6 +65,7 @@ export function resolveDragOverlayAnimatedStyle(
   windowOriginY = 0,
   windowOriginReady = 1,
   draggingPieceTransform?: ViewStyle['transform'],
+  bounds: Readonly<DragOverlayBounds> | null = null,
 ): Readonly<ViewStyle> {
   'worklet';
   const dragging =
@@ -71,17 +77,16 @@ export function resolveDragOverlayAnimatedStyle(
         ? draggingPieceTransform
         : [{ scale: DRAG_OVERLAY_LIFT_SCALE }]
       : [];
+  const center = resolveDragOverlayCenter(presentation, bounds);
 
   return {
     opacity: dragging && windowOriginReady === 1 ? 1 : 0,
     transform: [
       {
-        translateX:
-          presentation.pointerWindowX.value - windowOriginX - size / 2,
+        translateX: center.x - windowOriginX - size / 2,
       },
       {
-        translateY:
-          presentation.pointerWindowY.value - windowOriginY - size / 2,
+        translateY: center.y - windowOriginY - size / 2,
       },
       ...activeTransform,
     ],
@@ -95,6 +100,7 @@ export function resolveDragOverlayAnimatedStyle(
  */
 export function DragOverlay({
   boardId,
+  bounds = null,
   piece,
   presentation,
   reducedMotion,
@@ -116,8 +122,9 @@ export function DragOverlay({
         windowOrigin?.y.value ?? 0,
         windowOrigin?.ready.value ?? 1,
         style.transform,
+        bounds,
       ),
-    [presentation, reducedMotion, size, style.transform, windowOrigin],
+    [bounds, presentation, reducedMotion, size, style.transform, windowOrigin],
   );
 
   return (

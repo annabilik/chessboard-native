@@ -34,9 +34,12 @@ const BLACK_GEOMETRY: Readonly<BoardGestureGeometry> = Object.freeze({
   revision: 4,
   visualSquares: Object.freeze(['b1', 'a1', 'b2', 'a2']),
 });
+const DEFAULT_OCCUPIED_SQUARES: readonly SquareId[] = Object.freeze(['a2']);
 
 interface HarnessProps {
   readonly activationDistance?: number;
+  readonly allowDragOffBoard?: boolean;
+  readonly allowDragOffBoardGeneration?: number;
   readonly annotationEnabled?: boolean;
   readonly annotationRevision?: number | null;
   readonly boardId?: string;
@@ -55,12 +58,14 @@ interface HarnessProps {
 
 function Harness({
   activationDistance,
+  allowDragOffBoard,
+  allowDragOffBoardGeneration,
   annotationEnabled = false,
   annotationRevision = 17,
   boardId = 'gesture-board',
   enabled,
   geometry = WHITE_GEOMETRY,
-  occupiedSquares = Object.freeze(['a2']),
+  occupiedSquares = DEFAULT_OCCUPIED_SQUARES,
   onPresentation,
   onRender,
   onSignal,
@@ -75,6 +80,10 @@ function Harness({
     <GestureHandlerRootView>
       <BoardGestureLayer
         {...(activationDistance === undefined ? {} : { activationDistance })}
+        {...(allowDragOffBoard === undefined ? {} : { allowDragOffBoard })}
+        {...(allowDragOffBoardGeneration === undefined
+          ? {}
+          : { allowDragOffBoardGeneration })}
         annotationEnabled={annotationEnabled}
         annotationRevision={annotationRevision}
         boardId={boardId}
@@ -140,6 +149,72 @@ describe('board-level native gesture plane', () => {
     const ids = getBoardGestureTestIds('gesture-board');
     expect(gestureConfig(getByGestureTestId(ids.pan))['minDist']).toBe(12.5);
     expect(gestureConfig(getByGestureTestId(ids.tap))['maxDist']).toBe(12.5);
+  });
+
+  it('captures the overlay policy at pan begin without reinstalling unrelated recognizers', async () => {
+    const signals: Readonly<BoardGestureSignal>[] = [];
+    const onSignal = (signal: Readonly<BoardGestureSignal>): void => {
+      signals.push(signal);
+    };
+    const result = await render(
+      <Harness
+        allowDragOffBoard={false}
+        allowDragOffBoardGeneration={0}
+        enabled
+        onSignal={onSignal}
+      />,
+    );
+    const pan = getByGestureTestId(getBoardGestureTestIds('gesture-board').pan);
+    const handlerTag = (pan as Readonly<{ handlerTag: number }>).handlerTag;
+    const callbacks = gestureCallbacks(pan);
+    await act(() => {
+      callbacks.onBegin?.({ handlerTag, x: 25, y: 25 });
+    });
+
+    await result.rerender(
+      <Harness
+        allowDragOffBoard
+        allowDragOffBoardGeneration={1}
+        enabled
+        onSignal={onSignal}
+      />,
+    );
+    expect(
+      (
+        getByGestureTestId(getBoardGestureTestIds('gesture-board').pan) as {
+          readonly handlerTag: number;
+        }
+      ).handlerTag,
+    ).toBe(handlerTag);
+    await act(() => {
+      callbacks.onStart?.({ handlerTag, x: 35, y: 25 });
+      callbacks.onFinalize?.({ handlerTag, x: 35, y: 25 }, false);
+    });
+    expect(signals).toEqual([
+      expect.objectContaining({
+        allowDragOffBoard: false,
+        allowDragOffBoardGeneration: 0,
+        type: 'drag-start',
+      }),
+      expect.objectContaining({
+        allowDragOffBoard: false,
+        allowDragOffBoardGeneration: 0,
+        type: 'drag-cancel',
+      }),
+    ]);
+
+    signals.length = 0;
+    await act(() => {
+      callbacks.onBegin?.({ handlerTag, x: 25, y: 25 });
+      callbacks.onStart?.({ handlerTag, x: 35, y: 25 });
+    });
+    expect(signals).toEqual([
+      expect.objectContaining({
+        allowDragOffBoard: true,
+        allowDragOffBoardGeneration: 1,
+        type: 'drag-start',
+      }),
+    ]);
   });
 
   it('[PARITY-BEHAVIOR-B18] configures board-level tap/pan activation, keeps updates on shared values, cancels cleanly, and is disabled by default', async () => {

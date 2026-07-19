@@ -7,6 +7,7 @@ import {
   useState,
   useSyncExternalStore,
   type ReactElement,
+  type Ref,
 } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
@@ -48,6 +49,7 @@ import {
   type SquareActivationInput,
 } from '../internal/square-activation';
 import { useMoveRequestRuntime } from '../internal/use-move-request-runtime';
+import { useChessboardActions } from '../internal/use-chessboard-actions';
 import { useAnnotationOperation } from '../internal/use-annotation-operation';
 import { useAnnotationInputRuntime } from '../internal/use-annotation-input-runtime';
 import { useSquareActivation } from '../internal/use-square-activation';
@@ -67,6 +69,7 @@ import type {
   AnnotationTool,
   BoardSize,
   CanDragPiece,
+  ChessboardActions,
   ChessboardAccessibility,
   ChessboardStyles,
   ChessboardTheme,
@@ -113,7 +116,9 @@ interface MeasuredBoardSize extends BoardSize {
 
 interface BoardSurfaceProps {
   readonly activationDistance: number;
+  readonly allowDragOffBoard?: boolean;
   readonly accessibility: ChessboardAccessibility | undefined;
+  readonly actionsRef?: Ref<ChessboardActions> | undefined;
   readonly annotationDraft?: Readonly<CorrelatedAnnotationDraft> | null;
   readonly annotationPolicies: AnnotationPolicies | undefined;
   readonly annotationStyle: Readonly<AnnotationStyle>;
@@ -245,7 +250,9 @@ function invalidationReason(
 /** Responsive native host for measured visual board layers. */
 export function BoardSurface({
   activationDistance,
+  allowDragOffBoard = true,
   accessibility,
+  actionsRef,
   annotationDraft = null,
   annotationPolicies,
   annotationStyle,
@@ -629,14 +636,15 @@ export function BoardSurface({
     spareSelectionSnapshot.active?.targetBoardId === model.boardId
       ? spareSelectionSnapshot.active
       : null;
-  const cancelSelectedSpare = useCallback((): void => {
+  const cancelSelectedSpare = useCallback((): boolean => {
     const current = providerRuntime.spareSelection.getSnapshot().active;
     if (current !== null && current.targetBoardId === model.boardId) {
-      providerRuntime.spareSelection.clearOwner(
+      return providerRuntime.spareSelection.clearOwner(
         current.owner,
         current.selectionToken,
       );
     }
+    return false;
   }, [model.boardId, providerRuntime.spareSelection]);
   const placeSelectedSpare = useCallback(
     (square: SquareId): boolean => {
@@ -1007,6 +1015,22 @@ export function BoardSurface({
     accessibilitySpareInteraction,
     accessibilityAnnotationInteraction,
   );
+  const cancelMoveAction = useCallback((): boolean => {
+    if (!providerRegistered || model.boardId === null) {
+      return false;
+    }
+    const cancelledDrag = providerRegistration.cancelActiveDrag('user');
+    const cancelledMove = accessibilityProps.cancelMove('user');
+    const cancelledSpare = cancelSelectedSpare();
+    return cancelledDrag || cancelledMove || cancelledSpare;
+  }, [
+    accessibilityProps.cancelMove,
+    cancelSelectedSpare,
+    model.boardId,
+    providerRegistered,
+    providerRegistration,
+  ]);
+  useChessboardActions(actionsRef, cancelMoveAction);
   const positionTransition = usePositionTransitionRuntime({
     development,
     dimensions: model.dimensions,
@@ -1378,6 +1402,7 @@ export function BoardSurface({
           gestureGeometry === null ? null : (
             <BoardInteractionController
               activationDistance={activationDistance}
+              allowDragOffBoard={allowDragOffBoard}
               {...(annotationGestureEnabled
                 ? {
                     annotationRuntime,
