@@ -658,10 +658,58 @@ abandoned render or stale tap is inert. A callback invocation is a notification
 only; neither it nor the recognizer mutates selection or position.
 
 Without either `onSquareActivate` or `onPiecePress`, no ordinary same-square tap
-recognizer is enabled. An existing `onMoveRequest` still provides its accessible
-transient source-target, removal, and cancellation flow while accessible move
-input is permitted. With none of those callbacks or a complete annotation input
-gate, the component mounts no native gesture hit plane and remains read-only.
+activation is enabled. Square press callbacks may independently mount a
+press-only recognizer without enabling activation. An existing `onMoveRequest`
+still provides its accessible transient source-target, removal, and cancellation
+flow while accessible move input is permitted. With none of those callbacks,
+square press callbacks, or a complete annotation input gate, the component
+mounts no native gesture hit plane and remains read-only.
+
+## Square press callbacks
+
+`onSquarePressIn` and `onSquarePressOut` are portable native observations for
+the upstream mouse-down/up intent. They receive no DOM or native event object,
+do not enable square activation, and cannot update controlled state. Each
+delivery is a detached, frozen `SquarePressContext` containing the canonical
+square, the piece or `null` captured there, the board ID, and the controlled
+position revision at press-in:
+
+```tsx
+import {
+  Chessboard,
+  type OnSquarePressIn,
+  type OnSquarePressOut,
+} from '@vibechess/chessboard-native';
+
+const onSquarePressIn: OnSquarePressIn = (context) => {
+  interactionLog.record('in', context);
+};
+const onSquarePressOut: OnSquarePressOut = (context) => {
+  interactionLog.record('out', context);
+};
+
+<Chessboard
+  boardId="analysis"
+  onSquarePressIn={onSquarePressIn}
+  onSquarePressOut={onSquarePressOut}
+  position={position}
+/>;
+```
+
+A callback-only board mounts the same single accessibility-hidden RNGH plane but
+keeps tap activation, selection, annotation, and move requests disabled. An
+accepted press emits `onSquarePressIn` once. Release, leaving the hit plane,
+gesture failure, drag or annotation takeover, and a mounted semantic or geometry
+invalidation emit `onSquarePressOut` at most once with that originating context.
+Unmount disposes the press without invoking consumer code. Successful activation
+orders press-in, press-out, then the existing activation router; a drag takeover
+orders press-out before `onPieceDragStart`.
+
+Callback references become active only after commit. Replacing a callback does
+not recreate the recognizer, a terminal uses the latest committed handler, and
+removing a handler prevents stale delivery. Exceptions and return values are
+isolated from gesture and controlled-state behavior. Accessibility activation
+does not synthesize touch press-in/out callbacks.
 
 ## Piece callbacks and gesture tuning
 

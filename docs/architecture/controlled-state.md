@@ -85,6 +85,16 @@ denied source, movement that never reaches the threshold, or a pre-activation
 cancellation. The later drop remains exclusively an `onMoveRequest` concern;
 continuous pointer frames never become callback traffic.
 
+`onSquarePressIn` and `onSquarePressOut` are likewise observational. A verified
+native press start captures one detached, frozen `SquarePressContext` from the
+current controlled position revision. The terminal callback reuses that causal
+context; it does not read a shadow position or treat a later revision as the
+same press. Release and mounted cancellation pair at most once, callback results
+and exceptions cannot affect input, and unmount performs silent disposal. These
+callbacks may mount press recognition on an otherwise read-only board, but they
+never enable activation, moves, selection, annotations, or accessibility
+actions.
+
 Every annotation callback emits a delta correlated to
 `baseAnnotationRevision`. Toggle and clear operations include only IDs observed
 at that base, so reducing an operation against current consumer state cannot

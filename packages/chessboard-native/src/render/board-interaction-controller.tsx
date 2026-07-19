@@ -16,6 +16,10 @@ import type { AnnotationGestureCorrelation } from '../internal/annotation-gestur
 import { canDragCurrentPiece } from '../internal/interaction-permissions';
 import { DEFAULT_DRAG_ACTIVATION_DISTANCE } from '../internal/gesture-options';
 import {
+  createSquarePressContext,
+  emitSquarePress,
+} from '../internal/square-press';
+import {
   createBoardGestureAdapterState,
   reduceBoardGestureAdapter,
   type BoardGestureAdapterReduction,
@@ -41,11 +45,14 @@ import type {
 import type { AnnotationInputRuntime } from '../internal/use-annotation-input-runtime';
 import type {
   CanDragPiece,
+  OnSquarePressIn,
+  OnSquarePressOut,
   PieceInteractionContext,
   PieceRenderers,
   PositionObject,
   Revision,
   SquareId,
+  SquarePressContext,
 } from '../public-types';
 import {
   BoardGestureLayer,
@@ -71,6 +78,8 @@ interface BoardInteractionControllerProps {
     context: Readonly<PieceInteractionContext>,
   ) => boolean;
   readonly onPressedSquareChange?: (square: SquareId | null) => void;
+  readonly onSquarePressIn?: OnSquarePressIn;
+  readonly onSquarePressOut?: OnSquarePressOut;
   readonly pieceRenderers: PieceRenderers;
   readonly pieceStyle: Readonly<ViewStyle>;
   readonly position: NormalizedControlledValue<PositionObject>;
@@ -134,6 +143,7 @@ interface ActiveNativeAnnotationSignal {
 
 interface ActiveNativePressSignal {
   readonly boardId: string;
+  readonly context: Readonly<SquarePressContext>;
   readonly geometryRevision: Revision;
   readonly gestureToken: number;
   readonly positionRevision: Revision;
@@ -206,6 +216,8 @@ function BoardInteractionControllerContent({
   onDragSourceChange,
   onPieceDragStart,
   onPressedSquareChange,
+  onSquarePressIn,
+  onSquarePressOut,
   pieceRenderers,
   pieceStyle,
   position,
@@ -311,10 +323,29 @@ function BoardInteractionControllerContent({
   const onDragSourceChangeAtCommit = useRef(onDragSourceChange);
   const onPieceDragStartAtCommit = useRef(onPieceDragStart);
   const onPressedSquareChangeAtCommit = useRef(onPressedSquareChange);
+  const onSquarePressInAtCommit = useRef(onSquarePressIn);
+  const onSquarePressOutAtCommit = useRef(onSquarePressOut);
   const snapshotAtCommit = useRef(snapshot);
   const pieceSize = Math.min(
     geometry.width / geometry.columns,
     geometry.height / geometry.rows,
+  );
+
+  const finishNativePress = useCallback(
+    (signal?: Readonly<BoardGestureSignal>): boolean => {
+      const active = activeNativePressSignal.current;
+      if (
+        active === null ||
+        (signal !== undefined && !nativePressSignalMatches(active, signal))
+      ) {
+        return false;
+      }
+      activeNativePressSignal.current = null;
+      onPressedSquareChangeAtCommit.current?.(null);
+      emitSquarePress(onSquarePressOutAtCommit.current, active.context);
+      return true;
+    },
+    [],
   );
 
   const applyReduction = useCallback(
@@ -452,6 +483,7 @@ function BoardInteractionControllerContent({
           ) {
             return;
           }
+          finishNativePress();
           cancelAnnotation();
           const correlation = createCorrelation(
             signal,
@@ -529,6 +561,7 @@ function BoardInteractionControllerContent({
           return;
         }
         case 'tap': {
+          finishNativePress(signal);
           const currentAnnotationSnapshot = annotationSnapshotAtCommit.current;
           if (currentAnnotationSnapshot !== null) {
             if (
@@ -570,14 +603,28 @@ function BoardInteractionControllerContent({
         case 'press-start': {
           if (
             !trackPress ||
+            currentSnapshot.position === null ||
             signal.geometryRevision !== currentSnapshot.geometryEpoch ||
             signal.positionRevision !== currentSnapshot.positionRevision ||
             !geometry.visualSquares.includes(signal.sourceSquare)
           ) {
             return;
           }
+          if (
+            nativePressSignalMatches(activeNativePressSignal.current, signal)
+          ) {
+            return;
+          }
+          finishNativePress();
+          const context = createSquarePressContext({
+            basePositionRevision: currentSnapshot.positionRevision,
+            boardId,
+            piece: currentSnapshot.position[signal.sourceSquare] ?? null,
+            square: signal.sourceSquare,
+          });
           activeNativePressSignal.current = Object.freeze({
             boardId: signal.boardId,
+            context,
             geometryRevision: signal.geometryRevision,
             gestureToken: signal.gestureToken,
             positionRevision: signal.positionRevision,
@@ -587,16 +634,11 @@ function BoardInteractionControllerContent({
             sourceSquare: signal.sourceSquare,
           });
           onPressedSquareChangeAtCommit.current?.(signal.sourceSquare);
+          emitSquarePress(onSquarePressInAtCommit.current, context);
           return;
         }
         case 'press-end': {
-          if (
-            !nativePressSignalMatches(activeNativePressSignal.current, signal)
-          ) {
-            return;
-          }
-          activeNativePressSignal.current = null;
-          onPressedSquareChangeAtCommit.current?.(null);
+          finishNativePress(signal);
           return;
         }
         case 'annotation-start': {
@@ -613,6 +655,7 @@ function BoardInteractionControllerContent({
           ) {
             return;
           }
+          finishNativePress();
           const activeCorrelation = adapter.current.active?.correlation;
           if (activeCorrelation !== undefined) {
             applyReduction(
@@ -684,6 +727,7 @@ function BoardInteractionControllerContent({
       providerRuntime,
       providerTransientRevision,
       signalGeneration,
+      finishNativePress,
       geometry.visualSquares,
       trackPress,
     ],
@@ -696,6 +740,8 @@ function BoardInteractionControllerContent({
     onDragSourceChangeAtCommit.current = onDragSourceChange;
     onPieceDragStartAtCommit.current = onPieceDragStart;
     onPressedSquareChangeAtCommit.current = onPressedSquareChange;
+    onSquarePressInAtCommit.current = onSquarePressIn;
+    onSquarePressOutAtCommit.current = onSquarePressOut;
   }, [
     annotationRuntime,
     cancelFromProvider,
@@ -703,6 +749,8 @@ function BoardInteractionControllerContent({
     onDragSourceChange,
     onPieceDragStart,
     onPressedSquareChange,
+    onSquarePressIn,
+    onSquarePressOut,
   ]);
 
   useLayoutEffect(() => {
@@ -728,8 +776,7 @@ function BoardInteractionControllerContent({
         activePress.providerLifecycleRevision !== providerLifecycleRevision ||
         activePress.providerTransientRevision !== providerTransientRevision)
     ) {
-      activeNativePressSignal.current = null;
-      onPressedSquareChangeAtCommit.current?.(null);
+      finishNativePress();
     }
     let reduction = reduceBoardGestureAdapter(adapter.current, {
       snapshot,
@@ -738,10 +785,7 @@ function BoardInteractionControllerContent({
     if (signalGenerationChanged) {
       activeNativeAnnotationSignal.current = null;
       annotationRuntimeAtCommit.current?.cancel();
-      if (activeNativePressSignal.current !== null) {
-        activeNativePressSignal.current = null;
-        onPressedSquareChangeAtCommit.current?.(null);
-      }
+      finishNativePress();
     }
     const activeCorrelation = reduction.state.active?.correlation;
     const activeSource = reduction.state.active?.sourceSquare;
@@ -777,6 +821,7 @@ function BoardInteractionControllerContent({
     providerLifecycleRevision,
     providerTransientRevision,
     signalGeneration,
+    finishNativePress,
   ]);
 
   useLayoutEffect(() => {

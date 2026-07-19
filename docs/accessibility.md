@@ -149,6 +149,12 @@ move, or remove the piece. `onPieceDragStart` applies only to native pan input
 and adds no accessibility action; the non-drag move and activation paths remain
 available independently.
 
+`onSquarePressIn` and `onSquarePressOut` likewise describe physical native
+press boundaries only. They add no accessibility action and are not synthesized
+when the adjustable control activates a square. Consumers that need equivalent
+assistive-technology behavior use `onSquareActivate` or `onPiecePress`, whose
+payloads explicitly identify accessibility input where applicable.
+
 Callback references become visible only after their render commits. A touch
 gesture captures the selection revision at start, and both touch and
 accessibility paths recheck the current normalized position and selection
@@ -293,8 +299,8 @@ Callback and timeout semantics never depend on reduced motion.
 Run the Expo gallery and test **Accessibility prototype** first, then repeat the
 interaction-specific steps on **Controlled move requests** and **Provider
 coordination**, followed by **Spare pieces**, **Controlled annotation
-gestures**, **Piece callbacks**, and **Interaction hardening**. Test Android and
-iOS separately:
+gestures**, **Piece callbacks**, **Square press callbacks**, and **Interaction
+hardening**. Test Android and iOS separately:
 
 1. Enable TalkBack or VoiceOver and focus the board.
 2. Confirm the board is one focus target and visual squares are not separate
@@ -368,6 +374,11 @@ iOS separately:
     board's current revision, the visual position remains unchanged, and the
     spare still exposes its ordinary place/cancel flow. Confirm no visual piece
     or square becomes an additional accessibility target.
+26. On the square-press callback route, activate the adjustable board and
+    confirm it does not add a touch `onSquarePressIn` or `onSquarePressOut` log
+    entry. With assistive technology temporarily disabled, press occupied and
+    empty squares and confirm the paired log entries do not select or move a
+    piece.
 
 The automated component and native contracts do not replace this
 assistive-technology pass. In particular, XCUITest can audit the static iOS

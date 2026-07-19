@@ -33,6 +33,8 @@ import type {
   OnPieceDragStart,
   OnPiecePress,
   OnSquareActivate,
+  OnSquarePressIn,
+  OnSquarePressOut,
   PieceData,
   PieceInteractionContext,
   PieceRendererProps,
@@ -45,6 +47,7 @@ import type {
   SquareActivationIntent,
   SquareRenderer,
   SquareRendererProps,
+  SquarePressContext,
   SquareStyles,
 } from '../../src/index';
 
@@ -156,6 +159,33 @@ describe('public data contracts', () => {
     } satisfies PieceInteractionContext;
 
     expect(context.source.kind).toBe('spare');
+  });
+
+  it('exposes portable square press callbacks without a native or DOM event', () => {
+    const context = {
+      basePositionRevision: 12,
+      boardId: 'editor',
+      piece: { id: 'white-queen', pieceType: 'wQ' },
+      square: 'd1',
+    } satisfies SquarePressContext;
+    const observed: SquarePressContext[] = [];
+    const onSquarePressIn: OnSquarePressIn = (value) => {
+      observed.push(value);
+    };
+    const onSquarePressOut: OnSquarePressOut = (value) => {
+      observed.push(value);
+    };
+    const props = {
+      boardId: 'editor',
+      onSquarePressIn,
+      onSquarePressOut,
+      position: { d1: context.piece },
+    } satisfies ChessboardProps;
+
+    props.onSquarePressIn(context);
+    props.onSquarePressOut(context);
+
+    expect(observed).toEqual([context, context]);
   });
 
   it('composes gesture tuning and piece callbacks for board and targeted spare contexts', () => {
