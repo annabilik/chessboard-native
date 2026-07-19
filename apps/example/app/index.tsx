@@ -248,6 +248,14 @@ export default function GalleryIndex() {
           </Pressable>
         </Link>
 
+        <Link asChild href="/rules-owned-moves">
+          <Pressable style={styles.routeLink}>
+            <Text style={styles.routeLinkText}>
+              Open promotion and premove workflows
+            </Text>
+          </Pressable>
+        </Link>
+
         <Link asChild href="/visual-customization">
           <Pressable style={styles.routeLink}>
             <Text style={styles.routeLinkText}>

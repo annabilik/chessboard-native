@@ -192,9 +192,9 @@
         "surface": "root",
         "symbols": ["Chessboard"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-CHESSBOARD",
-      "compatibilityNotes": "The native component keeps the standalone entry point but uses direct controlled props instead of an options object."
+      "compatibilityNotes": "The root named export renders one responsive standalone native board and uses direct controlled props instead of an options object."
     },
     {
       "id": "export.chessboard-provider",

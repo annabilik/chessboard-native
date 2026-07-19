@@ -1,5 +1,5 @@
 import { act, fireEvent, render } from '@testing-library/react-native';
-import type { ReactElement } from 'react';
+import { createRef, useEffect, useState, type ReactElement } from 'react';
 import { View } from 'react-native';
 import { State } from 'react-native-gesture-handler';
 import {
@@ -10,12 +10,16 @@ import type { TestInstance } from 'test-renderer';
 
 import { ChessboardRuntime } from '../../src/Chessboard';
 import type {
+  ChessboardActions,
   ControlledPosition,
   ControlledSelection,
   MoveIntent,
   OnMoveRequest,
   PieceInteractionContext,
+  PieceData,
+  PieceRendererProps,
   PieceRenderers,
+  PositionObject,
   SquareActivationIntent,
 } from '../../src';
 import { getBoardGestureTestIds } from '../../src/render/board-gesture-layer';
@@ -258,6 +262,272 @@ describe('public controlled selection activation', () => {
     expect(JSON.stringify(selection)).toBe(selectionBefore);
     expect(position.value).toBe(positionValue);
   });
+
+  it.each([
+    ['applies a still-valid queue', false],
+    ['discards a queue whose source became stale', true],
+  ] as const)(
+    'keeps a consumer-owned premove outside onMoveRequest and %s after revalidation',
+    async (_scenario, removeSource) => {
+      interface QueuedPremove {
+        readonly basePositionRevision: number;
+        readonly piece: Readonly<PieceData>;
+        readonly sourceSquare: 'a2';
+        readonly targetSquare: 'b1';
+      }
+      type ConsumerPosition = Readonly<{
+        readonly revision: number;
+        readonly value: PositionObject;
+      }>;
+
+      const initialPosition = Object.freeze({
+        revision: 40,
+        value: Object.freeze({
+          a2: Object.freeze({ id: 'premove-piece', pieceType: 'token' }),
+          b2: Object.freeze({ id: 'other-piece', pieceType: 'token' }),
+        }),
+      }) satisfies ConsumerPosition;
+      const freshValue: PositionObject = Object.freeze({
+        a1: Object.freeze({ id: 'other-piece', pieceType: 'token' }),
+        ...(removeSource
+          ? {}
+          : {
+              a2: Object.freeze({
+                id: 'premove-piece',
+                pieceType: 'token',
+              }),
+            }),
+      });
+      const freshPosition = Object.freeze({
+        revision: 41,
+        value: freshValue,
+      }) satisfies ConsumerPosition;
+      const actionsRef = createRef<ChessboardActions>();
+      const activations: SquareActivationIntent[] = [];
+      const revalidatedAt: number[] = [];
+      const initialSelection = Object.freeze({
+        revision: 7,
+        selectedSquare: null,
+      }) satisfies ControlledSelection;
+      let latestPosition: ConsumerPosition = initialPosition;
+      let latestQueuedPremove: Readonly<QueuedPremove> | null = null;
+      let latestSelection: ControlledSelection = initialSelection;
+      const consumerControls: {
+        publishFreshPosition: (() => void) | null;
+      } = { publishFreshPosition: null };
+
+      function premovePieceProbe(props: PieceRendererProps): ReactElement {
+        return (
+          <View
+            testID={`premove-piece:${props.square ?? 'spare'}:${props.piece.id ?? 'anonymous'}`}
+          />
+        );
+      }
+
+      function ConsumerOwnedPremoveBoard(): ReactElement {
+        const [position, setPosition] =
+          useState<ConsumerPosition>(initialPosition);
+        const [selection, setSelection] =
+          useState<ControlledSelection>(initialSelection);
+        const [queuedPremove, setQueuedPremove] =
+          useState<Readonly<QueuedPremove> | null>(null);
+        latestPosition = position;
+        latestQueuedPremove = queuedPremove;
+        latestSelection = selection;
+        consumerControls.publishFreshPosition = () => {
+          setPosition(freshPosition);
+        };
+
+        useEffect(() => {
+          if (
+            queuedPremove === null ||
+            position.revision <= queuedPremove.basePositionRevision
+          ) {
+            return;
+          }
+          revalidatedAt.push(position.revision);
+          const currentPiece = position.value[queuedPremove.sourceSquare];
+          const targetIsEmpty =
+            position.value[queuedPremove.targetSquare] === undefined;
+          const stillMatches =
+            currentPiece?.id === queuedPremove.piece.id &&
+            currentPiece?.pieceType === queuedPremove.piece.pieceType;
+          setQueuedPremove(null);
+          if (!stillMatches || !targetIsEmpty) {
+            return;
+          }
+
+          const nextValue: Record<string, Readonly<PieceData>> = {};
+          for (const [square, piece] of Object.entries(position.value)) {
+            if (
+              piece !== undefined &&
+              square !== queuedPremove.sourceSquare &&
+              square !== queuedPremove.targetSquare
+            ) {
+              nextValue[square] = piece;
+            }
+          }
+          nextValue[queuedPremove.targetSquare] = currentPiece;
+          setPosition(
+            Object.freeze({
+              revision: position.revision + 1,
+              value: Object.freeze(nextValue),
+            }),
+          );
+        }, [position, queuedPremove]);
+
+        return (
+          <ChessboardRuntime
+            actionsRef={actionsRef}
+            boardId="consumer-owned-premove"
+            development={false}
+            dimensions={{ columns: 2, rows: 2 }}
+            onSquareActivate={(intent) => {
+              activations.push(intent);
+              if (intent.action !== 'activate') {
+                return;
+              }
+              if (intent.selectedSquare === null) {
+                if (
+                  intent.square !== 'a2' ||
+                  intent.baseSelectionRevision === null ||
+                  position.value['a2'] === undefined
+                ) {
+                  return;
+                }
+                setSelection(
+                  Object.freeze({
+                    destinationSquares: Object.freeze(['b1']),
+                    revision: intent.baseSelectionRevision + 1,
+                    selectedSquare: 'a2',
+                  }),
+                );
+                return;
+              }
+
+              const sourcePiece = position.value[intent.selectedSquare];
+              if (
+                intent.selectedSquare !== 'a2' ||
+                intent.square !== 'b1' ||
+                !intent.isDestination ||
+                sourcePiece === undefined
+              ) {
+                return;
+              }
+              setQueuedPremove(
+                Object.freeze({
+                  basePositionRevision: intent.basePositionRevision,
+                  piece: Object.freeze({ ...sourcePiece }),
+                  sourceSquare: 'a2',
+                  targetSquare: 'b1',
+                }),
+              );
+              setSelection((current) =>
+                Object.freeze({
+                  destinationSquares: Object.freeze([]),
+                  revision: current.revision + 1,
+                  selectedSquare: null,
+                }),
+              );
+            }}
+            pieceRenderers={{ token: premovePieceProbe }}
+            position={position}
+            reduceMotion="always"
+            selection={selection}
+            transitionDurationMs={0}
+          />
+        );
+      }
+
+      const result = await render(<ConsumerOwnedPremoveBoard />);
+      await measure(rootOf(result));
+      await tap('consumer-owned-premove', POINTS.a2);
+
+      expect(activations).toHaveLength(1);
+      expect(activations[0]).toEqual(
+        expect.objectContaining({
+          basePositionRevision: 40,
+          baseSelectionRevision: 7,
+          isDestination: false,
+          selectedSquare: null,
+          square: 'a2',
+        }),
+      );
+      expect(latestSelection).toEqual({
+        destinationSquares: ['b1'],
+        revision: 8,
+        selectedSquare: 'a2',
+      });
+      expect(latestQueuedPremove).toBeNull();
+      expect(actionsRef.current?.cancelMove()).toBe(false);
+
+      await tap('consumer-owned-premove', POINTS.b1);
+
+      expect(activations).toHaveLength(2);
+      expect(activations[1]).toEqual(
+        expect.objectContaining({
+          basePositionRevision: 40,
+          baseSelectionRevision: 8,
+          isDestination: true,
+          selectedSquare: 'a2',
+          square: 'b1',
+        }),
+      );
+      expect(latestQueuedPremove).toEqual({
+        basePositionRevision: 40,
+        piece: { id: 'premove-piece', pieceType: 'token' },
+        sourceSquare: 'a2',
+        targetSquare: 'b1',
+      });
+      expect(latestSelection).toEqual({
+        destinationSquares: [],
+        revision: 9,
+        selectedSquare: null,
+      });
+      expect(latestPosition).toBe(initialPosition);
+      expect(revalidatedAt).toEqual([]);
+      expect(actionsRef.current?.cancelMove()).toBe(false);
+
+      const publish = consumerControls.publishFreshPosition;
+      if (publish === null) {
+        throw new Error('Expected the consumer to expose a controlled update.');
+      }
+      await act(async () => {
+        publish();
+        await Promise.resolve();
+      });
+
+      expect(revalidatedAt).toEqual([41]);
+      expect(latestQueuedPremove).toBeNull();
+      if (removeSource) {
+        expect(latestPosition).toBe(freshPosition);
+        expect(
+          result.queryByTestId('premove-piece:b1:premove-piece', {
+            includeHiddenElements: true,
+          }),
+        ).toBeNull();
+      } else {
+        expect(latestPosition).toEqual({
+          revision: 42,
+          value: {
+            a1: { id: 'other-piece', pieceType: 'token' },
+            b1: { id: 'premove-piece', pieceType: 'token' },
+          },
+        });
+        expect(
+          result.getByTestId('premove-piece:b1:premove-piece', {
+            includeHiddenElements: true,
+          }),
+        ).toBeDefined();
+      }
+      expect(
+        result.queryByTestId('premove-piece:a2:premove-piece', {
+          includeHiddenElements: true,
+        }),
+      ).toBeNull();
+      expect(actionsRef.current?.cancelMove()).toBe(false);
+    },
+  );
 
   it('[PARITY-OPTION-ON-PIECE-CLICK] routes occupied piece presses before square activation for touch and accessibility, while empty squares fall back', async () => {
     const positionValue = Object.freeze({

@@ -60,11 +60,19 @@ async function drag(
   boardId: string,
   target: Readonly<{ x: number; y: number }>,
 ): Promise<void> {
+  await dragFrom(boardId, START, target);
+}
+
+async function dragFrom(
+  boardId: string,
+  source: Readonly<{ x: number; y: number }>,
+  target: Readonly<{ x: number; y: number }>,
+): Promise<void> {
   const pan = getByGestureTestId(getBoardGestureTestIds(boardId).pan);
   await act(() => {
     fireGestureHandler(pan, [
-      { state: State.BEGAN, ...START },
-      { state: State.ACTIVE, x: START.x + 10, y: START.y },
+      { state: State.BEGAN, ...source },
+      { state: State.ACTIVE, x: source.x + 10, y: source.y },
       { state: State.ACTIVE, ...target },
       { state: State.END, ...target },
     ]);
@@ -279,7 +287,7 @@ describe('public controlled move requests', () => {
     }
   });
 
-  it('[PARITY-BEHAVIOR-B49] forwards a same-square drag for an open piece vocabulary without applying chess rules', async () => {
+  it('[PARITY-BEHAVIOR-B49] forwards a promotion-candidate intent without applying chess rules or choosing a promotion', async () => {
     const boardId = 'rules-free';
     const intents: MoveIntent[] = [];
     const onMoveRequest: OnMoveRequest = (intent) => {
@@ -290,17 +298,17 @@ describe('public controlled move requests', () => {
       <ChessboardRuntime
         boardId={boardId}
         development={false}
-        dimensions={{ columns: 2, rows: 2 }}
+        dimensions={{ columns: 8, rows: 8 }}
         onMoveRequest={onMoveRequest}
-        pieceRenderers={PIECE_RENDERERS}
+        pieceRenderers={{ wP: pieceProbe }}
         position={{
           revision: 3,
-          value: { a2: { id: 'open-token', pieceType: 'token' } },
+          value: { a7: { id: 'promotion-candidate', pieceType: 'wP' } },
         }}
       />,
     );
     await measure(rootOf(result));
-    await drag(boardId, { x: START.x + 10, y: START.y });
+    await dragFrom(boardId, { x: 12.5, y: 37.5 }, { x: 37.5, y: 12.5 });
     await flushDecisions();
 
     expect(intents).toHaveLength(1);
@@ -314,10 +322,11 @@ describe('public controlled move requests', () => {
       boardId,
       input: 'drag',
       intentId: intent.intentId,
-      piece: { id: 'open-token', pieceType: 'token' },
-      source: { kind: 'board', square: 'a2' },
-      targetSquare: 'a2',
+      piece: { id: 'promotion-candidate', pieceType: 'wP' },
+      source: { kind: 'board', square: 'a7' },
+      targetSquare: 'b8',
     });
+    expect(intent).not.toHaveProperty('promotion');
   });
 
   it('[PARITY-BEHAVIOR-B23] preserves a null target for an off-board drag through the public callback', async () => {
