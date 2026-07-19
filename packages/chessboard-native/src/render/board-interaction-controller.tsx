@@ -10,9 +10,11 @@ import type { ViewStyle } from 'react-native';
 
 import { useReducedMotion } from '../accessibility/reduced-motion';
 import { ChessboardProvider } from '../ChessboardProvider';
+import { createBoardGestureDetectorKey } from '../internal/board-gesture-detector-key';
 import type { NormalizedControlledValue } from '../internal/controlled-domain';
 import type { AnnotationGestureCorrelation } from '../internal/annotation-gesture-adapter';
 import { canDragCurrentPiece } from '../internal/interaction-permissions';
+import { DEFAULT_DRAG_ACTIVATION_DISTANCE } from '../internal/gesture-options';
 import {
   createBoardGestureAdapterState,
   reduceBoardGestureAdapter,
@@ -39,6 +41,7 @@ import type {
 import type { AnnotationInputRuntime } from '../internal/use-annotation-input-runtime';
 import type {
   CanDragPiece,
+  PieceInteractionContext,
   PieceRenderers,
   PositionObject,
   Revision,
@@ -52,6 +55,7 @@ import {
 import { resolvePieceRenderer } from './piece-layer';
 
 interface BoardInteractionControllerProps {
+  readonly activationDistance?: number;
   readonly annotationRuntime?: Readonly<AnnotationInputRuntime>;
   readonly boardId: string;
   readonly canDragPiece?: CanDragPiece;
@@ -63,6 +67,9 @@ interface BoardInteractionControllerProps {
     candidate: Readonly<BoardGestureIntentCandidate>,
   ) => void;
   readonly onDragSourceChange?: (sourceSquare: SquareId | null) => void;
+  readonly onPieceDragStart?: (
+    context: Readonly<PieceInteractionContext>,
+  ) => boolean;
   readonly onPressedSquareChange?: (square: SquareId | null) => void;
   readonly pieceRenderers: PieceRenderers;
   readonly pieceStyle: Readonly<ViewStyle>;
@@ -73,6 +80,7 @@ interface BoardInteractionControllerProps {
 }
 
 const EMPTY_OCCUPIED_SQUARES: readonly SquareId[] = Object.freeze([]);
+const REJECTED_SIGNAL_GENERATION: Readonly<object> = Object.freeze({});
 
 function createSnapshot(options: {
   readonly boardId: string;
@@ -186,6 +194,7 @@ function signalMatchesActive(
  * executor, but cannot mutate position or retain a semantic snapshot.
  */
 function BoardInteractionControllerContent({
+  activationDistance = DEFAULT_DRAG_ACTIVATION_DISTANCE,
   annotationRuntime,
   boardId,
   canDragPiece,
@@ -195,6 +204,7 @@ function BoardInteractionControllerContent({
   geometry,
   onCandidate,
   onDragSourceChange,
+  onPieceDragStart,
   onPressedSquareChange,
   pieceRenderers,
   pieceStyle,
@@ -251,6 +261,31 @@ function BoardInteractionControllerContent({
       ? EMPTY_OCCUPIED_SQUARES
       : Object.freeze(draggable);
   }, [boardId, canDragPiece, dragEnabled, occupiedSquares, position]);
+  const providerGestureResetKey = JSON.stringify([
+    providerGeometryRevision,
+    providerLifecycleRevision,
+    providerResetRevision,
+    providerTransientRevision,
+  ]);
+  const gestureDetectorKey = createBoardGestureDetectorKey({
+    activationDistance,
+    annotationEnabled: annotationSnapshot !== null,
+    boardId,
+    dragEnabled,
+    draggableSquares,
+    geometryRevision: geometry.revision,
+    positionRevision: position.revision,
+    resetKey: providerGestureResetKey,
+    selectionRevision,
+    tapEnabled: tapEnabled || annotationSnapshot !== null,
+    trackDragTarget: dragEnabled,
+    trackPress,
+  });
+  const signalGeneration = useMemo<Readonly<object>>(
+    () => Object.freeze({}),
+    [gestureDetectorKey],
+  );
+  const signalGenerationAtCommit = useRef(signalGeneration);
   const adapter = useRef<Readonly<BoardGestureAdapterState>>(
     createBoardGestureAdapterState({
       boardId,
@@ -274,6 +309,7 @@ function BoardInteractionControllerContent({
   const tapEnabledAtCommit = useRef(tapEnabled);
   const onCandidateAtCommit = useRef(onCandidate);
   const onDragSourceChangeAtCommit = useRef(onDragSourceChange);
+  const onPieceDragStartAtCommit = useRef(onPieceDragStart);
   const onPressedSquareChangeAtCommit = useRef(onPressedSquareChange);
   const snapshotAtCommit = useRef(snapshot);
   const pieceSize = Math.min(
@@ -283,6 +319,10 @@ function BoardInteractionControllerContent({
 
   const applyReduction = useCallback(
     (reduction: Readonly<BoardGestureAdapterReduction>): void => {
+      const previousDragToken =
+        adapter.current.lifecycle.phase === 'drag'
+          ? adapter.current.active?.correlation.token
+          : undefined;
       adapter.current = reduction.state;
       syncInteractionPresentationSharedValues(
         presentation,
@@ -321,6 +361,9 @@ function BoardInteractionControllerContent({
             }),
           );
           onDragSourceChangeAtCommit.current?.(sourceSquare);
+          if (previousDragToken !== active.correlation.token) {
+            onPieceDragStartAtCommit.current?.(lifecycle.context);
+          }
         }
       } else {
         const active = providerRuntime.drag.getSnapshot().active;
@@ -358,6 +401,7 @@ function BoardInteractionControllerContent({
       if (correlation === undefined) {
         return;
       }
+      signalGenerationAtCommit.current = REJECTED_SIGNAL_GENERATION;
       if (acceptingSignals.current) {
         setProviderResetRevision((revision) => {
           if (revision === Number.MAX_SAFE_INTEGER) {
@@ -390,6 +434,7 @@ function BoardInteractionControllerContent({
     (signal: Readonly<BoardGestureSignal>): void => {
       if (
         !acceptingSignals.current ||
+        signalGenerationAtCommit.current !== signalGeneration ||
         !interactionEnabledAtCommit.current ||
         providerRuntime.getGeometryRevision() !== providerGeometryRevision ||
         providerRuntime.getTransientRevision() !== providerTransientRevision ||
@@ -638,6 +683,7 @@ function BoardInteractionControllerContent({
       providerGeometryRevision,
       providerRuntime,
       providerTransientRevision,
+      signalGeneration,
       geometry.visualSquares,
       trackPress,
     ],
@@ -648,16 +694,21 @@ function BoardInteractionControllerContent({
     cancelFromProviderAtCommit.current = cancelFromProvider;
     onCandidateAtCommit.current = onCandidate;
     onDragSourceChangeAtCommit.current = onDragSourceChange;
+    onPieceDragStartAtCommit.current = onPieceDragStart;
     onPressedSquareChangeAtCommit.current = onPressedSquareChange;
   }, [
     annotationRuntime,
     cancelFromProvider,
     onCandidate,
     onDragSourceChange,
+    onPieceDragStart,
     onPressedSquareChange,
   ]);
 
   useLayoutEffect(() => {
+    const signalGenerationChanged =
+      signalGenerationAtCommit.current !== signalGeneration;
+    signalGenerationAtCommit.current = signalGeneration;
     snapshotAtCommit.current = snapshot;
     annotationEnabledAtCommit.current = annotationSnapshot !== null;
     annotationSnapshotAtCommit.current = annotationSnapshot;
@@ -684,6 +735,14 @@ function BoardInteractionControllerContent({
       snapshot,
       type: 'synchronize',
     });
+    if (signalGenerationChanged) {
+      activeNativeAnnotationSignal.current = null;
+      annotationRuntimeAtCommit.current?.cancel();
+      if (activeNativePressSignal.current !== null) {
+        activeNativePressSignal.current = null;
+        onPressedSquareChangeAtCommit.current?.(null);
+      }
+    }
     const activeCorrelation = reduction.state.active?.correlation;
     const activeSource = reduction.state.active?.sourceSquare;
     const activeInput = reduction.state.lifecycle.phase;
@@ -695,11 +754,13 @@ function BoardInteractionControllerContent({
           : true;
     if (
       activeCorrelation !== undefined &&
-      (!(dragEnabled || tapEnabled) || !activeInputAllowed)
+      (signalGenerationChanged ||
+        !(dragEnabled || tapEnabled) ||
+        !activeInputAllowed)
     ) {
       reduction = reduceBoardGestureAdapter(reduction.state, {
         correlation: activeCorrelation,
-        reason: 'permissions-change',
+        reason: signalGenerationChanged ? 'user' : 'permissions-change',
         type: 'cancel',
       });
     }
@@ -715,12 +776,14 @@ function BoardInteractionControllerContent({
     providerGeometryRevision,
     providerLifecycleRevision,
     providerTransientRevision,
+    signalGeneration,
   ]);
 
   useLayoutEffect(() => {
     acceptingSignals.current = true;
     return () => {
       acceptingSignals.current = false;
+      signalGenerationAtCommit.current = REJECTED_SIGNAL_GENERATION;
       annotationEnabledAtCommit.current = false;
       annotationSnapshotAtCommit.current = null;
       dragEnabledAtCommit.current = false;
@@ -752,6 +815,7 @@ function BoardInteractionControllerContent({
 
   return (
     <BoardGestureLayer
+      activationDistance={activationDistance}
       annotationEnabled={annotationSnapshot !== null}
       annotationRevision={annotationSnapshot?.annotationRevision ?? null}
       boardId={boardId}
@@ -761,12 +825,7 @@ function BoardInteractionControllerContent({
       onSignal={handleSignal}
       positionRevision={position.revision}
       presentation={presentation}
-      resetKey={JSON.stringify([
-        providerGeometryRevision,
-        providerLifecycleRevision,
-        providerResetRevision,
-        providerTransientRevision,
-      ])}
+      resetKey={providerGestureResetKey}
       selectionRevision={selectionRevision}
       tapEnabled={tapEnabled || annotationSnapshot !== null}
       trackDragTarget={dragEnabled}

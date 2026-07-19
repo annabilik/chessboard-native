@@ -2027,9 +2027,9 @@
         "surface": "root",
         "symbols": ["ChessboardProps.gesture.activationDistance"]
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-DRAG-ACTIVATION-DISTANCE",
-      "compatibilityNotes": "Mapped to the native gesture activation threshold."
+      "compatibilityNotes": "ChessboardProps.gesture.activationDistance configures one validated finite non-negative native-point threshold, defaults to four points, and is shared with spares targeting that board."
     },
     {
       "id": "option.allow-drawing-arrows",
@@ -2371,9 +2371,9 @@
           "ChessboardProps.onPiecePress"
         ]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-OPTION-ON-PIECE-CLICK",
-      "compatibilityNotes": "Mapped onto one authoritative press pipeline; it never bubbles into a duplicate semantic callback."
+      "compatibilityNotes": "The root onPiecePress callback now observes one detached current-snapshot board or targeted-spare context without bubbling into onSquareActivate; only the Phase 5 compatibility adapter remains open."
     },
     {
       "id": "option.on-piece-drag",
@@ -2405,9 +2405,9 @@
           "ChessboardProps.onPieceDragStart"
         ]
       },
-      "status": "planned",
+      "status": "in-progress",
       "contractTestId": "PARITY-OPTION-ON-PIECE-DRAG",
-      "compatibilityNotes": "Mapped to native drag start with current controlled revision context."
+      "compatibilityNotes": "The root onPieceDragStart callback now observes one detached current-snapshot board or targeted-spare context after native drag activation; only the Phase 5 compatibility adapter remains open."
     },
     {
       "id": "option.on-piece-drop",
@@ -3119,9 +3119,9 @@
         "surface": "root",
         "symbols": ["ChessboardProps.gesture", "ChessboardAccessibility"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B18",
-      "compatibilityNotes": "Accessibility-hidden single-pointer RNGH planes keep continuous updates on the UI thread, fail denied sources before activation so an ancestor ScrollView can win, and cancel cleanly for a second pointer or AppState/geometry invalidation. Packed native suites cover arbitration and post-cancellation reuse; public gesture tuning remains future work."
+      "compatibilityNotes": "Accessibility-hidden single-pointer RNGH planes keep continuous updates on the UI thread, fail denied sources before activation so an ancestor ScrollView can win, and cancel cleanly for a second pointer or AppState/geometry invalidation. A validated public activationDistance is shared by the board and targeted spares; packed native suites cover arbitration and post-cancellation reuse."
     },
     {
       "id": "behavior.b19-automatic-scroll-during-drag",
@@ -3195,9 +3195,9 @@
         "surface": "root",
         "symbols": ["ChessboardProps.onPieceDragStart", "ChessboardProvider"]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B21",
-      "compatibilityNotes": "One provider interaction epoch drives a provider-level absolute pointerless overlay across registered boards and clipped source palettes; the public onPieceDragStart callback remains future work."
+      "compatibilityNotes": "One provider interaction epoch drives a provider-level absolute pointerless overlay across registered boards and clipped source palettes. The owning board observes exactly one current-snapshot onPieceDragStart after a permitted board or targeted-spare pan activates."
     },
     {
       "id": "behavior.b22-on-board-boolean-drop-decision",
@@ -3367,9 +3367,9 @@
           "ChessboardProps.onSquareActivate"
         ]
       },
-      "status": "in-progress",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B27",
-      "compatibilityNotes": "One board-level activation pipeline prevents a piece press from also emitting a duplicate square intent; the distinct onPiecePress surface remains future work.",
+      "compatibilityNotes": "One board-level activation pipeline gives an enabled selected-destination move precedence, otherwise routes an occupied piece to onPiecePress and never also emits a duplicate square intent.",
       "rationale": "Browser bubbling makes piece clicks also reach the square handler and contradicts documented conditions; native intent ordering must be explicit.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b27-piece-and-square-click-bubbling"
     },
@@ -3403,7 +3403,7 @@
       },
       "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B28",
-      "compatibilityNotes": "The board-level recognizer accepts same-square taps on occupied and empty squares, then routes exactly one current-snapshot activation or controlled destination move intent."
+      "compatibilityNotes": "The board-level recognizer accepts same-square taps on occupied and empty squares, then routes exactly one current-snapshot piece press, square activation, or controlled destination move intent."
     },
     {
       "id": "behavior.b29-hover-in-and-out-transitions",
@@ -3562,7 +3562,7 @@
       },
       "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B33",
-      "compatibilityNotes": "MoveIntent and SquareActivationIntent payloads come from the current normalized controlled snapshots and carry their base revisions; no shadow position or selection is consulted.",
+      "compatibilityNotes": "MoveIntent, SquareActivationIntent, and piece-interaction payloads come from current normalized controlled snapshots and carry their base revisions; no shadow position or selection is consulted.",
       "rationale": "Reading callback pieces from a mutable mirror can report data from a stale animation snapshot instead of the consumer's authoritative position.",
       "documentation": "docs/parity/react-chessboard-5.10.md#behavior-b33-callback-lookup-from-shadow-position"
     },

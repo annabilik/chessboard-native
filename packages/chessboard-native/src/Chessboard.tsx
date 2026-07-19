@@ -18,7 +18,12 @@ import {
   prepareBoardModel,
   type NormalizedBoardModel,
 } from './internal/board-model';
-import { createBoardLayoutOwnerToken } from './internal/board-layout-registry';
+import {
+  createBoardLayoutOwnerToken,
+  type NotifyProviderSparePieceInteraction,
+} from './internal/board-layout-registry';
+import { normalizeChessboardGestureOptions } from './internal/gesture-options';
+import { createPieceInteractionContext } from './internal/piece-interaction';
 import {
   createErrorReportMetadata,
   dispatchChessboardErrorReports,
@@ -31,6 +36,10 @@ import {
 } from './internal/provider-context';
 import type { ProviderBoardRegistration } from './internal/provider-board-registration';
 import type { ProviderDragCancellationReason } from './internal/provider-drag-coordinator';
+import {
+  usePieceInteraction,
+  type PieceInteractionCallbacks,
+} from './internal/use-piece-interaction';
 import { normalizeTransitionDurationMs } from './internal/use-position-transition-runtime';
 import { defaultPieceRenderers } from './pieces';
 import { BoardSurface } from './render/board-surface';
@@ -43,12 +52,15 @@ import type {
   BoardOrientation,
   CanDragPiece,
   ChessboardAccessibility,
+  ChessboardGestureOptions,
   ChessboardStyles,
   ChessboardTheme,
   InteractionPermissions,
   MoveRequestTimeouts,
   OnMoveRequest,
   OnAnnotationOperation,
+  OnPieceDragStart,
+  OnPiecePress,
   OnSquareActivate,
   PieceRenderers,
   PositionProp,
@@ -101,8 +113,14 @@ export interface ChessboardProps {
   readonly onMoveRequest?: OnMoveRequest;
   /** Declarative input gates; no callback always means read-only. */
   readonly interactionPermissions?: InteractionPermissions;
+  /** Native gesture-recognition tuning shared with targeted spare sources. */
+  readonly gesture?: ChessboardGestureOptions;
   /** Synchronous current-snapshot gate for board and targeted spare dragging. */
   readonly canDragPiece?: CanDragPiece;
+  /** Observes one current piece activation without changing controlled state. */
+  readonly onPiecePress?: OnPiecePress;
+  /** Observes one accepted native drag start without changing controlled state. */
+  readonly onPieceDragStart?: OnPieceDragStart;
   /** Decision and controlled-commit budgets; defaults are 10s and 1.5s. */
   readonly moveRequestTimeouts?: MoveRequestTimeouts;
   /** Labels, formatters, and correlated announcements for the board control. */
@@ -169,10 +187,12 @@ function useBoardModel(
 }
 
 function useProviderBoardRegistration(options: {
+  readonly activationDistance: number;
   readonly boardId: string | null;
   readonly development: boolean;
   readonly logError: ((error: ChessboardError) => void) | undefined;
   readonly onError: OnChessboardError | undefined;
+  readonly pieceInteraction: Readonly<PieceInteractionCallbacks>;
   readonly positionRevision: number | null;
 }): Readonly<ProviderBoardRegistration> | null {
   const provider = useOptionalChessboardProvider();
@@ -182,6 +202,8 @@ function useProviderBoardRegistration(options: {
   const [owner] = useState(createBoardLayoutOwnerToken);
   const hostRef = useRef<View | null>(null);
   const positionRevisionAtCommit = useRef<number | null>(null);
+  const activationDistanceAtCommit = useRef(options.activationDistance);
+  const pieceInteractionAtCommit = useRef(options.pieceInteraction);
   const [state, setState] =
     useState<Readonly<ProviderRegistrationState> | null>(null);
   const measureInWindow = useCallback(
@@ -203,6 +225,52 @@ function useProviderBoardRegistration(options: {
   );
   const readMoveRequest = useCallback(() => null, []);
   const readSpareDragPermission = useCallback(() => null, []);
+  const notifySparePieceDragStart =
+    useCallback<NotifyProviderSparePieceInteraction>(
+      (source, piece): boolean => {
+        const boardId = options.boardId;
+        const revision = positionRevisionAtCommit.current;
+        if (boardId === null || revision === null) {
+          return false;
+        }
+        return pieceInteractionAtCommit.current.dragStart(
+          createPieceInteractionContext({
+            basePositionRevision: revision,
+            boardId,
+            piece,
+            source,
+          }),
+        );
+      },
+      [options.boardId],
+    );
+  const notifySparePiecePress =
+    useCallback<NotifyProviderSparePieceInteraction>(
+      (source, piece): boolean => {
+        const boardId = options.boardId;
+        const revision = positionRevisionAtCommit.current;
+        if (boardId === null || revision === null) {
+          return false;
+        }
+        return pieceInteractionAtCommit.current.press(
+          createPieceInteractionContext({
+            basePositionRevision: revision,
+            boardId,
+            piece,
+            source,
+          }),
+        );
+      },
+      [options.boardId],
+    );
+  const readSparePieceDragStart = useCallback(
+    () => notifySparePieceDragStart,
+    [notifySparePieceDragStart],
+  );
+  const readSparePiecePress = useCallback(
+    () => notifySparePiecePress,
+    [notifySparePiecePress],
+  );
   const cancelActiveDrag = useCallback(
     (reason: ProviderDragCancellationReason): void => {
       const boardId = options.boardId;
@@ -215,8 +283,14 @@ function useProviderBoardRegistration(options: {
   );
 
   useLayoutEffect(() => {
+    activationDistanceAtCommit.current = options.activationDistance;
+    pieceInteractionAtCommit.current = options.pieceInteraction;
     positionRevisionAtCommit.current = options.positionRevision;
-  }, [options.positionRevision]);
+  }, [
+    options.activationDistance,
+    options.pieceInteraction,
+    options.positionRevision,
+  ]);
 
   useLayoutEffect(() => {
     const boardId = options.boardId;
@@ -226,6 +300,7 @@ function useProviderBoardRegistration(options: {
     const result = provider.runtime.registry.register({
       available: false,
       boardId,
+      dragActivationDistance: activationDistanceAtCommit.current,
       geometry: {
         dimensions: { columns: 8, rows: 8 },
         geometryEpoch: 0,
@@ -237,6 +312,8 @@ function useProviderBoardRegistration(options: {
       readMoveRequest,
       readPositionRevision,
       readSpareDragPermission,
+      readSparePieceDragStart,
+      readSparePiecePress,
     });
     if (result.status === 'registered') {
       // A preserved Suspense/Offscreen tree can replay layout effects without
@@ -298,12 +375,30 @@ function useProviderBoardRegistration(options: {
     readMoveRequest,
     readPositionRevision,
     readSpareDragPermission,
+    readSparePieceDragStart,
+    readSparePiecePress,
   ]);
 
   const currentState =
     state?.boardId === options.boardId && state.runtime === provider.runtime
       ? state
       : null;
+  useLayoutEffect(() => {
+    const boardId = options.boardId;
+    if (boardId === null || currentState?.status !== 'registered') {
+      return;
+    }
+    provider.runtime.registry.update(boardId, owner, {
+      dragActivationDistance: options.activationDistance,
+    });
+  }, [
+    currentState?.activation,
+    currentState?.status,
+    options.activationDistance,
+    options.boardId,
+    owner,
+    provider.runtime.registry,
+  ]);
   const registrationError = currentState?.error ?? null;
   const registration =
     useMemo<Readonly<ProviderBoardRegistration> | null>(() => {
@@ -345,21 +440,30 @@ function ChessboardRuntimeContent({
   ...props
 }: ChessboardRuntimeProps): ReactElement {
   const model = useBoardModel(props, development, logError);
+  const gesture = normalizeChessboardGestureOptions(props.gesture);
+  const pieceInteraction = usePieceInteraction({
+    boardId: model.boardId,
+    onPieceDragStart: props.onPieceDragStart,
+    onPiecePress: props.onPiecePress,
+  });
   const transitionDurationMs = normalizeTransitionDurationMs(
     props.transitionDurationMs,
   );
   const provider = useChessboardProvider();
   const providerRegistration = useProviderBoardRegistration({
+    activationDistance: gesture.activationDistance,
     boardId: model.boardId,
     development,
     logError,
     onError: props.onError,
+    pieceInteraction,
     positionRevision: model.position?.revision ?? null,
   });
 
   return (
     <ReducedMotionProvider preference={props.reduceMotion ?? 'system'}>
       <BoardSurface
+        activationDistance={gesture.activationDistance}
         accessibility={props.accessibility}
         annotationPolicies={props.annotationPolicies}
         annotationStyle={props.annotationStyle ?? defaultAnnotationStyle}
@@ -376,6 +480,8 @@ function ChessboardRuntimeContent({
         onAnnotationOperation={props.onAnnotationOperation}
         onMoveRequest={props.onMoveRequest}
         onSquareActivate={props.onSquareActivate}
+        pieceInteraction={pieceInteraction}
+        piecePressEnabled={typeof props.onPiecePress === 'function'}
         pieceRenderers={props.pieceRenderers ?? defaultPieceRenderers}
         renderSquare={props.renderSquare}
         providerRegistration={providerRegistration}

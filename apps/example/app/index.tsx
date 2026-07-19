@@ -186,11 +186,13 @@ export default function GalleryIndex() {
           native validation covers Android annotation actions and the static iOS
           surface; physical VoiceOver remains the manual action check. Custom
           square rendering and transient public style mappings now have a
-          focused visual-customization lab. Ordinary and special controlled
-          transitions, rapid-update continuity, geometry and orientation
-          rebasing, reduced motion, and pending-to-commit handoff now have a
-          focused lab. Controlled selection activation, move requests, provider
-          coordination, and external spare placement have focused examples. The
+          focused visual-customization lab. Piece press and drag-start
+          observations plus shared board/spare activation-distance tuning have a
+          focused callback lab. Ordinary and special controlled transitions,
+          rapid-update continuity, geometry and orientation rebasing, reduced
+          motion, and pending-to-commit handoff now have a focused lab.
+          Controlled selection activation, move requests, provider coordination,
+          and external spare placement have focused examples. The
           interaction-hardening lab adds native ScrollView, clipping, geometry,
           lifecycle, and render/callback evidence.
         </Text>
@@ -250,6 +252,12 @@ export default function GalleryIndex() {
             <Text style={styles.routeLinkText}>
               Open visual-customization lab
             </Text>
+          </Pressable>
+        </Link>
+
+        <Link asChild href="/piece-callbacks">
+          <Pressable style={styles.routeLink}>
+            <Text style={styles.routeLinkText}>Open piece-callback lab</Text>
           </Pressable>
         </Link>
 

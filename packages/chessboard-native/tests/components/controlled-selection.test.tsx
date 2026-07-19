@@ -14,6 +14,7 @@ import type {
   ControlledSelection,
   MoveIntent,
   OnMoveRequest,
+  PieceInteractionContext,
   PieceRenderers,
   SquareActivationIntent,
 } from '../../src';
@@ -198,6 +199,7 @@ describe('public controlled selection activation', () => {
   it('[PARITY-BEHAVIOR-B27] sends a selected destination through exactly one move intent and never also emits square activation', async () => {
     const positionValue = Object.freeze({
       a2: Object.freeze({ id: 'source', pieceType: 'token' }),
+      b1: Object.freeze({ id: 'target', pieceType: 'token' }),
     });
     const position = Object.freeze({
       revision: 20,
@@ -212,6 +214,7 @@ describe('public controlled selection activation', () => {
     const selectionBefore = JSON.stringify(selection);
     const moves: MoveIntent[] = [];
     const activations: SquareActivationIntent[] = [];
+    const piecePresses: Readonly<PieceInteractionContext>[] = [];
     const onMoveRequest: OnMoveRequest = (intent) => {
       moves.push(intent);
       return { status: 'rejected' };
@@ -222,6 +225,7 @@ describe('public controlled selection activation', () => {
         development={false}
         dimensions={{ columns: 2, rows: 2 }}
         onMoveRequest={onMoveRequest}
+        onPiecePress={(context) => piecePresses.push(context)}
         onSquareActivate={(intent) => activations.push(intent)}
         pieceRenderers={PIECE_RENDERERS}
         position={position}
@@ -248,10 +252,83 @@ describe('public controlled selection activation', () => {
       targetSquare: 'b1',
     });
     expect(typeof move.intentId).toBe('string');
+    expect(piecePresses).toEqual([]);
     expect(activations).toEqual([]);
     expect(JSON.stringify(position)).toBe(positionBefore);
     expect(JSON.stringify(selection)).toBe(selectionBefore);
     expect(position.value).toBe(positionValue);
+  });
+
+  it('[PARITY-OPTION-ON-PIECE-CLICK] routes occupied piece presses before square activation for touch and accessibility, while empty squares fall back', async () => {
+    const positionValue = Object.freeze({
+      a2: Object.freeze({ id: 'press-target', pieceType: 'token' }),
+    });
+    const piecePresses: Readonly<PieceInteractionContext>[] = [];
+    const activations: SquareActivationIntent[] = [];
+    const result = await render(
+      <ChessboardRuntime
+        boardId="piece-press-precedence"
+        development={false}
+        dimensions={{ columns: 2, rows: 2 }}
+        onPiecePress={(context) => piecePresses.push(context)}
+        onSquareActivate={(intent) => activations.push(intent)}
+        pieceRenderers={PIECE_RENDERERS}
+        position={{ revision: 31, value: positionValue }}
+        selection={{ revision: 7, selectedSquare: null }}
+      />,
+    );
+    const root = rootOf(result);
+    await measure(root);
+
+    await tap('piece-press-precedence', POINTS.a2);
+    expect(piecePresses).toHaveLength(1);
+    expect(activations).toEqual([]);
+
+    await fireEvent(root, 'accessibilityAction', {
+      nativeEvent: { actionName: 'activate' },
+    });
+    expect(piecePresses).toHaveLength(2);
+    expect(activations).toEqual([]);
+
+    await tap('piece-press-precedence', POINTS.a1);
+    await fireEvent(root, 'accessibilityAction', {
+      nativeEvent: { actionName: 'move-cursor-right' },
+    });
+    await fireEvent(root, 'accessibilityAction', {
+      nativeEvent: { actionName: 'activate' },
+    });
+
+    expect(piecePresses).toEqual([
+      {
+        basePositionRevision: 31,
+        boardId: 'piece-press-precedence',
+        piece: { id: 'press-target', pieceType: 'token' },
+        source: { kind: 'board', square: 'a2' },
+      },
+      {
+        basePositionRevision: 31,
+        boardId: 'piece-press-precedence',
+        piece: { id: 'press-target', pieceType: 'token' },
+        source: { kind: 'board', square: 'a2' },
+      },
+    ]);
+    for (const context of piecePresses) {
+      expect(Object.isFrozen(context)).toBe(true);
+      expect(Object.isFrozen(context.piece)).toBe(true);
+      expect(Object.isFrozen(context.source)).toBe(true);
+      expect(context.piece).not.toBe(positionValue.a2);
+    }
+    expect(activations).toHaveLength(2);
+    expect(activations[0]).toEqual(
+      expect.objectContaining({ input: 'touch', piece: null, square: 'a1' }),
+    );
+    expect(activations[1]).toEqual(
+      expect.objectContaining({
+        input: 'accessibility',
+        piece: null,
+        square: 'b2',
+      }),
+    );
   });
 
   it('keeps touch destination routing active when only accessibility move actions are disabled', async () => {

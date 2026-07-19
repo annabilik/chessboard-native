@@ -114,8 +114,8 @@ board. The same measured gate adds accessible arrow start/finish/cancel and
 square-toggle actions to the one adjustable board. Their operations use
 `input: 'accessibility'`, and only the consumer's next annotation prop persists
 the result. Selection styling follows the controlled selection prop, and
-`onSquareActivate` can opt
-the board into controlled touch and accessibility activation. Supplying
+`onSquareActivate` or `onPiecePress` can opt the board into controlled touch and
+accessibility activation. Supplying
 `onMoveRequest` opens the controlled move-request surface: board/spare-piece
 drag and the adjustable control's source, target, removal, and cancellation
 actions use one correlated lifecycle. Neither gesture path nor either callback
@@ -235,6 +235,14 @@ geometry. `disabled` prevents drag and accessible selection. The source is an
 accessible button whose default label and hint can be replaced with
 `accessibilityLabel` and `accessibilityHint`.
 
+Activating that button also calls the named target board's current
+`onPiecePress`, when present, with
+`source: { kind: 'spare', spareId }` and the board's current controlled position
+revision. This observation does not replace or commit the provider's transient
+accessible spare selection. Once a permitted spare pan actually activates, the
+same target board receives one `onPieceDragStart` observation. A palette never
+captures its own semantic callback or revision.
+
 Drag and non-drag placement both call only the named board's current
 `onMoveRequest`. The immutable intent carries that `boardId`, the board's
 current `basePositionRevision`, the detached `piece`, and
@@ -269,17 +277,20 @@ drag must travel beyond it.
 Board and spare-piece drag recognizers arbitrate with an ordinary ancestor
 React Native `ScrollView`. A touch that cannot start a current draggable source
 fails the drag path so the scroll view can take ownership. A valid drag can
-activate after its movement threshold and then retains the interaction until
-release or cancellation. The library never discovers or programmatically
-scrolls an arbitrary ancestor; upstream `allowAutoScroll` behavior is
-intentionally not part of the native 1.0 contract.
+activate after the named board's current `gesture.activationDistance` and then
+retains the interaction until release or cancellation. The threshold defaults
+to four native points and is shared by targeted spares. The library never
+discovers or programmatically scrolls an arbitrary ancestor; upstream
+`allowAutoScroll` behavior is intentionally not part of the native 1.0
+contract.
 
 Continuous pan coordinates and overlay transforms remain on the UI thread.
-Only activation, release, cancellation, and recognized tap boundaries cross to
-JavaScript. Deterministic component instrumentation verifies bounded React
-commits and custom-renderer calls. Packed-package Espresso and XCUITest
-scenarios separately verify parent scrolling, board-drag capture, exactly-once
-consumer callbacks, unchanged controlled revisions, and lifecycle
+Only activation, release, cancellation, canonical hover-square changes, and
+recognized tap boundaries cross to JavaScript. `onPieceDragStart` therefore
+fires once, never per frame. Deterministic component instrumentation verifies
+bounded React commits and custom-renderer calls. Packed-package Espresso and
+XCUITest scenarios separately verify parent scrolling, board-drag capture,
+exactly-once consumer callbacks, unchanged controlled revisions, and lifecycle
 cancellation.
 
 Leaving the interactive AppState cancels the provider's active drag, pending
@@ -597,18 +608,21 @@ draft and request the final operation without retaining an annotation list.
 `selection` is the only semantic selection source. Its `selectedSquare`,
 `destinationSquares`, and `disabledSquares` fields drive presentation, but the
 board never edits them. Supplying `onSquareActivate` opts into same-square touch
-and accessibility activation, including occupied and empty squares. Each
-enabled ordinary activation is routed exactly once:
+and accessibility activation, including occupied and empty squares. Supplying
+`onPiecePress` independently opts occupied squares into that same pipeline.
+Each enabled ordinary activation is routed exactly once:
 
 - For touch, when `onMoveRequest` is also present, a selected source exists,
   that source still contains a current controlled piece, and the enabled target
   is listed as a destination, the board emits only a `MoveIntent` to
   `onMoveRequest`. Accessibility activation uses that route only while
   `interactionPermissions.accessibility` permits move input.
-- Otherwise the board emits only an immutable `SquareActivationIntent` to
-  `onSquareActivate`. The intent reports the current position and selection
-  revisions, target square and piece, selected source, destination flag, input,
-  and action.
+- Otherwise an occupied square emits only one immutable
+  `PieceInteractionContext` to `onPiecePress` when supplied.
+- Every remaining enabled activation emits only a `SquareActivationIntent` to
+  `onSquareActivate` when supplied. The intent reports the current position and
+  selection revisions, target square and piece, selected source, destination
+  flag, input, and action.
 
 Disabled targets and disabled selected sources block ordinary activation.
 Omitting `destinationSquares` therefore keeps activation declarative rather
@@ -643,11 +657,68 @@ against the current normalized selection and position before emission, so an
 abandoned render or stale tap is inert. A callback invocation is a notification
 only; neither it nor the recognizer mutates selection or position.
 
-Without `onSquareActivate`, no same-square tap recognizer is enabled. An
-existing `onMoveRequest` still provides its accessible transient source-target,
-removal, and cancellation flow while accessible move input is permitted. With
-neither callback, the component mounts no native gesture hit plane and remains
-read-only.
+Without either `onSquareActivate` or `onPiecePress`, no ordinary same-square tap
+recognizer is enabled. An existing `onMoveRequest` still provides its accessible
+transient source-target, removal, and cancellation flow while accessible move
+input is permitted. With none of those callbacks or a complete annotation input
+gate, the component mounts no native gesture hit plane and remains read-only.
+
+## Piece callbacks and gesture tuning
+
+`onPiecePress` and `onPieceDragStart` are synchronous observations. They do not
+approve moves, enable drag by themselves, or modify controlled state. Each
+receives one detached, frozen `PieceInteractionContext` containing the owning
+`boardId`, its current `basePositionRevision`, a copied `piece`, and one explicit
+source:
+
+```ts
+import type { OnPiecePress } from '@vibechess/chessboard-native';
+
+const onPiecePress: OnPiecePress = (context) => {
+  const source =
+    context.source.kind === 'board'
+      ? `square ${context.source.square}`
+      : `spare ${context.source.spareId}`;
+  interactionLog.record({
+    boardId: context.boardId,
+    piece: context.piece,
+    revision: context.basePositionRevision,
+    source,
+  });
+};
+```
+
+An occupied same-square touch or accessibility activation calls
+`onPiecePress` once unless a declared selected-destination move owns that action
+first. It never also calls `onSquareActivate`. Activating `SparePiece` keeps its
+existing transient accessible-selection behavior and also calls the named
+target board's current `onPiecePress`; the palette never owns a separate
+callback or position revision.
+
+`onPieceDragStart` fires once after a board or targeted-spare pan passes current
+permissions and `canDragPiece` and actually activates. It does not fire for a
+denied source, a gesture cancelled before activation, or every pointer frame.
+The later terminal request still belongs only to `onMoveRequest`. Exceptions
+from either observational callback are isolated and their return values are
+ignored.
+
+```tsx
+<Chessboard
+  boardId="analysis"
+  gesture={{ activationDistance: 12 }}
+  onMoveRequest={onMoveRequest}
+  onPieceDragStart={(context) => interactionLog.dragStarted(context)}
+  onPiecePress={(context) => interactionLog.pressed(context)}
+  position={position}
+/>
+```
+
+`gesture.activationDistance` is measured in native points, defaults to `4`, and
+must be a finite non-negative number. It configures the board pan threshold and
+is published to every `SparePiece` targeting that board. On the shared board
+plane it also sets same-square tap travel tolerance and two-finger annotation
+pan activation distance. Changing it replaces the current recognizer
+configuration; it never changes position, selection, or annotations.
 
 ## Controlled move requests
 
@@ -709,9 +780,9 @@ With a callback, accessible move input and drag both default on. Set
 component never exposes a drag-only move action. `canDragPiece` is a synchronous
 current-position gate for drag activation; throwing or returning anything other
 than `true` denies the drag. Without `onMoveRequest`, no move-request pan
-recognizer is mounted; `onSquareActivate` may still enable controlled tap input.
-The default decision timeout is 10 seconds; after acceptance, the default
-controlled-commit timeout is 1.5 seconds.
+recognizer is mounted; `onSquareActivate` or `onPiecePress` may still enable
+controlled tap input. The default decision timeout is 10 seconds; after
+acceptance, the default controlled-commit timeout is 1.5 seconds.
 
 ## Controlled position transitions
 
@@ -877,17 +948,20 @@ consumer-controlled. `formatActionLabel` can localize those action names, and
 `formatMoveOutcome` customizes the correlated committed, rejected, cancelled,
 or timed-out announcement; returning `null` suppresses it.
 
-When `onSquareActivate` is present, activating the current square uses the
-exclusive controlled-selection router described above, and a selected board
-also exposes an explicit clear-selection action. The consumer must publish the
-resulting selection update. Without that callback, `onMoveRequest` preserves
-the transient accessible source-target fallback.
+When `onSquareActivate` or `onPiecePress` is present, activating the current
+square uses the exclusive controlled-selection router described above. An
+occupied square prefers the piece observer unless an accessible declared move
+owns the action; remaining activation can emit the square intent. A controlled
+selected board also exposes an explicit clear-selection action. The consumer
+must publish any resulting selection update. Without either callback,
+`onMoveRequest` preserves the transient accessible source-target fallback.
 
 Setting `interactionPermissions.accessibility` to `false` disables accessible
 destination-to-move routing, removal, cancellation, and the transient fallback.
-Controlled square activation remains available and therefore emits a square
-intent for a destination that cannot use the accessible move route. Touch
-destination routing remains independent of this accessibility-only gate.
+Controlled piece/square activation remains available and therefore follows its
+ordinary exclusive route for a destination that cannot use the accessible move
+path. Touch destination routing remains independent of this accessibility-only
+gate.
 
 See the repository's
 [`docs/accessibility.md`](https://github.com/annabilik/chessboard-native/blob/main/docs/accessibility.md)

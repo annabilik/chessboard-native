@@ -18,9 +18,15 @@ import {
   type CanDragPiece,
   type MoveDecision,
   type OnMoveRequest,
+  type OnPieceDragStart,
+  type OnPiecePress,
   type PieceRendererProps,
   type PieceRenderers,
 } from '../src';
+import {
+  useChessboardProvider,
+  type ChessboardProviderRuntime,
+} from '../src/internal/provider-context';
 import { getSparePieceGestureTestId } from '../src/render/spare-piece-gesture-layer';
 
 type SpareRenderResult = Awaited<ReturnType<typeof render>>;
@@ -100,9 +106,17 @@ async function measureBoard(board: TestInstance): Promise<void> {
 }
 
 function sparePanCallbacks(spareId: string): Readonly<PanCallbacks> {
-  const pan = getByGestureTestId(getSparePieceGestureTestId(spareId));
-  return (pan as unknown as Readonly<{ handlers: Readonly<PanCallbacks> }>)
-    .handlers;
+  const pan = sparePan(spareId);
+  return (pan as Readonly<{ handlers: Readonly<PanCallbacks> }>).handlers;
+}
+
+function sparePan(spareId: string): unknown {
+  return getByGestureTestId(getSparePieceGestureTestId(spareId));
+}
+
+function gestureConfig(gesture: unknown): Readonly<Record<string, unknown>> {
+  return (gesture as Readonly<{ config: Readonly<Record<string, unknown>> }>)
+    .config;
 }
 
 async function beginSpareDrag(
@@ -156,6 +170,7 @@ function moveRequestMock(
 }
 
 function renderTarget(options: {
+  readonly activationDistance?: number;
   readonly canDragPiece?: CanDragPiece;
   readonly disabled?: boolean;
   readonly dimensions?: BoardDimensions;
@@ -165,6 +180,8 @@ function renderTarget(options: {
     drag?: boolean;
   }>;
   readonly onMoveRequest?: OnMoveRequest;
+  readonly onPieceDragStart?: OnPieceDragStart;
+  readonly onPiecePress?: OnPiecePress;
   readonly orientation?: BoardOrientation;
   readonly positionRevision?: number;
   readonly showBoard?: boolean;
@@ -197,12 +214,21 @@ function renderTarget(options: {
             ? {}
             : { canDragPiece: options.canDragPiece })}
           dimensions={options.dimensions ?? { columns: 2, rows: 2 }}
+          {...(options.activationDistance === undefined
+            ? {}
+            : { gesture: { activationDistance: options.activationDistance } })}
           {...(options.interactionPermissions === undefined
             ? {}
             : { interactionPermissions: options.interactionPermissions })}
           {...(options.onMoveRequest === undefined
             ? {}
             : { onMoveRequest: options.onMoveRequest })}
+          {...(options.onPieceDragStart === undefined
+            ? {}
+            : { onPieceDragStart: options.onPieceDragStart })}
+          {...(options.onPiecePress === undefined
+            ? {}
+            : { onPiecePress: options.onPiecePress })}
           orientation={options.orientation ?? 'white'}
           position={{ revision: options.positionRevision ?? 1, value: {} }}
           reduceMotion="never"
@@ -210,6 +236,15 @@ function renderTarget(options: {
       )}
     </ChessboardProvider>
   );
+}
+
+function ProviderRuntimeProbe({
+  runtimeRef,
+}: {
+  readonly runtimeRef: { current: ChessboardProviderRuntime | null };
+}): null {
+  runtimeRef.current = useChessboardProvider().runtime;
+  return null;
 }
 
 describe('SparePiece', () => {
@@ -439,6 +474,248 @@ describe('SparePiece', () => {
         includeHiddenElements: true,
       }),
     ).toEqual([]);
+  });
+
+  it('inherits current target activation config, routes current piece callbacks, and cancels an active drag when config changes', async () => {
+    mockBoardWindowBounds();
+    const onMoveRequest = moveRequestMock();
+    const staleDragStart = jest.fn<
+      ReturnType<OnPieceDragStart>,
+      Parameters<OnPieceDragStart>
+    >();
+    const stalePress = jest.fn<
+      ReturnType<OnPiecePress>,
+      Parameters<OnPiecePress>
+    >();
+    const currentDragStart = jest.fn<
+      ReturnType<OnPieceDragStart>,
+      Parameters<OnPieceDragStart>
+    >();
+    const currentPress = jest.fn<
+      ReturnType<OnPiecePress>,
+      Parameters<OnPiecePress>
+    >();
+    const result = await render(
+      renderTarget({
+        activationDistance: 6,
+        onMoveRequest,
+        onPieceDragStart: staleDragStart,
+        onPiecePress: stalePress,
+        positionRevision: 4,
+      }),
+    );
+    await measureBoard(boardByLabel(result, 'target board'));
+    const retainedCallbacks = sparePanCallbacks('reserve');
+    expect(gestureConfig(sparePan('reserve'))['minDist']).toBe(6);
+
+    await result.rerender(
+      renderTarget({
+        activationDistance: 11,
+        onMoveRequest,
+        onPieceDragStart: currentDragStart,
+        onPiecePress: currentPress,
+        positionRevision: 11,
+      }),
+    );
+    expect(gestureConfig(sparePan('reserve'))['minDist']).toBe(11);
+    await startSpareDrag(retainedCallbacks);
+    expect(staleDragStart).not.toHaveBeenCalled();
+    expect(currentDragStart).not.toHaveBeenCalled();
+
+    const spare = result.getByRole('button');
+    await fireEvent.press(spare);
+    expect(stalePress).not.toHaveBeenCalled();
+    expect(currentPress).toHaveBeenCalledTimes(1);
+    expect(currentPress).toHaveBeenCalledWith({
+      basePositionRevision: 11,
+      boardId: 'target-board',
+      piece: { id: 'reserve-knight', pieceType: 'wN' },
+      source: { kind: 'spare', spareId: 'reserve' },
+    });
+
+    const currentCallbacks = await beginSpareDrag('reserve');
+    expect(staleDragStart).not.toHaveBeenCalled();
+    expect(currentDragStart).toHaveBeenCalledTimes(1);
+    expect(currentDragStart).toHaveBeenCalledWith({
+      basePositionRevision: 11,
+      boardId: 'target-board',
+      piece: { id: 'reserve-knight', pieceType: 'wN' },
+      source: { kind: 'spare', spareId: 'reserve' },
+    });
+    expect(currentPress).toHaveBeenCalledTimes(1);
+    expect(
+      result.queryAllByTestId(providerOverlayId('target-board'), {
+        includeHiddenElements: true,
+      }),
+    ).toHaveLength(1);
+
+    await result.rerender(
+      renderTarget({
+        activationDistance: 18,
+        onMoveRequest,
+        onPieceDragStart: currentDragStart,
+        onPiecePress: currentPress,
+        positionRevision: 11,
+      }),
+    );
+    expect(gestureConfig(sparePan('reserve'))['minDist']).toBe(18);
+    expect(
+      result.queryAllByTestId(providerOverlayId('target-board'), {
+        includeHiddenElements: true,
+      }),
+    ).toEqual([]);
+    await releaseSpareDrag(currentCallbacks, { x: 125, y: 225 });
+
+    expect(onMoveRequest).not.toHaveBeenCalled();
+    expect(currentDragStart).toHaveBeenCalledTimes(1);
+    expect(currentPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalidates a retained spare start when the same target id is replaced at the same effective default activation distance', async () => {
+    const oldMoveRequest = moveRequestMock();
+    const currentMoveRequest = moveRequestMock();
+    const oldDragStart = jest.fn<
+      ReturnType<OnPieceDragStart>,
+      Parameters<OnPieceDragStart>
+    >();
+    const currentDragStart = jest.fn<
+      ReturnType<OnPieceDragStart>,
+      Parameters<OnPieceDragStart>
+    >();
+    const result = await render(
+      renderTarget({
+        onMoveRequest: oldMoveRequest,
+        onPieceDragStart: oldDragStart,
+        positionRevision: 4,
+      }),
+    );
+    await measureBoard(boardByLabel(result, 'target board'));
+    const retainedCallbacks = sparePanCallbacks('reserve');
+    expect(gestureConfig(sparePan('reserve'))['minDist']).toBe(4);
+
+    await result.rerender(
+      renderTarget({
+        onMoveRequest: oldMoveRequest,
+        onPieceDragStart: oldDragStart,
+        positionRevision: 4,
+        showBoard: false,
+      }),
+    );
+    expect(gestureConfig(sparePan('reserve'))['minDist']).toBe(4);
+
+    await result.rerender(
+      renderTarget({
+        onMoveRequest: currentMoveRequest,
+        onPieceDragStart: currentDragStart,
+        positionRevision: 11,
+      }),
+    );
+    await measureBoard(boardByLabel(result, 'target board'));
+    expect(gestureConfig(sparePan('reserve'))['minDist']).toBe(4);
+    await startSpareDrag(retainedCallbacks);
+
+    expect(oldDragStart).not.toHaveBeenCalled();
+    expect(currentDragStart).not.toHaveBeenCalled();
+    expect(oldMoveRequest).not.toHaveBeenCalled();
+    expect(currentMoveRequest).not.toHaveBeenCalled();
+    expect(
+      result.queryAllByTestId(providerOverlayId('target-board'), {
+        includeHiddenElements: true,
+      }),
+    ).toEqual([]);
+  });
+
+  it('synchronously rejects a retained queued start after another provider source replaces its drag lease', async () => {
+    mockBoardWindowBounds();
+    const onPieceDragStart = jest.fn<
+      ReturnType<OnPieceDragStart>,
+      Parameters<OnPieceDragStart>
+    >();
+    const runtimeRef: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    const result = await render(
+      <ChessboardProvider>
+        <ProviderRuntimeProbe runtimeRef={runtimeRef} />
+        <SparePiece
+          piece={{ id: 'first-knight', pieceType: 'wN' }}
+          spareId="first-reserve"
+          targetBoardId="target-board"
+        />
+        <SparePiece
+          piece={{ id: 'second-bishop', pieceType: 'wB' }}
+          spareId="second-reserve"
+          targetBoardId="target-board"
+        />
+        <Chessboard
+          accessibility={{ boardLabel: 'target board' }}
+          boardId="target-board"
+          dimensions={{ columns: 2, rows: 2 }}
+          onMoveRequest={moveRequestMock()}
+          onPieceDragStart={onPieceDragStart}
+          position={{ revision: 11, value: {} }}
+          reduceMotion="never"
+        />
+      </ChessboardProvider>,
+    );
+    await measureBoard(boardByLabel(result, 'target board'));
+    const firstCallbacks = await beginSpareDrag('first-reserve');
+    const secondCallbacks = sparePanCallbacks('second-reserve');
+
+    await act(() => {
+      secondCallbacks.onBegin?.({
+        absoluteX: 24,
+        absoluteY: 24,
+        x: 24,
+        y: 24,
+      });
+      secondCallbacks.onStart?.({
+        absoluteX: 36,
+        absoluteY: 24,
+        x: 36,
+        y: 24,
+      });
+      firstCallbacks.onBegin?.({
+        absoluteX: 24,
+        absoluteY: 24,
+        x: 24,
+        y: 24,
+      });
+      firstCallbacks.onStart?.({
+        absoluteX: 36,
+        absoluteY: 24,
+        x: 36,
+        y: 24,
+      });
+    });
+
+    expect(onPieceDragStart.mock.calls).toEqual([
+      [
+        {
+          basePositionRevision: 11,
+          boardId: 'target-board',
+          piece: { id: 'first-knight', pieceType: 'wN' },
+          source: { kind: 'spare', spareId: 'first-reserve' },
+        },
+      ],
+      [
+        {
+          basePositionRevision: 11,
+          boardId: 'target-board',
+          piece: { id: 'second-bishop', pieceType: 'wB' },
+          source: { kind: 'spare', spareId: 'second-reserve' },
+        },
+      ],
+    ]);
+    expect(runtimeRef.current?.drag.getSnapshot().active?.source).toEqual({
+      kind: 'spare',
+      spareId: 'second-reserve',
+    });
+    expect(
+      result.queryAllByTestId(providerOverlayId('target-board'), {
+        includeHiddenElements: true,
+      }),
+    ).toHaveLength(1);
   });
 
   it('publishes only validated spare hover boundaries and renders the source as a target-correlated ghost', async () => {

@@ -66,6 +66,7 @@ function Surface({
   return (
     <ChessboardProvider geometryRevision={providerGeometryRevision}>
       <BoardSurface
+        activationDistance={4}
         accessibility={undefined}
         annotationDraft={draft}
         annotationPolicies={undefined}
@@ -78,6 +79,11 @@ function Surface({
         onAnnotationOperation={undefined}
         onMoveRequest={undefined}
         onSquareActivate={undefined}
+        pieceInteraction={Object.freeze({
+          dragStart: () => false,
+          press: () => false,
+        })}
+        piecePressEnabled={false}
         pieceRenderers={{}}
         providerGeometryRevision={providerGeometryRevision}
         providerLifecycleRevision={providerLifecycleRevision}

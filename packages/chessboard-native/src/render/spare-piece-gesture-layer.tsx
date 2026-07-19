@@ -7,7 +7,7 @@ import {
   INTERACTION_PRESENTATION_PHASE,
   type InteractionPresentationSharedValues,
 } from '../internal/interaction-presentation';
-import { DEFAULT_DRAG_ACTIVATION_DISTANCE } from './board-gesture-layer';
+import { DEFAULT_DRAG_ACTIVATION_DISTANCE } from '../internal/gesture-options';
 import { hitTestGesturePoint } from './gesture-hit-test';
 import type { SquareId } from '../public-types';
 
@@ -51,6 +51,7 @@ export type SparePieceGestureSignal =
     };
 
 interface SparePieceGestureLayerProps {
+  readonly activationDistance?: number;
   readonly children: ReactElement;
   readonly enabled: boolean;
   readonly hover: Readonly<SparePieceHoverSharedValues>;
@@ -72,6 +73,7 @@ export function getSparePieceGestureTestId(spareId: string): string {
  * presentation active until fresh provider verification completes.
  */
 export function SparePieceGestureLayer({
+  activationDistance = DEFAULT_DRAG_ACTIVATION_DISTANCE,
   children,
   enabled,
   hover,
@@ -152,7 +154,7 @@ export function SparePieceGestureLayer({
       .enabled(enabled)
       .minPointers(1)
       .maxPointers(1)
-      .minDistance(DEFAULT_DRAG_ACTIVATION_DISTANCE)
+      .minDistance(activationDistance)
       .shouldCancelWhenOutside(false)
       .withTestId(testID)
       .onTouchesDown((event, stateManager) => {
@@ -231,6 +233,7 @@ export function SparePieceGestureLayer({
         panCancelReason.value = 0;
       });
   }, [
+    activationDistance,
     enabled,
     hover,
     nextGestureToken,
@@ -245,7 +248,7 @@ export function SparePieceGestureLayer({
   return (
     <GestureDetector
       gesture={gesture}
-      key={JSON.stringify([enabled, resetKey, spareId])}
+      key={JSON.stringify([activationDistance, enabled, resetKey, spareId])}
     >
       {children}
     </GestureDetector>

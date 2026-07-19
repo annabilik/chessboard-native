@@ -67,11 +67,14 @@ TalkBack localizes them; on iOS the adjustable trait invokes them directly, so
 they are omitted from the custom rotor menu. Four custom actions provide
 directional navigation. Actions that cannot move at the current edge are
 omitted, and disabled boards expose no actions. With `onSquareActivate`, the
-current square exposes controlled activation. When `onMoveRequest` is also
-present and accessible move input is permitted, a declared enabled destination
-with a current enabled selected source routes only to that move callback; every
-other enabled square routes only to `onSquareActivate`. When a controlled
-selected square exists, a separate
+current square exposes controlled activation. `onPiecePress` independently
+enables ordinary activation for an occupied current square. When
+`onMoveRequest` is also present and accessible move input is permitted, a
+declared enabled destination with a current enabled selected source routes only
+to that move callback. Otherwise an occupied square routes only to
+`onPiecePress` when supplied; remaining enabled squares route only to
+`onSquareActivate` when supplied. When a controlled selected square exists, a
+separate
 clear-selection action emits an explicit activation intent. Neither action
 changes the selection prop.
 
@@ -80,10 +83,11 @@ removing the piece on the current enabled square remains a direct accessibility
 `MoveIntent` with `targetSquare: null`; it does not enter the square-activation
 callback.
 
-Without `onSquareActivate`, `onMoveRequest` preserves the transient move
-fallback while accessible move input is permitted. An occupied cursor square
-exposes source activation and removal. Activating a source stores only transient
-interaction context; after moving the cursor, activation submits the target.
+Without either `onSquareActivate` or `onPiecePress`, `onMoveRequest` preserves
+the transient move fallback while accessible move input is permitted. An
+occupied cursor square exposes source activation and removal. Activating a
+source stores only transient interaction context; after moving the cursor,
+activation submits the target.
 Removal submits the same intent with `targetSquare: null`, and cancellation
 clears source targeting or active async work. A provider-selected spare takes
 precedence over every board-local interaction action until placement or
@@ -131,10 +135,19 @@ selection update.
 Ordinary activation has one exclusive outcome. Touch routes a declared enabled
 destination to `onMoveRequest` whenever that callback is active and the enabled
 selected source still contains a current controlled piece. Accessibility uses
-the same route only while accessible move input is permitted. Otherwise the
-board emits one activation and no move request. An explicit `clear-selection`
-action always asks the consumer to clear the controlled selection, including
-when the selected square itself is disabled.
+the same route only while accessible move input is permitted. Otherwise an
+occupied current square routes to `onPiecePress` when supplied; only the
+remaining activation routes to `onSquareActivate`. A piece press never also
+emits a square activation. An explicit `clear-selection` action always asks the
+consumer to clear the controlled selection, including when the selected square
+itself is disabled.
+
+`onPiecePress` receives one detached frozen `PieceInteractionContext` from the
+current controlled position revision. It is an observation whose result is
+ignored, and an exception cannot break the board action. It does not select,
+move, or remove the piece. `onPieceDragStart` applies only to native pan input
+and adds no accessibility action; the non-drag move and activation paths remain
+available independently.
 
 Callback references become visible only after their render commits. A touch
 gesture captures the selection revision at start, and both touch and
@@ -147,16 +160,17 @@ therefore cannot invoke an obsolete callback or mutate semantic state.
 Accessible move input defaults on when `onMoveRequest` is present. Set
 `interactionPermissions.drag` to `false` for an accessibility-only board.
 Setting `interactionPermissions.accessibility` to `false` also disables drag;
-the package refuses to expose a drag-only action. With `onSquareActivate`,
-controlled activation remains available, but destination activation emits a
-square intent instead of entering the disabled accessible move route. Touch
-destination routing is unaffected. Without `onSquareActivate`, `onMoveRequest`
-retains source-target activation as transient accessibility state only while
-the gate is enabled. Every resulting move path emits `MoveIntent`, invokes the
-same callback, uses the same decision and controlled-commit timeouts, and waits
-for the consumer's next `position` prop. While a physical drag is active, the
-adjustable control temporarily suppresses activation and move actions so two
-input paths cannot submit overlapping work.
+the package refuses to expose a drag-only action. With `onSquareActivate` or
+`onPiecePress`, ordinary controlled activation remains available instead of
+entering the disabled accessible move route: an occupied square prefers the
+piece observer, while the remaining activation can emit a square intent. Touch
+destination routing is unaffected. Without either activation callback,
+`onMoveRequest` retains source-target activation as transient accessibility
+state only while the gate is enabled. Every resulting move path emits
+`MoveIntent`, invokes the same callback, uses the same decision and
+controlled-commit timeouts, and waits for the consumer's next `position` prop.
+While a physical drag is active, the adjustable control temporarily suppresses
+activation and move actions so two input paths cannot submit overlapping work.
 
 The virtual cursor and captured source are transient. They never modify
 `selection`, infer a legal destination, or move a piece. A revisioned consumer
@@ -176,6 +190,12 @@ provider-scoped source and announces that selection. The source must name an
 explicit `targetBoardId`; only the matching registered board exposes **Place
 selected spare** and **Cancel spare selection**. Boards with another ID keep
 their ordinary action set. Selecting a second spare replaces the first.
+
+The same button activation calls the target board's current `onPiecePress`,
+when supplied, with a spare-source context and that board's current position
+revision. This observational callback neither replaces nor commits the
+transient spare selection. Its result is ignored and its failure cannot prevent
+the accessible place/cancel flow.
 
 Placement uses the matching board's current virtual-cursor square and emits the
 same controlled request lifecycle as other moves:
@@ -273,7 +293,8 @@ Callback and timeout semantics never depend on reduced motion.
 Run the Expo gallery and test **Accessibility prototype** first, then repeat the
 interaction-specific steps on **Controlled move requests** and **Provider
 coordination**, followed by **Spare pieces**, **Controlled annotation
-gestures**, and **Interaction hardening**. Test Android and iOS separately:
+gestures**, **Piece callbacks**, and **Interaction hardening**. Test Android and
+iOS separately:
 
 1. Enable TalkBack or VoiceOver and focus the board.
 2. Confirm the board is one focus target and visual squares are not separate
@@ -342,6 +363,11 @@ gestures**, and **Interaction hardening**. Test Android and iOS separately:
 24. Repeat after starting a board or spare drag. Confirm no overlay remains
     focused or visible after resume and the next non-drag accessible placement
     still emits exactly one controlled request.
+25. On the piece-callback route, activate an occupied board square and the spare
+    queen. Confirm each adds exactly one `onPiecePress` entry with the named
+    board's current revision, the visual position remains unchanged, and the
+    spare still exposes its ordinary place/cancel flow. Confirm no visual piece
+    or square becomes an additional accessibility target.
 
 The automated component and native contracts do not replace this
 assistive-technology pass. In particular, XCUITest can audit the static iOS

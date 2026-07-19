@@ -8,16 +8,17 @@ import {
 import { useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import type { Revision, SquareId } from '../public-types';
+import { createBoardGestureDetectorKey } from '../internal/board-gesture-detector-key';
+import { DEFAULT_DRAG_ACTIVATION_DISTANCE } from '../internal/gesture-options';
 import {
   INTERACTION_PRESENTATION_PHASE,
   resetInteractionPresentationSharedValues,
   type InteractionPresentationSharedValues,
 } from '../internal/interaction-presentation';
+import type { Revision, SquareId } from '../public-types';
 import { hitTestGesturePoint } from './gesture-hit-test';
 
-/** Internal native activation distance until the public gesture options land. */
-export const DEFAULT_DRAG_ACTIVATION_DISTANCE = 4;
+export { DEFAULT_DRAG_ACTIVATION_DISTANCE } from '../internal/gesture-options';
 
 /** Internal native long-press delay until public gesture options land. */
 export const DEFAULT_ANNOTATION_LONG_PRESS_DURATION_MS = 500;
@@ -942,20 +943,20 @@ export function BoardGestureLayer({
   const twoFingerSourceSquare = useSharedValue<SquareId | null>(null);
   const twoFingerTargetSquare = useSharedValue<SquareId | null>(null);
   const testIds = useMemo(() => getBoardGestureTestIds(boardId), [boardId]);
-  const detectorKey = JSON.stringify([
+  const detectorKey = createBoardGestureDetectorKey({
     activationDistance,
     annotationEnabled,
     boardId,
     dragEnabled,
     draggableSquares,
-    geometry.revision,
+    geometryRevision: geometry.revision,
     positionRevision,
     resetKey,
     selectionRevision,
     tapEnabled,
     trackDragTarget,
     trackPress,
-  ]);
+  });
   const gesture = useMemo(() => {
     if (!annotationEnabled && !dragEnabled && !tapEnabled && !trackPress) {
       return null;

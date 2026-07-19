@@ -14,6 +14,7 @@ import type {
   BoardTransition,
   CanDragPiece,
   ChessboardAccessibility,
+  ChessboardGestureOptions,
   ChessboardProps,
   ChessboardProviderProps,
   ChessboardStyles,
@@ -29,6 +30,8 @@ import type {
   MoveRequestTimeouts,
   MoveSource,
   OnMoveRequest,
+  OnPieceDragStart,
+  OnPiecePress,
   OnSquareActivate,
   PieceData,
   PieceInteractionContext,
@@ -153,6 +156,50 @@ describe('public data contracts', () => {
     } satisfies PieceInteractionContext;
 
     expect(context.source.kind).toBe('spare');
+  });
+
+  it('composes gesture tuning and piece callbacks for board and targeted spare contexts', () => {
+    const gesture = {
+      activationDistance: 6,
+    } satisfies ChessboardGestureOptions;
+    const observed: PieceInteractionContext[] = [];
+    const onPiecePress: OnPiecePress = (context) => {
+      observed.push(context);
+    };
+    const onPieceDragStart: OnPieceDragStart = (context) => {
+      observed.push(context);
+    };
+    const props = {
+      boardId: 'editor',
+      gesture,
+      onPieceDragStart,
+      onPiecePress,
+      position: {
+        b1: { id: 'board-knight', pieceType: 'wN' },
+      },
+    } satisfies ChessboardProps;
+    const board = {
+      basePositionRevision: 7,
+      boardId: props.boardId,
+      piece: { id: 'board-knight', pieceType: 'wN' },
+      source: { kind: 'board', square: 'b1' },
+    } satisfies PieceInteractionContext;
+    const spare = {
+      basePositionRevision: 8,
+      boardId: props.boardId,
+      piece: { id: 'palette-queen', pieceType: 'wQ' },
+      source: { kind: 'spare', spareId: 'white-queen' },
+    } satisfies PieceInteractionContext;
+
+    props.onPiecePress(board);
+    props.onPieceDragStart(spare);
+
+    expect(props.gesture).toBe(gesture);
+    expect(observed).toEqual([board, spare]);
+    expect(observed.map(({ source }) => source.kind)).toEqual([
+      'board',
+      'spare',
+    ]);
   });
 
   it('[PARITY-EXPORT-PIECE-DROP-HANDLER-ARGS] permits an off-board target without committing it', () => {
@@ -566,11 +613,17 @@ describe('public data contracts', () => {
     const mutateSnapshots = (
       position: PositionObject,
       piece: PieceData,
+      interaction: PieceInteractionContext,
+      gesture: ChessboardGestureOptions,
     ): void => {
       // @ts-expect-error Position entries are readonly consumer snapshots.
       position['e4'] = { pieceType: 'wP' };
       // @ts-expect-error Piece data is readonly consumer state.
       piece.pieceType = 'bP';
+      // @ts-expect-error Piece callback contexts are deeply readonly snapshots.
+      interaction.piece.pieceType = 'bP';
+      // @ts-expect-error Gesture configuration is immutable consumer input.
+      gesture.activationDistance = 10;
     };
 
     expect(invalidDraft).toBe(persistent);

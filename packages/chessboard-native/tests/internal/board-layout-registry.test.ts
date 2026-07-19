@@ -10,6 +10,7 @@ import {
   type BoardWindowBounds,
   type CanStartProviderSpareDrag,
   type MeasureBoardInWindow,
+  type NotifyProviderSparePieceInteraction,
   type ProviderSpareMove,
   type RequestProviderSpareMove,
 } from '../../src/internal/board-layout-registry';
@@ -53,20 +54,26 @@ function registration(options: {
   readonly available?: boolean;
   readonly boardId?: string;
   readonly geometry?: BoardLayoutGeometry;
+  readonly dragActivationDistance?: number;
   readonly measureInWindow: MeasureBoardInWindow;
   readonly owner: BoardLayoutOwnerToken;
   readonly readMoveRequest?: () => RequestProviderSpareMove | null;
+  readonly readSparePieceDragStart?: () => NotifyProviderSparePieceInteraction | null;
+  readonly readSparePiecePress?: () => NotifyProviderSparePieceInteraction | null;
   readonly readPositionRevision?: () => Revision | null;
   readonly readSpareDragPermission?: () => CanStartProviderSpareDrag | null;
 }): BoardLayoutRegistration {
   return {
     available: options.available ?? true,
     boardId: options.boardId ?? 'analysis',
+    dragActivationDistance: options.dragActivationDistance ?? 4,
     geometry: options.geometry ?? geometry(),
     measureInWindow: options.measureInWindow,
     owner: options.owner,
     readMoveRequest: options.readMoveRequest ?? (() => null),
     readPositionRevision: options.readPositionRevision ?? (() => 11),
+    readSparePieceDragStart: options.readSparePieceDragStart ?? (() => null),
+    readSparePiecePress: options.readSparePiecePress ?? (() => null),
     readSpareDragPermission: options.readSpareDragPermission ?? (() => null),
   };
 }
@@ -1275,6 +1282,245 @@ describe('board layout registry', () => {
     });
     measurement.respond(1, { height: 80, width: 80, x: 0, y: 0 });
     expectAccepted(await freshVerification);
+  });
+
+  it('publishes only targeted activation-distance changes and unregisters the configuration', () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const variationOwner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    const listener = jest.fn();
+    const variationListener = jest.fn();
+    const unsubscribeThrowing = registry.subscribeBoardConfiguration(
+      'analysis',
+      () => {
+        throw new Error('observer failed');
+      },
+    );
+    const unsubscribe = registry.subscribeBoardConfiguration(
+      'analysis',
+      listener,
+    );
+    registry.subscribeBoardConfiguration('variation', variationListener);
+
+    expect(registry.getSpareDragActivationDistance('analysis')).toBeNull();
+    expect(registry.getSpareGestureConfigurationEpoch('analysis')).toBe(0);
+    expect(() =>
+      registry.register(
+        registration({ measureInWindow: measurement.measureInWindow, owner }),
+      ),
+    ).not.toThrow();
+    const registeredEpoch =
+      registry.getSpareGestureConfigurationEpoch('analysis');
+    expect(registeredEpoch).toBeGreaterThan(0);
+    expect(registry.getSpareDragActivationDistance('analysis')).toBe(4);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(variationListener).not.toHaveBeenCalled();
+
+    expect(
+      registry.update('analysis', owner, { dragActivationDistance: 12.5 }),
+    ).toBe(true);
+    const updatedEpoch = registry.getSpareGestureConfigurationEpoch('analysis');
+    expect(updatedEpoch).toBeGreaterThan(registeredEpoch);
+    expect(registry.getSpareDragActivationDistance('analysis')).toBe(12.5);
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    expect(
+      registry.update('analysis', owner, { dragActivationDistance: 12.5 }),
+    ).toBe(true);
+    expect(registry.getSpareGestureConfigurationEpoch('analysis')).toBe(
+      updatedEpoch,
+    );
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(
+      registry.update('analysis', owner, { dragActivationDistance: 0 }),
+    ).toBe(true);
+    expect(registry.getSpareDragActivationDistance('analysis')).toBe(0);
+    expect(listener).toHaveBeenCalledTimes(3);
+
+    expect(
+      registry.update('analysis', variationOwner, {
+        dragActivationDistance: 8,
+      }),
+    ).toBe(false);
+    expect(listener).toHaveBeenCalledTimes(3);
+    registry.register(
+      registration({
+        boardId: 'variation',
+        dragActivationDistance: 9,
+        measureInWindow: measurement.measureInWindow,
+        owner: variationOwner,
+      }),
+    );
+    expect(variationListener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledTimes(3);
+
+    expect(registry.unregister('analysis', variationOwner)).toBe(false);
+    expect(registry.unregister('analysis', owner)).toBe(true);
+    const unregisteredEpoch =
+      registry.getSpareGestureConfigurationEpoch('analysis');
+    expect(unregisteredEpoch).toBeGreaterThan(updatedEpoch);
+    expect(registry.getSpareDragActivationDistance('analysis')).toBeNull();
+    expect(listener).toHaveBeenCalledTimes(4);
+
+    unsubscribe();
+    unsubscribeThrowing();
+    registry.register(
+      registration({
+        dragActivationDistance: 6,
+        measureInWindow: measurement.measureInWindow,
+        owner: createBoardLayoutOwnerToken(),
+      }),
+    );
+    expect(
+      registry.getSpareGestureConfigurationEpoch('analysis'),
+    ).toBeGreaterThan(unregisteredEpoch);
+    expect(listener).toHaveBeenCalledTimes(4);
+  });
+
+  it('routes targeted spare press and drag-start notifications through current readers with detached inputs', () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    const firstPress = jest.fn<
+      boolean,
+      Parameters<NotifyProviderSparePieceInteraction>
+    >(() => true);
+    const replacementPress = jest.fn<
+      boolean,
+      Parameters<NotifyProviderSparePieceInteraction>
+    >(() => true);
+    const firstDragStart = jest.fn<
+      boolean,
+      Parameters<NotifyProviderSparePieceInteraction>
+    >(() => true);
+    const replacementDragStart = jest.fn<
+      boolean,
+      Parameters<NotifyProviderSparePieceInteraction>
+    >(() => true);
+    let currentPress: NotifyProviderSparePieceInteraction | null = firstPress;
+    let currentDragStart: NotifyProviderSparePieceInteraction | null =
+      firstDragStart;
+    const readSparePiecePress = jest.fn(() => currentPress);
+    const readSparePieceDragStart = jest.fn(() => currentDragStart);
+    registry.register(
+      registration({
+        measureInWindow: measurement.measureInWindow,
+        owner,
+        readSparePieceDragStart,
+        readSparePiecePress,
+      }),
+    );
+    const source: { kind: 'spare'; spareId: string } = {
+      kind: 'spare',
+      spareId: 'palette-source',
+    };
+    const piece: { id: string; pieceType: string } = {
+      id: 'palette-piece',
+      pieceType: 'wQ',
+    };
+
+    expect(registry.notifySparePiecePress('analysis', source, piece)).toBe(
+      true,
+    );
+    expect(registry.notifySparePieceDragStart('analysis', source, piece)).toBe(
+      true,
+    );
+    expect(firstPress).toHaveBeenCalledTimes(1);
+    expect(firstDragStart).toHaveBeenCalledTimes(1);
+    const [pressSource, pressPiece] = firstPress.mock.calls[0] ?? [];
+    const [dragSource, dragPiece] = firstDragStart.mock.calls[0] ?? [];
+    expect(pressSource).toEqual(source);
+    expect(pressPiece).toEqual(piece);
+    expect(dragSource).toEqual(source);
+    expect(dragPiece).toEqual(piece);
+    expect(pressSource).not.toBe(source);
+    expect(pressPiece).not.toBe(piece);
+    expect(dragSource).not.toBe(source);
+    expect(dragPiece).not.toBe(piece);
+    expect(Object.isFrozen(pressSource)).toBe(true);
+    expect(Object.isFrozen(pressPiece)).toBe(true);
+    expect(Object.isFrozen(dragSource)).toBe(true);
+    expect(Object.isFrozen(dragPiece)).toBe(true);
+
+    source.spareId = 'mutated-source';
+    piece.pieceType = 'bR';
+    expect(pressSource).toEqual({ kind: 'spare', spareId: 'palette-source' });
+    expect(pressPiece).toEqual({ id: 'palette-piece', pieceType: 'wQ' });
+
+    currentPress = replacementPress;
+    currentDragStart = replacementDragStart;
+    expect(
+      registry.notifySparePiecePress('analysis', spareSource, sparePiece),
+    ).toBe(true);
+    expect(
+      registry.notifySparePieceDragStart('analysis', spareSource, sparePiece),
+    ).toBe(true);
+    expect(replacementPress).toHaveBeenCalledTimes(1);
+    expect(replacementDragStart).toHaveBeenCalledTimes(1);
+    expect(readSparePiecePress).toHaveBeenCalledTimes(2);
+    expect(readSparePieceDragStart).toHaveBeenCalledTimes(2);
+
+    currentPress = null;
+    currentDragStart = null;
+    expect(
+      registry.notifySparePiecePress('analysis', spareSource, sparePiece),
+    ).toBe(false);
+    expect(
+      registry.notifySparePieceDragStart('analysis', spareSource, sparePiece),
+    ).toBe(false);
+  });
+
+  it('isolates targeted spare notification reader and callback failures', () => {
+    const registry = createBoardLayoutRegistry();
+    const owner = createBoardLayoutOwnerToken();
+    const measurement = deferredMeasurement();
+    registry.register(
+      registration({
+        measureInWindow: measurement.measureInWindow,
+        owner,
+        readSparePieceDragStart: () => {
+          throw new Error('reader failed');
+        },
+        readSparePiecePress: () => () => {
+          throw new Error('callback failed');
+        },
+      }),
+    );
+
+    expect(() =>
+      registry.notifySparePiecePress('analysis', spareSource, sparePiece),
+    ).not.toThrow();
+    expect(
+      registry.notifySparePiecePress('analysis', spareSource, sparePiece),
+    ).toBe(false);
+    expect(() =>
+      registry.notifySparePieceDragStart('analysis', spareSource, sparePiece),
+    ).not.toThrow();
+    expect(
+      registry.notifySparePieceDragStart('analysis', spareSource, sparePiece),
+    ).toBe(false);
+
+    expect(
+      registry.update('analysis', owner, {
+        readSparePieceDragStart: () => () => false,
+        readSparePiecePress: () => () => undefined as never,
+      }),
+    ).toBe(true);
+    expect(
+      registry.notifySparePiecePress('analysis', spareSource, sparePiece),
+    ).toBe(false);
+    expect(
+      registry.notifySparePieceDragStart('analysis', spareSource, sparePiece),
+    ).toBe(false);
+
+    registry.dispose();
+    expect(
+      registry.notifySparePiecePress('analysis', spareSource, sparePiece),
+    ).toBe(false);
+    expect(
+      registry.notifySparePieceDragStart('analysis', spareSource, sparePiece),
+    ).toBe(false);
   });
 
   it('deactivates transient work without preventing a later registration', async () => {
