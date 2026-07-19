@@ -53,13 +53,9 @@ export type AnnotationOperation = (AnnotationOperationBase & {
 
 // @public
 export interface AnnotationOperationBase {
-    // (undocumented)
     readonly baseAnnotationRevision: Revision;
-    // (undocumented)
     readonly boardId: string;
-    // (undocumented)
     readonly input: 'touch' | 'keyboard' | 'accessibility' | 'policy';
-    // (undocumented)
     readonly operationId: string;
 }
 
@@ -128,33 +124,22 @@ export type ApplyAnnotationOperationResult = Readonly<{
 
 // @public
 export interface ArrowAnnotation {
-    // (undocumented)
     readonly color: string;
-    // (undocumented)
     readonly from: SquareId;
     readonly id: string;
-    // (undocumented)
     readonly layer?: 'belowPieces' | 'abovePieces';
-    // (undocumented)
     readonly opacity?: number;
-    // (undocumented)
     readonly shape?: 'straight' | 'knight';
-    // (undocumented)
     readonly to: SquareId;
-    // (undocumented)
     readonly type: 'arrow';
     readonly width?: number;
 }
 
 // @public
 export interface BoardActionAccessibilityContext {
-    // (undocumented)
     readonly action: ChessboardAccessibilityAction;
-    // (undocumented)
     readonly boardId: string;
-    // (undocumented)
     readonly piece: PieceData | null;
-    // (undocumented)
     readonly square: SquareId;
 }
 
@@ -163,9 +148,7 @@ export type BoardAnnotation = ArrowAnnotation | SquareAnnotation;
 
 // @public
 export interface BoardDimensions {
-    // (undocumented)
     readonly columns: number;
-    // (undocumented)
     readonly rows: number;
 }
 
@@ -174,25 +157,19 @@ export type BoardOrientation = 'white' | 'black';
 
 // @public
 export interface BoardPoint {
-    // (undocumented)
     readonly x: number;
-    // (undocumented)
     readonly y: number;
 }
 
 // @public
 export interface BoardSize {
-    // (undocumented)
     readonly height: number;
-    // (undocumented)
     readonly width: number;
 }
 
 // @public
 export interface BoardSquare {
-    // (undocumented)
     readonly isLight: boolean;
-    // (undocumented)
     readonly square: SquareId;
 }
 
@@ -225,7 +202,6 @@ export interface ChessboardAccessibility {
     readonly boardHint?: string;
     readonly boardLabel?: string;
     readonly formatActionLabel?: (context: BoardActionAccessibilityContext) => string;
-    // (undocumented)
     readonly formatMoveOutcome?: (context: MoveOutcomeAccessibilityContext) => string | null;
     readonly formatSquareValue?: (context: SquareAccessibilityContext) => string;
 }
@@ -241,15 +217,10 @@ export interface ChessboardActions {
 // @public
 export class ChessboardError extends Error {
     constructor(message: string, details: ChessboardErrorDetails, cause?: unknown);
-    // (undocumented)
     readonly boardId: string | null;
-    // (undocumented)
     readonly code: ChessboardErrorCode;
-    // (undocumented)
     readonly domain: ChessboardErrorDomain;
-    // (undocumented)
     readonly name = "ChessboardError";
-    // (undocumented)
     readonly revision: Revision | null;
 }
 
@@ -258,11 +229,8 @@ export type ChessboardErrorCode = ChessboardErrorDetails['code'];
 
 // @public
 export interface ChessboardErrorContext {
-    // (undocumented)
     readonly boardId: string | null;
-    // (undocumented)
     readonly domain: ChessboardErrorDomain;
-    // (undocumented)
     readonly revision: Revision | null;
 }
 
@@ -397,33 +365,23 @@ export function columnIndexToFile(columnIndex: number, columns: number, orientat
 
 // @public
 export interface ControlledAnnotations {
-    // (undocumented)
     readonly revision: Revision;
-    // (undocumented)
     readonly value: readonly BoardAnnotation[];
 }
 
 // @public
 export interface ControlledPosition {
-    // (undocumented)
     readonly committedIntentId?: string;
-    // (undocumented)
     readonly revision: Revision;
-    // (undocumented)
     readonly transition?: BoardTransition;
-    // (undocumented)
     readonly value: PositionInput;
 }
 
 // @public
 export interface ControlledSelection {
-    // (undocumented)
     readonly destinationSquares?: readonly SquareId[];
-    // (undocumented)
     readonly disabledSquares?: readonly SquareId[];
-    // (undocumented)
     readonly revision: Revision;
-    // (undocumented)
     readonly selectedSquare: SquareId | null;
 }
 
@@ -467,29 +425,19 @@ export type MoveInput = 'drag' | 'tap' | 'keyboard' | 'accessibility';
 
 // @public
 export interface MoveIntent {
-    // (undocumented)
     readonly basePositionRevision: Revision;
-    // (undocumented)
     readonly boardId: string;
-    // (undocumented)
     readonly input: MoveInput;
-    // (undocumented)
     readonly intentId: string;
-    // (undocumented)
     readonly piece: PieceData;
-    // (undocumented)
     readonly source: MoveSource;
-    // (undocumented)
     readonly targetSquare: SquareId | null;
 }
 
 // @public
 export interface MoveOutcomeAccessibilityContext {
-    // (undocumented)
     readonly intent: MoveIntent;
-    // (undocumented)
     readonly outcome: 'committed' | 'rejected' | 'cancelled' | 'timed-out';
-    // (undocumented)
     readonly reason?: string;
 }
 
@@ -592,26 +540,18 @@ export type PieceType = string;
 
 // @public
 export interface PieceVisualState {
-    // (undocumented)
     readonly isDragging: boolean;
-    // (undocumented)
     readonly isGhost: boolean;
-    // (undocumented)
     readonly isPending: boolean;
-    // (undocumented)
     readonly isPressed: boolean;
-    // (undocumented)
     readonly isTransitioning: boolean;
 }
 
 // @public
 export interface PlainSelection {
-    // (undocumented)
     readonly destinationSquares?: readonly SquareId[];
-    // (undocumented)
     readonly disabledSquares?: readonly SquareId[];
     readonly revision?: never;
-    // (undocumented)
     readonly selectedSquare: SquareId | null;
 }
 
@@ -657,62 +597,38 @@ export interface SparePieceProps {
 
 // @public
 export interface SquareAccessibilityContext {
-    // (undocumented)
     readonly boardId: string;
-    // (undocumented)
     readonly isDestination: boolean;
-    // (undocumented)
     readonly isDisabled: boolean;
-    // (undocumented)
     readonly isPendingSource: boolean;
-    // (undocumented)
     readonly isPendingTarget: boolean;
-    // (undocumented)
     readonly isSelected: boolean;
-    // (undocumented)
     readonly orientation: BoardOrientation;
-    // (undocumented)
     readonly piece: PieceData | null;
-    // (undocumented)
     readonly square: SquareId;
 }
 
 // @public
 export interface SquareActivationIntent {
-    // (undocumented)
     readonly action: 'activate' | 'clear-selection';
-    // (undocumented)
     readonly basePositionRevision: Revision;
-    // (undocumented)
     readonly baseSelectionRevision: Revision | null;
-    // (undocumented)
     readonly boardId: string;
-    // (undocumented)
     readonly input: 'touch' | 'keyboard' | 'accessibility';
-    // (undocumented)
     readonly intentId: string;
-    // (undocumented)
     readonly isDestination: boolean;
-    // (undocumented)
     readonly piece: PieceData | null;
-    // (undocumented)
     readonly selectedSquare: SquareId | null;
-    // (undocumented)
     readonly square: SquareId;
 }
 
 // @public
 export interface SquareAnnotation {
-    // (undocumented)
     readonly color: string;
     readonly id: string;
-    // (undocumented)
     readonly layer?: 'belowPieces' | 'abovePieces';
-    // (undocumented)
     readonly shape?: 'fill' | 'circle' | 'dot' | 'border';
-    // (undocumented)
     readonly square: SquareId;
-    // (undocumented)
     readonly type: 'square';
 }
 
@@ -721,13 +637,9 @@ export type SquareId = string;
 
 // @public
 export interface SquarePressContext {
-    // (undocumented)
     readonly basePositionRevision: Revision;
-    // (undocumented)
     readonly boardId: string;
-    // (undocumented)
     readonly piece: Readonly<PieceData> | null;
-    // (undocumented)
     readonly square: SquareId;
 }
 
@@ -736,17 +648,11 @@ export type SquareRenderer = (props: SquareRendererProps) => ReactElement | null
 
 // @public
 export interface SquareRendererProps {
-    // (undocumented)
     readonly boardId: string;
-    // (undocumented)
     readonly piece: PieceData | null;
-    // (undocumented)
     readonly size: number;
-    // (undocumented)
     readonly square: SquareId;
-    // (undocumented)
     readonly state: SquareVisualState;
-    // (undocumented)
     readonly style: Readonly<ViewStyle>;
 }
 
@@ -758,19 +664,12 @@ export function squareToBoardPoint(square: SquareId, size: BoardSize, dimensions
 
 // @public
 export interface SquareVisualState {
-    // (undocumented)
     readonly isDestination: boolean;
-    // (undocumented)
     readonly isDisabled: boolean;
-    // (undocumented)
     readonly isDropTarget: boolean;
-    // (undocumented)
     readonly isPendingSource: boolean;
-    // (undocumented)
     readonly isPendingTarget: boolean;
-    // (undocumented)
     readonly isPressed: boolean;
-    // (undocumented)
     readonly isSelected: boolean;
 }
 

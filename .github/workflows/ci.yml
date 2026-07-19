@@ -47,6 +47,9 @@ jobs:
       - name: Lint source and documentation
         run: pnpm lint
 
+      - name: Validate documentation completeness
+        run: pnpm docs:check
+
       - name: Type-check workspaces and tests
         run: pnpm typecheck
 

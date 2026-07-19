@@ -75,145 +75,91 @@ export type PieceType = string;
 
 // @public
 export interface PieceVisualState {
-    // (undocumented)
     readonly isDragging: boolean;
-    // (undocumented)
     readonly isGhost: boolean;
-    // (undocumented)
     readonly isPending: boolean;
-    // (undocumented)
     readonly isPressed: boolean;
-    // (undocumented)
     readonly isTransitioning: boolean;
 }
 
 // @public
 export interface ReactChessboardArrow {
-    // (undocumented)
     readonly color: string;
-    // (undocumented)
     readonly endSquare: string;
-    // (undocumented)
     readonly startSquare: string;
 }
 
 // @public
 export interface ReactChessboardDraggingPieceData {
-    // (undocumented)
     readonly isSparePiece: boolean;
-    // (undocumented)
     readonly pieceType: PieceType;
-    // (undocumented)
     readonly position: string;
 }
 
 // @public
 export interface ReactChessboardOptions {
     readonly allowAutoScroll?: never;
-    // (undocumented)
     readonly allowDragging?: boolean;
-    // (undocumented)
     readonly allowDragOffBoard?: boolean;
-    // (undocumented)
     readonly allowDrawingArrows?: boolean;
-    // (undocumented)
     readonly alphaNotationStyle?: StyleProp<TextStyle>;
-    // (undocumented)
     readonly animationDurationInMs?: number;
-    // (undocumented)
     readonly arrowOptions?: Readonly<AnnotationStyle>;
-    // (undocumented)
     readonly arrows?: readonly Readonly<ReactChessboardArrow>[];
-    // (undocumented)
     readonly boardOrientation?: BoardOrientation;
-    // (undocumented)
     readonly boardStyle?: StyleProp<ViewStyle>;
-    // (undocumented)
     readonly canDragPiece?: (args: Readonly<ReactChessboardPieceHandlerArgs>) => boolean;
-    // (undocumented)
     readonly chessboardColumns?: number;
-    // (undocumented)
     readonly chessboardRows?: number;
-    // (undocumented)
     readonly clearArrowsOnClick?: boolean;
-    // (undocumented)
     readonly clearArrowsOnPositionChange?: boolean;
-    // (undocumented)
     readonly darkSquareNotationStyle?: StyleProp<TextStyle>;
-    // (undocumented)
     readonly darkSquareStyle?: StyleProp<ViewStyle>;
-    // (undocumented)
     readonly dragActivationDistance?: number;
-    // (undocumented)
     readonly draggingPieceGhostStyle?: StyleProp<ViewStyle>;
-    // (undocumented)
     readonly draggingPieceStyle?: StyleProp<ViewStyle>;
-    // (undocumented)
     readonly dropSquareStyle?: StyleProp<ViewStyle>;
-    // (undocumented)
     readonly id?: string;
-    // (undocumented)
     readonly lightSquareNotationStyle?: StyleProp<TextStyle>;
-    // (undocumented)
     readonly lightSquareStyle?: StyleProp<ViewStyle>;
-    // (undocumented)
     readonly numericNotationStyle?: StyleProp<TextStyle>;
-    // (undocumented)
     readonly onArrowsChange?: (args: {
         readonly arrows: readonly Readonly<ReactChessboardArrow>[];
     }) => void;
     readonly onMouseOutSquare?: never;
     readonly onMouseOverSquare?: never;
-    // (undocumented)
     readonly onPieceClick?: (args: Readonly<ReactChessboardPieceHandlerArgs>) => void;
-    // (undocumented)
     readonly onPieceDrag?: (args: Readonly<ReactChessboardPieceHandlerArgs>) => void;
-    // (undocumented)
     readonly onPieceDrop?: (args: Readonly<ReactChessboardPieceDropHandlerArgs>) => boolean;
-    // (undocumented)
     readonly onSquareClick?: (args: Readonly<ReactChessboardSquareHandlerArgs>) => void;
     readonly onSquareMouseDown?: (args: Readonly<ReactChessboardSquareHandlerArgs>) => void;
     readonly onSquareMouseUp?: (args: Readonly<ReactChessboardSquareHandlerArgs>) => void;
     readonly onSquareRightClick?: never;
-    // (undocumented)
     readonly pieces?: PieceRenderers;
-    // (undocumented)
     readonly position?: string | ReactChessboardPosition;
-    // (undocumented)
     readonly showAnimations?: boolean;
-    // (undocumented)
     readonly showNotation?: boolean;
-    // (undocumented)
     readonly squareRenderer?: SquareRenderer;
-    // (undocumented)
     readonly squareStyle?: StyleProp<ViewStyle>;
-    // (undocumented)
     readonly squareStyles?: SquareStyles;
 }
 
 // @public
 export interface ReactChessboardPieceData {
-    // (undocumented)
     readonly pieceType: PieceType;
 }
 
 // @public
 export interface ReactChessboardPieceDropHandlerArgs {
-    // (undocumented)
     readonly piece: Readonly<ReactChessboardDraggingPieceData>;
-    // (undocumented)
     readonly sourceSquare: string;
-    // (undocumented)
     readonly targetSquare: string | null;
 }
 
 // @public
 export interface ReactChessboardPieceHandlerArgs {
-    // (undocumented)
     readonly isSparePiece: boolean;
-    // (undocumented)
     readonly piece: Readonly<ReactChessboardPieceData>;
-    // (undocumented)
     readonly square: string | null;
 }
 
@@ -222,15 +168,12 @@ export type ReactChessboardPosition = Readonly<Partial<Record<string, Readonly<R
 
 // @public
 export interface ReactChessboardProps {
-    // (undocumented)
     readonly options?: Readonly<ReactChessboardOptions>;
 }
 
 // @public
 export interface ReactChessboardSquareHandlerArgs {
-    // (undocumented)
     readonly piece: Readonly<ReactChessboardPieceData> | null;
-    // (undocumented)
     readonly square: string;
 }
 
@@ -242,17 +185,11 @@ export type SquareRenderer = (props: SquareRendererProps) => ReactElement | null
 
 // @public
 export interface SquareRendererProps {
-    // (undocumented)
     readonly boardId: string;
-    // (undocumented)
     readonly piece: PieceData | null;
-    // (undocumented)
     readonly size: number;
-    // (undocumented)
     readonly square: SquareId;
-    // (undocumented)
     readonly state: SquareVisualState;
-    // (undocumented)
     readonly style: Readonly<ViewStyle>;
 }
 
@@ -261,19 +198,12 @@ export type SquareStyles = Readonly<Partial<Record<SquareId, StyleProp<ViewStyle
 
 // @public
 export interface SquareVisualState {
-    // (undocumented)
     readonly isDestination: boolean;
-    // (undocumented)
     readonly isDisabled: boolean;
-    // (undocumented)
     readonly isDropTarget: boolean;
-    // (undocumented)
     readonly isPendingSource: boolean;
-    // (undocumented)
     readonly isPendingTarget: boolean;
-    // (undocumented)
     readonly isPressed: boolean;
-    // (undocumented)
     readonly isSelected: boolean;
 }
 

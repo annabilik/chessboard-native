@@ -306,10 +306,10 @@ Callback and timeout semantics never depend on reduced motion.
 
 ## Manual TalkBack and VoiceOver pass
 
-Run the Expo gallery and test **Accessibility prototype** first, then repeat the
+Run the Expo gallery and test **Accessibility** first, then repeat the
 interaction-specific steps on **Controlled move requests** and **Provider
 coordination**, followed by **Spare pieces**, **Controlled annotation
-gestures**, **Piece callbacks**, **Square press callbacks**, and **Interaction
+annotations**, **Piece callbacks**, **Square press callbacks**, and **Interaction
 hardening**. Test Android and iOS separately:
 
 1. Enable TalkBack or VoiceOver and focus the board.
@@ -328,7 +328,7 @@ hardening**. Test Android and iOS separately:
    twice and does not double-speak either ID.
 9. Cycle through `system`, `always`, and `never` with delayed changes; confirm
    the board remains the same focus target and cursor state is preserved.
-10. On the accessibility prototype, confirm there is no activation, move,
+10. On the Accessibility route, confirm there is no activation, move,
     removal, or annotation action because it has no matching callback boundary
     and no complete annotation tool/collection/handler gate.
 11. On the controlled-selection route, activate an ordinary occupied or empty

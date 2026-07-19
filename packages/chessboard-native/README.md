@@ -3,6 +3,10 @@
 > **Prerelease status:** `0.1.0-next.*` releases are for evaluation and
 > integration testing, not production use; APIs may change before 1.0. The
 > installation command targets whichever published prerelease owns `next`.
+> Documentation on the repository's `main` branch can be ahead of that tag.
+> The release record says `next` is currently `0.1.0-next.1` from commit
+> `8d3c419`, which does not contain the later `react-chessboard-compat` entry
+> point described below.
 
 ## Installation
 
@@ -87,52 +91,29 @@ in the repository's
 [GitHub issues](https://github.com/annabilik/chessboard-native/issues). Include
 the exact package and peer versions, platform, and a minimal reproduction.
 
-A controlled, rules-free React Native chessboard component.
+## Documentation
 
-This prerelease package includes the controlled public contracts,
-platform-free position and coordinate core, measured geometry, strict FEN
-foundation, a responsive board renderer, and the completed Phase 2 interaction
-surface. `Chessboard` fills its parent width, derives height from board rows and
-columns, and renders oriented square backgrounds, optional edge notation, and
-the current controlled position and annotation collection. Constrain the
-parent to set an explicit width.
+The installed README is the detailed usage guide. Repository documentation
+adds the authored API and migration material:
 
-The default set contains twelve original interim geometric chess pieces.
-Consumers can replace it with a visual-only renderer map keyed by the open
-`pieceType` vocabulary. Theme, instance, canonical per-square styles, transient
-drag paint, and custom square content are declarative. The board is one
-adjustable accessibility control with an
-orientation-aware virtual cursor and decorative visual descendants. Controlled
-square and arrow annotations render in below/above-piece SVG planes. Revisioned
-annotation stores can consume immutable operation callbacks with the public pure
-application helper; independent board-press and position-change policies only
-request controlled deltas. A non-null `annotationTool` additionally enables
-explicit tap, long-press-pan, and two-finger-pan drawing when a current
-annotation collection and `onAnnotationOperation` are present. Every completed
-path requests one controlled toggle; it never edits the collection inside the
-board. The same measured gate adds accessible arrow start/finish/cancel and
-square-toggle actions to the one adjustable board. Their operations use
-`input: 'accessibility'`, and only the consumer's next annotation prop persists
-the result. Selection styling follows the controlled selection prop, and
-`onSquareActivate` or `onPiecePress` can opt the board into controlled touch and
-accessibility activation. Supplying
-`onMoveRequest` opens the controlled move-request surface: board/spare-piece
-drag and the adjustable control's source, target, removal, and cancellation
-actions use one correlated lifecycle. Neither gesture path nor either callback
-changes position or selection; only the consumer's next controlled props can do
-that.
-`ChessboardProvider` adds provider-scoped board identity, one shared transient
-overlay, and stale-safe external-drop measurement. Its public `SparePiece`
-source supports drag, selected-spare tap placement, and accessible placement on
-one named board while that board's controlled move callback remains the only
-position authority. A
-visual-only `renderSquare` receives current controlled and transient context
-inside board-owned measured paint. Pure controlled-position transition planning
-validates exact-revision hints,
-prefers stable piece IDs, and treats ambiguous anonymous matches as exits and
-enters. The mounted Reanimated runtime consumes only those detached operations,
-samples presentation-only continuity across interruption and geometry changes,
-and never renders a retained position snapshot.
+- [API reference](https://github.com/annabilik/chessboard-native/blob/main/docs/api-reference.md)
+- [Migration from `react-chessboard`](https://github.com/annabilik/chessboard-native/blob/main/docs/migrating-from-react-chessboard.md)
+- [Comparison](https://github.com/annabilik/chessboard-native/blob/main/docs/comparison.md)
+- [Support matrix](https://github.com/annabilik/chessboard-native/blob/main/docs/support-matrix.md)
+- [Pinned parity ledger](https://github.com/annabilik/chessboard-native/blob/main/docs/parity/react-chessboard-5.10.md)
+
+## Core contract
+
+`Chessboard` fills its parent's measured width and derives height from the board
+dimensions. Constrain the parent to choose a size. Position, annotations, and
+optional selection are consumer-owned controlled values. Move, selection, and
+annotation callbacks emit decisions or requested deltas; they never commit
+semantic state inside the component.
+
+The root API includes native interaction, provider-coordinated spare pieces,
+controlled transitions, declarative visual customization, and one adjustable
+accessibility control. The package is rules-free: legality, promotion, premoves,
+history, and application state belong to the consumer.
 
 ```tsx
 import { Chessboard } from '@vibechess/chessboard-native';
@@ -145,6 +126,12 @@ import { Chessboard } from '@vibechess/chessboard-native';
 ```
 
 ## `react-chessboard` compatibility subpath
+
+> [!IMPORTANT]
+> This entry point is available in current repository source but not in npm
+> `0.1.0-next.1`. Do not use the import below after installing `@next` until a
+> later published prerelease explicitly includes
+> `./react-chessboard-compat` in its package exports.
 
 Applications migrating from `react-chessboard@5.10` can keep its single
 `options` object and familiar option names through a separate entry point:

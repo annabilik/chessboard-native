@@ -10,6 +10,11 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  GALLERY_ROUTE_SECTIONS,
+  galleryRouteHref,
+} from '../src/gallery-routes';
+
 const GuidePiece: PieceRenderer = ({ size }) => (
   <View
     style={[
@@ -113,11 +118,67 @@ export default function GalleryIndex() {
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.heading}>
-          <Text style={styles.eyebrow}>PHASE 1 · CONTROLLED ANNOTATIONS</Text>
-          <Text style={styles.title}>chessboard-native</Text>
+          <Text style={styles.eyebrow}>EXPO GALLERY · PUBLIC CONTRACTS</Text>
+          <Text accessibilityRole="header" style={styles.title}>
+            chessboard-native
+          </Text>
           <Text style={styles.description}>
-            Responsive current-prop positions, pieces, and marker-free native
-            SVG annotations with no internal semantic state.
+            A rules-free, store-driven React Native chessboard. Choose a focused
+            lab by public contract, then use the overview boards for rendering,
+            annotation, orientation, rectangular-board, and custom-piece
+            coverage.
+          </Text>
+        </View>
+
+        <View style={styles.catalog}>
+          {GALLERY_ROUTE_SECTIONS.map((section) => (
+            <View key={section.id} style={styles.catalogSection}>
+              <Text accessibilityRole="header" style={styles.catalogTitle}>
+                {section.title}
+              </Text>
+              <Text style={styles.catalogDescription}>
+                {section.description}
+              </Text>
+              <View style={styles.routeList}>
+                {section.routes.map((route) => (
+                  <Link key={route.name} asChild href={galleryRouteHref(route)}>
+                    <Pressable
+                      accessibilityHint={`Opens the ${route.title} lab`}
+                      accessibilityRole="button"
+                      style={({ pressed }) => [
+                        styles.routeCard,
+                        pressed && styles.routeCardPressed,
+                      ]}
+                    >
+                      <View style={styles.routeCopy}>
+                        <Text style={styles.routeTitle}>{route.title}</Text>
+                        <Text style={styles.routeDescription}>
+                          {route.description}
+                        </Text>
+                      </View>
+                      <Text
+                        accessibilityElementsHidden
+                        importantForAccessibility="no"
+                        style={styles.chevron}
+                      >
+                        ›
+                      </Text>
+                    </Pressable>
+                  </Link>
+                ))}
+              </View>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.overviewHeading}>
+          <Text accessibilityRole="header" style={styles.overviewTitle}>
+            Overview boards
+          </Text>
+          <Text style={styles.overviewDescription}>
+            Both boards render directly from their current props. Replacing the
+            annotation set below never creates a second semantic source of
+            truth.
           </Text>
         </View>
 
@@ -176,125 +237,6 @@ export default function GalleryIndex() {
           Open “guide” piece type · explicit default spread · black 5×3 variant
           · canonical c2 style · oriented rectangular annotations
         </Text>
-
-        <Text style={styles.pending}>
-          The boards now expose one adjustable accessibility control while the
-          visual subtree remains decorative. Controlled annotation operations,
-          independent clearing policies, stale-safe consumer application, and
-          transient draft composition now have a focused lab with explicit,
-          long-press, two-finger, and single-control accessibility input. Packed
-          native validation covers Android annotation actions and the static iOS
-          surface; physical VoiceOver remains the manual action check. Custom
-          square rendering and transient public style mappings now have a
-          focused visual-customization lab. Piece press and drag-start
-          observations plus shared board/spare activation-distance tuning have a
-          focused callback lab. Paired occupied/empty square press observations
-          have a separate callback-only lab. Ordinary and special controlled
-          transitions, rapid-update continuity, geometry and orientation
-          rebasing, reduced motion, and pending-to-commit handoff now have a
-          focused lab. Controlled selection activation, move requests, provider
-          coordination, and external spare placement have focused examples. The
-          interaction-hardening lab adds native ScrollView, clipping, geometry,
-          lifecycle, and render/callback evidence. A compatibility route proves
-          the familiar react-chessboard options object over the same controlled
-          native pipeline.
-        </Text>
-
-        <Link asChild href="/react-chessboard-compat">
-          <Pressable style={styles.routeLink}>
-            <Text style={styles.routeLinkText}>
-              Open react-chessboard compatibility
-            </Text>
-          </Pressable>
-        </Link>
-
-        <Link asChild href="/controlled-annotations">
-          <Pressable style={styles.routeLink}>
-            <Text style={styles.routeLinkText}>
-              Open controlled annotation gestures
-            </Text>
-          </Pressable>
-        </Link>
-
-        <Link asChild href="/transitions">
-          <Pressable style={styles.routeLink}>
-            <Text style={styles.routeLinkText}>
-              Open controlled transitions
-            </Text>
-          </Pressable>
-        </Link>
-
-        <Link asChild href="/interaction-hardening">
-          <Pressable style={styles.routeLink}>
-            <Text style={styles.routeLinkText}>
-              Open interaction-hardening lab
-            </Text>
-          </Pressable>
-        </Link>
-
-        <Link asChild href="/spare-pieces">
-          <Pressable style={styles.routeLink}>
-            <Text style={styles.routeLinkText}>Open spare-piece editor</Text>
-          </Pressable>
-        </Link>
-
-        <Link asChild href="/provider-coordination">
-          <Pressable style={styles.routeLink}>
-            <Text style={styles.routeLinkText}>Open provider coordination</Text>
-          </Pressable>
-        </Link>
-
-        <Link asChild href="/controlled-selection">
-          <Pressable style={styles.routeLink}>
-            <Text style={styles.routeLinkText}>Open controlled selection</Text>
-          </Pressable>
-        </Link>
-
-        <Link asChild href="/move-request">
-          <Pressable style={styles.routeLink}>
-            <Text style={styles.routeLinkText}>
-              Open controlled move requests
-            </Text>
-          </Pressable>
-        </Link>
-
-        <Link asChild href="/rules-owned-moves">
-          <Pressable style={styles.routeLink}>
-            <Text style={styles.routeLinkText}>
-              Open promotion and premove workflows
-            </Text>
-          </Pressable>
-        </Link>
-
-        <Link asChild href="/visual-customization">
-          <Pressable style={styles.routeLink}>
-            <Text style={styles.routeLinkText}>
-              Open visual-customization lab
-            </Text>
-          </Pressable>
-        </Link>
-
-        <Link asChild href="/piece-callbacks">
-          <Pressable style={styles.routeLink}>
-            <Text style={styles.routeLinkText}>Open piece-callback lab</Text>
-          </Pressable>
-        </Link>
-
-        <Link asChild href="/square-press-callbacks">
-          <Pressable style={styles.routeLink}>
-            <Text style={styles.routeLinkText}>
-              Open square-press callback lab
-            </Text>
-          </Pressable>
-        </Link>
-
-        <Link asChild href="/accessibility">
-          <Pressable style={styles.routeLink}>
-            <Text style={styles.routeLinkText}>
-              Open accessibility prototype
-            </Text>
-          </Pressable>
-        </Link>
       </ScrollView>
     </SafeAreaView>
   );
@@ -366,6 +308,27 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 520,
   },
+  catalog: {
+    width: '100%',
+    maxWidth: 520,
+    gap: 28,
+    marginBottom: 40,
+  },
+  catalogDescription: {
+    color: '#766c5d',
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 6,
+  },
+  catalogSection: {
+    width: '100%',
+  },
+  catalogTitle: {
+    color: '#1e1b17',
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
   caption: {
     width: '100%',
     maxWidth: 520,
@@ -374,26 +337,57 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
   },
-  pending: {
-    width: '100%',
-    maxWidth: 520,
-    marginTop: 28,
+  chevron: {
+    color: '#236a5b',
+    fontSize: 28,
+    fontWeight: '400',
+    lineHeight: 32,
+  },
+  overviewDescription: {
     color: '#665c4d',
     fontSize: 15,
     lineHeight: 22,
+    marginTop: 8,
   },
-  routeLink: {
+  overviewHeading: {
     width: '100%',
     maxWidth: 520,
-    alignItems: 'center',
-    backgroundColor: '#236a5b',
-    borderRadius: 10,
-    marginTop: 20,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
+    marginBottom: 20,
   },
-  routeLinkText: {
-    color: '#ffffff',
+  overviewTitle: {
+    color: '#1e1b17',
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+  },
+  routeCard: {
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderColor: '#d8d0c3',
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    padding: 16,
+  },
+  routeCardPressed: {
+    backgroundColor: '#eee8dd',
+  },
+  routeCopy: {
+    flex: 1,
+  },
+  routeDescription: {
+    color: '#665c4d',
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 4,
+  },
+  routeList: {
+    gap: 10,
+    marginTop: 14,
+  },
+  routeTitle: {
+    color: '#236a5b',
     fontSize: 16,
     fontWeight: '700',
   },
