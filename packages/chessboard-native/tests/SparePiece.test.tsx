@@ -324,8 +324,11 @@ describe('SparePiece', () => {
         />
         <Chessboard
           accessibility={{ boardLabel: 'right board' }}
+          annotations={{ revision: 2, value: [] }}
+          annotationTool={{ color: '#ef4444', type: 'arrow' }}
           boardId="right"
           dimensions={{ columns: 2, rows: 2 }}
+          onAnnotationOperation={jest.fn()}
           onMoveRequest={targetMove}
           position={{ revision: 8, value: {} }}
           reduceMotion="never"
@@ -335,6 +338,17 @@ describe('SparePiece', () => {
     const spare = result.getByRole('button');
     const left = boardByLabel(result, 'left board');
     const right = boardByLabel(result, 'right board');
+    await measureBoard(right);
+    expect(actionNames(boardByLabel(result, 'right board'))).toContain(
+      'start-arrow',
+    );
+    await accessibilityAction(
+      boardByLabel(result, 'right board'),
+      'start-arrow',
+    );
+    expect(actionNames(boardByLabel(result, 'right board'))).toContain(
+      'cancel-annotation',
+    );
 
     await fireEvent.press(spare);
     expect(actionNames(left)).not.toContain('place-spare');
@@ -342,6 +356,8 @@ describe('SparePiece', () => {
     expect(actionNames(right)).toEqual(
       expect.arrayContaining(['place-spare', 'cancel-spare']),
     );
+    expect(actionNames(right)).not.toContain('start-arrow');
+    expect(actionNames(right)).not.toContain('cancel-annotation');
 
     await accessibilityAction(right, 'cancel-spare');
     expect(spare).toHaveProp('accessibilityState', {
@@ -350,6 +366,9 @@ describe('SparePiece', () => {
     });
     expect(targetMove).not.toHaveBeenCalled();
     expect(otherMove).not.toHaveBeenCalled();
+    expect(actionNames(boardByLabel(result, 'right board'))).toContain(
+      'start-arrow',
+    );
 
     await fireEvent.press(spare);
     await accessibilityAction(

@@ -61,6 +61,10 @@ type InteractiveAccessibilityAction = Extract<
   | 'clear-selection'
   | 'place-spare'
   | 'remove-piece'
+  | 'start-arrow'
+  | 'finish-arrow'
+  | 'toggle-square-annotation'
+  | 'cancel-annotation'
 >;
 
 type LabeledAccessibilityAction =
@@ -71,15 +75,25 @@ type NativeMoveAccessibilityAction =
 
 type NativeSpareAccessibilityAction = 'cancel-spare' | 'place-spare';
 
+type NativeAnnotationAccessibilityAction =
+  | 'start-arrow'
+  | 'finish-arrow'
+  | 'toggle-square-annotation'
+  | 'cancel-annotation';
+
 const INTERACTIVE_ACTION_LABELS: Readonly<
   Record<InteractiveAccessibilityAction, string>
 > = Object.freeze({
   'activate-square': 'Activate square',
+  'cancel-annotation': 'Cancel annotation',
   'cancel-move': 'Cancel move',
   'cancel-spare': 'Cancel spare selection',
   'clear-selection': 'Clear selection',
+  'finish-arrow': 'Finish arrow',
   'place-spare': 'Place selected spare',
   'remove-piece': 'Remove piece',
+  'start-arrow': 'Start arrow',
+  'toggle-square-annotation': 'Toggle square annotation',
 });
 
 const STANDARD_PIECE_LABELS: Readonly<Record<string, string>> = Object.freeze({
@@ -127,6 +141,19 @@ export interface BoardAccessibilitySpareInteraction {
   readonly enabled: boolean;
   readonly place: (square: SquareId) => boolean;
   readonly selection: Readonly<ProviderSpareSelectionDescriptor> | null;
+}
+
+/** Internal bridge from the single accessibility control to annotations. */
+export interface BoardAccessibilityAnnotationInteraction {
+  readonly activate: (
+    action: Exclude<NativeAnnotationAccessibilityAction, 'cancel-annotation'>,
+    square: SquareId,
+  ) => boolean;
+  readonly cancel: () => boolean;
+  readonly enabled: boolean;
+  readonly mode: 'idle' | 'armed-arrow' | 'drawing';
+  readonly sourceSquare: SquareId | null;
+  readonly tool: 'arrow' | 'square' | null;
 }
 
 interface AccessibilityCursorState {
@@ -246,7 +273,11 @@ function fallbackActionLabel(action: LabeledAccessibilityAction): string {
     action === 'cancel-move' ||
     action === 'cancel-spare' ||
     action === 'place-spare' ||
-    action === 'remove-piece'
+    action === 'remove-piece' ||
+    action === 'start-arrow' ||
+    action === 'finish-arrow' ||
+    action === 'toggle-square-annotation' ||
+    action === 'cancel-annotation'
   ) {
     return INTERACTIVE_ACTION_LABELS[action];
   }
@@ -443,6 +474,7 @@ export function useBoardAccessibility(
   moveInteraction?: BoardAccessibilityMoveInteraction,
   squareInteraction?: BoardAccessibilitySquareInteraction,
   spareInteraction?: BoardAccessibilitySpareInteraction,
+  annotationInteraction?: BoardAccessibilityAnnotationInteraction,
 ): BoardAccessibilityProps {
   const [cursorState, setCursorState] = useState<AccessibilityCursorState>(
     () => ({ feedbackRevision: 0, square: initialCursorSquare(model) }),
@@ -454,11 +486,12 @@ export function useBoardAccessibility(
     setStoredMoveSource(null);
   }, [sourceResetRevision]);
   const squareActivationEnabled = squareInteraction?.enabled === true;
+  const annotationEnabled = annotationInteraction?.enabled === true;
   useEffect(() => {
-    if (squareActivationEnabled) {
+    if (squareActivationEnabled || annotationEnabled) {
       setStoredMoveSource(null);
     }
-  }, [squareActivationEnabled]);
+  }, [annotationEnabled, squareActivationEnabled]);
   const dimensions = model.dimensions;
   const orientation = model.orientation;
   const preferredSquare = preferredCursorSquare(model);
@@ -497,6 +530,7 @@ export function useBoardAccessibility(
       : null;
   const activeMoveSource =
     !squareActivationEnabled &&
+    !annotationEnabled &&
     storedMoveSource !== null &&
     moveSourceIsCurrent(storedMoveSource, model, moveEnabled)
       ? storedMoveSource
@@ -605,6 +639,66 @@ export function useBoardAccessibility(
       ];
       for (const { action, name } of nativeSpareActions) {
         const formattedLabel = actionLabel(action, accessibility, spareContext);
+        const label = uniqueActionLabel(formattedLabel, action, labels);
+        labels.add(label);
+        available.push(Object.freeze({ label, name }));
+      }
+    } else if (hasPendingLifecycle && moveEnabled) {
+      const action = 'cancel-move' as const;
+      const formattedLabel = actionLabel(action, accessibility, squareContext);
+      const label = uniqueActionLabel(formattedLabel, action, labels);
+      available.push(Object.freeze({ label, name: action }));
+    } else if (annotationEnabled) {
+      const nativeAnnotationActions: Readonly<{
+        action: Extract<
+          InteractiveAccessibilityAction,
+          NativeAnnotationAccessibilityAction
+        >;
+        name: NativeAnnotationAccessibilityAction;
+      }>[] =
+        annotationInteraction.mode === 'armed-arrow'
+          ? [
+              ...(annotationInteraction.sourceSquare !== cursor
+                ? [
+                    Object.freeze({
+                      action: 'finish-arrow' as const,
+                      name: 'finish-arrow' as const,
+                    }),
+                  ]
+                : []),
+              Object.freeze({
+                action: 'cancel-annotation' as const,
+                name: 'cancel-annotation' as const,
+              }),
+            ]
+          : annotationInteraction.mode === 'drawing'
+            ? [
+                Object.freeze({
+                  action: 'cancel-annotation' as const,
+                  name: 'cancel-annotation' as const,
+                }),
+              ]
+            : annotationInteraction.tool === 'arrow'
+              ? [
+                  Object.freeze({
+                    action: 'start-arrow' as const,
+                    name: 'start-arrow' as const,
+                  }),
+                ]
+              : annotationInteraction.tool === 'square'
+                ? [
+                    Object.freeze({
+                      action: 'toggle-square-annotation' as const,
+                      name: 'toggle-square-annotation' as const,
+                    }),
+                  ]
+                : [];
+      for (const { action, name } of nativeAnnotationActions) {
+        const formattedLabel = actionLabel(
+          action,
+          accessibility,
+          squareContext,
+        );
         const label = uniqueActionLabel(formattedLabel, action, labels);
         labels.add(label);
         available.push(Object.freeze({ label, name }));
@@ -731,6 +825,8 @@ export function useBoardAccessibility(
     activeMoveSourceDisabled,
     activeSpareSelection,
     accessibility,
+    annotationEnabled,
+    annotationInteraction,
     cursor,
     controlledSelectedSquare,
     dimensions,
@@ -810,6 +906,50 @@ export function useBoardAccessibility(
             !hasPendingLifecycle &&
             squareContext?.isDisabled !== true &&
             spareInteraction.place(cursor)
+          ) {
+            requestExplicitFeedback();
+          }
+          return;
+        }
+
+        if (activeSpareSelection !== null) {
+          return;
+        }
+
+        if (hasPendingLifecycle && moveEnabled) {
+          if (actionName === 'cancel-move') {
+            moveInteraction.cancel();
+          }
+          return;
+        }
+
+        if (annotationEnabled) {
+          if (actionName === 'cancel-annotation') {
+            if (
+              annotationInteraction.mode !== 'idle' &&
+              annotationInteraction.cancel()
+            ) {
+              requestExplicitFeedback();
+            }
+            return;
+          }
+          const isAllowedActivation =
+            actionName === 'start-arrow'
+              ? annotationInteraction.mode === 'idle' &&
+                annotationInteraction.tool === 'arrow'
+              : actionName === 'finish-arrow'
+                ? annotationInteraction.mode === 'armed-arrow' &&
+                  annotationInteraction.sourceSquare !== cursor
+                : actionName === 'toggle-square-annotation'
+                  ? annotationInteraction.mode === 'idle' &&
+                    annotationInteraction.tool === 'square'
+                  : false;
+          if (
+            isAllowedActivation &&
+            (actionName === 'start-arrow' ||
+              actionName === 'finish-arrow' ||
+              actionName === 'toggle-square-annotation') &&
+            annotationInteraction.activate(actionName, cursor)
           ) {
             requestExplicitFeedback();
           }
@@ -933,6 +1073,8 @@ export function useBoardAccessibility(
       activeMoveSource,
       activeMoveSourceDisabled,
       activeSpareSelection,
+      annotationEnabled,
+      annotationInteraction,
       cursor,
       controlledSelectedSquare,
       dimensions,

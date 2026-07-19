@@ -23,6 +23,36 @@ final class ChessboardNativeHarnessAccessibilityUITests: XCTestCase {
 
     try app.performAccessibilityAudit()
   }
+
+  func testPackedAnnotationAccessibilitySurface() throws {
+    let app = XCUIApplication()
+    app.launchArguments += [
+      "-AppleLanguages", "(en)",
+      "-AppleLocale", "en_US",
+      "--fixture", "annotation-arrow",
+    ]
+    app.launch()
+
+    let boards = app.descendants(matching: .any).matching(
+      NSPredicate(format: "label == %@", "Annotation test board, white orientation")
+    )
+    let board = boards.firstMatch
+
+    XCTAssertTrue(board.waitForExistence(timeout: 30))
+    XCTAssertEqual(boards.count, 1)
+    XCTAssertTrue(board.isEnabled)
+    XCTAssertEqual(board.value as? String, "a2, empty")
+    XCTAssertEqual(board.descendants(matching: .any).count, 0)
+    XCTAssertEqual(app.staticTexts["annotation:operation-count"].label, "Operation count: 0")
+    XCTAssertEqual(app.staticTexts["annotation:revision"].label, "Annotation revision: 0")
+    XCTAssertEqual(app.staticTexts["annotation:count"].label, "Annotation count: 0")
+
+    try app.performAccessibilityAudit()
+    let screenshot = XCTAttachment(screenshot: board.screenshot())
+    screenshot.name = "annotation-arrow-initial"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+  }
 }
 
 final class ChessboardNativeHarnessInteractionUITests: XCTestCase {
@@ -42,7 +72,7 @@ final class ChessboardNativeHarnessInteractionUITests: XCTestCase {
 
     // Cross two ranks so the hosted simulator reliably clears the gesture
     // activation threshold before XCUITest releases the touch.
-    drag(on: board, file: 3, fromRank: 4, toRank: 6)
+    dragPiece(on: board, file: 3, fromRank: 4, toRank: 6)
 
     waitForLabel(callbackCount, "Callback count: 1")
     waitForLabel(lastTarget, "Last target: d6")
@@ -129,7 +159,7 @@ final class ChessboardNativeHarnessInteractionUITests: XCTestCase {
     let app = launchInteractionFixture("interaction-lifecycle")
     let board = interactionBoard(in: app)
 
-    drag(on: board, file: 3, fromRank: 4, toRank: 6)
+    dragPiece(on: board, file: 3, fromRank: 4, toRank: 6)
     waitForLabel(app.staticTexts["interaction:callback-count"], "Callback count: 1")
     waitForLabel(app.staticTexts["interaction:decision"], "Decision: pending")
 
@@ -193,6 +223,22 @@ final class ChessboardNativeHarnessInteractionUITests: XCTestCase {
     let start = squareCoordinate(on: board, file: file, rank: fromRank)
     let end = squareCoordinate(on: board, file: file, rank: toRank)
     start.press(forDuration: 0.05, thenDragTo: end)
+  }
+
+  private func dragPiece(
+    on board: XCUIElement,
+    file: Int,
+    fromRank: Int,
+    toRank: Int
+  ) {
+    let start = squareCoordinate(on: board, file: file, rank: fromRank)
+    let end = squareCoordinate(on: board, file: file, rank: toRank)
+    start.press(
+      forDuration: 0.15,
+      thenDragTo: end,
+      withVelocity: .slow,
+      thenHoldForDuration: 0.1
+    )
   }
 
   private func squareCoordinate(

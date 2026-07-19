@@ -182,15 +182,16 @@ export default function GalleryIndex() {
           visual subtree remains decorative. Controlled annotation operations,
           independent clearing policies, stale-safe consumer application, and
           transient draft composition now have a focused lab with explicit,
-          long-press, and two-finger touch drawing. Accessible annotation
-          actions, physical annotation validation, custom square rendering, and
-          transient public style mappings remain later slices. Ordinary and
-          special controlled transitions, rapid-update continuity, geometry and
-          orientation rebasing, reduced motion, and pending-to-commit handoff
-          now have a focused lab. Controlled selection activation, move
-          requests, provider coordination, and external spare placement have
-          focused examples. The interaction-hardening lab adds native
-          ScrollView, clipping, geometry, lifecycle, and render/callback
+          long-press, two-finger, and single-control accessibility input. Packed
+          native validation covers Android annotation actions and the static iOS
+          surface; physical VoiceOver remains the manual action check. Custom
+          square rendering and transient public style mappings remain later
+          slices. Ordinary and special controlled transitions, rapid-update
+          continuity, geometry and orientation rebasing, reduced motion, and
+          pending-to-commit handoff now have a focused lab. Controlled selection
+          activation, move requests, provider coordination, and external spare
+          placement have focused examples. The interaction-hardening lab adds
+          native ScrollView, clipping, geometry, lifecycle, and render/callback
           evidence.
         </Text>
 

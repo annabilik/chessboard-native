@@ -102,12 +102,12 @@ replacement, successful submission, source or target unmount, and provider
 deactivation clear the transient selection. It is neither semantic board
 selection nor proof that the consumer accepted a move.
 
-Explicit activation, long-press pan, and two-finger pan are three touch input
-paths over one annotation reducer and operation emitter. P4.1 establishes that
-commit-current emitter and the independent board-press/position-change policy
-paths. P4.4 connects the touch paths without creating another operation or
-annotation store. Keyboard and accessibility annotation actions remain a
-separate P4.5 adapter over the same semantic operation boundary.
+Explicit activation, long-press pan, two-finger pan, and the adjustable board's
+annotation actions are input adapters over one annotation reducer and operation
+emitter. P4.1 establishes that commit-current emitter and the independent
+board-press/position-change policy paths. P4.4 connects the touch paths, and
+P4.5 connects accessibility without creating another operation or annotation
+store. Keyboard annotation input remains future work.
 
 `annotationTool` is the controlled annotation mode. Input is enabled only for a
 ready measured board with a current annotation domain, a non-null valid tool,
@@ -118,11 +118,12 @@ square path finishes on one tap. Long-press and two-finger pans draw an arrow
 from source to terminal target; a square tool applies to the terminal square.
 An arrow ending on its source or outside the board emits nothing.
 
-All three paths emit the same immutable `toggle` request with `input: "touch"`.
-The request carries the exact current annotation revision and only matching IDs
-observed at that revision; its generated annotation ID is used only if the
-consumer applies an add. The callback result is ignored. Persistent rendering
-changes only after a later controlled `annotations` prop arrives.
+All three touch paths emit the same immutable `toggle` request with
+`input: "touch"`. The request carries the exact current annotation revision and
+only matching IDs observed at that revision; its generated annotation ID is
+used only if the consumer applies an add. The callback result is ignored.
+Persistent rendering changes only after a later controlled `annotations` prop
+arrives.
 
 Annotation recognizers compose on the existing accessibility-hidden board
 plane as
@@ -145,6 +146,22 @@ provider lifecycle, tool semantics, callback removal, replacement gesture, and
 unmount cancel it. A stale draft is synchronously suppressed, and late native
 signals are inert. Callback replacements become visible only after commit; an
 abandoned render cannot install a handler.
+
+Accessibility uses that same measured session rather than a parallel state
+machine. With an arrow tool, `start-arrow` arms the cursor square, navigation
+retains the correlated border draft, `finish-arrow` on a different square emits
+one toggle, and `cancel-annotation` clears the draft without emission. With a
+square tool, `toggle-square-annotation` emits immediately at the cursor. These
+operations use `input: "accessibility"` and the same exact-revision matching-ID
+logic as touch. Either touch or accessibility may finish a source started by
+the other.
+
+While the annotation gate is complete, its actions replace ordinary accessible
+move and square activation so one action cannot request two outcomes. A
+provider-selected spare remains the first action owner, and an already-pending
+move retains its cancel action before a newly enabled annotation tool. Removing
+the tool, collection, handler, measurement, or any correlation input cancels
+the shared transient session.
 
 ## Move-request lifecycle, gesture adapter, and executor
 

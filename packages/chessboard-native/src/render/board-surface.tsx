@@ -14,6 +14,7 @@ import { useAccessibilityAnnouncement } from '../accessibility/announcements';
 import { useReducedMotion } from '../accessibility/reduced-motion';
 import {
   useBoardAccessibility,
+  type BoardAccessibilityAnnotationInteraction,
   type BoardAccessibilityMoveInteraction,
   type BoardAccessibilitySpareInteraction,
   type BoardAccessibilitySquareInteraction,
@@ -24,6 +25,7 @@ import { findMatchingAnnotationIds } from '../core/annotation-operations';
 import {
   normalizeAnnotationTool,
   type AnnotationGestureCandidate,
+  type AnnotationGestureSnapshot,
 } from '../internal/annotation-gesture-adapter';
 import type { NormalizedBoardModel } from '../internal/board-model';
 import {
@@ -46,6 +48,7 @@ import {
 } from '../internal/square-activation';
 import { useMoveRequestRuntime } from '../internal/use-move-request-runtime';
 import { useAnnotationOperation } from '../internal/use-annotation-operation';
+import { useAnnotationInputRuntime } from '../internal/use-annotation-input-runtime';
 import { useSquareActivation } from '../internal/use-square-activation';
 import { usePositionTransitionRuntime } from '../internal/use-position-transition-runtime';
 import type { ProviderBoardRegistration } from '../internal/provider-board-registration';
@@ -293,8 +296,6 @@ export function BoardSurface({
   const [activeDragSourceSquare, setActiveDragSourceSquare] = useState<
     string | null
   >(null);
-  const [gestureAnnotationDraft, setGestureAnnotationDraft] =
-    useState<Readonly<CorrelatedAnnotationDraft> | null>(null);
   const [
     accessibilitySourceResetRevision,
     setAccessibilitySourceResetRevision,
@@ -613,13 +614,6 @@ export function BoardSurface({
       selectedSpare,
     ],
   );
-  const accessibilityProps = useBoardAccessibility(
-    model,
-    accessibility,
-    accessibilityMoveInteraction,
-    accessibilitySquareInteraction,
-    accessibilitySpareInteraction,
-  );
   const fallbackDimensions = model.dimensions ?? STANDARD_BOARD_DIMENSIONS;
   const modelColumns = model.dimensions?.columns ?? null;
   const modelRows = model.dimensions?.rows ?? null;
@@ -738,15 +732,104 @@ export function BoardSurface({
   if (nextGeometryEpochMetadata !== geometryEpochMetadata) {
     setGeometryEpochMetadata(nextGeometryEpochMetadata);
   }
-  useLayoutEffect(() => {
-    if (!annotationGestureEnabled) {
-      setGestureAnnotationDraft((current) =>
-        current === null ? current : null,
-      );
+  const gestureGeometry = useMemo<Readonly<BoardGestureGeometry> | null>(() => {
+    if (layout === null || nextGeometryEpochMetadata.revision === null) {
+      return null;
     }
-  }, [annotationGestureEnabled]);
+    return Object.freeze({
+      columns: layout.dimensions.columns,
+      height: layout.size.height,
+      revision: nextGeometryEpochMetadata.revision,
+      rows: layout.dimensions.rows,
+      visualSquares: Object.freeze(layout.cells.map(({ square }) => square)),
+      width: layout.size.width,
+    });
+  }, [layout, nextGeometryEpochMetadata.revision]);
+  const annotationInputSnapshot =
+    useMemo<Readonly<AnnotationGestureSnapshot> | null>(() => {
+      if (!annotationGestureEnabled || gestureGeometry === null) {
+        return null;
+      }
+      return Object.freeze({
+        annotationRevision: model.annotations.revision,
+        boardId: model.boardId,
+        geometryEpoch: gestureGeometry.revision,
+        positionRevision: model.position.revision,
+        providerGeometryRevision,
+        providerLifecycleRevision,
+        tool: normalizedAnnotationTool,
+      });
+    }, [
+      annotationGestureEnabled,
+      gestureGeometry,
+      model.annotations,
+      model.boardId,
+      model.position,
+      normalizedAnnotationTool,
+      providerGeometryRevision,
+      providerLifecycleRevision,
+    ]);
+  const handleAnnotationCandidate = useCallback(
+    (candidate: Readonly<AnnotationGestureCandidate>): void => {
+      const boardId = model.boardId;
+      const position = model.position;
+      const annotations = model.annotations;
+      const geometry = gestureGeometry;
+      const annotation = candidate.annotation;
+      const annotationSquaresAreCurrent =
+        annotation.type === 'arrow'
+          ? geometry?.visualSquares.includes(annotation.from) === true &&
+            geometry.visualSquares.includes(annotation.to)
+          : geometry?.visualSquares.includes(annotation.square) === true;
+      if (
+        !annotationGestureEnabled ||
+        boardId === null ||
+        position === null ||
+        annotations === null ||
+        geometry === null ||
+        candidate.boardId !== boardId ||
+        candidate.geometryEpoch !== geometry.revision ||
+        candidate.basePositionRevision !== position.revision ||
+        candidate.baseAnnotationRevision !== annotations.revision ||
+        candidate.providerGeometryRevision !== providerGeometryRevision ||
+        candidate.providerLifecycleRevision !== providerLifecycleRevision ||
+        !annotationSquaresAreCurrent
+      ) {
+        return;
+      }
+      annotationOperation.emit({
+        annotation,
+        baseAnnotationRevision: annotations.revision,
+        input: candidate.input,
+        matchingIdsAtBase: findMatchingAnnotationIds(
+          annotations.value,
+          annotation,
+        ),
+        type: 'toggle',
+      });
+    },
+    [
+      annotationGestureEnabled,
+      annotationOperation.emit,
+      gestureGeometry,
+      model.annotations,
+      model.boardId,
+      model.position,
+      providerGeometryRevision,
+      providerLifecycleRevision,
+    ],
+  );
+  const annotationRuntime = useAnnotationInputRuntime({
+    onCandidate: handleAnnotationCandidate,
+    snapshot: annotationInputSnapshot,
+  });
+  useLayoutEffect(() => {
+    if (selectedSpare !== null) {
+      annotationRuntime.cancel();
+    }
+  }, [annotationRuntime.cancel, selectedSpare]);
   const currentAnnotationDraft = projectCurrentAnnotationDraft(
-    gestureAnnotationDraft ?? annotationDraft,
+    annotationRuntime.presentation ?? annotationDraft,
     Object.freeze({
       annotationRevision: model.annotations?.revision ?? null,
       boardId: model.boardId,
@@ -769,19 +852,55 @@ export function BoardSurface({
       style: annotationStyle,
     });
   }, [annotationStyle, currentAnnotationDraft, layout, model.annotations]);
-  const gestureGeometry = useMemo<Readonly<BoardGestureGeometry> | null>(() => {
-    if (layout === null || nextGeometryEpochMetadata.revision === null) {
-      return null;
-    }
-    return Object.freeze({
-      columns: layout.dimensions.columns,
-      height: layout.size.height,
-      revision: nextGeometryEpochMetadata.revision,
-      rows: layout.dimensions.rows,
-      visualSquares: Object.freeze(layout.cells.map(({ square }) => square)),
-      width: layout.size.width,
-    });
-  }, [layout, nextGeometryEpochMetadata.revision]);
+  const accessibilityAnnotationInteraction = useMemo<
+    Readonly<BoardAccessibilityAnnotationInteraction>
+  >(
+    () =>
+      Object.freeze({
+        activate: (
+          action: 'start-arrow' | 'finish-arrow' | 'toggle-square-annotation',
+          square: SquareId,
+        ): boolean =>
+          annotationRuntime.snapshot === null
+            ? false
+            : annotationRuntime.activate('accessibility', square, {
+                mode: action === 'finish-arrow' ? 'armed-arrow' : 'idle',
+                snapshot: annotationRuntime.snapshot,
+                sourceSquare:
+                  action === 'finish-arrow'
+                    ? annotationRuntime.sourceSquare
+                    : null,
+                token: annotationRuntime.token,
+              }),
+        cancel: (): boolean => {
+          const snapshot = annotationRuntime.snapshot;
+          if (snapshot === null) {
+            return false;
+          }
+          return annotationRuntime.cancel(undefined, {
+            mode: annotationRuntime.mode,
+            snapshot,
+            sourceSquare: annotationRuntime.sourceSquare,
+            token: annotationRuntime.token,
+          });
+        },
+        enabled:
+          annotationRuntime.snapshot !== null &&
+          activeDragSourceSquare === null,
+        mode: annotationRuntime.mode,
+        sourceSquare: annotationRuntime.sourceSquare,
+        tool: annotationRuntime.snapshot?.tool.type ?? null,
+      }),
+    [activeDragSourceSquare, annotationRuntime],
+  );
+  const accessibilityProps = useBoardAccessibility(
+    model,
+    accessibility,
+    accessibilityMoveInteraction,
+    accessibilitySquareInteraction,
+    accessibilitySpareInteraction,
+    accessibilityAnnotationInteraction,
+  );
   const positionTransition = usePositionTransitionRuntime({
     development,
     dimensions: model.dimensions,
@@ -949,64 +1068,6 @@ export function BoardSurface({
     pendingLifecycle,
   ]);
 
-  const handleAnnotationDraftChange = useCallback(
-    (draft: Readonly<CorrelatedAnnotationDraft> | null): void => {
-      setGestureAnnotationDraft((current) =>
-        current === draft ? current : draft,
-      );
-    },
-    [],
-  );
-  const handleAnnotationCandidate = useCallback(
-    (candidate: Readonly<AnnotationGestureCandidate>): void => {
-      const boardId = model.boardId;
-      const position = model.position;
-      const annotations = model.annotations;
-      const geometry = gestureGeometry;
-      const annotation = candidate.annotation;
-      const annotationSquaresAreCurrent =
-        annotation.type === 'arrow'
-          ? geometry?.visualSquares.includes(annotation.from) === true &&
-            geometry.visualSquares.includes(annotation.to)
-          : geometry?.visualSquares.includes(annotation.square) === true;
-      if (
-        !annotationGestureEnabled ||
-        boardId === null ||
-        position === null ||
-        annotations === null ||
-        geometry === null ||
-        candidate.boardId !== boardId ||
-        candidate.geometryEpoch !== geometry.revision ||
-        candidate.basePositionRevision !== position.revision ||
-        candidate.baseAnnotationRevision !== annotations.revision ||
-        candidate.providerGeometryRevision !== providerGeometryRevision ||
-        candidate.providerLifecycleRevision !== providerLifecycleRevision ||
-        !annotationSquaresAreCurrent
-      ) {
-        return;
-      }
-      annotationOperation.emit({
-        annotation,
-        baseAnnotationRevision: annotations.revision,
-        input: candidate.input,
-        matchingIdsAtBase: findMatchingAnnotationIds(
-          annotations.value,
-          annotation,
-        ),
-        type: 'toggle',
-      });
-    },
-    [
-      annotationGestureEnabled,
-      annotationOperation.emit,
-      gestureGeometry,
-      model.annotations,
-      model.boardId,
-      model.position,
-      providerGeometryRevision,
-      providerLifecycleRevision,
-    ],
-  );
   const handleGestureCandidate = useCallback(
     (candidate: Readonly<BoardGestureIntentCandidate>): void => {
       const boardId = model.boardId;
@@ -1185,10 +1246,7 @@ export function BoardSurface({
             <BoardInteractionController
               {...(annotationGestureEnabled
                 ? {
-                    annotations: model.annotations,
-                    annotationTool: normalizedAnnotationTool,
-                    onAnnotationCandidate: handleAnnotationCandidate,
-                    onAnnotationDraftChange: handleAnnotationDraftChange,
+                    annotationRuntime,
                   }
                 : {})}
               boardId={model.boardId}
