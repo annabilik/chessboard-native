@@ -35,9 +35,11 @@ export function ProviderDragOverlay(): ReactElement | null {
     });
   }, [originReady, originX, originY]);
   const active = snapshot.active;
+  const activeOwner = active?.owner ?? null;
+  const activeGestureToken = active?.gestureToken ?? null;
 
   useLayoutEffect(() => {
-    if (active === null) {
+    if (activeGestureToken === null) {
       originX.value = 0;
       originY.value = 0;
       originReady.value = 0;
@@ -46,8 +48,8 @@ export function ProviderDragOverlay(): ReactElement | null {
     originReady.value = 0;
     measureOrigin();
   }, [
-    active,
-    active?.gestureToken,
+    activeGestureToken,
+    activeOwner,
     measureOrigin,
     originReady,
     originX,
@@ -78,7 +80,11 @@ export function ProviderDragOverlay(): ReactElement | null {
         square={resolveBoardVisualSquare(active.square)}
       />
     ) : (
-      <DragOverlay {...shared} source={active.source} square={active.square} />
+      <DragOverlay
+        {...shared}
+        source={active.source}
+        square={active.targetSquare}
+      />
     );
   return (
     <View

@@ -400,6 +400,12 @@ export interface ChessboardTheme {
   readonly destinationSquare?: StyleProp<ViewStyle>;
   /** Controlled disabled-square paint layered after selected-square paint. */
   readonly disabledSquare?: StyleProp<ViewStyle>;
+  /** Active drop-target paint layered after every other named square state. */
+  readonly dropTarget?: StyleProp<ViewStyle>;
+  /** Active drag-overlay paint layered after static piece paint. */
+  readonly draggingPiece?: StyleProp<ViewStyle>;
+  /** Active board or spare source-ghost paint layered after static piece paint. */
+  readonly draggingPieceGhost?: StyleProp<ViewStyle>;
   /** Notation contrast layered onto light squares. */
   readonly lightSquareNotation?: StyleProp<TextStyle>;
   /** Notation contrast layered onto dark squares. */
@@ -428,6 +434,12 @@ export interface ChessboardStyles {
   readonly destinationSquare?: StyleProp<ViewStyle>;
   /** Controlled disabled-square paint layered after selected-square paint. */
   readonly disabledSquare?: StyleProp<ViewStyle>;
+  /** Active drop-target paint layered after every other named square state. */
+  readonly dropTarget?: StyleProp<ViewStyle>;
+  /** Active drag-overlay paint layered after static piece paint. */
+  readonly draggingPiece?: StyleProp<ViewStyle>;
+  /** Active board or spare source-ghost paint layered after static piece paint. */
+  readonly draggingPieceGhost?: StyleProp<ViewStyle>;
   /** Notation contrast layered onto light squares. */
   readonly lightSquareNotation?: StyleProp<TextStyle>;
   /** Notation contrast layered onto dark squares. */

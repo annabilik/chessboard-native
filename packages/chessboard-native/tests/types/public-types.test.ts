@@ -53,6 +53,9 @@ describe('public data contracts', () => {
       'darkSquareNotation',
       'destinationSquare',
       'disabledSquare',
+      'draggingPiece',
+      'draggingPieceGhost',
+      'dropTarget',
       'fileNotation',
       'lightSquare',
       'lightSquareNotation',
@@ -317,6 +320,9 @@ describe('public data contracts', () => {
       darkSquare: { backgroundColor: '#76543a' },
       destinationSquare: { boxShadow: 'inset 0 0 0 2px green' },
       disabledSquare: { opacity: 0.4 },
+      draggingPiece: { transform: [{ scale: 1.15 }] },
+      draggingPieceGhost: { opacity: 0.35 },
+      dropTarget: { boxShadow: 'inset 0 0 0 1px black' },
       fileNotation: { fontSize: 11 },
       piece: { opacity: 0.9 },
       selectedSquare: { boxShadow: 'inset 0 0 0 2px orange' },
@@ -325,11 +331,14 @@ describe('public data contracts', () => {
     const theme = {
       darkSquare: nativeStyles.darkSquare,
       destinationSquare: nativeStyles.destinationSquare,
+      draggingPiece: nativeStyles.draggingPiece,
+      dropTarget: nativeStyles.dropTarget,
       piece: nativeStyles.piece,
     } satisfies ChessboardTheme;
     const styles = {
       board: [false, nativeStyles.board],
       disabledSquare: nativeStyles.disabledSquare,
+      draggingPieceGhost: nativeStyles.draggingPieceGhost,
       fileNotation: nativeStyles.fileNotation,
       selectedSquare: nativeStyles.selectedSquare,
     } satisfies ChessboardStyles;

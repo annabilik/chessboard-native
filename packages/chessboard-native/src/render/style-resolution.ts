@@ -103,6 +103,9 @@ const THEME_SLOTS = Object.freeze([
   'darkSquareNotation',
   'destinationSquare',
   'disabledSquare',
+  'draggingPiece',
+  'draggingPieceGhost',
+  'dropTarget',
   'fileNotation',
   'lightSquare',
   'lightSquareNotation',
@@ -214,7 +217,10 @@ export function resolveSquareStyle(options: {
   readonly styles?: ChessboardStyles | undefined;
   readonly theme?: ChessboardTheme | undefined;
   readonly state?: Readonly<
-    Pick<SquareVisualState, 'isDestination' | 'isDisabled' | 'isSelected'>
+    Pick<
+      SquareVisualState,
+      'isDestination' | 'isDisabled' | 'isDropTarget' | 'isSelected'
+    >
   >;
   readonly transientStyle?: StyleProp<ViewStyle>;
 }): Readonly<ViewStyle> {
@@ -239,6 +245,9 @@ export function resolveSquareStyle(options: {
     options.state?.isDisabled ? defaultTheme.disabledSquare : undefined,
     options.state?.isDisabled ? options.theme?.disabledSquare : undefined,
     options.state?.isDisabled ? options.styles?.disabledSquare : undefined,
+    options.state?.isDropTarget ? defaultTheme.dropTarget : undefined,
+    options.state?.isDropTarget ? options.theme?.dropTarget : undefined,
+    options.state?.isDropTarget ? options.styles?.dropTarget : undefined,
     options.transientStyle,
   ]);
 }
@@ -254,6 +263,36 @@ export function resolvePieceStyle(
     theme?.piece,
     styles?.piece,
     ...transientStyles,
+  ]);
+}
+
+/** Resolve active drag-overlay paint after the complete static piece chain. */
+export function resolveDraggingPieceStyle(
+  theme: ChessboardTheme | undefined,
+  styles: ChessboardStyles | undefined,
+): Readonly<ViewStyle> {
+  return flattenAndFreeze<ViewStyle>([
+    defaultTheme.piece,
+    theme?.piece,
+    styles?.piece,
+    defaultTheme.draggingPiece,
+    theme?.draggingPiece,
+    styles?.draggingPiece,
+  ]);
+}
+
+/** Resolve active board or spare source-ghost paint after static piece paint. */
+export function resolveDraggingPieceGhostStyle(
+  theme: ChessboardTheme | undefined,
+  styles: ChessboardStyles | undefined,
+): Readonly<ViewStyle> {
+  return flattenAndFreeze<ViewStyle>([
+    defaultTheme.piece,
+    theme?.piece,
+    styles?.piece,
+    defaultTheme.draggingPieceGhost,
+    theme?.draggingPieceGhost,
+    styles?.draggingPieceGhost,
   ]);
 }
 

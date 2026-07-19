@@ -15,6 +15,14 @@ const destinationSquare = Object.freeze({
   boxShadow: 'inset 0 0 0 3px rgba(76, 175, 80, 0.9)',
 });
 const disabledSquare = Object.freeze({ opacity: 0.45 });
+const dropTarget = Object.freeze({
+  boxShadow: 'inset 0px 0px 0px 1px black',
+});
+const draggingPieceScale = Object.freeze({ scale: 1.2 });
+const draggingPiece = Object.freeze({
+  transform: Object.freeze([draggingPieceScale]),
+});
+const draggingPieceGhost = Object.freeze({ opacity: 0.5 });
 const lightSquareNotation = Object.freeze({ color: '#B58863' });
 const darkSquareNotation = Object.freeze({ color: '#F0D9B5' });
 const fileNotation = Object.freeze({
@@ -48,6 +56,9 @@ export const defaultTheme: Readonly<Required<ChessboardTheme>> = Object.freeze({
   darkSquareNotation,
   destinationSquare,
   disabledSquare,
+  draggingPiece,
+  draggingPieceGhost,
+  dropTarget,
   fileNotation,
   lightSquare,
   lightSquareNotation,

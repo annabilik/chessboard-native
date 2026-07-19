@@ -18,8 +18,8 @@ import {
   resolveBoardVisualSquare,
 } from './interaction-piece-visual';
 
-/** Fixed presentation-only lift; public drag styling remains a later API. */
-export const DRAG_OVERLAY_LIFT_SCALE = 1.08;
+/** Pinned native default carried by `defaultTheme.draggingPiece`. */
+export const DRAG_OVERLAY_LIFT_SCALE = 1.2;
 
 export interface DragOverlayWindowOrigin {
   readonly ready: SharedValue<number>;
@@ -59,10 +59,18 @@ export function resolveDragOverlayAnimatedStyle(
   windowOriginX = 0,
   windowOriginY = 0,
   windowOriginReady = 1,
+  draggingPieceTransform?: ViewStyle['transform'],
 ): Readonly<ViewStyle> {
   'worklet';
   const dragging =
     presentation.phase.value === INTERACTION_PRESENTATION_PHASE.DRAG;
+  const activeTransform =
+    dragging && !reducedMotion
+      ? draggingPieceTransform !== undefined &&
+        typeof draggingPieceTransform !== 'string'
+        ? draggingPieceTransform
+        : [{ scale: DRAG_OVERLAY_LIFT_SCALE }]
+      : [];
 
   return {
     opacity: dragging && windowOriginReady === 1 ? 1 : 0,
@@ -75,7 +83,7 @@ export function resolveDragOverlayAnimatedStyle(
         translateY:
           presentation.pointerWindowY.value - windowOriginY - size / 2,
       },
-      { scale: dragging && !reducedMotion ? DRAG_OVERLAY_LIFT_SCALE : 1 },
+      ...activeTransform,
     ],
   };
 }
@@ -107,8 +115,9 @@ export function DragOverlay({
         windowOrigin?.x.value ?? 0,
         windowOrigin?.y.value ?? 0,
         windowOrigin?.ready.value ?? 1,
+        style.transform,
       ),
-    [presentation, reducedMotion, size, windowOrigin],
+    [presentation, reducedMotion, size, style.transform, windowOrigin],
   );
 
   return (

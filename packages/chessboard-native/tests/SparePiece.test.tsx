@@ -45,6 +45,7 @@ interface PanCallbacks {
     success: boolean,
   ) => void;
   readonly onStart?: (event: Readonly<Record<string, number>>) => void;
+  readonly onUpdate?: (event: Readonly<Record<string, number>>) => void;
 }
 
 interface MeasureInWindowView {
@@ -170,6 +171,7 @@ function renderTarget(options: {
   readonly showSpare?: boolean;
   readonly size?: number;
   readonly spareId?: string;
+  readonly sparePieceRenderers?: PieceRenderers;
   readonly targetBoardId?: string;
 }): ReactElement {
   const targetBoardId = options.targetBoardId ?? 'target-board';
@@ -179,6 +181,9 @@ function renderTarget(options: {
         <SparePiece
           disabled={options.disabled ?? false}
           piece={SPARE_PIECE}
+          {...(options.sparePieceRenderers === undefined
+            ? {}
+            : { pieceRenderers: options.sparePieceRenderers })}
           {...(options.size === undefined ? {} : { size: options.size })}
           spareId={options.spareId ?? 'reserve'}
           targetBoardId={targetBoardId}
@@ -429,6 +434,90 @@ describe('SparePiece', () => {
       }),
     );
     expect(currentMove.mock.calls[0]?.[1].signal).toBeInstanceOf(AbortSignal);
+    expect(
+      result.queryAllByTestId(providerOverlayId('target-board'), {
+        includeHiddenElements: true,
+      }),
+    ).toEqual([]);
+  });
+
+  it('publishes only validated spare hover boundaries and renders the source as a target-correlated ghost', async () => {
+    mockBoardWindowBounds();
+    const renderPiece = jest.fn<ReactElement, [PieceRendererProps]>(() => (
+      <View />
+    ));
+    const result = await render(
+      renderTarget({
+        onMoveRequest: moveRequestMock(),
+        sparePieceRenderers: Object.freeze({ wN: renderPiece }),
+      }),
+    );
+    await measureBoard(boardByLabel(result, 'target board'));
+    const callbacks = await beginSpareDrag('reserve');
+    const ghostCalls = (): PieceRendererProps[] =>
+      renderPiece.mock.calls
+        .map(([props]) => props)
+        .filter(({ state }) => state.isGhost);
+    const dragCalls = (): PieceRendererProps[] =>
+      renderPiece.mock.calls
+        .map(([props]) => props)
+        .filter(({ state }) => state.isDragging);
+
+    await waitFor(() => {
+      const initialGhost = ghostCalls().at(-1);
+      expect(initialGhost).toEqual(
+        expect.objectContaining({
+          boardId: 'target-board',
+          source: { kind: 'spare', spareId: 'reserve' },
+          square: null,
+        }),
+      );
+      expect(initialGhost?.state.isGhost).toBe(true);
+      expect(
+        result.getByTestId('chessboard-native:spare:reserve', {
+          includeHiddenElements: true,
+        }),
+      ).toHaveStyle({ opacity: 0.5 });
+    });
+
+    await act(() => {
+      callbacks.onUpdate?.({ absoluteX: 125, absoluteY: 225, x: 50, y: 50 });
+    });
+    await waitFor(() => {
+      expect(ghostCalls().at(-1)?.square).toBeNull();
+      expect(dragCalls().at(-1)?.square).toBe('a2');
+    });
+    const firstBoundaryCallCount = ghostCalls().length;
+    const firstBoundaryOverlayCallCount = dragCalls().length;
+
+    await act(() => {
+      callbacks.onUpdate?.({ absoluteX: 150, absoluteY: 250, x: 75, y: 75 });
+    });
+    expect(ghostCalls()).toHaveLength(firstBoundaryCallCount);
+    expect(dragCalls()).toHaveLength(firstBoundaryOverlayCallCount);
+
+    await act(() => {
+      callbacks.onUpdate?.({ absoluteX: 225, absoluteY: 225, x: 150, y: 50 });
+    });
+    await waitFor(() => {
+      expect(ghostCalls().at(-1)?.square).toBeNull();
+      expect(dragCalls().at(-1)?.square).toBe('b2');
+    });
+
+    await act(() => {
+      callbacks.onUpdate?.({ absoluteX: 350, absoluteY: 250, x: 275, y: 75 });
+    });
+    await waitFor(() => {
+      expect(ghostCalls().at(-1)?.square).toBeNull();
+      expect(dragCalls().at(-1)?.square).toBeNull();
+    });
+
+    await act(() => {
+      callbacks.onFinalize?.(
+        { absoluteX: 350, absoluteY: 250, x: 275, y: 75 },
+        false,
+      );
+    });
     expect(
       result.queryAllByTestId(providerOverlayId('target-board'), {
         includeHiddenElements: true,

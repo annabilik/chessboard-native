@@ -99,8 +99,9 @@ parent to set an explicit width.
 
 The default set contains twelve original interim geometric chess pieces.
 Consumers can replace it with a visual-only renderer map keyed by the open
-`pieceType` vocabulary. Theme, instance, and canonical per-square styles are
-also declarative. The board is one adjustable accessibility control with an
+`pieceType` vocabulary. Theme, instance, canonical per-square styles, transient
+drag paint, and custom square content are declarative. The board is one
+adjustable accessibility control with an
 orientation-aware virtual cursor and decorative visual descendants. Controlled
 square and arrow annotations render in below/above-piece SVG planes. Revisioned
 annotation stores can consume immutable operation callbacks with the public pure
@@ -123,9 +124,10 @@ that.
 `ChessboardProvider` adds provider-scoped board identity, one shared transient
 overlay, and stale-safe external-drop measurement. Its public `SparePiece`
 source supports drag and accessible placement on one named board while that
-board's controlled move callback remains the only position authority. Custom
-square rendering remains future work. Pure controlled-position transition
-planning validates exact-revision hints,
+board's controlled move callback remains the only position authority. A
+visual-only `renderSquare` receives current controlled and transient context
+inside board-owned measured paint. Pure controlled-position transition planning
+validates exact-revision hints,
 prefers stable piece IDs, and treats ambiguous anonymous matches as exits and
 enters. The mounted Reanimated runtime consumes only those detached operations,
 samples presentation-only continuity across interruption and geometry changes,
@@ -335,24 +337,94 @@ const Fairy: PieceRenderer = ({ size }) => (
 />;
 ```
 
-Resolved static styles follow built-in defaults, `theme`, instance `styles`,
-and canonical `squareStyles` in that order. Controlled state paint follows
-those layers in the fixed order destination, selected, then disabled. Each
-state slot resolves its built-in default, `theme`, and instance `styles` before
-the next slot is applied. Per-square styles and selection IDs are canonical and
-do not rotate when orientation changes. The default state paint uses inset
-shadow or opacity and never changes square geometry.
+Resolved square styles follow this fixed order:
 
-Custom piece content receives the resolved piece style for inspection or
+1. Built-in base and light/dark paint.
+2. `theme` base and light/dark paint.
+3. Instance `styles` base and light/dark paint.
+4. Canonical `squareStyles[square]` paint.
+5. Destination, selected, disabled, and drop-target state slots, in that order.
+
+Each state slot resolves its built-in default, `theme`, and instance `styles`
+before the next slot is applied, making `dropTarget` the final named square
+state. Per-square styles, pieces, and selection IDs are canonical and do not
+rotate when orientation changes. The defaults use inset shadow or opacity and
+never change square geometry.
+
+Static piece paint resolves built-in `piece`, `theme.piece`, then
+`styles.piece`. The active provider drag overlay adds built-in,
+`theme.draggingPiece`, and `styles.draggingPiece` paint after that complete
+chain. Its default 1.2 scale is composed after the pointer translations on the
+UI thread; reduced motion suppresses the lift transform. The active source
+ghost similarly adds the `draggingPieceGhost` chain, whose default opacity is
+0.5. The named target board's resolved drag and ghost slots apply to both
+board-origin and spare-origin drags. `SparePiece.style` remains its resting base
+paint; once its provider lease is active, the target board owns the overlay and
+ghost presentation.
+
+`renderSquare` is called for every measured canonical square. Its frozen props
+contain `boardId`, `square`, the current controlled `piece` or `null`, the
+smaller measured cell dimension as `size`, the resolved frozen `style`, and a
+frozen `state` with these flags:
+
+- `isSelected`, `isDestination`, and `isDisabled` come from the current
+  controlled selection.
+- `isPressed` is current gesture presentation and clears when that correlated
+  press ends or becomes stale.
+- `isDropTarget` is the current correlated board or spare hover square. It is
+  visual feedback only; verified release and `onMoveRequest` still authorize
+  the move.
+- `isPendingSource` and `isPendingTarget` describe the current deciding or
+  awaiting-controlled-commit move presentation.
+
+The board always owns and paints the square frame. It applies `style` exactly
+once, then mounts custom content inside a pointerless,
+accessibility-hidden wrapper. The renderer receives no handlers and cannot
+replace measurement, hit testing, gestures, or the single board accessibility
+control. Returning `null` leaves the resolved fallback paint visible.
+
+```tsx
+import { Chessboard, type SquareRenderer } from '@vibechess/chessboard-native';
+import { View } from 'react-native';
+
+const SquareContent: SquareRenderer = ({ size, state }) =>
+  state.isPendingTarget ? (
+    <View
+      style={{
+        backgroundColor: '#ffffff',
+        borderRadius: size * 0.06,
+        height: size * 0.12,
+        opacity: 0.8,
+        width: size * 0.12,
+      }}
+    />
+  ) : null;
+
+<Chessboard
+  boardId="styled-board"
+  onMoveRequest={onMoveRequest}
+  position={position}
+  renderSquare={SquareContent}
+  styles={{
+    draggingPiece: { opacity: 0.9, transform: [{ scale: 1.12 }] },
+    draggingPieceGhost: { opacity: 0.3 },
+    dropTarget: { backgroundColor: '#b8d8ba' },
+  }}
+/>;
+```
+
+Custom piece content receives its resolved piece style for inspection or
 derived artwork, while the board-owned wrapper applies that style exactly once.
 Renderers should not blindly apply it again. Renderer props contain no event or
 accessibility handlers. Their discriminated `source` is
 `{ kind: 'board', square }` for a controlled board piece and
 `{ kind: 'spare', spareId }` for a public spare. `square` is non-null for board
-sources and nullable for spare sources; `SparePiece` and its external overlay
-pass `null`. The corresponding board or spare host keeps the visual subtree
-non-interactive and decorative. Host measurement and absolute square/piece
-wrapper rectangles remain structural and cannot be replaced by visual styles.
+sources and nullable for spare sources. A resting `SparePiece` and its source
+ghost pass `null`; its active provider overlay passes the current canonical
+target square while over the board and `null` off-board. The corresponding
+board or spare host keeps the visual subtree non-interactive and decorative.
+Host measurement and absolute square/piece wrapper rectangles remain structural
+and cannot be replaced by visual styles.
 
 Board display, width, height, aspect ratio, flex sizing, margins, insets,
 padding, transforms, box sizing, border widths, and pointer-event modes are

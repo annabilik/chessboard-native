@@ -185,14 +185,14 @@ export default function GalleryIndex() {
           long-press, two-finger, and single-control accessibility input. Packed
           native validation covers Android annotation actions and the static iOS
           surface; physical VoiceOver remains the manual action check. Custom
-          square rendering and transient public style mappings remain later
-          slices. Ordinary and special controlled transitions, rapid-update
-          continuity, geometry and orientation rebasing, reduced motion, and
-          pending-to-commit handoff now have a focused lab. Controlled selection
-          activation, move requests, provider coordination, and external spare
-          placement have focused examples. The interaction-hardening lab adds
-          native ScrollView, clipping, geometry, lifecycle, and render/callback
-          evidence.
+          square rendering and transient public style mappings now have a
+          focused visual-customization lab. Ordinary and special controlled
+          transitions, rapid-update continuity, geometry and orientation
+          rebasing, reduced motion, and pending-to-commit handoff now have a
+          focused lab. Controlled selection activation, move requests, provider
+          coordination, and external spare placement have focused examples. The
+          interaction-hardening lab adds native ScrollView, clipping, geometry,
+          lifecycle, and render/callback evidence.
         </Text>
 
         <Link asChild href="/controlled-annotations">
@@ -241,6 +241,14 @@ export default function GalleryIndex() {
           <Pressable style={styles.routeLink}>
             <Text style={styles.routeLinkText}>
               Open controlled move requests
+            </Text>
+          </Pressable>
+        </Link>
+
+        <Link asChild href="/visual-customization">
+          <Pressable style={styles.routeLink}>
+            <Text style={styles.routeLinkText}>
+              Open visual-customization lab
             </Text>
           </Pressable>
         </Link>

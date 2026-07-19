@@ -3,6 +3,8 @@ import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { defaultTheme } from '../../src';
 import {
   resolveBoardStyle,
+  resolveDraggingPieceGhostStyle,
+  resolveDraggingPieceStyle,
   resolveNotationStyle,
   resolvePieceStyle,
   resolveSquareStyle,
@@ -40,6 +42,28 @@ describe('native visual defaults', () => {
       boxShadow: 'inset 0 0 0 3px rgba(255, 170, 0, 0.95)',
     });
     expect(defaultTheme.disabledSquare).toEqual({ opacity: 0.45 });
+  });
+
+  it('[PARITY-EXPORT-DEFAULT-DROP-SQUARE-STYLE] exports the pinned drop-target default', () => {
+    expect(defaultTheme.dropTarget).toEqual({
+      boxShadow: 'inset 0px 0px 0px 1px black',
+    });
+  });
+
+  it('[PARITY-EXPORT-DEFAULT-DRAGGING-PIECE-STYLE] exports the pinned dragging-piece default', () => {
+    const draggingPiece = StyleSheet.flatten<ViewStyle>(
+      defaultTheme.draggingPiece,
+    );
+
+    expect(defaultTheme.draggingPiece).toEqual({
+      transform: [{ scale: 1.2 }],
+    });
+    expect(Object.isFrozen(draggingPiece.transform)).toBe(true);
+    expect(Object.isFrozen(draggingPiece.transform?.[0])).toBe(true);
+  });
+
+  it('[PARITY-EXPORT-DEFAULT-DRAGGING-PIECE-GHOST-STYLE] exports the pinned source-ghost default', () => {
+    expect(defaultTheme.draggingPieceGhost).toEqual({ opacity: 0.5 });
   });
 
   it('[PARITY-EXPORT-DEFAULT-DARK-SQUARE-NOTATION-STYLE] exports dark-square contrast', () => {
@@ -181,6 +205,7 @@ describe('native style resolution', () => {
       state: {
         isDestination: true,
         isDisabled: true,
+        isDropTarget: false,
         isSelected: true,
       },
       styles: {
@@ -210,6 +235,7 @@ describe('native style resolution', () => {
       state: {
         isDestination: false,
         isDisabled: false,
+        isDropTarget: false,
         isSelected: false,
       },
       styles: {
@@ -221,6 +247,62 @@ describe('native style resolution', () => {
 
     expect(resolved.opacity).toBeUndefined();
     expect(resolved.boxShadow).toBeUndefined();
+  });
+
+  it('[PARITY-OPTION-DROP-SQUARE-STYLE] applies instance drop-target paint after its theme', () => {
+    const resolved = resolveSquareStyle({
+      isLight: true,
+      square: 'e4',
+      squareStyles: {
+        e4: { boxShadow: 'inset 0 0 0 2px static', opacity: 0.9 },
+      },
+      state: {
+        isDestination: true,
+        isDisabled: true,
+        isDropTarget: true,
+        isSelected: true,
+      },
+      styles: {
+        disabledSquare: { opacity: 0.25 },
+        dropTarget: {
+          boxShadow: 'inset 0 0 0 6px instance-drop',
+          opacity: 0.95,
+        },
+        selectedSquare: { boxShadow: 'inset 0 0 0 4px selected' },
+      },
+      theme: {
+        dropTarget: { boxShadow: 'inset 0 0 0 5px theme-drop' },
+      },
+    });
+
+    expect(resolved).toEqual(
+      expect.objectContaining({
+        boxShadow: 'inset 0 0 0 6px instance-drop',
+        opacity: 0.95,
+      }),
+    );
+  });
+
+  it('[PARITY-BEHAVIOR-B45] gives drop-target paint final square-state precedence', () => {
+    const resolved = resolveSquareStyle({
+      isLight: true,
+      square: 'e4',
+      squareStyles: { e4: { opacity: 0.9 } },
+      state: {
+        isDestination: true,
+        isDisabled: true,
+        isDropTarget: true,
+        isSelected: true,
+      },
+      styles: {
+        destinationSquare: { opacity: 0.8 },
+        disabledSquare: { opacity: 0.7 },
+        dropTarget: { opacity: 0.4 },
+        selectedSquare: { opacity: 0.6 },
+      },
+    });
+
+    expect(resolved.opacity).toBe(0.4);
   });
 
   it('[PARITY-OPTION-DARK-SQUARE-NOTATION-STYLE] applies dark-square notation contrast', () => {
@@ -313,6 +395,55 @@ describe('native style resolution', () => {
     );
     expect(consumerPieceStyle).toEqual({ opacity: 0.6 });
     expect(Object.isFrozen(consumerPieceStyle)).toBe(false);
+  });
+
+  it('[PARITY-OPTION-DRAGGING-PIECE-STYLE] resolves dragging paint after the complete static piece chain', () => {
+    const themePiece = { backgroundColor: '#112233', opacity: 0.8 };
+    const instancePiece = { borderRadius: 4, opacity: 0.7 };
+    const themeDrag = { opacity: 0.9, transform: [{ scale: 1.1 }] };
+    const instanceDrag = { opacity: 0.6, transform: [{ rotate: '5deg' }] };
+
+    const dragging = resolveDraggingPieceStyle(
+      { draggingPiece: themeDrag, piece: themePiece },
+      { draggingPiece: instanceDrag, piece: instancePiece },
+    );
+
+    expect(dragging).toEqual({
+      alignItems: 'center',
+      backgroundColor: '#112233',
+      borderRadius: 4,
+      justifyContent: 'center',
+      opacity: 0.6,
+      transform: [{ rotate: '5deg' }],
+    });
+    expect(Object.isFrozen(dragging)).toBe(true);
+    expect(themePiece).toEqual({ backgroundColor: '#112233', opacity: 0.8 });
+    expect(instanceDrag).toEqual({
+      opacity: 0.6,
+      transform: [{ rotate: '5deg' }],
+    });
+  });
+
+  it('[PARITY-OPTION-DRAGGING-PIECE-GHOST-STYLE] resolves source-ghost paint after the complete static piece chain', () => {
+    const themePiece = { backgroundColor: '#112233', opacity: 0.8 };
+    const instancePiece = { borderRadius: 4, opacity: 0.7 };
+    const themeGhost = { opacity: 0.4 };
+    const instanceGhost = { opacity: 0.3 };
+    const ghost = resolveDraggingPieceGhostStyle(
+      { draggingPieceGhost: themeGhost, piece: themePiece },
+      { draggingPieceGhost: instanceGhost, piece: instancePiece },
+    );
+
+    expect(ghost).toEqual({
+      alignItems: 'center',
+      backgroundColor: '#112233',
+      borderRadius: 4,
+      justifyContent: 'center',
+      opacity: 0.3,
+    });
+    expect(Object.isFrozen(ghost)).toBe(true);
+    expect(themePiece).toEqual({ backgroundColor: '#112233', opacity: 0.8 });
+    expect(instanceGhost).toEqual({ opacity: 0.3 });
   });
 
   it('keeps defaultTheme idempotent at responsive and full notation sizes', () => {

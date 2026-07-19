@@ -73,7 +73,11 @@ controlled position. The package includes an original interim geometric set
 for the twelve standard chess pieces, also available from the focused `/pieces`
 export; a supplied `pieceRenderers` map replaces that set as a whole and
 supports any open `pieceType`. Theme, instance, and canonical per-square styles
-use one documented precedence chain. Consumers set an explicit width by
+use one documented precedence chain. Public drop-target, dragging-piece, and
+source-ghost slots style the correlated transient drag presentation. A
+visual-only `renderSquare` receives frozen resolved paint, the current
+controlled piece, measured size, and current interaction flags without becoming
+another gesture or accessibility surface. Consumers set an explicit width by
 constraining the parent. The P1.5 accessibility prototype adds an
 orientation-aware virtual cursor, native adjustable/directional navigation,
 current controlled square values, correlated announcements, and the centralized
@@ -99,9 +103,10 @@ measured runtime with `input: "accessibility"`. Annotation actions replace
 ordinary accessible move/square activation, while selected spares and already
 pending moves retain precedence. The consumer's next annotation prop remains
 the only persistent result. Keyboard annotation input remains future work.
-Controlled destination, selected, and disabled square paint now follows
-canonical `squareStyles` without changing hit geometry. Custom square renderers
-remain later work.
+Controlled destination, selected, disabled, and current drop-target square
+paint follows canonical `squareStyles` without changing hit geometry. Custom
+square content remains inside the board-owned pointerless measured paint, so a
+null renderer result keeps the resolved fallback square visible.
 Phase 2 has a pure interaction reducer, board-level RNGH adapter,
 mounted move-request executor, an accessible non-drag path, and controlled
 square activation.

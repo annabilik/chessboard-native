@@ -18,6 +18,9 @@ import {
 } from '../../src/render/piece-layer';
 
 const EMPTY_STYLE: Readonly<ViewStyle> = Object.freeze({});
+const DEFAULT_GHOST_STYLE: Readonly<ViewStyle> = Object.freeze({
+  opacity: 0.5,
+});
 
 function currentPosition(
   value: PositionObject,
@@ -110,6 +113,85 @@ describe('measured piece projection', () => {
 });
 
 describe('piece renderer resolution and composition', () => {
+  it('gives active source ghosts the resolved ghost style while pending sources keep their internal presentation', async () => {
+    const calls: PieceRendererProps[] = [];
+    const Renderer: PieceRenderer = (props) => {
+      calls.push(props);
+      return <View testID={`transient-${props.square ?? 'spare'}`} />;
+    };
+    const layout = createBoardSurfaceLayout(
+      { height: 80, width: 160 },
+      { columns: 2, rows: 1 },
+      'white',
+    );
+    const staticStyle = Object.freeze<ViewStyle>({
+      backgroundColor: '#112233',
+      opacity: 0.8,
+    });
+    const ghostStyle = Object.freeze<ViewStyle>({
+      backgroundColor: '#445566',
+      opacity: 0.5,
+      transform: [{ scale: 4 }],
+    });
+    const result = await render(
+      <PieceLayer
+        boardId="transient-styles"
+        dragSourceSquare="a1"
+        draggingPieceGhostStyle={ghostStyle}
+        layout={layout}
+        pendingSourceSquare="b1"
+        pieceRenderers={{ token: Renderer }}
+        position={currentPosition(
+          frozenPosition({
+            a1: { pieceType: 'token' },
+            b1: { pieceType: 'token' },
+          }),
+        )}
+        style={staticStyle}
+      />,
+    );
+
+    const dragArtwork = nodeByTestId(rootOf(result), 'transient-a1');
+    const pendingArtwork = nodeByTestId(rootOf(result), 'transient-b1');
+    const dragHost = dragArtwork?.parent ?? null;
+    const pendingHost = pendingArtwork?.parent ?? null;
+    if (dragHost === null || pendingHost === null) {
+      throw new Error('Expected board-owned transient piece hosts.');
+    }
+    expect(
+      StyleSheet.flatten<ViewStyle>(
+        dragHost.props['style'] as StyleProp<ViewStyle>,
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        backgroundColor: '#445566',
+        opacity: 0.5,
+        transform: undefined,
+      }),
+    );
+    expect(
+      StyleSheet.flatten<ViewStyle>(
+        pendingHost.props['style'] as StyleProp<ViewStyle>,
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        backgroundColor: '#112233',
+        opacity: 0.45,
+      }),
+    );
+
+    const dragCall = calls.find(({ square }) => square === 'a1');
+    const pendingCall = calls.find(({ square }) => square === 'b1');
+    expect(dragCall?.style).toBe(ghostStyle);
+    expect(dragCall?.state).toEqual(
+      expect.objectContaining({ isGhost: true, isPending: false }),
+    );
+    expect(pendingCall?.style).toBe(staticStyle);
+    expect(pendingCall?.state).toEqual(
+      expect.objectContaining({ isGhost: true, isPending: true }),
+    );
+  });
+
   it('[PARITY-OPTION-PIECES] uses a supplied renderer map as a whole replacement', async () => {
     const calls: PieceRendererProps[] = [];
     const CustomPawn: PieceRenderer = (props) => {
@@ -129,6 +211,7 @@ describe('piece renderer resolution and composition', () => {
     const result = await render(
       <PieceLayer
         boardId="replacement"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
         layout={layout}
         pieceRenderers={renderers}
         position={currentPosition(
@@ -191,6 +274,7 @@ describe('piece renderer resolution and composition', () => {
     const result = await render(
       <PieceLayer
         boardId="custom-board"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
         layout={layout}
         pieceRenderers={renderers}
         position={currentPosition(
@@ -288,6 +372,7 @@ describe('piece renderer resolution and composition', () => {
     const result = await render(
       <PieceLayer
         boardId="component-types"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
         layout={layout}
         pieceRenderers={renderers}
         position={currentPosition(
@@ -355,6 +440,7 @@ describe('piece renderer resolution and composition', () => {
     const result = await render(
       <PieceLayer
         boardId="memo"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
         layout={layout}
         pieceRenderers={renderers}
         position={first}
@@ -366,6 +452,7 @@ describe('piece renderer resolution and composition', () => {
     await result.rerender(
       <PieceLayer
         boardId="memo"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
         layout={layout}
         pieceRenderers={renderers}
         position={currentPosition(
@@ -380,6 +467,7 @@ describe('piece renderer resolution and composition', () => {
     await result.rerender(
       <PieceLayer
         boardId="memo"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
         layout={layout}
         pieceRenderers={renderers}
         position={null}
@@ -391,6 +479,7 @@ describe('piece renderer resolution and composition', () => {
     await result.rerender(
       <PieceLayer
         boardId="memo"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
         layout={layout}
         pieceRenderers={renderers}
         position={currentPosition(

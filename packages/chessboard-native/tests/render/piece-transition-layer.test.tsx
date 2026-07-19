@@ -19,6 +19,9 @@ import {
 } from '../../src/render/piece-layer';
 
 const EMPTY_STYLE: Readonly<ViewStyle> = Object.freeze({});
+const DEFAULT_GHOST_STYLE: Readonly<ViewStyle> = Object.freeze({
+  opacity: 0.5,
+});
 
 function testSharedValue(initialValue: number): SharedValue<number> {
   let value = initialValue;
@@ -334,6 +337,7 @@ describe('mounted piece transition projection', () => {
     const result = await render(
       <PieceLayer
         boardId="move"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
         layout={layout}
         pieceRenderers={{ token: Probe }}
         position={currentPosition({
@@ -358,6 +362,7 @@ describe('mounted piece transition projection', () => {
     const halfwayResult = await render(
       <PieceLayer
         boardId="move"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
         layout={layout}
         pieceRenderers={{ token: Probe }}
         position={currentPosition({
@@ -418,6 +423,7 @@ describe('mounted piece transition projection', () => {
     const result = await render(
       <PieceLayer
         boardId="capture"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
         layout={layout}
         pieceRenderers={{ token: Probe }}
         position={currentPosition({
@@ -452,6 +458,7 @@ describe('mounted piece transition projection', () => {
     const progressedResult = await render(
       <PieceLayer
         boardId="capture"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
         layout={layout}
         pieceRenderers={{ token: Probe }}
         position={currentPosition({
@@ -609,6 +616,7 @@ describe('mounted piece transition projection', () => {
     const result = await render(
       <PieceLayer
         boardId="promotion"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
         layout={layout}
         pieceRenderers={{ captured: Probe, pawn: Probe, promoted: Probe }}
         position={currentPosition({
@@ -661,6 +669,7 @@ describe('mounted piece transition projection', () => {
     const result = await render(
       <PieceLayer
         boardId="decorative"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
         layout={layout}
         pieceRenderers={{ token: Probe }}
         position={currentPosition({})}

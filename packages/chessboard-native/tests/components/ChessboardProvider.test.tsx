@@ -249,6 +249,63 @@ describe('ChessboardProvider', () => {
     ).not.toBeNull();
   });
 
+  it('prevents an unregistered duplicate board from rewriting the active drag style lease', async () => {
+    const onError = onErrorMock();
+    const runtime: RuntimeCapture = { current: null };
+    const result = await render(
+      <ChessboardProvider>
+        <RuntimeProbe capture={(value) => (runtime.current = value)} />
+        <ChessboardRuntime
+          accessibility={{ boardLabel: 'registered styled board' }}
+          boardId="duplicate-styled"
+          development={false}
+          dimensions={{ columns: 2, rows: 2 }}
+          onMoveRequest={() => ({ status: 'rejected' })}
+          pieceRenderers={PIECE_RENDERERS}
+          position={{
+            revision: 1,
+            value: { a2: { id: 'registered-token', pieceType: 'token' } },
+          }}
+          styles={{ draggingPiece: { backgroundColor: '#117744' } }}
+        />
+        <ChessboardRuntime
+          accessibility={{ boardLabel: 'conflicting styled board' }}
+          boardId="duplicate-styled"
+          development={false}
+          dimensions={{ columns: 2, rows: 2 }}
+          onError={onError}
+          onMoveRequest={() => ({ status: 'rejected' })}
+          pieceRenderers={PIECE_RENDERERS}
+          position={{
+            revision: 1,
+            value: { a2: { id: 'conflicting-token', pieceType: 'token' } },
+          }}
+          styles={{ draggingPiece: { backgroundColor: '#aa2244' } }}
+        />
+      </ChessboardProvider>,
+    );
+    await waitFor(() => {
+      expect(onError).toHaveBeenCalledTimes(1);
+    });
+    await measure(boardByLabel(result, 'registered styled board'));
+    await measure(boardByLabel(result, 'conflicting styled board'));
+
+    const callbacks = await beginDrag('duplicate-styled');
+    await waitFor(() => {
+      expect(
+        capturedRuntime(runtime).drag.getSnapshot().active?.style
+          .backgroundColor,
+      ).toBe('#117744');
+    });
+
+    await act(() => {
+      callbacks.onFinalize?.(
+        { absoluteX: 35, absoluteY: 25, x: 35, y: 25 },
+        false,
+      );
+    });
+  });
+
   it('throws the typed duplicate during development instead of committing a conflicting board', async () => {
     await expect(
       render(

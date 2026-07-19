@@ -63,8 +63,15 @@ export type BoardGestureSignal =
       readonly type: 'drag-end';
     })
   | (BoardGestureSignalBase & {
+      readonly targetSquare: SquareId | null;
+      readonly type: 'drag-target';
+    })
+  | (BoardGestureSignalBase & {
       readonly reason: 'second-finger' | 'user';
       readonly type: 'drag-cancel';
+    })
+  | (BoardGestureSignalBase & {
+      readonly type: 'press-start' | 'press-end';
     })
   | (BoardGestureSignalBase & {
       readonly annotationRevision: Revision | null;
@@ -107,6 +114,8 @@ interface BoardGestureLayerProps {
   readonly presentation: InteractionPresentationSharedValues;
   readonly resetKey: string;
   readonly selectionRevision: Revision | null;
+  readonly trackDragTarget?: boolean;
+  readonly trackPress?: boolean;
 }
 
 /** Stable board-owned native test identifiers for deterministic adapter tests. */
@@ -164,6 +173,7 @@ function createBoardGestures(options: {
   readonly tapGestureToken: { value: number | null };
   readonly tapAnnotationRevision: { value: Revision | null };
   readonly tapSelectionRevision: { value: Revision | null };
+  readonly tapPressActive: { value: number };
   readonly tapSourceSquare: { value: SquareId | null };
   readonly tapEnabled: boolean;
   readonly testIds: Readonly<BoardGestureTestIds>;
@@ -174,6 +184,8 @@ function createBoardGestures(options: {
   readonly twoFingerRevision: { value: Revision | null };
   readonly twoFingerSourceSquare: { value: SquareId | null };
   readonly twoFingerTargetSquare: { value: SquareId | null };
+  readonly trackDragTarget: boolean;
+  readonly trackPress: boolean;
 }): ComposedGesture {
   const {
     activationDistance,
@@ -201,6 +213,7 @@ function createBoardGestures(options: {
     tapAnnotationRevision,
     tapGestureToken,
     tapSelectionRevision,
+    tapPressActive,
     tapSourceSquare,
     tapEnabled,
     testIds,
@@ -211,6 +224,8 @@ function createBoardGestures(options: {
     twoFingerRevision,
     twoFingerSourceSquare,
     twoFingerTargetSquare,
+    trackDragTarget,
+    trackPress,
   } = options;
   const allocateGestureToken = (): number | null => {
     'worklet';
@@ -335,7 +350,24 @@ function createBoardGestures(options: {
         return;
       }
       updatePointer(event.x, event.y, event.absoluteX, event.absoluteY);
-      presentation.targetSquare.value = hitTest(event.x, event.y);
+      const targetSquare = hitTest(event.x, event.y);
+      if (targetSquare === presentation.targetSquare.value) {
+        return;
+      }
+      presentation.targetSquare.value = targetSquare;
+      const sourceSquare = panSourceSquare.value;
+      const gestureToken = panGestureToken.value;
+      if (trackDragTarget && sourceSquare !== null && gestureToken !== null) {
+        scheduleOnRN(onSignal, {
+          boardId,
+          geometryRevision: geometry.revision,
+          gestureToken,
+          positionRevision,
+          sourceSquare,
+          targetSquare,
+          type: 'drag-target',
+        });
+      }
     })
     .onEnd((event, success) => {
       'worklet';
@@ -394,7 +426,7 @@ function createBoardGestures(options: {
     });
 
   const tap = Gesture.Tap()
-    .enabled(tapEnabled)
+    .enabled(tapEnabled || trackPress)
     .minPointers(1)
     .numberOfTaps(1)
     .maxDistance(activationDistance)
@@ -404,9 +436,11 @@ function createBoardGestures(options: {
       'worklet';
       if (event.allTouches.length !== 1) {
         tapAnnotationRevision.value = null;
-        tapGestureToken.value = null;
         tapSelectionRevision.value = null;
-        tapSourceSquare.value = null;
+        if (tapPressActive.value !== 1) {
+          tapGestureToken.value = null;
+          tapSourceSquare.value = null;
+        }
         stateManager.fail();
       }
     })
@@ -416,6 +450,24 @@ function createBoardGestures(options: {
       tapSourceSquare.value = hitTest(event.x, event.y);
       tapAnnotationRevision.value = currentAnnotationRevision.value;
       tapSelectionRevision.value = currentSelectionRevision.value;
+      const gestureToken = tapGestureToken.value;
+      const sourceSquare = tapSourceSquare.value;
+      tapPressActive.value =
+        trackPress && gestureToken !== null && sourceSquare !== null ? 1 : 0;
+      if (
+        tapPressActive.value === 1 &&
+        gestureToken !== null &&
+        sourceSquare !== null
+      ) {
+        scheduleOnRN(onSignal, {
+          boardId,
+          geometryRevision: geometry.revision,
+          gestureToken,
+          positionRevision,
+          sourceSquare,
+          type: 'press-start',
+        });
+      }
     })
     .onEnd((event, success) => {
       'worklet';
@@ -423,7 +475,24 @@ function createBoardGestures(options: {
       const targetSquare = hitTest(event.x, event.y);
       const gestureToken = tapGestureToken.value;
       if (
+        tapPressActive.value === 1 &&
+        sourceSquare !== null &&
+        gestureToken !== null
+      ) {
+        tapPressActive.value = 0;
+        scheduleOnRN(onSignal, {
+          boardId,
+          geometryRevision: geometry.revision,
+          gestureToken,
+          positionRevision,
+          sourceSquare,
+          type: 'press-end',
+        });
+      }
+      if (
+        tapEnabled &&
         success &&
+        tapSelectionRevision.value === currentSelectionRevision.value &&
         sourceSquare !== null &&
         targetSquare === sourceSquare &&
         gestureToken !== null
@@ -443,6 +512,24 @@ function createBoardGestures(options: {
     })
     .onFinalize(() => {
       'worklet';
+      const gestureToken = tapGestureToken.value;
+      const sourceSquare = tapSourceSquare.value;
+      if (
+        tapPressActive.value === 1 &&
+        gestureToken !== null &&
+        sourceSquare !== null
+      ) {
+        tapPressActive.value = 0;
+        scheduleOnRN(onSignal, {
+          boardId,
+          geometryRevision: geometry.revision,
+          gestureToken,
+          positionRevision,
+          sourceSquare,
+          type: 'press-end',
+        });
+      }
+      tapPressActive.value = 0;
       tapGestureToken.value = null;
       tapAnnotationRevision.value = null;
       tapSourceSquare.value = null;
@@ -822,6 +909,8 @@ export function BoardGestureLayer({
   resetKey,
   selectionRevision,
   tapEnabled = false,
+  trackDragTarget = false,
+  trackPress = false,
 }: BoardGestureLayerProps): ReactElement | null {
   const currentAnnotationRevision = useSharedValue<Revision | null>(
     annotationRevision,
@@ -842,6 +931,7 @@ export function BoardGestureLayer({
   const panSourceSquare = useSharedValue<SquareId | null>(null);
   const tapAnnotationRevision = useSharedValue<Revision | null>(null);
   const tapGestureToken = useSharedValue<number | null>(null);
+  const tapPressActive = useSharedValue(0);
   const tapSelectionRevision = useSharedValue<Revision | null>(null);
   const tapSourceSquare = useSharedValue<SquareId | null>(null);
   const twoFingerActive = useSharedValue(0);
@@ -863,9 +953,11 @@ export function BoardGestureLayer({
     resetKey,
     selectionRevision,
     tapEnabled,
+    trackDragTarget,
+    trackPress,
   ]);
   const gesture = useMemo(() => {
-    if (!annotationEnabled && !dragEnabled && !tapEnabled) {
+    if (!annotationEnabled && !dragEnabled && !tapEnabled && !trackPress) {
       return null;
     }
 
@@ -895,6 +987,7 @@ export function BoardGestureLayer({
       tapAnnotationRevision,
       tapGestureToken,
       tapSelectionRevision,
+      tapPressActive,
       tapSourceSquare,
       tapEnabled,
       testIds,
@@ -905,6 +998,8 @@ export function BoardGestureLayer({
       twoFingerRevision,
       twoFingerSourceSquare,
       twoFingerTargetSquare,
+      trackDragTarget,
+      trackPress,
     });
   }, [
     activationDistance,
@@ -932,6 +1027,7 @@ export function BoardGestureLayer({
     tapAnnotationRevision,
     tapGestureToken,
     tapSelectionRevision,
+    tapPressActive,
     tapSourceSquare,
     tapEnabled,
     testIds,
@@ -942,6 +1038,8 @@ export function BoardGestureLayer({
     twoFingerRevision,
     twoFingerSourceSquare,
     twoFingerTargetSquare,
+    trackDragTarget,
+    trackPress,
   ]);
 
   useLayoutEffect(() => {
@@ -951,10 +1049,13 @@ export function BoardGestureLayer({
   useLayoutEffect(() => {
     currentSelectionRevision.value = selectionRevision;
     tapSelectionRevision.value = null;
-    tapSourceSquare.value = null;
+    if (tapPressActive.value !== 1) {
+      tapSourceSquare.value = null;
+    }
   }, [
     currentSelectionRevision,
     selectionRevision,
+    tapPressActive,
     tapSelectionRevision,
     tapSourceSquare,
   ]);
@@ -972,6 +1073,7 @@ export function BoardGestureLayer({
     panSourceSquare.value = null;
     tapAnnotationRevision.value = null;
     tapGestureToken.value = null;
+    tapPressActive.value = 0;
     tapSelectionRevision.value = null;
     tapSourceSquare.value = null;
     twoFingerActive.value = 0;
@@ -995,6 +1097,7 @@ export function BoardGestureLayer({
       panSourceSquare.value = null;
       tapAnnotationRevision.value = null;
       tapGestureToken.value = null;
+      tapPressActive.value = 0;
       tapSelectionRevision.value = null;
       tapSourceSquare.value = null;
       twoFingerActive.value = 0;
@@ -1025,6 +1128,7 @@ export function BoardGestureLayer({
     tapAnnotationRevision,
     tapEnabled,
     tapGestureToken,
+    tapPressActive,
     tapSelectionRevision,
     tapSourceSquare,
     twoFingerActive,

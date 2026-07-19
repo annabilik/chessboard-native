@@ -1,6 +1,6 @@
 import { useMemo, type ReactElement } from 'react';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { useSharedValue } from 'react-native-reanimated';
+import { useSharedValue, type SharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import {
@@ -8,11 +8,35 @@ import {
   type InteractionPresentationSharedValues,
 } from '../internal/interaction-presentation';
 import { DEFAULT_DRAG_ACTIVATION_DISTANCE } from './board-gesture-layer';
+import { hitTestGesturePoint } from './gesture-hit-test';
+import type { SquareId } from '../public-types';
+
+/** UI-thread-only cached target geometry for one accepted spare drag. */
+export interface SparePieceHoverSharedValues {
+  readonly boundsHeight: SharedValue<number>;
+  readonly boundsWidth: SharedValue<number>;
+  readonly boundsX: SharedValue<number>;
+  readonly boundsY: SharedValue<number>;
+  readonly candidateSquare: SharedValue<SquareId | null>;
+  readonly columns: SharedValue<number>;
+  readonly ready: SharedValue<number>;
+  readonly rows: SharedValue<number>;
+  readonly visualSquares: SharedValue<readonly SquareId[]>;
+}
 
 export type SparePieceGestureSignal =
   | {
       readonly gestureToken: number;
+      readonly pointerWindowX: number;
+      readonly pointerWindowY: number;
       readonly type: 'start';
+    }
+  | {
+      readonly gestureToken: number;
+      readonly pointerWindowX: number;
+      readonly pointerWindowY: number;
+      readonly targetSquare: SquareId | null;
+      readonly type: 'hover';
     }
   | {
       readonly gestureToken: number;
@@ -29,6 +53,7 @@ export type SparePieceGestureSignal =
 interface SparePieceGestureLayerProps {
   readonly children: ReactElement;
   readonly enabled: boolean;
+  readonly hover: Readonly<SparePieceHoverSharedValues>;
   readonly onSignal: (signal: Readonly<SparePieceGestureSignal>) => void;
   readonly presentation: Readonly<InteractionPresentationSharedValues>;
   readonly resetKey: string;
@@ -49,6 +74,7 @@ export function getSparePieceGestureTestId(spareId: string): string {
 export function SparePieceGestureLayer({
   children,
   enabled,
+  hover,
   onSignal,
   presentation,
   resetKey,
@@ -87,6 +113,40 @@ export function SparePieceGestureLayer({
         ? absoluteY
         : Number.NaN;
     };
+    const updateHover = (
+      absoluteX: number,
+      absoluteY: number,
+      gestureToken: number,
+    ): void => {
+      'worklet';
+      if (
+        hover.ready.value !== 1 ||
+        !Number.isFinite(absoluteX) ||
+        !Number.isFinite(absoluteY)
+      ) {
+        return;
+      }
+      const targetSquare = hitTestGesturePoint(
+        absoluteX - hover.boundsX.value,
+        absoluteY - hover.boundsY.value,
+        hover.boundsWidth.value,
+        hover.boundsHeight.value,
+        hover.columns.value,
+        hover.rows.value,
+        hover.visualSquares.value,
+      );
+      if (targetSquare === hover.candidateSquare.value) {
+        return;
+      }
+      hover.candidateSquare.value = targetSquare;
+      scheduleOnRN(onSignal, {
+        gestureToken,
+        pointerWindowX: absoluteX,
+        pointerWindowY: absoluteY,
+        targetSquare,
+        type: 'hover',
+      });
+    };
 
     return Gesture.Pan()
       .enabled(enabled)
@@ -124,6 +184,8 @@ export function SparePieceGestureLayer({
         updatePointer(event.x, event.y, event.absoluteX, event.absoluteY);
         scheduleOnRN(onSignal, {
           gestureToken,
+          pointerWindowX: presentation.pointerWindowX.value,
+          pointerWindowY: presentation.pointerWindowY.value,
           type: 'start',
         });
       })
@@ -133,6 +195,10 @@ export function SparePieceGestureLayer({
           return;
         }
         updatePointer(event.x, event.y, event.absoluteX, event.absoluteY);
+        const gestureToken = panGestureToken.value;
+        if (gestureToken !== null) {
+          updateHover(event.absoluteX, event.absoluteY, gestureToken);
+        }
       })
       .onEnd((event, success) => {
         'worklet';
@@ -141,6 +207,7 @@ export function SparePieceGestureLayer({
           return;
         }
         updatePointer(event.x, event.y, event.absoluteX, event.absoluteY);
+        updateHover(event.absoluteX, event.absoluteY, gestureToken);
         panActive.value = 0;
         scheduleOnRN(onSignal, {
           gestureToken,
@@ -165,6 +232,7 @@ export function SparePieceGestureLayer({
       });
   }, [
     enabled,
+    hover,
     nextGestureToken,
     onSignal,
     panActive,

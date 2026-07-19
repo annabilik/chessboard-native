@@ -54,6 +54,7 @@ import type {
   PositionProp,
   ReduceMotion,
   SelectionProp,
+  SquareRenderer,
   SquareStyles,
 } from './public-types';
 
@@ -75,6 +76,8 @@ export interface ChessboardProps {
   readonly styles?: ChessboardStyles;
   /** Declarative visual overrides keyed by canonical square ID. */
   readonly squareStyles?: SquareStyles;
+  /** Visual-only square content rendered inside board-owned measured paint. */
+  readonly renderSquare?: SquareRenderer;
   /** Whole-map piece renderer replacement; defaults are not merged into it. */
   readonly pieceRenderers?: PieceRenderers;
   /** The only persistent annotation collection when supplied. */
@@ -374,6 +377,7 @@ function ChessboardRuntimeContent({
         onMoveRequest={props.onMoveRequest}
         onSquareActivate={props.onSquareActivate}
         pieceRenderers={props.pieceRenderers ?? defaultPieceRenderers}
+        renderSquare={props.renderSquare}
         providerRegistration={providerRegistration}
         providerLifecycleRevision={provider.lifecycleRevision}
         showNotation={props.showNotation ?? true}
