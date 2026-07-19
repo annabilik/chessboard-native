@@ -8,6 +8,7 @@ import {
 import { useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { createBoardGestureDetectorKey } from '../internal/board-gesture-detector-key';
 import { DEFAULT_DRAG_ACTIVATION_DISTANCE } from '../internal/gesture-options';
 import {
   INTERACTION_PRESENTATION_PHASE,
@@ -942,20 +943,20 @@ export function BoardGestureLayer({
   const twoFingerSourceSquare = useSharedValue<SquareId | null>(null);
   const twoFingerTargetSquare = useSharedValue<SquareId | null>(null);
   const testIds = useMemo(() => getBoardGestureTestIds(boardId), [boardId]);
-  const detectorKey = JSON.stringify([
+  const detectorKey = createBoardGestureDetectorKey({
     activationDistance,
     annotationEnabled,
     boardId,
     dragEnabled,
     draggableSquares,
-    geometry.revision,
+    geometryRevision: geometry.revision,
     positionRevision,
     resetKey,
     selectionRevision,
     tapEnabled,
     trackDragTarget,
     trackPress,
-  ]);
+  });
   const gesture = useMemo(() => {
     if (!annotationEnabled && !dragEnabled && !tapEnabled && !trackPress) {
       return null;

@@ -23,6 +23,10 @@ import {
   type PieceRendererProps,
   type PieceRenderers,
 } from '../src';
+import {
+  useChessboardProvider,
+  type ChessboardProviderRuntime,
+} from '../src/internal/provider-context';
 import { getSparePieceGestureTestId } from '../src/render/spare-piece-gesture-layer';
 
 type SpareRenderResult = Awaited<ReturnType<typeof render>>;
@@ -232,6 +236,15 @@ function renderTarget(options: {
       )}
     </ChessboardProvider>
   );
+}
+
+function ProviderRuntimeProbe({
+  runtimeRef,
+}: {
+  readonly runtimeRef: { current: ChessboardProviderRuntime | null };
+}): null {
+  runtimeRef.current = useChessboardProvider().runtime;
+  return null;
 }
 
 describe('SparePiece', () => {
@@ -610,6 +623,99 @@ describe('SparePiece', () => {
         includeHiddenElements: true,
       }),
     ).toEqual([]);
+  });
+
+  it('synchronously rejects a retained queued start after another provider source replaces its drag lease', async () => {
+    mockBoardWindowBounds();
+    const onPieceDragStart = jest.fn<
+      ReturnType<OnPieceDragStart>,
+      Parameters<OnPieceDragStart>
+    >();
+    const runtimeRef: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    const result = await render(
+      <ChessboardProvider>
+        <ProviderRuntimeProbe runtimeRef={runtimeRef} />
+        <SparePiece
+          piece={{ id: 'first-knight', pieceType: 'wN' }}
+          spareId="first-reserve"
+          targetBoardId="target-board"
+        />
+        <SparePiece
+          piece={{ id: 'second-bishop', pieceType: 'wB' }}
+          spareId="second-reserve"
+          targetBoardId="target-board"
+        />
+        <Chessboard
+          accessibility={{ boardLabel: 'target board' }}
+          boardId="target-board"
+          dimensions={{ columns: 2, rows: 2 }}
+          onMoveRequest={moveRequestMock()}
+          onPieceDragStart={onPieceDragStart}
+          position={{ revision: 11, value: {} }}
+          reduceMotion="never"
+        />
+      </ChessboardProvider>,
+    );
+    await measureBoard(boardByLabel(result, 'target board'));
+    const firstCallbacks = await beginSpareDrag('first-reserve');
+    const secondCallbacks = sparePanCallbacks('second-reserve');
+
+    await act(() => {
+      secondCallbacks.onBegin?.({
+        absoluteX: 24,
+        absoluteY: 24,
+        x: 24,
+        y: 24,
+      });
+      secondCallbacks.onStart?.({
+        absoluteX: 36,
+        absoluteY: 24,
+        x: 36,
+        y: 24,
+      });
+      firstCallbacks.onBegin?.({
+        absoluteX: 24,
+        absoluteY: 24,
+        x: 24,
+        y: 24,
+      });
+      firstCallbacks.onStart?.({
+        absoluteX: 36,
+        absoluteY: 24,
+        x: 36,
+        y: 24,
+      });
+    });
+
+    expect(onPieceDragStart.mock.calls).toEqual([
+      [
+        {
+          basePositionRevision: 11,
+          boardId: 'target-board',
+          piece: { id: 'first-knight', pieceType: 'wN' },
+          source: { kind: 'spare', spareId: 'first-reserve' },
+        },
+      ],
+      [
+        {
+          basePositionRevision: 11,
+          boardId: 'target-board',
+          piece: { id: 'second-bishop', pieceType: 'wB' },
+          source: { kind: 'spare', spareId: 'second-reserve' },
+        },
+      ],
+    ]);
+    expect(runtimeRef.current?.drag.getSnapshot().active?.source).toEqual({
+      kind: 'spare',
+      spareId: 'second-reserve',
+    });
+    expect(
+      result.queryAllByTestId(providerOverlayId('target-board'), {
+        includeHiddenElements: true,
+      }),
+    ).toHaveLength(1);
   });
 
   it('publishes only validated spare hover boundaries and renders the source as a target-correlated ghost', async () => {

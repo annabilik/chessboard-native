@@ -171,6 +171,56 @@ describe('board interaction controller races', () => {
     );
   });
 
+  it('synchronously rejects a queued board start after another provider source replaces its drag lease', async () => {
+    const runtime: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    const onPieceDragStart = jest.fn(() => true);
+    function RuntimeProbe(): null {
+      runtime.current = useChessboardProvider().runtime;
+      return null;
+    }
+
+    await render(
+      <ChessboardProvider>
+        <RuntimeProbe />
+        <BoardInteractionController
+          boardId="race-board"
+          dragEnabled
+          geometry={geometry(5)}
+          onPieceDragStart={onPieceDragStart}
+          pieceRenderers={{}}
+          pieceStyle={{}}
+          position={controlledPosition(9)}
+        />
+      </ChessboardProvider>,
+    );
+    const retainedSignal = currentSignalHandler();
+    await act(() => {
+      retainedSignal(dragSignal({ gestureToken: 72, type: 'drag-start' }));
+    });
+    const providerRuntime = runtime.current;
+    const active = providerRuntime?.drag.getSnapshot().active ?? null;
+    if (providerRuntime === null || active === null) {
+      throw new Error('Expected the board to own the provider drag lease.');
+    }
+    const replacement = Object.freeze({
+      ...active,
+      boardId: 'replacement-board',
+      gestureToken: 999,
+      onCancel: jest.fn(),
+      owner: Object.freeze({}),
+    });
+
+    await act(() => {
+      providerRuntime.drag.claim(replacement);
+      retainedSignal(dragSignal({ gestureToken: 73, type: 'drag-start' }));
+    });
+
+    expect(onPieceDragStart).toHaveBeenCalledTimes(1);
+    expect(providerRuntime.drag.getSnapshot().active).toBe(replacement);
+  });
+
   it('clears only the current correlated press and invalidates it on a position commit', async () => {
     const onPressedSquareChange = jest.fn();
     const result = await render(
@@ -597,6 +647,55 @@ describe('board interaction controller races', () => {
     ).toEqual([]);
   });
 
+  it('rejects a queued drag start after drag permission is disabled and re-enabled with otherwise identical revisions', async () => {
+    const onPieceDragStart = jest.fn(() => true);
+    const result = await render(
+      <BoardInteractionController
+        boardId="race-board"
+        dragEnabled
+        geometry={geometry(5)}
+        onPieceDragStart={onPieceDragStart}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+      />,
+    );
+    const retainedSignal = currentSignalHandler();
+
+    await result.rerender(
+      <BoardInteractionController
+        boardId="race-board"
+        geometry={geometry(5)}
+        onPieceDragStart={onPieceDragStart}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+      />,
+    );
+    await result.rerender(
+      <BoardInteractionController
+        boardId="race-board"
+        dragEnabled
+        geometry={geometry(5)}
+        onPieceDragStart={onPieceDragStart}
+        pieceRenderers={{}}
+        pieceStyle={{}}
+        position={controlledPosition(9)}
+      />,
+    );
+    await act(() => {
+      retainedSignal(dragSignal({ gestureToken: 96, type: 'drag-start' }));
+    });
+
+    expect(onPieceDragStart).not.toHaveBeenCalled();
+    expect(
+      result.queryAllByTestId(
+        'chessboard-native:race-board:provider-drag-overlay',
+        { includeHiddenElements: true },
+      ),
+    ).toEqual([]);
+  });
+
   it('rejects a tap correlated to a stale selection commit and accepts the current revision', async () => {
     const onCandidate = jest.fn();
     const result = await render(
@@ -625,9 +724,10 @@ describe('board interaction controller races', () => {
         tapEnabled
       />,
     );
+    const currentSignal = currentSignalHandler();
     await act(() => {
       retainedSignal(tapSignal({ gestureToken: 51, selectionRevision: 3 }));
-      retainedSignal(tapSignal({ gestureToken: 52, selectionRevision: 4 }));
+      currentSignal(tapSignal({ gestureToken: 52, selectionRevision: 4 }));
     });
 
     expect(onCandidate).toHaveBeenCalledTimes(1);

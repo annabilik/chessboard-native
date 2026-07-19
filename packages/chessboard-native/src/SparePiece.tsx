@@ -324,6 +324,7 @@ export function SparePiece({
       piece.pieceType,
       provider.geometryRevision,
       provider.lifecycleRevision,
+      providerResetRevision,
       provider.runtime,
       providerTransientRevision,
       reducedMotion,
@@ -407,8 +408,10 @@ export function SparePiece({
       if (drag?.gestureToken !== gestureToken) {
         return;
       }
+      const wasAcceptingSignals = acceptingSignalGeneration.current !== null;
+      acceptingSignalGeneration.current = null;
       finishDrag(drag, false);
-      if (acceptingSignalGeneration.current !== null) {
+      if (wasAcceptingSignals) {
         setProviderResetRevision((revision) => {
           if (revision === Number.MAX_SAFE_INTEGER) {
             throw new RangeError(
