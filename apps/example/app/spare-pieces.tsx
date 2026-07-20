@@ -17,6 +17,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 const BOARD_ID = 'spare-piece-editor';
+const CONTROL_BOARD_ID = 'spare-piece-unrelated-control';
 
 const WIDE_DIMENSIONS = Object.freeze({
   columns: 5,
@@ -25,6 +26,10 @@ const WIDE_DIMENSIONS = Object.freeze({
 const TALL_DIMENSIONS = Object.freeze({
   columns: 3,
   rows: 5,
+}) satisfies BoardDimensions;
+const CONTROL_DIMENSIONS = Object.freeze({
+  columns: 2,
+  rows: 2,
 }) satisfies BoardDimensions;
 
 const WIDE_POSITION = Object.freeze({
@@ -36,6 +41,10 @@ const TALL_POSITION = Object.freeze({
   a1: Object.freeze({ id: 'white-king', pieceType: 'wK' }),
   b3: Object.freeze({ id: 'guide', pieceType: 'fairy' }),
   c5: Object.freeze({ id: 'black-king', pieceType: 'bK' }),
+}) satisfies PositionObject;
+const CONTROL_POSITION = Object.freeze({
+  a1: Object.freeze({ id: 'control-white-king', pieceType: 'wK' }),
+  b2: Object.freeze({ id: 'control-black-king', pieceType: 'bK' }),
 }) satisfies PositionObject;
 
 const Fairy: PieceRenderer = ({ size }) => (
@@ -185,6 +194,21 @@ export default function SparePiecesExample() {
     [decisionMode, palette, position],
   );
 
+  const onControlMoveRequest = useCallback<OnMoveRequest>((intent) => {
+    const spareLeak = intent.source.kind === 'spare';
+    setStatus(
+      spareLeak
+        ? 'Isolation failure: the unrelated control board received a spare placement request.'
+        : 'The unrelated control board rejected its local test move; its position remains unchanged.',
+    );
+    return {
+      status: 'rejected',
+      reason: spareLeak
+        ? 'A targeted spare leaked to the unrelated board'
+        : 'The control board is intentionally non-mutating',
+    };
+  }, []);
+
   const switchDimensions = useCallback((): void => {
     const nextIsTall = dimensions.columns === WIDE_DIMENSIONS.columns;
     const nextDimensions = nextIsTall ? TALL_DIMENSIONS : WIDE_DIMENSIONS;
@@ -276,6 +300,31 @@ export default function SparePiecesExample() {
             {`\n`}
             {status}
           </Text>
+        </View>
+
+        <View style={styles.controlBoardCard}>
+          <Text style={styles.cardTitle}>Unrelated control board</Text>
+          <Text style={styles.instructions}>
+            This non-mutating board has its own rejecting move callback, shares
+            the provider, and is not the palette's named target. After selecting
+            a spare, it must never expose place or cancel-spare actions.
+          </Text>
+          <View style={styles.controlBoard}>
+            <Chessboard
+              accessibility={{
+                boardHint:
+                  'Confirm that selected spare actions remain exclusive to the named variant editor board.',
+                boardLabel: 'Unrelated control board, white orientation',
+              }}
+              boardId={CONTROL_BOARD_ID}
+              dimensions={CONTROL_DIMENSIONS}
+              interactionPermissions={{ accessibility: true, drag: false }}
+              onMoveRequest={onControlMoveRequest}
+              pieceRenderers={EDITOR_RENDERERS}
+              position={CONTROL_POSITION}
+              reduceMotion="always"
+            />
+          </View>
         </View>
       </ChessboardProvider>
 
@@ -390,6 +439,21 @@ const styles = StyleSheet.create({
     gap: 12,
     maxWidth: 520,
     padding: 16,
+    width: '100%',
+  },
+  controlBoard: {
+    alignSelf: 'center',
+    maxWidth: 240,
+    width: '100%',
+  },
+  controlBoardCard: {
+    backgroundColor: '#ffffff',
+    borderColor: '#d9d0c3',
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 12,
+    maxWidth: 520,
+    padding: 14,
     width: '100%',
   },
   description: {

@@ -11,10 +11,9 @@ optional selection; the component never creates a second semantic source of
 truth.
 
 > [!WARNING]
-> The package is in prerelease. This source tree is prepared as
-> `0.1.0-next.2` and includes the `react-chessboard-compat` entry point. Merging
-> a version commit does not publish it, so npm's moving `next` tag can still
-> resolve an older prerelease. Verify the installed version and exports, then
+> The package is in prerelease. npm `next` currently resolves
+> `0.1.0-next.2`, including the `react-chessboard-compat` entry point. The tag
+> moves between prereleases, so verify the installed version and exports, then
 > pin an exact `0.1.0-next.N` version after evaluation.
 
 ## Highlights
@@ -125,8 +124,8 @@ apply the move; the consumer's next `position` prop is the commit.
 | `pieces`                  | You only need the bundled geometric `defaultPieceRenderers` value; renderer types remain on the root API                                                                                   |
 
 > [!IMPORTANT]
-> The prepared `0.1.0-next.2` package exports this compatibility entry point;
-> npm `0.1.0-next.1` does not. After installing `@next`, confirm the resolved
+> Published `0.1.0-next.2` exports this compatibility entry point; npm
+> `0.1.0-next.1` does not. After installing `@next`, confirm the resolved
 > package is `0.1.0-next.2` or a later version that retains the export before
 > using the import below.
 
@@ -149,6 +148,7 @@ replacement.
 - [Support and validation matrix](docs/support-matrix.md)
 - [Pinned parity ledger](docs/parity/react-chessboard-5.10.md)
 - [Accessibility contract](docs/accessibility.md)
+- [Physical accessibility validation](docs/physical-accessibility-validation.md)
 - [Architecture decisions](docs/architecture/invariants.md)
 - [Prerelease runbook](docs/releasing.md)
 
@@ -193,14 +193,15 @@ pnpm verify
 
 Important commands:
 
-| Command               | Purpose                                                                                    |
-| --------------------- | ------------------------------------------------------------------------------------------ |
-| `pnpm check`          | Formatting, lint, docs, types, Jest, tooling, and parity evidence                          |
-| `pnpm verify`         | Complete pull-request gate, including build, API, package, release, and Expo export checks |
-| `pnpm api:check`      | Compare declarations with all three checked-in API reports                                 |
-| `pnpm package:check`  | Inspect one packed archive with Publint and Are The Types Wrong                            |
-| `pnpm parity:verify`  | Rebuild executable parity evidence and validate the ledger                                 |
-| `pnpm example:export` | Export Android and iOS Expo gallery bundles                                                |
+| Command                             | Purpose                                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------------------ |
+| `pnpm check`                        | Formatting, lint, docs, types, Jest, tooling, and parity evidence                          |
+| `pnpm verify`                       | Complete pull-request gate, including build, API, package, release, and Expo export checks |
+| `pnpm accessibility:evidence:check` | Validate the pending physical-evidence record and exact checklist coverage                 |
+| `pnpm api:check`                    | Compare declarations with all three checked-in API reports                                 |
+| `pnpm package:check`                | Inspect one packed archive with Publint and Are The Types Wrong                            |
+| `pnpm parity:verify`                | Rebuild executable parity evidence and validate the ledger                                 |
+| `pnpm example:export`               | Export Android and iOS Expo gallery bundles                                                |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for local workflow and pull-request
 requirements. Security reports follow [SECURITY.md](SECURITY.md).

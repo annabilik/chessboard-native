@@ -1,0 +1,177 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/annabilik/chessboard-native/fixtures/accessibility/physical-results.schema.json",
+  "title": "chessboard-native physical accessibility evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "package",
+    "galleryCommit",
+    "sessions"
+  ],
+  "properties": {
+    "$schema": { "type": "string", "minLength": 1 },
+    "schemaVersion": { "const": 1 },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "sourceCommit",
+        "archiveSha256",
+        "publicationRun"
+      ],
+      "properties": {
+        "name": { "const": "@vibechess/chessboard-native" },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$"
+        },
+        "sourceCommit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "archiveSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "publicationRun": {
+          "type": "string",
+          "pattern": "^https://github\\.com/annabilik/chessboard-native/actions/runs/[0-9]+$"
+        }
+      }
+    },
+    "galleryCommit": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "sessions": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "platform",
+          "assistiveTechnology",
+          "tester",
+          "observedAt",
+          "locale",
+          "device",
+          "runtime",
+          "evidence",
+          "results"
+        ],
+        "properties": {
+          "platform": { "enum": ["android", "ios"] },
+          "assistiveTechnology": { "enum": ["TalkBack", "VoiceOver"] },
+          "tester": { "type": ["string", "null"], "minLength": 1 },
+          "observedAt": {
+            "type": ["string", "null"],
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+          },
+          "locale": { "type": ["string", "null"], "minLength": 1 },
+          "device": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "manufacturer",
+              "model",
+              "osVersion",
+              "architecture",
+              "assistiveTechnologyVersion"
+            ],
+            "properties": {
+              "kind": { "const": "physical" },
+              "manufacturer": {
+                "type": ["string", "null"],
+                "minLength": 1
+              },
+              "model": { "type": ["string", "null"], "minLength": 1 },
+              "osVersion": {
+                "type": ["string", "null"],
+                "minLength": 1
+              },
+              "architecture": {
+                "type": ["string", "null"],
+                "minLength": 1
+              },
+              "assistiveTechnologyVersion": {
+                "type": ["string", "null"],
+                "minLength": 1
+              }
+            }
+          },
+          "runtime": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["expoGoVersion", "reactNativeVersion"],
+            "properties": {
+              "expoGoVersion": {
+                "type": ["string", "null"],
+                "minLength": 1
+              },
+              "reactNativeVersion": {
+                "type": ["string", "null"],
+                "minLength": 1
+              }
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^https://\\S+$"
+            }
+          },
+          "results": {
+            "type": "array",
+            "minItems": 26,
+            "maxItems": 26,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "status", "notes"],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^A11Y-[0-9]{2}$"
+                },
+                "status": {
+                  "enum": ["not-run", "passed", "failed", "blocked"]
+                },
+                "notes": { "type": ["string", "null"], "minLength": 1 }
+              }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": { "platform": { "const": "android" } }
+            },
+            "then": {
+              "properties": {
+                "assistiveTechnology": { "const": "TalkBack" }
+              }
+            }
+          },
+          {
+            "if": { "properties": { "platform": { "const": "ios" } } },
+            "then": {
+              "properties": {
+                "assistiveTechnology": { "const": "VoiceOver" }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

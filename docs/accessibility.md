@@ -306,89 +306,106 @@ Callback and timeout semantics never depend on reduced motion.
 
 ## Manual TalkBack and VoiceOver pass
 
-Run the Expo gallery and test **Accessibility** first, then repeat the
-interaction-specific steps on **Controlled move requests** and **Provider
-coordination**, followed by **Spare pieces**, **Controlled annotations**,
-**Piece callbacks**, **Square press callbacks**, and **Interaction hardening**.
-Test Android and iOS separately:
+Use the [physical validation runbook](./physical-accessibility-validation.md)
+to prepare an isolated gallery from the exact immutable npm archive and record
+both sessions in the versioned evidence file. A structurally valid pending
+record is not a pass; the complete evidence command rejects missing device
+metadata, artifacts, or checks.
 
-1. Enable TalkBack or VoiceOver and focus the board.
-2. Confirm the board is one focus target and visual squares are not separate
-   targets.
-3. Confirm the label, orientation, role, current square, piece, and controlled
-   flags are understandable.
-4. Increment and decrement repeatedly, including across a row and at both ends.
-5. Invoke every available directional action, including at all four edges.
-6. Schedule an orientation change in the gallery, return focus to the board
-   before it fires, then confirm focus remains on the same host and the
-   canonical cursor square stays unchanged.
-7. Repeat the delayed test for controlled position and reduced-motion changes.
-   Confirm the value refreshes without moving the cursor.
-8. Trigger the same announcement text twice with new IDs. Confirm it speaks
-   twice and does not double-speak either ID.
-9. Cycle through `system`, `always`, and `never` with delayed changes; confirm
-   the board remains the same focus target and cursor state is preserved.
-10. On the Accessibility route, confirm there is no activation, move,
-    removal, or annotation action because it has no matching callback boundary
-    and no complete annotation tool/collection/handler gate.
-11. On the controlled-selection route, activate an ordinary occupied or empty
-    square. Confirm exactly one activation callback occurs and the visual
-    selection changes only after the example publishes its next selection prop.
-12. With a selected source on that route, activate a declared destination.
-    Confirm exactly one move request and no square-activation callback occur,
-    then confirm the position and selection change only through controlled prop
-    updates.
-13. Select a square and invoke clear selection. Confirm one
+Run the Expo gallery and test **Accessibility** first, then repeat the
+interaction-specific steps on **Controlled selection**, **Controlled move
+requests**, and **Provider coordination**, followed by **Spare pieces**,
+**Controlled annotations**, **Piece callbacks**, **Square press callbacks**,
+and **Interaction hardening**. Test Android and iOS separately:
+
+1. **A11Y-01:** Enable TalkBack or VoiceOver and focus the board.
+2. **A11Y-02:** Confirm the board is one focus target and visual squares are
+   not separate targets.
+3. **A11Y-03:** Confirm the label, orientation, role, current square, piece,
+   and controlled flags are understandable.
+4. **A11Y-04:** Increment and decrement repeatedly, including across a row and
+   at both ends.
+5. **A11Y-05:** Invoke every available directional action, including at all
+   four edges.
+6. **A11Y-06:** Schedule an orientation change in the gallery, return focus to
+   the board before it fires, then confirm focus remains on the same host and
+   the canonical cursor square stays unchanged.
+7. **A11Y-07:** Repeat the delayed test for controlled position and
+   reduced-motion changes. Confirm the value refreshes without moving the
+   cursor.
+8. **A11Y-08:** Trigger the same announcement text twice with new IDs. Confirm
+   it speaks twice and does not double-speak either ID.
+9. **A11Y-09:** Cycle through `system`, `always`, and `never` with delayed
+   changes; confirm the board remains the same focus target and cursor state is
+   preserved.
+10. **A11Y-10:** On the Accessibility route, confirm there is no activation,
+    move, removal, or annotation action because it has no matching callback
+    boundary and no complete annotation tool/collection/handler gate.
+11. **A11Y-11:** On the controlled-selection route, activate an ordinary
+    occupied or empty square. Confirm exactly one activation callback occurs
+    and the visual selection changes only after the example publishes its next
+    selection prop.
+12. **A11Y-12:** With a selected source on that route, activate a declared
+    destination. Confirm exactly one move request and no square-activation
+    callback occur, then confirm the position and selection change only through
+    controlled prop updates.
+13. **A11Y-13:** Select a square and invoke clear selection. Confirm one
     `clear-selection` activation occurs and the consumer's next selection prop
     removes the selected styling.
-14. On the controlled move-request route, which omits `onSquareActivate`,
-    activate an occupied source, navigate to a target, and activate again.
-    Confirm the transient fallback emits one request and the board remains one
-    focus target while the controlled position updates.
-15. Repeat the fallback with removal and cancellation. Confirm removal sends a
+14. **A11Y-14:** On the controlled move-request route, which omits
+    `onSquareActivate`, activate an occupied source, navigate to a target, and
+    activate again. Confirm the transient fallback emits one request and the
+    board remains one focus target while the controlled position updates.
+15. **A11Y-15:** Repeat the fallback with removal. Then select **Hold next
+    request for cancellation**, submit another move, and invoke **Cancel move**
+    from the board actions while it remains pending. Confirm removal sends a
     null target, cancellation does not update position, and neither action
     creates a square accessibility element.
-16. On the provider-coordination route, move between the two boards. Confirm
-    each board is one distinct adjustable target, each retains its own cursor
-    and value, and the provider and shared drag overlay never become focus
-    targets.
-17. On the spare-pieces route, activate one palette button, focus the named
-    board, move its cursor, and choose place. Confirm the board emits one spare
-    move request and changes only after the example publishes a controlled
-    position update.
-18. Select a different spare and choose cancel. Confirm the palette selection
-    clears, the board position does not change, and an unrelated board never
-    exposes either spare action.
-19. On the controlled-annotation route with the arrow tool, choose **Start
-    arrow**, navigate to a different square, and choose **Finish arrow**.
-    Confirm one `toggle/accessibility` operation is logged and the persistent
-    arrow appears only after the example publishes the next annotation prop.
-20. Start another arrow and choose **Cancel annotation**. Confirm no operation
-    is logged and no persistent annotation is added. Repeat on the source
-    square and confirm **Finish arrow** is not offered there.
-21. Select the square tool and choose **Toggle square annotation** twice on the
-    same cursor square. Confirm the consumer-owned collection adds and then
-    removes the square through two revisioned operations while the board stays
-    one focus target.
-22. While annotation mode is enabled, confirm ordinary activation, removal,
-    and source/target move actions are absent.
-23. On the interaction-hardening route, confirm the clipped source palette and
-    provider overlay add no focus target. Select the spare, background and
-    resume the app, then confirm the transient selection is gone and the board
-    remains one adjustable control.
-24. Repeat after starting a board or spare drag. Confirm no overlay remains
-    focused or visible after resume and the next non-drag accessible placement
-    still emits exactly one controlled request.
-25. On the piece-callback route, activate an occupied board square and the spare
-    queen. Confirm each adds exactly one `onPiecePress` entry with the named
-    board's current revision, the visual position remains unchanged, and the
-    spare still exposes its ordinary place/cancel flow. Confirm no visual piece
-    or square becomes an additional accessibility target.
-26. On the square-press callback route, activate the adjustable board and
-    confirm it does not add a touch `onSquarePressIn` or `onSquarePressOut` log
-    entry. With assistive technology temporarily disabled, press occupied and
-    empty squares and confirm the paired log entries do not select or move a
-    piece.
+16. **A11Y-16:** On the provider-coordination route, move between the two
+    boards. Confirm each board is one distinct adjustable target, each retains
+    its own cursor and value, and the provider and shared drag overlay never
+    become focus targets.
+17. **A11Y-17:** On the spare-pieces route, activate one palette button, focus
+    the named board, move its cursor, and choose place. Confirm the board emits
+    one spare move request and changes only after the example publishes a
+    controlled position update.
+18. **A11Y-18:** Select a different spare, focus the route's unrelated control
+    board while the spare remains selected, and confirm it exposes neither
+    spare action. Return to the named board and choose cancel; confirm the
+    palette selection clears and neither board position changes.
+19. **A11Y-19:** On the controlled-annotation route with the arrow tool, choose
+    **Start arrow**, navigate to a different square, and choose **Finish
+    arrow**. Confirm one `toggle/accessibility` operation is logged and the
+    persistent arrow appears only after the example publishes the next
+    annotation prop.
+20. **A11Y-20:** Start another arrow and choose **Cancel annotation**. Confirm
+    no operation is logged and no persistent annotation is added. Repeat on the
+    source square and confirm **Finish arrow** is not offered there.
+21. **A11Y-21:** Select the square tool and choose **Toggle square annotation**
+    twice on the same cursor square. Confirm the consumer-owned collection adds
+    and then removes the square through two revisioned operations while the
+    board stays one focus target.
+22. **A11Y-22:** While annotation mode is enabled, confirm ordinary activation,
+    removal, and source/target move actions are absent.
+23. **A11Y-23:** On the interaction-hardening route, confirm the clipped source
+    palette and provider overlay add no focus target. Select the spare,
+    background and resume the app, then confirm the transient selection is gone
+    and the board remains one adjustable control.
+24. **A11Y-24:** Temporarily disable assistive technology, start a board or
+    spare native drag, then background and resume the app. Re-enable TalkBack or
+    VoiceOver and confirm no overlay is visible or focusable, the board remains
+    one adjustable target, and the next non-drag accessible placement emits
+    exactly one controlled request.
+25. **A11Y-25:** On the piece-callback route, activate an occupied board square
+    and the spare queen. Confirm each adds exactly one `onPiecePress` entry with
+    the named board's current revision, the visual position remains unchanged,
+    and the spare still exposes its ordinary place/cancel flow. Confirm no
+    visual piece or square becomes an additional accessibility target.
+26. **A11Y-26:** On the square-press callback route, activate the adjustable
+    board and confirm it does not add a touch `onSquarePressIn` or
+    `onSquarePressOut` log entry. With assistive technology temporarily
+    disabled, press occupied and empty squares and confirm the paired log
+    entries do not select or move a piece.
 
 The automated component and native contracts do not replace this
 assistive-technology pass. In particular, XCUITest can audit the static iOS

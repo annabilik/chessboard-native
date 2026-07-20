@@ -3,10 +3,10 @@
 > **Prerelease status:** `0.1.0-next.*` releases are for evaluation and
 > integration testing, not production use; APIs may change before 1.0. The
 > installation command targets whichever published prerelease owns `next`.
-> This source tree is prepared as `0.1.0-next.2`, including the compatibility
-> entry point described below, but merging does not publish it. Verify that an
-> `@next` installation resolves `0.1.0-next.2` or a later version that retains
-> the export before relying on it.
+> npm `next` currently resolves `0.1.0-next.2`, including the compatibility
+> entry point described below. Verify that an `@next` installation resolves
+> `0.1.0-next.2` or a later version that retains the export before relying on
+> it.
 
 ## Installation
 
@@ -128,7 +128,7 @@ import { Chessboard } from '@vibechess/chessboard-native';
 ## `react-chessboard` compatibility subpath
 
 > [!IMPORTANT]
-> The prepared `0.1.0-next.2` package exports this entry point; npm
+> Published `0.1.0-next.2` exports this entry point; npm
 > `0.1.0-next.1` does not. After installing `@next`, confirm the resolved
 > package is `0.1.0-next.2` or a later version that retains
 > `./react-chessboard-compat` before using the import below.
