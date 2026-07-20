@@ -31,6 +31,13 @@ const manifestPath = path.join(
   'fixtures/parity/react-chessboard-5.10.json',
 );
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+const workspacePackage = JSON.parse(
+  await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'),
+);
+const ciWorkflow = await readFile(
+  path.join(repositoryRoot, '.github/workflows/ci.yml'),
+  'utf8',
+);
 const inventory = await collectUpstreamInventory(repositoryRoot, manifest);
 const implementedContractCount = manifest.entries.filter(
   (entry) => entry.status === 'implemented',
@@ -142,13 +149,28 @@ test('derives the complete pinned upstream inventory', () => {
   );
 });
 
-test('accepts the complete planned ledger and schema', async () => {
+test('accepts the complete pinned ledger and schema', async () => {
   await validateManifestSchema(repositoryRoot, manifest);
   assert.deepEqual(validateManifestSemantics(manifest, inventory), []);
   assert.equal(manifest.entries.length, 131);
   assert.equal(
     manifest.entries.filter((entry) => entry.kind === 'behavior').length,
     50,
+  );
+});
+
+test('keeps local verification and pull-request CI on the complete parity gate', () => {
+  assert.match(
+    workspacePackage.scripts.check,
+    /pnpm parity:complete --results coverage\/parity\/jest\.parity\.json/u,
+  );
+  assert.match(
+    workspacePackage.scripts['parity:verify'],
+    /pnpm parity:complete --results coverage\/parity\/jest\.parity\.json/u,
+  );
+  assert.match(
+    ciWorkflow,
+    /run: pnpm parity:complete --results coverage\/parity\/jest\.parity\.json/u,
   );
 });
 
@@ -450,17 +472,12 @@ test('rejects unknown, failed, and skipped executed results', () => {
   assert.match(errors, /is skipped, not passed/);
 });
 
-test('complete mode requires keep/adapt implementation and every execution', () => {
+test('complete mode requires every disposition implemented and every execution', () => {
   const planned = allPlannedManifest();
   const errors = validateResults(planned, [], true);
-  const unfinishedKeepAdapt = planned.entries.filter(
-    (entry) =>
-      entry.status !== 'implemented' &&
-      (entry.disposition === 'keep' || entry.disposition === 'adapt'),
-  ).length;
   assert.equal(
     errors.filter((error) => error.includes('remains planned')).length,
-    unfinishedKeepAdapt,
+    131,
   );
   assert.equal(
     errors.filter((error) => error.includes('has no executed result')).length,
@@ -479,13 +496,14 @@ test('renders deterministic documentation and catches committed drift', async ()
   assert.match(rendered, /<a id="option-allow-auto-scroll"><\/a>/);
 });
 
-test('normal end-to-end check accepts evidence for implemented IDs', async () => {
+test('complete end-to-end check accepts evidence for every implemented disposition', async () => {
   const temporaryDirectory = await mkdtemp(
     path.join(tmpdir(), 'chessboard-native-end-to-end-'),
   );
   try {
     const shardPath = await writeImplementedEvidence(temporaryDirectory);
     const result = await checkParity({
+      complete: true,
       repositoryRoot,
       resultInputs: [shardPath],
     });

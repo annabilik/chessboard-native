@@ -2,9 +2,9 @@
 
 <!-- markdownlint-disable MD013 -->
 
-This is the human-readable reference for the public API on `main`. The
-generated [primary](../packages/chessboard-native/etc/chessboard-native.api.md)
-and
+This is the human-readable reference for the public API on `main`. The generated
+[primary](../packages/chessboard-native/etc/chessboard-native.api.md),
+[pieces](../packages/chessboard-native/etc/chessboard-native.pieces.api.md), and
 [compatibility](../packages/chessboard-native/etc/chessboard-native.react-chessboard-compat.api.md)
 API reports are the exact declaration locks.
 

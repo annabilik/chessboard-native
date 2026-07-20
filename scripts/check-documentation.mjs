@@ -57,6 +57,27 @@ export const requiredApiReferenceSymbols = Object.freeze([
   'ReactChessboardOptions',
 ]);
 
+export const requiredApiReportNames = Object.freeze([
+  'compatibility',
+  'pieces',
+  'primary',
+]);
+
+const expectedForgottenExportSymbols = Object.freeze({
+  compatibility: Object.freeze([]),
+  pieces: Object.freeze([
+    'MoveSource',
+    'PieceData',
+    'PieceRenderer',
+    'PieceRendererProps',
+    'PieceRenderers',
+    'PieceType',
+    'PieceVisualState',
+    'SquareId',
+  ]),
+  primary: Object.freeze([]),
+});
+
 const publicImportSpecifiers = Object.freeze([
   '@vibechess/chessboard-native',
   '@vibechess/chessboard-native/pieces',
@@ -183,9 +204,51 @@ export function validateDocumentationSnapshot({
     );
   }
 
+  const missingApiReports = requiredApiReportNames.filter(
+    (reportName) => !Object.hasOwn(apiReports, reportName),
+  );
+  if (missingApiReports.length > 0) {
+    failures.push(
+      `missing required API reports: ${missingApiReports.join(', ')}`,
+    );
+  }
+
   for (const [reportName, report] of Object.entries(apiReports)) {
     if (report.includes('(undocumented)')) {
       failures.push(`${reportName} contains undocumented public API members`);
+    }
+    if (
+      report.includes('(No @packageDocumentation comment for this package)')
+    ) {
+      failures.push(`${reportName} is missing package documentation`);
+    }
+
+    const extractorDiagnostics = [
+      ...report.matchAll(/\((ae-[a-z0-9-]+)\)/g),
+    ].map((match) => match[1]);
+    const unexpectedDiagnostics = extractorDiagnostics.filter(
+      (diagnostic) => diagnostic !== 'ae-forgotten-export',
+    );
+    if (unexpectedDiagnostics.length > 0) {
+      failures.push(
+        `${reportName} contains unreviewed API Extractor diagnostics: ${[...new Set(unexpectedDiagnostics)].sort().join(', ')}`,
+      );
+    }
+
+    const actualForgottenExports = [
+      ...report.matchAll(/\(ae-forgotten-export\)(?: The symbol "([^"]+)")?/g),
+    ]
+      .map((match) => match[1] ?? '<unparsed>')
+      .sort();
+    const expectedForgottenExports =
+      expectedForgottenExportSymbols[reportName] ?? [];
+    if (
+      JSON.stringify(actualForgottenExports) !==
+      JSON.stringify(expectedForgottenExports)
+    ) {
+      failures.push(
+        `${reportName} forgotten exports do not match the reviewed allowlist`,
+      );
     }
   }
 
@@ -295,6 +358,7 @@ export async function checkRepositoryDocumentation() {
 
   const [
     primaryApiReport,
+    piecesApiReport,
     compatibilityApiReport,
     apiReference,
     catalogSource,
@@ -307,6 +371,7 @@ export async function checkRepositoryDocumentation() {
     supportMatrix,
   ] = await Promise.all([
     read('packages/chessboard-native/etc/chessboard-native.api.md'),
+    read('packages/chessboard-native/etc/chessboard-native.pieces.api.md'),
     read(
       'packages/chessboard-native/etc/chessboard-native.react-chessboard-compat.api.md',
     ),
@@ -325,6 +390,7 @@ export async function checkRepositoryDocumentation() {
     apiReference,
     apiReports: {
       compatibility: compatibilityApiReport,
+      pieces: piecesApiReport,
       primary: primaryApiReport,
     },
     catalogSource,

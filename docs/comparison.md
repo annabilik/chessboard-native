@@ -30,23 +30,25 @@ Each upstream ledger row receives one reviewed disposition:
   behavior.
 - **Drop:** the browser-specific contract has no native 1.0 equivalent.
 
-The current ledger records 121 rows as implemented and ten intentional `drop`
-rows as planned:
+The current ledger records all 131 rows as implemented. Ten of those
+implementation outcomes are intentional, executable `drop` decisions:
 
 <!-- markdownlint-disable MD013 -->
 
-| Inventory          | Implemented | Planned drop |   Total |
-| ------------------ | ----------: | -----------: | ------: |
-| Root exports       |          37 |            2 |      39 |
-| Options            |          38 |            4 |      42 |
-| Reviewed behaviors |          46 |            4 |      50 |
-| **Total**          |     **121** |       **10** | **131** |
+| Inventory          | Implemented rows | Of which intentional drops | Total rows |
+| ------------------ | ---------------: | -------------------------: | ---------: |
+| Root exports       |               39 |                          2 |         39 |
+| Options            |               42 |                          4 |         42 |
+| Reviewed behaviors |               50 |                          4 |         50 |
+| **Total**          |          **131** |                     **10** |    **131** |
 
 <!-- markdownlint-enable MD013 -->
 
-This is not a parity-closure claim. The ten dropped rows still need their final
-closure evidence, the complete checker has not become the release claim, the
-public API is not frozen, and no release candidate has been published.
+This closes parity for the pinned native target: every row has one reviewed
+disposition and one passing executable contract, including negative contracts
+for the ten browser-only exclusions. It does not make the library a drop-in
+browser replacement, certify physical devices, or mean that a release
+candidate has been published.
 
 ## Curated comparison
 
@@ -146,8 +148,10 @@ The repository evidence supports these statements:
 - `chessboard-native` is a controlled, rules-free React Native board.
 - It targets the useful surface of the pinned `react-chessboard` 5.10 source
   through reviewed keep, adapt, redesign, and drop decisions.
-- Current-source keep, adapt, and redesign rows are recorded as implemented in
-  the parity ledger.
+- All 131 current-source rows are recorded as implemented in the parity ledger;
+  the ten drop rows are tested exclusions rather than emulated browser features.
+- The three supported TypeScript entry points and exact package resolver map
+  are frozen as reviewed candidate snapshots.
 - The compatibility adapter preserves familiar option names where a portable
   native contract exists.
 - The primary API adds revision correlation, controlled annotation operations,
@@ -160,8 +164,6 @@ The repository evidence does **not** yet support these statements:
 
 - “drop-in replacement”;
 - “browser API compatible”;
-- “parity closed” or “all 131 rows complete”;
-- “public API frozen”;
 - “release candidate” or “production ready”;
 - “all React Native or Expo versions supported”;
 - “React Native Web supported”;
@@ -174,6 +176,7 @@ The repository evidence does **not** yet support these statements:
 - [Machine-readable parity manifest](../fixtures/parity/react-chessboard-5.10.json)
 - [Generated exhaustive parity ledger](./parity/react-chessboard-5.10.md)
 - [Primary public API report](../packages/chessboard-native/etc/chessboard-native.api.md)
+- [Pieces public API report](../packages/chessboard-native/etc/chessboard-native.pieces.api.md)
 - [Compatibility public API report](../packages/chessboard-native/etc/chessboard-native.react-chessboard-compat.api.md)
 - [Architecture invariants](./architecture/invariants.md)
 - [Accessibility contract and pending physical checklist](./accessibility.md)

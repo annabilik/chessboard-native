@@ -79,11 +79,16 @@ another internal path are not public API.
 <!-- markdownlint-enable MD013 -->
 
 For exact current declarations, use the
-[primary API report](../packages/chessboard-native/etc/chessboard-native.api.md)
+[primary API report](../packages/chessboard-native/etc/chessboard-native.api.md),
+the
+[pieces API report](../packages/chessboard-native/etc/chessboard-native.pieces.api.md),
 and the
 [compatibility API report](../packages/chessboard-native/etc/chessboard-native.react-chessboard-compat.api.md).
-API Extractor checks both reports in normal CI, but the prerelease API is not
-frozen.
+API Extractor checks all three reports in normal CI, while release validation
+locks the exact package resolver map. These reviewed candidate snapshots are
+the frozen public API; changing one requires an intentional report or resolver
+diff, matching documentation and tests, and a Changeset when published behavior
+changes.
 
 The React Native export condition intentionally resolves TypeScript source for
 Metro. The `import` and `default` conditions resolve compiled ESM, and `types`
@@ -112,7 +117,7 @@ to the older npm archive.
 | Adjustable board accessibility model                                    | Supported contract          | Component tests; Android Espresso and iOS XCUITest audits are available in opt-in native CI       | Physical TalkBack and VoiceOver validation is a release gate and remains pending. |
 | Reduced-motion policy                                                   | Supported                   | Unit/component tests and gallery route                                                            | Physical platform confirmation remains part of the manual matrix.                 |
 | Controlled position transitions                                         | Supported                   | Pure planning, component, interruption, and geometry-rebase tests                                 | Physical visual/performance baselines remain pending.                             |
-| `react-chessboard` 5.10 compatibility adapter                           | Supported in current source | API report, adapter/component tests, gallery route, and parity ledger                             | Not in npm `0.1.0-next.1`; browser-only exclusions remain intentional.            |
+| `react-chessboard` 5.10 compatibility adapter                           | Supported in current source | API report, adapter/component tests, gallery route, and closed parity ledger                      | Not in npm `0.1.0-next.1`; browser-only exclusions remain intentional.            |
 | Chess rules, legal moves, promotion choice, and premove queue           | Not provided                | Explicit architecture contract and gallery consumer example                                       | The application or a chess rules library owns them.                               |
 | Hover, right-click, modifier-key arrow colors, and ancestor auto-scroll | Not supported               | Explicit `drop` rows in the pinned parity ledger                                                  | React Native Web and browser-specific compatibility are post-1.0 work.            |
 
@@ -194,8 +199,8 @@ normal CI run:
 | Gesture and lifecycle matrix | Manual pending | Physical-device scrolling, clipping, cancellation, orientation, backgrounding, and reuse checks.                           |
 | Compatibility matrix         | Manual pending | Recorded results for the chosen OS, device, Expo, React Native, and native toolchain combinations.                         |
 | Performance budgets          | Manual pending | Physical JS/UI frame, render-count, memory, and large-board measurements.                                                  |
-| Parity closure               | Pending        | Final evidence for all 131 ledger rows, including the ten intentional drops.                                               |
-| API freeze                   | Pending        | Reviewed final API snapshots after parity closure.                                                                         |
+| Parity closure               | Complete       | All 131 ledger rows have one passing executable contract; the ten intentional drops are tested exclusions.                 |
+| API freeze                   | Complete       | Three reviewed TypeScript entry-point reports plus the exact package resolver map are required in normal CI.               |
 | Release candidate            | Not published  | Fresh clean-install, native, accessibility, performance, and burn-in gates must precede an RC claim.                       |
 | 1.0 production support       | Not declared   | The current package remains a prerelease evaluation surface.                                                               |
 

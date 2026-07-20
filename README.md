@@ -198,7 +198,7 @@ Important commands:
 | --------------------- | ------------------------------------------------------------------------------------------ |
 | `pnpm check`          | Formatting, lint, docs, types, Jest, tooling, and parity evidence                          |
 | `pnpm verify`         | Complete pull-request gate, including build, API, package, release, and Expo export checks |
-| `pnpm api:check`      | Compare declarations with both checked-in API reports                                      |
+| `pnpm api:check`      | Compare declarations with all three checked-in API reports                                 |
 | `pnpm package:check`  | Inspect one packed archive with Publint and Are The Types Wrong                            |
 | `pnpm parity:verify`  | Rebuild executable parity evidence and validate the ledger                                 |
 | `pnpm example:export` | Export Android and iOS Expo gallery bundles                                                |
@@ -215,11 +215,12 @@ licensing are kept under
 for offline evidence; they are never included in the npm archive.
 
 The machine-readable ledger covers all 39 root exports, 42 options, and 50
-reviewed behaviors. Normal parity validation requires exactly one passing
-executable contract for every implemented keep/adapt row. The Phase 5 closure
-gate also requires every keep/adapt row to be implemented and all 131 contract
-IDs to pass. Browser-only drop rows remain explicit until that gate; the project
-does not currently claim closed or drop-in parity.
+reviewed behaviors. Required parity validation runs the complete gate: all 131
+rows must be marked implemented, with exactly one passing executable contract
+for every contract ID. That total includes ten negative contracts that lock
+intentional browser-only exclusions. This closes the pinned native parity
+target; it does not claim a drop-in browser replacement, React Native Web
+support, or production readiness.
 
 Merging does not publish. A manual protected workflow builds and inspects one
 archive, performs a registry-safe dry run by default, and publishes through npm

@@ -17,6 +17,14 @@ const sourceManifestPath = path.join(
 );
 const sourceManifest = JSON.parse(await readFile(sourceManifestPath, 'utf8'));
 const sourceVersion = sourceManifest.version;
+const workspaceManifest = JSON.parse(
+  await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'),
+);
+const apiExtractorConfigs = [
+  'packages/chessboard-native/api-extractor.json',
+  'packages/chessboard-native/api-extractor.pieces.json',
+  'packages/chessboard-native/api-extractor.react-chessboard-compat.json',
+];
 
 async function createManifest(t, mutate) {
   const directory = await mkdtemp(path.join(tmpdir(), 'cbn-prerelease-test-'));
@@ -63,6 +71,20 @@ test('accepts the exact prerelease manifest and emits its version', async (t) =>
     await readFile(githubOutputPath, 'utf8'),
     `version=${sourceVersion}\n`,
   );
+});
+
+test('keeps every public entry-point snapshot in API check and update scripts', () => {
+  for (const scriptName of ['api:check', 'api:update']) {
+    const script = workspaceManifest.scripts[scriptName];
+    assert.equal(typeof script, 'string');
+    for (const configPath of apiExtractorConfigs) {
+      assert.equal(
+        script.split(configPath).length - 1,
+        1,
+        `${scriptName} must invoke ${configPath} exactly once`,
+      );
+    }
+  }
 });
 
 test('rejects malformed and zero-base prerelease versions', async (t) => {
@@ -140,4 +162,78 @@ test('rejects an additional private package export', async (t) => {
     manifest.exports['./internal'] = './src/internal.ts';
   });
   assertFailure(runCheck(manifestPath), /exports must contain exactly/);
+});
+
+test('rejects changed public export targets', async (t) => {
+  const targetMutations = [
+    (manifest) => {
+      manifest.exports['./pieces'].types = './lib/typescript/src/index.d.ts';
+    },
+    (manifest) => {
+      manifest.exports['./package.json'] = './src/package.json';
+    },
+  ];
+
+  for (const mutate of targetMutations) {
+    const { manifestPath } = await createManifest(t, mutate);
+    assertFailure(
+      runCheck(manifestPath),
+      /exports must match the frozen public package export map exactly/,
+    );
+  }
+});
+
+test('rejects changed public export conditions', async (t) => {
+  const conditionMutations = [
+    (manifest) => {
+      delete manifest.exports['.']['react-native'];
+    },
+    (manifest) => {
+      manifest.exports['./react-chessboard-compat'].require =
+        './lib/module/react-chessboard-compat/index.js';
+    },
+    (manifest) => {
+      const rootExport = manifest.exports['.'];
+      manifest.exports['.'] = {
+        default: rootExport.default,
+        types: rootExport.types,
+        'react-native': rootExport['react-native'],
+        import: rootExport.import,
+      };
+    },
+  ];
+
+  for (const mutate of conditionMutations) {
+    const { manifestPath } = await createManifest(t, mutate);
+    assertFailure(
+      runCheck(manifestPath),
+      /exports must match the frozen public package export map exactly/,
+    );
+  }
+});
+
+test('rejects changed top-level resolver fields', async (t) => {
+  const resolverMutations = [
+    ['type', 'commonjs'],
+    ['source', './src/pieces/index.ts'],
+    ['main', './src/index.ts'],
+    ['module', './src/index.ts'],
+    ['types', './src/index.ts'],
+    ['typings', './lib/typescript/src/index.d.ts'],
+    ['react-native', './lib/module/index.js'],
+    ['browser', './lib/module/browser.js'],
+    ['imports', { '#internal': './lib/module/index.js' }],
+    ['typesVersions', { '*': { '*': ['./lib/typescript/src/index.d.ts'] } }],
+    ['sideEffects', true],
+  ];
+
+  for (const [fieldName, value] of resolverMutations) {
+    const { manifestPath } = await createManifest(t, (manifest) => {
+      manifest[fieldName] = value;
+    });
+    assertFailure(
+      runCheck(manifestPath),
+      new RegExp(`${fieldName} must match the frozen resolver value`),
+    );
+  }
 });

@@ -17,8 +17,8 @@ newly documented surface.
 - [Support matrix](support-matrix.md) — supported runtime lines, platforms,
   package entry points, and the evidence behind each claim.
 - [Pinned parity ledger](parity/react-chessboard-5.10.md) — exhaustive,
-  source-addressed status for all pinned exports, options, and reviewed
-  behaviors.
+  source-addressed implementation evidence for all pinned exports, options,
+  and reviewed behaviors.
 
 ## Architecture
 

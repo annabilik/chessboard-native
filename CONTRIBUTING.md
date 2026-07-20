@@ -60,16 +60,33 @@ only authored parity source; regenerate its rendered document with
 `pnpm parity:update`.
 
 Implementation status is forward-only: `planned` may move to `in-progress` or
-`implemented`, and `in-progress` may move to `implemented`. An implemented
-`keep`/`adapt` row must have one collected passing result matching its unique
-`contractTestId`; placing the ID in source text does not count. Result shards follow
+`implemented`, and `in-progress` may move to `implemented`. The frozen ledger
+keeps every disposition implemented—including `redesign` and `drop`—and each
+row must have one collected passing result matching its unique `contractTestId`;
+placing the ID in source text does not count. Result shards follow
 `fixtures/parity/results.schema.json` and are supplied with repeated
 `--results <path>` arguments. Contract tests put the ID at the start of an
 executed Jest title, for example `[PARITY-OPTION-POSITION] ...`; the CI runner
 collects raw output and creates the commit-bound shard. Do not author or commit
-result shards. CI compares pull requests with their base manifest and rejects
-removed rows, status regressions, and changes to an implemented row's
-disposition, native mapping, or contract ID.
+result shards. Required CI runs the complete gate. It also compares pull
+requests with their base manifest and rejects removed rows, status regressions,
+and changes to an implemented row's disposition, native mapping, or contract
+ID.
+
+## Public API snapshot changes
+
+The reviewed public declaration snapshots cover the package root, the `pieces`
+subpath, and the `react-chessboard-compat` subpath under
+`packages/chessboard-native/etc`. The package export map and its resolver fields
+are part of the same public contract. Deep imports below `src` or `lib` are not
+public API.
+
+After the release-candidate API freeze, treat any declaration, public subpath,
+export condition, or resolver-target change as intentional API work. Add the
+lowest authoritative tests, update the human-readable API documentation, and
+add a Changeset when the published package behavior changes. Run
+`pnpm api:update` only after reviewing the generated declaration diff; never
+update a report merely to make `pnpm api:check` pass.
 
 ## Pull requests
 

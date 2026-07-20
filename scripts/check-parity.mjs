@@ -16,7 +16,7 @@ function usage() {
     '',
     'Options:',
     '  --baseline-ref <git-ref>  Validate status transitions against a Git ref',
-    '  --complete                Require keep/adapt complete and every ID passing',
+    '  --complete                Require every row implemented and every ID passing',
     '  --manifest <path>          Override the repository-relative manifest path',
     '  --results <path>           Add an executed-result file or directory (repeatable)',
     '  --write-doc                Regenerate the rendered parity documentation',

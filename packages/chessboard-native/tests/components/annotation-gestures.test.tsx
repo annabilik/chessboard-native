@@ -259,7 +259,7 @@ describe('controlled native annotation gestures', () => {
     expect(nodes(rootOf(result), 'annotation:')).toEqual([]);
   });
 
-  it('routes a square tool tap exclusively before clear and square activation callbacks', async () => {
+  it('[PARITY-BEHAVIOR-B31] replaces browser context-menu ordering with one exclusive native annotation route', async () => {
     const boardId = 'exclusive-square-tool';
     const operations: Readonly<AnnotationOperation>[] = [];
     const onSquareActivate = jest.fn();

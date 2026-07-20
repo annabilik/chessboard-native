@@ -62,7 +62,7 @@ jobs:
       - name: Validate upstream parity manifest
         env:
           PARITY_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
-        run: pnpm parity:check --results coverage/parity/jest.parity.json
+        run: pnpm parity:complete --results coverage/parity/jest.parity.json
 
       - name: Build package
         run: pnpm build

@@ -240,7 +240,7 @@
         "surface": "none",
         "symbols": []
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-USE-CHESSBOARD-CONTEXT",
       "compatibilityNotes": "The inferred 46-property browser context is intentionally private and has no public native hook.",
       "rationale": "The upstream hook leaks internal shadow position, annotation, and browser-drag state; exporting it would make those implementation details a compatibility contract.",
@@ -916,7 +916,7 @@
         "surface": "none",
         "symbols": []
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-EXPORT-IS-TOUCH-END-WITHIN-SQUARE",
       "compatibilityNotes": "DOM element lookup and React.TouchEvent hit testing have no public native equivalent.",
       "rationale": "Native input uses one board-level gesture surface and measured coordinate hit testing; exposing a document-based helper would be unusable and misleading.",
@@ -1993,7 +1993,7 @@
         "surface": "none",
         "symbols": []
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ALLOW-AUTO-SCROLL",
       "compatibilityNotes": "Native board and spare gestures arbitrate with ordinary ancestor ScrollViews, but 1.0 never discovers or programmatically scrolls an ancestor.",
       "rationale": "Portable React Native code cannot generically control an arbitrary ancestor ScrollView while preserving deterministic destination geometry.",
@@ -2303,7 +2303,7 @@
         "surface": "none",
         "symbols": []
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ON-MOUSE-OUT-SQUARE",
       "compatibilityNotes": "Pointer hover compatibility is deferred to post-1.0 React Native Web work.",
       "rationale": "Touch-first Android and iOS have no mouse-out event, and browser hover ordering is not a portable native contract.",
@@ -2336,7 +2336,7 @@
         "surface": "none",
         "symbols": []
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ON-MOUSE-OVER-SQUARE",
       "compatibilityNotes": "Pointer hover compatibility is deferred to post-1.0 React Native Web work.",
       "rationale": "Touch-first Android and iOS have no mouse-over event, and browser hover ordering is not a portable native contract.",
@@ -2575,7 +2575,7 @@
         "surface": "none",
         "symbols": []
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-OPTION-ON-SQUARE-RIGHT-CLICK",
       "compatibilityNotes": "Right-click compatibility is post-1.0; native annotation uses long-press, two-finger, or explicit mode.",
       "rationale": "Secondary-button semantics and browser event ordering do not exist consistently on the first-class Android and iOS targets.",
@@ -3143,7 +3143,7 @@
         "surface": "none",
         "symbols": []
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B19",
       "compatibilityNotes": "1.0 verifies native ScrollView arbitration but never discovers or programmatically scrolls an ancestor.",
       "rationale": "React Native cannot generically discover and control arbitrary ancestor scrolling while retaining a stable measured destination.",
@@ -3430,7 +3430,7 @@
         "surface": "none",
         "symbols": []
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B29",
       "compatibilityNotes": "Hover is post-1.0 RN Web work; native pressed/drag-over state is renderer data.",
       "rationale": "Android and iOS touch input has no portable hover lifecycle, and exact synthesized browser event ordering is outside the native support tier.",
@@ -3481,7 +3481,7 @@
         "surface": "none",
         "symbols": []
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B31",
       "compatibilityNotes": "Long-press and native annotation gestures replace right-click for 1.0.",
       "rationale": "Secondary-button context menus, preventDefault, and DOM bubbling order are browser-specific and deferred to the post-1.0 web tier.",
@@ -3652,7 +3652,7 @@
         "surface": "none",
         "symbols": []
       },
-      "status": "planned",
+      "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B36",
       "compatibilityNotes": "1.0 uses an explicit portable palette; Shift-over-Control behavior is compat/web work.",
       "rationale": "Hardware keyboard modifier and secondary-button combinations are not consistently available on first-class Android and iOS touch targets.",
