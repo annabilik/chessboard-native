@@ -276,9 +276,10 @@ individual rows.
 
 ## Complete browser-only exclusions
 
-These are all ten `drop` rows in the pinned ledger. Their status remains
-`planned` until the parity-closure work records final evidence. Listing them
-here does not close parity.
+These are all ten `drop` rows in the pinned ledger. Their status is
+`implemented`: executable negative contracts lock each exclusion or portable
+replacement boundary. Implemented here means the reviewed drop decision is
+enforced; it does not mean the browser feature exists on Android or iOS.
 
 <!-- markdownlint-disable MD013 -->
 
@@ -332,5 +333,5 @@ Before removing the web component:
     moving `next` tag.
 
 The physical assistive-technology pass, broad compatibility matrix, performance
-budgets, API freeze, parity closure, and release-candidate burn-in remain
-separate release work.
+budgets, release-version preparation, publication, and release-candidate
+burn-in remain separate release work.

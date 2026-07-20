@@ -1182,11 +1182,7 @@ export function validateResults(
         `${entry.id} (${entry.status}) has no executed result for ${entry.contractTestId}`,
       );
     }
-    if (
-      complete &&
-      entry.status !== 'implemented' &&
-      (entry.disposition === 'keep' || entry.disposition === 'adapt')
-    ) {
+    if (complete && entry.status !== 'implemented') {
       errors.push(`${entry.id} remains ${entry.status} at the complete gate`);
     }
   }
@@ -1261,7 +1257,7 @@ export function renderParityDocumentation(manifest) {
     `This is the rendered view of [the machine-readable manifest](../../fixtures/parity/react-chessboard-5.10.json) for \`${manifest.target.package}@${manifest.target.version}\`.`,
     `The target is pinned to tag \`${manifest.target.tag}\`, commit \`${manifest.target.commit}\`; its complete ${manifest.expectedCounts.sourceFiles}-file, ${manifest.expectedCounts.sourceLines.toLocaleString('en-US')}-line \`src/\` tree and licenses are available in the [offline fixture](../../${manifest.target.fixture}/PROVENANCE.md).`,
     '',
-    'Parity means every upstream item has one reviewed disposition and one implementation status. It does not mean copying the browser implementation. Normal CI accepts reserved tests for planned/in-progress rows; implemented keep/adapt rows must resolve to one collected passing result. The 1.0 `--complete` gate requires every keep/adapt row to be implemented and every ledger contract to resolve uniquely to a pass.',
+    'Parity means every upstream item has one reviewed disposition and one implementation status. It does not mean copying the browser implementation. Incremental validation accepts reserved tests for planned/in-progress rows; implemented keep/adapt rows must resolve to one collected passing result. Required CI uses the `--complete` gate, which requires every reviewed disposition to be implemented and every ledger contract to resolve uniquely to a pass. For a drop row, implemented records a tested exclusion, not an implementation of the browser feature.',
     '',
     '## Pinned inventory',
     '',

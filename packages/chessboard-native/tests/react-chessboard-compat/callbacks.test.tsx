@@ -48,6 +48,17 @@ function mockSquareHandler() {
   >();
 }
 
+function expectUnsupportedRuntimeOption(
+  option: keyof ReactChessboardOptions,
+  value: unknown,
+): void {
+  const options: ReactChessboardOptions = {};
+  Object.defineProperty(options, option, { value });
+  expect(() => createReactChessboardProps(options)).toThrow(
+    `compatibility option "${option}" is unavailable`,
+  );
+}
+
 const BOARD_PIECE_CONTEXT = Object.freeze({
   basePositionRevision: 4,
   boardId: 'compat-board',
@@ -439,18 +450,19 @@ describe('react-chessboard compatibility callback adapter', () => {
     );
   });
 
-  it.each([
-    'allowAutoScroll',
-    'onMouseOutSquare',
-    'onMouseOverSquare',
-    'onSquareRightClick',
-  ] as const)('rejects unsupported runtime option %s', (option) => {
-    const options: ReactChessboardOptions = {};
-    Object.defineProperty(options, option, {
-      value: option === 'allowAutoScroll' ? true : jest.fn(),
-    });
-    expect(() => createReactChessboardProps(options)).toThrow(
-      `compatibility option "${option}" is unavailable`,
-    );
+  it('[PARITY-OPTION-ALLOW-AUTO-SCROLL] rejects ancestor auto-scroll instead of accepting a native no-op', () => {
+    expectUnsupportedRuntimeOption('allowAutoScroll', true);
+  });
+
+  it('[PARITY-OPTION-ON-MOUSE-OUT-SQUARE] rejects browser mouse-out callbacks instead of accepting a native no-op', () => {
+    expectUnsupportedRuntimeOption('onMouseOutSquare', jest.fn());
+  });
+
+  it('[PARITY-OPTION-ON-MOUSE-OVER-SQUARE] rejects browser mouse-over callbacks instead of accepting a native no-op', () => {
+    expectUnsupportedRuntimeOption('onMouseOverSquare', jest.fn());
+  });
+
+  it('[PARITY-OPTION-ON-SQUARE-RIGHT-CLICK] rejects browser right-click callbacks instead of accepting a native no-op', () => {
+    expectUnsupportedRuntimeOption('onSquareRightClick', jest.fn());
   });
 });

@@ -8,6 +8,7 @@ import {
   ChessboardError,
   ChessboardProvider,
   type ChessboardErrorContext,
+  type ChessboardProviderProps,
   type OnChessboardError,
   type PieceRendererProps,
   type PieceRenderers,
@@ -75,6 +76,15 @@ function RuntimeProbe({
 
 interface RuntimeCapture {
   current: ChessboardProviderRuntime | null;
+}
+
+function assertNoAncestorScrollControl(
+  props: Readonly<ChessboardProviderProps>,
+): void {
+  // @ts-expect-error Native consumers own any ancestor scrolling policy.
+  void props.allowAutoScroll;
+  // @ts-expect-error The provider never accepts an ancestor scroll command.
+  void props.scrollTo;
 }
 
 function capturedRuntime(capture: RuntimeCapture): ChessboardProviderRuntime {
@@ -388,6 +398,33 @@ describe('ChessboardProvider', () => {
     expect(committedRuntime).not.toHaveProperty('position');
     expect(committedRuntime).not.toHaveProperty('selection');
     expect(committedRuntime).not.toHaveProperty('annotations');
+  });
+
+  it('[PARITY-BEHAVIOR-B19] exposes consumer geometry invalidation without owning ancestor scrolling', async () => {
+    const runtime: RuntimeCapture = { current: null };
+    const result = await render(
+      <ChessboardProvider geometryRevision={2}>
+        <RuntimeProbe capture={(value) => (runtime.current = value)} />
+      </ChessboardProvider>,
+    );
+    const committedRuntime = capturedRuntime(runtime);
+
+    expect(assertNoAncestorScrollControl).toEqual(expect.any(Function));
+    expect(
+      Object.keys(committedRuntime).filter((key) =>
+        key.toLowerCase().includes('scroll'),
+      ),
+    ).toEqual([]);
+    expect(committedRuntime.getGeometryRevision()).toBe(2);
+
+    await result.rerender(
+      <ChessboardProvider geometryRevision={3}>
+        <RuntimeProbe capture={(value) => (runtime.current = value)} />
+      </ChessboardProvider>,
+    );
+
+    expect(capturedRuntime(runtime)).toBe(committedRuntime);
+    expect(committedRuntime.getGeometryRevision()).toBe(3);
   });
 
   it('[PARITY-BEHAVIOR-B04] keeps board identity out of native IDs and fails a mounted ID mutation closed', async () => {

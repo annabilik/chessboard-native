@@ -17,6 +17,21 @@ const guidePaths = [
   'docs/support-matrix.md',
 ];
 const packageName = '@vibechess/chessboard-native';
+const piecesForgottenExports = [
+  'MoveSource',
+  'PieceData',
+  'PieceRenderer',
+  'PieceRendererProps',
+  'PieceRenderers',
+  'PieceType',
+  'PieceVisualState',
+  'SquareId',
+]
+  .map(
+    (symbol) =>
+      `// Warning: (ae-forgotten-export) The symbol "${symbol}" needs to be exported by the entry point index.d.ts`,
+  )
+  .join('\n');
 
 function validSnapshot() {
   const guideNames = guidePaths.map((guidePath) => guidePath.split('/').at(-1));
@@ -28,7 +43,11 @@ function validSnapshot() {
       `\`${packageName}/pieces\``,
       `\`${packageName}/react-chessboard-compat\``,
     ].join('\n'),
-    apiReports: { compatibility: 'documented', primary: 'documented' },
+    apiReports: {
+      compatibility: 'documented',
+      pieces: `${piecesForgottenExports}\ndocumented`,
+      primary: 'documented',
+    },
     catalogSource: "name: 'alpha'\nname: 'beta'\n",
     comparison:
       '[ledger](parity/react-chessboard-5.10.md) react-chessboard@5.10.0',
@@ -84,7 +103,7 @@ test('extracts actual Markdown destinations and exact inline code values', () =>
 
 test('accepts complete guides, gallery routes, peers, and API reports', () => {
   assert.deepEqual(validateDocumentationSnapshot(validSnapshot()), {
-    documentedReports: 2,
+    documentedReports: 3,
     guideCount: 4,
     routeCount: 2,
   });
@@ -92,12 +111,55 @@ test('accepts complete guides, gallery routes, peers, and API reports', () => {
 
 test('rejects undocumented API members and gallery drift', () => {
   const snapshot = validSnapshot();
-  snapshot.apiReports.primary = '// (undocumented)';
+  snapshot.apiReports.pieces = '// (undocumented)';
   snapshot.routeNames = ['alpha', 'missing'];
 
   assert.throws(
     () => validateDocumentationSnapshot(snapshot),
-    /gallery catalog routes.*primary contains undocumented/s,
+    /gallery catalog routes.*pieces contains undocumented/s,
+  );
+});
+
+test('rejects a missing public entry-point API report', () => {
+  const snapshot = validSnapshot();
+  delete snapshot.apiReports.pieces;
+
+  assert.throws(
+    () => validateDocumentationSnapshot(snapshot),
+    /missing required API reports: pieces/,
+  );
+});
+
+test('rejects missing package documentation and unreviewed API warnings', () => {
+  const missingPackageDocumentation = validSnapshot();
+  missingPackageDocumentation.apiReports.primary =
+    '// (No @packageDocumentation comment for this package)';
+  assert.throws(
+    () => validateDocumentationSnapshot(missingPackageDocumentation),
+    /primary is missing package documentation/,
+  );
+
+  const unreviewedWarning = validSnapshot();
+  unreviewedWarning.apiReports.compatibility =
+    '// Warning: (ae-forgotten-export) Unexpected';
+  assert.throws(
+    () => validateDocumentationSnapshot(unreviewedWarning),
+    /compatibility forgotten exports do not match the reviewed allowlist/,
+  );
+
+  const missingReviewedWarning = validSnapshot();
+  missingReviewedWarning.apiReports.pieces = 'documented';
+  assert.throws(
+    () => validateDocumentationSnapshot(missingReviewedWarning),
+    /pieces forgotten exports do not match the reviewed allowlist/,
+  );
+
+  const differentDiagnostic = validSnapshot();
+  differentDiagnostic.apiReports.primary =
+    '// Warning: (ae-internal-missing-underscore)';
+  assert.throws(
+    () => validateDocumentationSnapshot(differentDiagnostic),
+    /primary contains unreviewed API Extractor diagnostics/,
   );
 });
 

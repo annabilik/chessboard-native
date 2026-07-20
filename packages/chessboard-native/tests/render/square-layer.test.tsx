@@ -58,6 +58,26 @@ function requiredNode(
   return node;
 }
 
+function requiredRendererProps(
+  value: Readonly<SquareRendererProps> | null,
+): Readonly<SquareRendererProps> {
+  if (value === null) {
+    throw new Error('Expected the custom square renderer to receive props.');
+  }
+  return value;
+}
+
+function assertNoBrowserHoverLifecycle(
+  props: Readonly<SquareRendererProps>,
+): void {
+  // @ts-expect-error Native square renderers expose no mouse-over callback.
+  void props.onMouseOver;
+  // @ts-expect-error Native square renderers expose no mouse-out callback.
+  void props.onMouseOut;
+  // @ts-expect-error Drop targeting is explicit state, not browser hover state.
+  void props.state.isHovered;
+}
+
 describe('controlled selection square presentation', () => {
   it('projects canonical selected, destination, and disabled squares in either orientation', async () => {
     for (const orientation of ['white', 'black'] as const) {
@@ -151,6 +171,48 @@ describe('controlled selection square presentation', () => {
         (paint) => flattenedStyle(paint).boxShadow === undefined,
       ),
     ).toBe(true);
+  });
+
+  it('[PARITY-BEHAVIOR-B29] exposes native press and drop-target state without a browser hover lifecycle', async () => {
+    const layout = createBoardSurfaceLayout(
+      { height: 100, width: 100 },
+      { columns: 1, rows: 1 },
+      'white',
+    );
+    let observed: Readonly<SquareRendererProps> | null = null;
+    const result = await render(
+      <SquareLayer
+        boardId="native-hover-boundary"
+        dropTargetSquare="a1"
+        layout={layout}
+        position={null}
+        pressedSquare="a1"
+        renderSquare={(props) => {
+          observed = props;
+          return null;
+        }}
+        selection={null}
+      />,
+    );
+    const props = requiredRendererProps(observed);
+
+    expect(rootOf(result)).toBeDefined();
+    expect(assertNoBrowserHoverLifecycle).toEqual(expect.any(Function));
+    expect(Object.keys(props.state).sort()).toEqual([
+      'isDestination',
+      'isDisabled',
+      'isDropTarget',
+      'isPendingSource',
+      'isPendingTarget',
+      'isPressed',
+      'isSelected',
+    ]);
+    expect(props.state.isDropTarget).toBe(true);
+    expect(props.state.isPressed).toBe(true);
+    expect(Object.isFrozen(props)).toBe(true);
+    expect(Object.isFrozen(props.state)).toBe(true);
+    expect(Object.hasOwn(props, 'onMouseOver')).toBe(false);
+    expect(Object.hasOwn(props, 'onMouseOut')).toBe(false);
   });
 
   it('[PARITY-OPTION-SQUARE-RENDERER] invokes hook-capable visual renderers with latest frozen square context inside structural wrappers', async () => {

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/api-extractor/v7/api-extractor.schema.json",
+  "mainEntryPointFilePath": "<projectFolder>/lib/typescript/src/pieces/index.d.ts",
+  "newlineKind": "lf",
+  "compiler": {
+    "tsconfigFilePath": "<projectFolder>/tsconfig.build.json"
+  },
+  "apiReport": {
+    "enabled": true,
+    "includeForgottenExports": true,
+    "reportFileName": "chessboard-native.pieces",
+    "reportFolder": "<projectFolder>/etc",
+    "reportTempFolder": "<projectFolder>/temp"
+  },
+  "docModel": {
+    "enabled": false
+  },
+  "dtsRollup": {
+    "enabled": false
+  },
+  "tsdocMetadata": {
+    "enabled": false
+  }
+}

@@ -1,5 +1,6 @@
 import { appendFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = path.resolve(
@@ -14,12 +15,41 @@ const expectedPackageName = '@vibechess/chessboard-native';
 const expectedRepositoryUrl =
   'git+https://github.com/annabilik/chessboard-native.git';
 const expectedRepositoryDirectory = 'packages/chessboard-native';
-const expectedExportKeys = [
-  '.',
-  './package.json',
-  './pieces',
-  './react-chessboard-compat',
-];
+const expectedExports = {
+  '.': {
+    types: './lib/typescript/src/index.d.ts',
+    'react-native': './src/index.ts',
+    import: './lib/module/index.js',
+    default: './lib/module/index.js',
+  },
+  './pieces': {
+    types: './lib/typescript/src/pieces/index.d.ts',
+    'react-native': './src/pieces/index.ts',
+    import: './lib/module/pieces/index.js',
+    default: './lib/module/pieces/index.js',
+  },
+  './react-chessboard-compat': {
+    types: './lib/typescript/src/react-chessboard-compat/index.d.ts',
+    'react-native': './src/react-chessboard-compat/index.ts',
+    import: './lib/module/react-chessboard-compat/index.js',
+    default: './lib/module/react-chessboard-compat/index.js',
+  },
+  './package.json': './package.json',
+};
+const expectedExportKeys = Object.keys(expectedExports).sort();
+const expectedResolverFields = {
+  type: 'module',
+  source: './src/index.ts',
+  main: './lib/module/index.js',
+  module: './lib/module/index.js',
+  types: './lib/typescript/src/index.d.ts',
+  typings: undefined,
+  'react-native': './src/index.ts',
+  browser: undefined,
+  imports: undefined,
+  typesVersions: undefined,
+  sideEffects: false,
+};
 const dependencyGroups = [
   'dependencies',
   'devDependencies',
@@ -151,6 +181,24 @@ function assertExports(exportsField) {
       `exports must contain exactly ${expectedExportKeys.join(', ')}`,
     );
   }
+
+  if (JSON.stringify(exportsField) !== JSON.stringify(expectedExports)) {
+    throw new Error(
+      'exports must match the frozen public package export map exactly',
+    );
+  }
+}
+
+function assertResolverFields(manifest) {
+  for (const [fieldName, expectedValue] of Object.entries(
+    expectedResolverFields,
+  )) {
+    if (!isDeepStrictEqual(manifest[fieldName], expectedValue)) {
+      throw new Error(
+        `${fieldName} must match the frozen resolver value ${JSON.stringify(expectedValue)}`,
+      );
+    }
+  }
 }
 
 function assertNoLocalDependencies(manifest) {
@@ -184,6 +232,7 @@ function validateManifest(manifest, expectedVersion) {
   assertVersion(manifest.version, expectedVersion);
   assertPublishConfig(manifest.publishConfig);
   assertRepository(manifest.repository);
+  assertResolverFields(manifest);
   assertExports(manifest.exports);
   assertNoLocalDependencies(manifest);
 

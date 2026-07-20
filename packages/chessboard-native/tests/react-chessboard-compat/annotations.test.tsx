@@ -6,6 +6,7 @@ import {
 } from 'react-native-gesture-handler/jest-utils';
 import type { TestInstance } from 'test-renderer';
 
+import { defaultAnnotationStyle } from '../../src';
 import type { AnnotationOperation } from '../../src/public-types';
 import {
   createReactChessboardProps,
@@ -195,6 +196,30 @@ describe('react-chessboard compatibility annotations', () => {
     expect(proposals[0]?.arrows[0]).not.toBe(first);
     expect(proposals[0]?.arrows[1]).not.toBe(second);
     expect(controlled).toEqual([first, second]);
+  });
+
+  it('[PARITY-BEHAVIOR-B36] derives native drawing color only from the explicit portable palette', () => {
+    const props = createReactChessboardProps({
+      arrowOptions: {
+        ...defaultAnnotationStyle,
+        color: '#123456',
+        secondaryColor: '#654321',
+        tertiaryColor: '#abcdef',
+      },
+      onArrowsChange: () => undefined,
+    });
+    const tool = props.annotationTool;
+    if (tool === undefined || tool === null) {
+      throw new Error('Expected compatibility drawing to expose one tool.');
+    }
+
+    expect(tool).toEqual({ color: '#123456', type: 'arrow' });
+    expect(Object.keys(tool).sort()).toEqual(['color', 'type']);
+    expect(Object.hasOwn(tool, 'secondaryColor')).toBe(false);
+    expect(Object.hasOwn(tool, 'tertiaryColor')).toBe(false);
+    expect(Object.hasOwn(tool, 'shiftKey')).toBe(false);
+    expect(Object.hasOwn(tool, 'ctrlKey')).toBe(false);
+    expect(Object.isFrozen(tool)).toBe(true);
   });
 
   it('[PARITY-BEHAVIOR-B38] waits for controlled feedback before rendering one arrow-clear proposal', async () => {
