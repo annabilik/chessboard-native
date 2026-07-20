@@ -252,9 +252,9 @@ identity violations. It includes a stable `code`, recovery `domain`, optional
 ## Compatibility entry point
 
 > [!IMPORTANT]
-> This entry point is available in current repository source but not in npm
-> `0.1.0-next.1`. Wait for a later prerelease that explicitly exports
-> `./react-chessboard-compat` before importing it from npm.
+> The prepared `0.1.0-next.2` package exports this entry point; npm
+> `0.1.0-next.1` does not. Merging does not publish, so verify that the registry
+> exposes the exact prepared version before importing the subpath from npm.
 
 The compatibility entry point exports its own `Chessboard`,
 `ReactChessboardOptions`, upstream-shaped position/arrow/callback payload

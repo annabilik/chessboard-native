@@ -1,5 +1,96 @@
 # @vibechess/chessboard-native
 
+<!-- markdownlint-disable MD024 -->
+
+## 0.1.0-next.2
+
+### Minor Changes
+
+- 71c8713: <!-- markdownlint-disable MD041 -->
+
+  Add controlled arrow and square annotation actions to the single adjustable
+  board. Accessibility and touch now share one correlated draft runtime and emit
+  immutable operations without owning persistent annotations.
+
+- 22de881: <!-- markdownlint-disable MD041 -->
+
+  Add a stale-safe `ChessboardActions.cancelMove` handle and declarative
+  `gesture.allowDragOffBoard` overlay bounds. Cancellation clears only transient
+  move work, while visual clamping leaves raw hit testing and nullable off-board
+  move intents unchanged.
+
+- 475f00c: <!-- markdownlint-disable MD041 -->
+
+  Add deterministic controlled-annotation operations, revision-safe consumer
+  application, independent clear policies, and transient annotation-draft
+  composition without introducing a second semantic annotation store.
+
+- 0f7d72b: <!-- markdownlint-disable MD041 -->
+
+  Add controlled native annotation input through explicit activation,
+  long-press pan, and two-finger pan. The new `annotationTool` prop produces one
+  revision-correlated draft and toggle operation without owning persistent
+  annotations.
+
+- 4efbbf8: <!-- markdownlint-disable MD041 -->
+
+  Add non-committing `onPiecePress` and `onPieceDragStart` observations for board
+  pieces and targeted spares. Their frozen contexts come from the named board's
+  current controlled position revision, callback exceptions cannot break input,
+  and an occupied piece press never also bubbles into square activation.
+
+  Add `gesture.activationDistance` as a validated, finite non-negative native
+  point threshold shared by a board and spares targeting that board. It defaults
+  to four points and changes gesture recognition only, never controlled state.
+
+- 24dbcef: <!-- markdownlint-disable MD041 -->
+
+  Add the optional `react-chessboard-compat` package subpath, which adapts the
+  upstream-shaped options and callbacks onto the primary controlled native
+  pipeline without adding another semantic source of truth.
+
+- cdd8bf5: <!-- markdownlint-disable MD041 -->
+
+  Add observational `onSquarePressIn` and `onSquarePressOut` callbacks with a
+  detached, frozen `SquarePressContext` captured from the current controlled
+  position. Press callbacks can run on an otherwise read-only board without
+  enabling activation, pair release and mounted cancellation exactly once, and
+  remain isolated from semantic state and callback exceptions.
+
+- 457daa3: <!-- markdownlint-disable MD041 -->
+
+  Add selected-spare tap placement on the named board's current controlled move
+  runtime. The tap path is revision- and selection-correlated, yields to pending
+  moves and disabled targets, and remains exclusive with annotations and ordinary
+  piece/square activation.
+
+  Harden open custom piece types with prototype-safe default accessibility labels
+  and snapshot `SparePiece` payload fields exactly once per prop identity.
+
+- 778caaf: <!-- markdownlint-disable MD041 -->
+
+  Add visual-only custom square rendering plus declarative drop-target,
+  dragging-piece, and source-ghost theme and instance style slots. Custom
+  square content receives frozen controlled and transient context inside the
+  board-owned measured, pointerless, accessibility-hidden paint layer.
+  Spare drag-overlay renderers now receive the current canonical hover square,
+  or `null` while off-board; resting spare and source-ghost renderers remain
+  squareless.
+
+### Patch Changes
+
+- 1375fb7: <!-- markdownlint-disable MD041 -->
+
+  Complete the public API documentation, migration and comparison guides, support
+  matrix, and categorized native example gallery for the upcoming release.
+
+- fa5beb6: <!-- markdownlint-disable MD041 -->
+
+  Close the pinned `react-chessboard@5.10.0` parity ledger with executable
+  contracts for all 131 reviewed rows, including the ten intentional browser-only
+  exclusions. Freeze the three public TypeScript entry points and exact package
+  resolver map as reviewed candidate snapshots without changing runtime behavior.
+
 ## 0.1.0-next.1
 
 ### Patch Changes

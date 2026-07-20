@@ -1,6 +1,6 @@
 {
   "name": "@vibechess/chessboard-native",
-  "version": "0.1.0-next.1",
+  "version": "0.1.0-next.2",
   "description": "Controlled, rules-free React Native chessboard component",
   "type": "module",
   "source": "./src/index.ts",

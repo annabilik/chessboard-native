@@ -81,7 +81,7 @@ subpath, and the `react-chessboard-compat` subpath under
 are part of the same public contract. Deep imports below `src` or `lib` are not
 public API.
 
-After the release-candidate API freeze, treat any declaration, public subpath,
+With the public API frozen, treat any declaration, public subpath,
 export condition, or resolver-target change as intentional API work. Add the
 lowest authoritative tests, update the human-readable API documentation, and
 add a Changeset when the published package behavior changes. Run

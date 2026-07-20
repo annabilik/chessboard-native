@@ -7,16 +7,27 @@
     "@vibechess/chessboard-native": "0.0.0"
   },
   "changesets": [
+    "accessible-annotation-actions",
+    "board-actions-drag-bounds",
+    "controlled-annotation-operations",
     "controlled-annotations",
     "controlled-move-requests",
     "controlled-position-transitions",
     "controlled-selection-activation",
+    "documented-native-surface",
+    "frozen-parity-surface",
     "initial-controlled-board",
     "interaction-hardening",
+    "native-annotation-gestures",
+    "piece-callbacks-and-gesture-tuning",
     "provider-coordination",
     "public-spare-piece",
+    "react-chessboard-compat",
     "special-move-transitions",
+    "square-press-callbacks",
     "transition-continuity",
-    "trusted-publishing-proof"
+    "trusted-publishing-proof",
+    "variant-editor-hardening",
+    "visual-customization"
   ]
 }

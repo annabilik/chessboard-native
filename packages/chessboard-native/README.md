@@ -3,10 +3,10 @@
 > **Prerelease status:** `0.1.0-next.*` releases are for evaluation and
 > integration testing, not production use; APIs may change before 1.0. The
 > installation command targets whichever published prerelease owns `next`.
-> Documentation on the repository's `main` branch can be ahead of that tag.
-> The release record says `next` is currently `0.1.0-next.1` from commit
-> `8d3c419`, which does not contain the later `react-chessboard-compat` entry
-> point described below.
+> This source tree is prepared as `0.1.0-next.2`, including the compatibility
+> entry point described below, but merging does not publish it. Verify that an
+> `@next` installation resolves `0.1.0-next.2` or a later version that retains
+> the export before relying on it.
 
 ## Installation
 
@@ -128,10 +128,10 @@ import { Chessboard } from '@vibechess/chessboard-native';
 ## `react-chessboard` compatibility subpath
 
 > [!IMPORTANT]
-> This entry point is available in current repository source but not in npm
-> `0.1.0-next.1`. Do not use the import below after installing `@next` until a
-> later published prerelease explicitly includes
-> `./react-chessboard-compat` in its package exports.
+> The prepared `0.1.0-next.2` package exports this entry point; npm
+> `0.1.0-next.1` does not. After installing `@next`, confirm the resolved
+> package is `0.1.0-next.2` or a later version that retains
+> `./react-chessboard-compat` before using the import below.
 
 Applications migrating from `react-chessboard@5.10` can keep its single
 `options` object and familiar option names through a separate entry point:
