@@ -11,11 +11,11 @@ optional selection; the component never creates a second semantic source of
 truth.
 
 > [!WARNING]
-> The package is in prerelease, and documentation on `main` describes current
-> repository source. The release record says npm's `next` tag is
-> `0.1.0-next.1` from commit `8d3c419`; that archive does not contain the later
-> `react-chessboard-compat` entry point. Pin an exact `0.1.0-next.N` version
-> after evaluation and verify its exports.
+> The package is in prerelease. This source tree is prepared as
+> `0.1.0-next.2` and includes the `react-chessboard-compat` entry point. Merging
+> a version commit does not publish it, so npm's moving `next` tag can still
+> resolve an older prerelease. Verify the installed version and exports, then
+> pin an exact `0.1.0-next.N` version after evaluation.
 
 ## Highlights
 
@@ -25,8 +25,7 @@ truth.
 - Native drag, tap, spare-piece, annotation, and adjustable-control input.
 - Declarative themes, styles, custom pieces, and visual-only square renderers.
 - Multiple-board coordination without provider-owned chess state.
-- A current-source `react-chessboard-compat` entry point for incremental
-  migration.
+- A `react-chessboard-compat` entry point for incremental migration.
 - ESM package exports verified in clean Expo and bare React Native consumers.
 
 The library does not contain chess rules, legal-move validation, application
@@ -122,14 +121,14 @@ apply the move; the consumer's next `position` prop is the commit.
 | Surface                   | Choose it when                                                                                                                                                                             |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Primary root API          | You want revision correlation, asynchronous decisions, stable annotation IDs, square annotations, selection, accessibility customization, transitions, providers, or targeted spare pieces |
-| `react-chessboard-compat` | You are using current repository source to migrate a `react-chessboard@5.10.0` options object and accept native values and controlled semantics                                            |
+| `react-chessboard-compat` | You are migrating a `react-chessboard@5.10.0` options object and accept native values and controlled semantics                                                                             |
 | `pieces`                  | You only need the bundled geometric `defaultPieceRenderers` value; renderer types remain on the root API                                                                                   |
 
 > [!IMPORTANT]
-> The compatibility entry point is current-source-only at this repository
-> snapshot. It is absent from npm `0.1.0-next.1`, so the import below will not
-> work after the `@next` installation above until a later prerelease explicitly
-> includes that export.
+> The prepared `0.1.0-next.2` package exports this compatibility entry point;
+> npm `0.1.0-next.1` does not. After installing `@next`, confirm the resolved
+> package is `0.1.0-next.2` or a later version that retains the export before
+> using the import below.
 
 ```tsx
 import { Chessboard } from '@vibechess/chessboard-native/react-chessboard-compat';

@@ -13,13 +13,11 @@ than the DOM, CSS, and dnd-kit. Position, annotations, and optional selection
 remain controlled by the application.
 
 > [!IMPORTANT]
-> This guide describes the current repository source. The repository release
-> record says `0.1.0-next.1` was published from commit `8d3c419`. That archive
-> predates the `react-chessboard-compat` entry point and later main-branch
-> features. Do not infer that an API documented here exists in the currently
-> published prerelease. Check the exact version's release notes and package
-> exports; wait for a later prerelease before importing the compatibility
-> subpath from npm.
+> This guide describes the source prepared as `0.1.0-next.2`, which includes
+> the `react-chessboard-compat` entry point. npm `0.1.0-next.1` predates that
+> export, and merging the prepared version does not publish it. Check the exact
+> installed version, release notes, and package exports before importing the
+> compatibility subpath from npm.
 
 ## Choose a migration path
 
@@ -333,5 +331,5 @@ Before removing the web component:
     moving `next` tag.
 
 The physical assistive-technology pass, broad compatibility matrix, performance
-budgets, release-version preparation, publication, and release-candidate
-burn-in remain separate release work.
+budgets, publication, and release-candidate burn-in remain separate release
+work.

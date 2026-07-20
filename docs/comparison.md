@@ -12,11 +12,10 @@ source for all 39 upstream root exports, 42 `ChessboardOptions` fields, and 50
 reviewed observable behaviors.
 
 > [!IMPORTANT]
-> This page describes the current repository source. The repository release
-> record identifies `0.1.0-next.1` as an older archive published from commit
-> `8d3c419`. In particular, that archive does not export the later
-> `react-chessboard-compat` subpath. Check the exact package version rather than
-> assuming that current main-branch capabilities are already on npm.
+> This page describes the source prepared as `0.1.0-next.2`, including the
+> `react-chessboard-compat` subpath. npm `0.1.0-next.1` is an older immutable
+> archive without that export. Merging does not publish the prepared version;
+> check the exact registry and installed package version before using it.
 
 ## What parity means here
 
@@ -52,8 +51,9 @@ candidate has been published.
 
 ## Curated comparison
 
-“Compatibility” below means the current-source
-`@vibechess/chessboard-native/react-chessboard-compat` adapter. It preserves a
+“Compatibility” below means the
+`@vibechess/chessboard-native/react-chessboard-compat` adapter included in the
+prepared `0.1.0-next.2` package. It preserves a
 familiar options object while reducing it to the primary native contracts. It
 does not emulate browser primitives.
 
@@ -148,10 +148,10 @@ The repository evidence supports these statements:
 - `chessboard-native` is a controlled, rules-free React Native board.
 - It targets the useful surface of the pinned `react-chessboard` 5.10 source
   through reviewed keep, adapt, redesign, and drop decisions.
-- All 131 current-source rows are recorded as implemented in the parity ledger;
-  the ten drop rows are tested exclusions rather than emulated browser features.
+- All 131 pinned rows are recorded as implemented in the parity ledger; the ten
+  drop rows are tested exclusions rather than emulated browser features.
 - The three supported TypeScript entry points and exact package resolver map
-  are frozen as reviewed candidate snapshots.
+  are frozen reviewed declaration snapshots.
 - The compatibility adapter preserves familiar option names where a portable
   native contract exists.
 - The primary API adds revision correlation, controlled annotation operations,
