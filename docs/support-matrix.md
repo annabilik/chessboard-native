@@ -9,7 +9,7 @@ has finished.
 > [!IMPORTANT]
 > The matrices describe the source package prepared as `0.1.0` unless a
 > row explicitly says “published.” Merging does not publish that version.
-> Published `0.1.0-next.2`, from commit `addc0cb`, includes the compatibility
+> Published `0.1.0`, from commit `addc0cb`, includes the compatibility
 > export but ships interim geometric pieces; npm `0.1.0-next.1`, published from
 > commit `8d3c419`, is an older immutable archive without the compatibility
 > export. Verify the exact registry version before treating a prepared package
@@ -21,7 +21,7 @@ has finished.
 
 | Status           | Meaning                                                                                                                                          |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Supported        | Part of the exact prepared-package support contract.                                                                                             |
+| Supported        | Part of the exact published-package support contract.                                                                                            |
 | Normal CI        | Verified on every pull request and push to `main` by a required job.                                                                             |
 | Opt-in native CI | A checked-in native build or audit job exists, but `RUN_NATIVE_CI=true` is currently required. A normal green pull request does not mean it ran. |
 | Manual pending   | The contract and procedure exist, but the required physical or manual release pass is not complete.                                              |
@@ -102,25 +102,25 @@ automatically to any older npm archive.
 
 <!-- markdownlint-disable MD013 -->
 
-| Surface                                                                 | Current-source status | Evidence level                                                                                    | Remaining boundary                                                                                                           |
-| ----------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Static controlled position rendering                                    | Supported             | Unit/component tests, API checks, gallery export, and packed Expo/bare consumers in normal CI     | Physical visual baselines remain pending.                                                                                    |
-| White/black orientation and rectangular dimensions                      | Supported             | Unit and property tests plus gallery examples                                                     | Broad physical device and layout matrix remains pending.                                                                     |
-| Strict FEN and sparse object positions                                  | Supported             | Unit/property contract evidence in normal CI                                                      | FEN remains 8 by 8 only; variants must use object positions.                                                                 |
-| Default and custom piece renderers                                      | Supported             | Component tests, API checks, and gallery export                                                   | Supplied renderer maps replace the defaults as a whole.                                                                      |
-| Native theme, instance styles, square styles, and square renderers      | Supported             | Component and parity contract evidence                                                            | Renderers are visual-only; board geometry and accessibility remain board-owned.                                              |
-| Controlled selection and square activation                              | Supported             | Component and parity contract evidence                                                            | The consumer must publish selection and position changes.                                                                    |
-| Controlled move requests                                                | Supported             | Deterministic sync/async, cancellation, timeout, stale-result, and commit-correlation tests       | The component does not validate chess rules or commit position.                                                              |
-| Board and spare-piece drag                                              | Supported             | Component instrumentation; packed Android/iOS interaction harness available in opt-in native CI   | Physical gesture/device matrix and performance qualification remain pending.                                                 |
-| Provider coordination and `SparePiece`                                  | Supported             | Component tests, examples, and packed interaction harness available in opt-in native CI           | Every spare must target one explicit board; the provider is not a semantic store.                                            |
-| Controlled arrows and square annotations                                | Supported             | Unit/component/parity evidence and gallery examples; packed native annotation fixtures are opt-in | Persistent state remains consumer-owned.                                                                                     |
-| Touch annotation gestures                                               | Supported             | Deterministic component tests and the controlled-annotations gallery route                        | Physical gesture matrix remains pending.                                                                                     |
-| Adjustable board accessibility model                                    | Supported contract    | Component tests; Android Espresso and iOS XCUITest audits are available in opt-in native CI       | Physical TalkBack and VoiceOver validation is a release gate and remains pending.                                            |
-| Reduced-motion policy                                                   | Supported             | Unit/component tests and gallery route                                                            | Physical platform confirmation remains part of the manual matrix.                                                            |
-| Controlled position transitions                                         | Supported             | Pure planning, component, interruption, and geometry-rebase tests                                 | Physical visual/performance baselines remain pending.                                                                        |
-| `react-chessboard` 5.10 compatibility adapter                           | Supported             | API report, adapter/component tests, gallery route, and closed parity ledger                      | Included in published `0.1.0-next.2` and later; npm `0.1.0-next.1` lacks it, and browser-only exclusions remain intentional. |
-| Chess rules, legal moves, promotion choice, and premove queue           | Not provided          | Explicit architecture contract and gallery consumer example                                       | The application or a chess rules library owns them.                                                                          |
-| Hover, right-click, modifier-key arrow colors, and ancestor auto-scroll | Not supported         | Explicit `drop` rows in the pinned parity ledger                                                  | React Native Web and browser-specific compatibility are post-1.0 work.                                                       |
+| Surface                                                                 | Current-source status | Evidence level                                                                                    | Remaining boundary                                                                                                    |
+| ----------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Static controlled position rendering                                    | Supported             | Unit/component tests, API checks, gallery export, and packed Expo/bare consumers in normal CI     | Physical visual baselines remain pending.                                                                             |
+| White/black orientation and rectangular dimensions                      | Supported             | Unit and property tests plus gallery examples                                                     | Broad physical device and layout matrix remains pending.                                                              |
+| Strict FEN and sparse object positions                                  | Supported             | Unit/property contract evidence in normal CI                                                      | FEN remains 8 by 8 only; variants must use object positions.                                                          |
+| Default and custom piece renderers                                      | Supported             | Component tests, API checks, and gallery export                                                   | Supplied renderer maps replace the defaults as a whole.                                                               |
+| Native theme, instance styles, square styles, and square renderers      | Supported             | Component and parity contract evidence                                                            | Renderers are visual-only; board geometry and accessibility remain board-owned.                                       |
+| Controlled selection and square activation                              | Supported             | Component and parity contract evidence                                                            | The consumer must publish selection and position changes.                                                             |
+| Controlled move requests                                                | Supported             | Deterministic sync/async, cancellation, timeout, stale-result, and commit-correlation tests       | The component does not validate chess rules or commit position.                                                       |
+| Board and spare-piece drag                                              | Supported             | Component instrumentation; packed Android/iOS interaction harness available in opt-in native CI   | Physical gesture/device matrix and performance qualification remain pending.                                          |
+| Provider coordination and `SparePiece`                                  | Supported             | Component tests, examples, and packed interaction harness available in opt-in native CI           | Every spare must target one explicit board; the provider is not a semantic store.                                     |
+| Controlled arrows and square annotations                                | Supported             | Unit/component/parity evidence and gallery examples; packed native annotation fixtures are opt-in | Persistent state remains consumer-owned.                                                                              |
+| Touch annotation gestures                                               | Supported             | Deterministic component tests and the controlled-annotations gallery route                        | Physical gesture matrix remains pending.                                                                              |
+| Adjustable board accessibility model                                    | Supported contract    | Component tests; Android Espresso and iOS XCUITest audits are available in opt-in native CI       | Physical TalkBack and VoiceOver validation is a release gate and remains pending.                                     |
+| Reduced-motion policy                                                   | Supported             | Unit/component tests and gallery route                                                            | Physical platform confirmation remains part of the manual matrix.                                                     |
+| Controlled position transitions                                         | Supported             | Pure planning, component, interruption, and geometry-rebase tests                                 | Physical visual/performance baselines remain pending.                                                                 |
+| `react-chessboard` 5.10 compatibility adapter                           | Supported             | API report, adapter/component tests, gallery route, and closed parity ledger                      | Included in published `0.1.0` and later; npm `0.1.0-next.1` lacks it, and browser-only exclusions remain intentional. |
+| Chess rules, legal moves, promotion choice, and premove queue           | Not provided          | Explicit architecture contract and gallery consumer example                                       | The application or a chess rules library owns them.                                                                   |
+| Hover, right-click, modifier-key arrow colors, and ancestor auto-scroll | Not supported         | Explicit `drop` rows in the pinned parity ledger                                                  | React Native Web and browser-specific compatibility are post-1.0 work.                                                |
 
 <!-- markdownlint-enable MD013 -->
 
@@ -175,7 +175,7 @@ See the [CI workflow](../.github/workflows/ci.yml), the
 
 ### Published prerelease evidence
 
-The release record documents `0.1.0-next.1` as:
+The current release record documents `0.1.0` as:
 
 - built and inspected as one exact archive;
 - published through npm trusted OIDC with provenance;
@@ -183,9 +183,12 @@ The release record documents `0.1.0-next.1` as:
 - installed into clean Expo and bare React Native consumers, with type checks
   and Expo production exports.
 
-That evidence belongs to commit `8d3c419` and that immutable archive. It does
-not validate later main-branch APIs. Merging also does not publish. See
-[Releasing](./releasing.md).
+That evidence belongs to commit
+`f8aa4653e9d75d3141dfcbae52a1223a327f6945`, workflow run
+[`30806201340`](https://github.com/annabilik/chessboard-native/actions/runs/30806201340),
+and registry archive SHA-256
+`7457c0f66774c03ca18a3bc05496471d1bf58f4163069f5e15245b64aeb8ea67`.
+It does not validate later package changes. See [Releasing](./releasing.md).
 
 ## Release validation still pending
 
@@ -194,18 +197,18 @@ normal CI run:
 
 <!-- markdownlint-disable MD013 -->
 
-| Release evidence             | Status         | What remains                                                                                                               |
-| ---------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Physical TalkBack            | Manual pending | Spoken output, gesture behavior, announcement delivery, and focus retention on real Android hardware.                      |
-| Physical VoiceOver           | Manual pending | Rotor and custom-action discoverability/execution, spoken output, announcements, and focus retention on real iOS hardware. |
-| Visual baselines             | Manual pending | Approved baselines across the release device and appearance matrix.                                                        |
-| Gesture and lifecycle matrix | Manual pending | Physical-device scrolling, clipping, cancellation, orientation, backgrounding, and reuse checks.                           |
-| Compatibility matrix         | Manual pending | Recorded results for the chosen OS, device, Expo, React Native, and native toolchain combinations.                         |
-| Performance budgets          | Manual pending | Physical JS/UI frame, render-count, memory, and large-board measurements.                                                  |
-| Parity closure               | Complete       | All 131 ledger rows have one passing executable contract; the ten intentional drops are tested exclusions.                 |
-| API freeze                   | Complete       | Three reviewed TypeScript entry-point reports plus the exact package resolver map are required in normal CI.               |
-| Release candidate            | Not published  | Fresh clean-install, native, accessibility, performance, and burn-in gates must precede an RC claim.                       |
-| 1.0 production support       | Not declared   | The current package remains a 0.x evaluation surface.                                                                      |
+| Release evidence             | Status         | What remains                                                                                                                                                                                            |
+| ---------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Physical TalkBack            | Manual pending | The exact-package [record](./release-evidence/accessibility-0.1.0.md) awaits spoken output, gesture behavior, announcement delivery, and focus retention on real Android hardware.                      |
+| Physical VoiceOver           | Manual pending | The exact-package [record](./release-evidence/accessibility-0.1.0.md) awaits rotor and custom-action discoverability/execution, spoken output, announcements, and focus retention on real iOS hardware. |
+| Visual baselines             | Manual pending | Approved baselines across the release device and appearance matrix.                                                                                                                                     |
+| Gesture and lifecycle matrix | Manual pending | Physical-device scrolling, clipping, cancellation, orientation, backgrounding, and reuse checks.                                                                                                        |
+| Compatibility matrix         | Manual pending | Recorded results for the chosen OS, device, Expo, React Native, and native toolchain combinations.                                                                                                      |
+| Performance budgets          | Manual pending | Physical JS/UI frame, render-count, memory, and large-board measurements.                                                                                                                               |
+| Parity closure               | Complete       | All 131 ledger rows have one passing executable contract; the ten intentional drops are tested exclusions.                                                                                              |
+| API freeze                   | Complete       | Three reviewed TypeScript entry-point reports plus the exact package resolver map are required in normal CI.                                                                                            |
+| Release candidate            | Not published  | Fresh clean-install, native, accessibility, performance, and burn-in gates must precede an RC claim.                                                                                                    |
+| 1.0 production support       | Not declared   | The current package remains a 0.x evaluation surface.                                                                                                                                                   |
 
 <!-- markdownlint-enable MD013 -->
 
@@ -213,7 +216,8 @@ Automated accessibility audits are valuable but cannot establish spoken
 pronunciation, TalkBack gesture behavior, VoiceOver rotor behavior, or live
 focus retention. The
 [manual TalkBack and VoiceOver checklist](./accessibility.md#manual-talkback-and-voiceover-pass)
-remains authoritative for those claims.
+and [physical validation runbook](./physical-accessibility-validation.md)
+remain authoritative for those claims.
 
 ## Consumer setup requirements
 
