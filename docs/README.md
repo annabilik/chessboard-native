@@ -33,6 +33,8 @@ newly documented surface.
 ## Quality and release
 
 - [Accessibility contract](accessibility.md)
+- [Physical accessibility validation](physical-accessibility-validation.md)
+- [Accessibility evidence for `0.1.0-next.2`](release-evidence/accessibility-0.1.0-next.2.md)
 - [Prerelease runbook](releasing.md)
 
 The Expo gallery is source-controlled in

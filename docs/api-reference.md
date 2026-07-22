@@ -252,9 +252,9 @@ identity violations. It includes a stable `code`, recovery `domain`, optional
 ## Compatibility entry point
 
 > [!IMPORTANT]
-> The prepared `0.1.0-next.2` package exports this entry point; npm
-> `0.1.0-next.1` does not. Merging does not publish, so verify that the registry
-> exposes the exact prepared version before importing the subpath from npm.
+> Published `0.1.0-next.2` exports this entry point; npm `0.1.0-next.1` does
+> not. Verify the exact installed version before importing the subpath because
+> npm's `next` tag moves between prereleases.
 
 The compatibility entry point exports its own `Chessboard`,
 `ReactChessboardOptions`, upstream-shaped position/arrow/callback payload

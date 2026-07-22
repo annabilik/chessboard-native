@@ -226,6 +226,25 @@ under `next`, then redownloads the immutable registry version and repeats the
 artifact and clean-consumer installation checks. Do not proceed if GitHub asks
 for a token instead of using trusted publishing.
 
+### 0.1.0-next.2 publication record
+
+Protected workflow run
+[`29760766252`](https://github.com/annabilik/chessboard-native/actions/runs/29760766252)
+published `@vibechess/chessboard-native@0.1.0-next.2` through trusted OIDC on
+July 20, 2026 from reviewed `main` commit
+`addc0cb8a7e4d6f4302e25e21c124766279ca82b`. All four jobs passed: preparation,
+npm dry run, publication, and registry verification.
+
+The independently downloaded registry archive contains 431 entries and has
+SHA-256
+`69546ea3fd9fc2a89ac4053be21a1d57e537c0ecbe27c5ea7bac02df07412916`,
+exactly matching the inspected workflow archive. Its SLSA provenance binds the
+package to this repository, `.github/workflows/release.yml`, `main`, the source
+commit above, and the workflow invocation. Registry-installed Expo Android and
+iOS exports, Expo type checking, and bare React Native type checking passed.
+The `next` tag moved to `0.1.0-next.2`; `latest` intentionally remained on the
+bootstrap version `0.1.0-next.0`.
+
 ## Post-release checks
 
 After either publishing mode succeeds, verify the public registry state from a

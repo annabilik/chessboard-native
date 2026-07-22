@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "A11Y-01",
+      "routes": ["accessibility"],
+      "title": "Enable the platform screen reader and focus the board"
+    },
+    {
+      "id": "A11Y-02",
+      "routes": ["accessibility"],
+      "title": "Confirm one board focus target with no square descendants"
+    },
+    {
+      "id": "A11Y-03",
+      "routes": ["accessibility"],
+      "title": "Confirm the spoken role, orientation, square, piece, and flags"
+    },
+    {
+      "id": "A11Y-04",
+      "routes": ["accessibility"],
+      "title": "Exercise increment and decrement across rows and boundaries"
+    },
+    {
+      "id": "A11Y-05",
+      "routes": ["accessibility"],
+      "title": "Exercise every available directional action and edge"
+    },
+    {
+      "id": "A11Y-06",
+      "routes": ["accessibility"],
+      "title": "Retain host focus and canonical cursor through orientation change"
+    },
+    {
+      "id": "A11Y-07",
+      "routes": ["accessibility"],
+      "title": "Refresh value without moving the cursor after controlled updates"
+    },
+    {
+      "id": "A11Y-08",
+      "routes": ["accessibility"],
+      "title": "Speak repeated announcement text once for each new ID"
+    },
+    {
+      "id": "A11Y-09",
+      "routes": ["accessibility"],
+      "title": "Preserve focus and cursor through reduced-motion changes"
+    },
+    {
+      "id": "A11Y-10",
+      "routes": ["accessibility"],
+      "title": "Expose no interaction action without its callback gate"
+    },
+    {
+      "id": "A11Y-11",
+      "routes": ["controlled-selection"],
+      "title": "Publish ordinary square activation through controlled selection"
+    },
+    {
+      "id": "A11Y-12",
+      "routes": ["controlled-selection"],
+      "title": "Route a selected destination to exactly one move request"
+    },
+    {
+      "id": "A11Y-13",
+      "routes": ["controlled-selection"],
+      "title": "Clear controlled selection through one explicit action"
+    },
+    {
+      "id": "A11Y-14",
+      "routes": ["move-request"],
+      "title": "Submit one transient source-target move request"
+    },
+    {
+      "id": "A11Y-15",
+      "routes": ["move-request"],
+      "title": "Exercise accessible removal and cancellation"
+    },
+    {
+      "id": "A11Y-16",
+      "routes": ["provider-coordination"],
+      "title": "Keep two provider boards independently focusable"
+    },
+    {
+      "id": "A11Y-17",
+      "routes": ["spare-pieces"],
+      "title": "Place a selected spare through the named board"
+    },
+    {
+      "id": "A11Y-18",
+      "routes": ["spare-pieces"],
+      "title": "Cancel a spare without exposing actions on an unrelated board"
+    },
+    {
+      "id": "A11Y-19",
+      "routes": ["controlled-annotations"],
+      "title": "Create one controlled arrow through accessibility actions"
+    },
+    {
+      "id": "A11Y-20",
+      "routes": ["controlled-annotations"],
+      "title": "Cancel arrow composition without emitting an operation"
+    },
+    {
+      "id": "A11Y-21",
+      "routes": ["controlled-annotations"],
+      "title": "Toggle one controlled square annotation on and off"
+    },
+    {
+      "id": "A11Y-22",
+      "routes": ["controlled-annotations"],
+      "title": "Suppress move and activation actions during annotation mode"
+    },
+    {
+      "id": "A11Y-23",
+      "routes": ["interaction-hardening"],
+      "title": "Clear clipped spare selection after background and resume"
+    },
+    {
+      "id": "A11Y-24",
+      "routes": ["interaction-hardening"],
+      "title": "Cancel a native drag across app lifecycle and restore accessible use"
+    },
+    {
+      "id": "A11Y-25",
+      "routes": ["piece-callbacks"],
+      "title": "Observe board and spare piece presses exactly once"
+    },
+    {
+      "id": "A11Y-26",
+      "routes": ["square-press-callbacks"],
+      "title": "Keep physical press boundaries out of accessibility activation"
+    }
+  ]
+}

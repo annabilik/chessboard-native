@@ -11,6 +11,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 const DECISION_DELAY_MS = 450;
+// Keep the manual cancellation fixture pending for the longest delay supported
+// by React Native timers; the operator is expected to end it explicitly.
+const OPERATOR_DECISION_TIMEOUT_MS = 2_147_483_647;
 
 const INITIAL_POSITION: PositionObject = Object.freeze({
   a1: Object.freeze({ id: 'white-rook', pieceType: 'wR' }),
@@ -23,7 +26,7 @@ type DemoPosition = Omit<ControlledPosition, 'value'> & {
   readonly value: PositionObject;
 };
 
-type DecisionMode = 'accept' | 'reject';
+type DecisionMode = 'accept' | 'hold' | 'reject';
 
 function piecesMatch(
   left: Readonly<PieceData> | undefined,
@@ -65,24 +68,32 @@ function applyIntent(
   });
 }
 
-function waitForDecision(signal: AbortSignal): Promise<boolean> {
+function waitForDecision(
+  signal: AbortSignal,
+  mode: DecisionMode,
+): Promise<boolean> {
   return new Promise((resolve) => {
     if (signal.aborted) {
       resolve(false);
       return;
     }
 
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const finish = (completed: boolean): void => {
-      clearTimeout(timer);
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
       signal.removeEventListener('abort', handleAbort);
       resolve(completed);
     };
     const handleAbort = (): void => {
       finish(false);
     };
-    const timer = setTimeout(() => {
-      finish(true);
-    }, DECISION_DELAY_MS);
+    if (mode !== 'hold') {
+      timer = setTimeout(() => {
+        finish(true);
+      }, DECISION_DELAY_MS);
+    }
     signal.addEventListener('abort', handleAbort, { once: true });
   });
 }
@@ -110,11 +121,14 @@ export default function MoveRequestExample() {
 
   const onMoveRequest = useCallback<OnMoveRequest>(async (intent, context) => {
     const mode = decisionModeRef.current;
+    const requestLabel = `${intent.source.kind === 'board' ? intent.source.square : intent.source.spareId} → ${intent.targetSquare ?? 'off board'}`;
     setStatus(
-      `Request ${intent.source.kind === 'board' ? intent.source.square : intent.source.spareId} → ${intent.targetSquare ?? 'off board'} is deciding…`,
+      mode === 'hold'
+        ? `Request ${requestLabel} is held. Invoke Cancel move on the board or use the cancel button.`
+        : `Request ${requestLabel} is deciding…`,
     );
 
-    const completed = await waitForDecision(context.signal);
+    const completed = await waitForDecision(context.signal, mode);
     if (!completed) {
       setStatus('The request was cancelled before the decision completed.');
       return { status: 'rejected', reason: 'cancelled' };
@@ -157,7 +171,10 @@ export default function MoveRequestExample() {
           canDragPiece={canDragWhitePiece}
           gesture={{ allowDragOffBoard }}
           interactionPermissions={{ accessibility: true, drag: true }}
-          moveRequestTimeouts={{ commitMs: 1_500, decisionMs: 3_000 }}
+          moveRequestTimeouts={{
+            commitMs: 1_500,
+            decisionMs: OPERATOR_DECISION_TIMEOUT_MS,
+          }}
           onMoveRequest={onMoveRequest}
           position={position}
           reduceMotion="always"
@@ -183,6 +200,22 @@ export default function MoveRequestExample() {
             style={styles.button}
           >
             <Text style={styles.buttonText}>Toggle accept / reject</Text>
+          </Pressable>
+          <Pressable
+            accessibilityHint="Keeps the next request pending until you invoke Cancel move on the board or use the cancel button."
+            accessibilityRole="button"
+            accessibilityState={{ selected: decisionMode === 'hold' }}
+            onPress={() => {
+              setDecisionMode('hold');
+              setStatus(
+                'The next request will remain pending until you cancel it.',
+              );
+            }}
+            style={styles.button}
+          >
+            <Text style={styles.buttonText}>
+              Hold next request for cancellation
+            </Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -236,7 +269,8 @@ export default function MoveRequestExample() {
         control remains available for every occupied source, proving that drag
         always has a non-drag alternative. An off-board removal is the same
         request with a null target, even while the visible overlay is clamped.
-        The cancel button affects transient move work only.
+        Hold mode keeps the next request pending until the board's Cancel move
+        action or the cancel button ends that transient work.
       </Text>
     </ScrollView>
   );
