@@ -19,6 +19,8 @@ newly documented surface.
 - [Pinned parity ledger](parity/react-chessboard-5.10.md) — exhaustive,
   source-addressed implementation evidence for all pinned exports, options,
   and reviewed behaviors.
+- [Native Storybook](storybook.md) — run and maintain the complete on-device
+  interactive catalog.
 
 ## Architecture
 
@@ -35,7 +37,7 @@ newly documented surface.
 - [Accessibility contract](accessibility.md)
 - [Prerelease runbook](releasing.md)
 
-The Expo gallery is source-controlled in
-[`apps/example`](../apps/example/app/index.tsx). It demonstrates mounted public
-workflows; it is not a substitute for the physical accessibility, performance,
-and device checks listed as pending in the support matrix.
+The Expo gallery and its native Storybook are source-controlled in
+[`apps/example`](../apps/example/app/index.tsx). They demonstrate mounted public
+workflows; neither is a substitute for the physical accessibility,
+performance, and device checks listed as pending in the support matrix.

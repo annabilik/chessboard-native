@@ -3,14 +3,21 @@ import {
   type ReactChessboardArrow,
   type ReactChessboardOptions,
   type ReactChessboardPieceDropHandlerArgs,
+  type ReactChessboardPieceHandlerArgs,
+  type ReactChessboardSquareHandlerArgs,
 } from '@vibechess/chessboard-native/react-chessboard-compat';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type CompatibilityPosition = Readonly<
   Partial<Record<string, Readonly<{ pieceType: string }>>>
 >;
+
+interface CallbackEvent {
+  readonly id: number;
+  readonly message: string;
+}
 
 const INITIAL_POSITION = Object.freeze({
   a1: Object.freeze({ pieceType: 'wR' }),
@@ -54,12 +61,32 @@ function detachArrows(
   );
 }
 
+function describePieceCallback(
+  name: 'canDragPiece' | 'onPieceClick' | 'onPieceDrag',
+  args: Readonly<ReactChessboardPieceHandlerArgs>,
+): string {
+  return `${name}: ${args.piece.pieceType} at ${args.square ?? 'null'}; spare=${String(args.isSparePiece)}.`;
+}
+
+function describeSquareCallback(
+  name: 'onSquareClick' | 'onSquareMouseDown' | 'onSquareMouseUp',
+  args: Readonly<ReactChessboardSquareHandlerArgs>,
+): string {
+  return `${name}: ${args.square}; piece=${args.piece?.pieceType ?? 'null'}.`;
+}
+
 export default function ReactChessboardCompatibilityScreen() {
   const [position, setPosition] =
     useState<CompatibilityPosition>(INITIAL_POSITION);
   const [arrows, setArrows] =
     useState<readonly Readonly<ReactChessboardArrow>[]>(INITIAL_ARROWS);
-  const [lastEvent, setLastEvent] = useState('No compatibility callback yet.');
+  const [eventLog, setEventLog] = useState<readonly CallbackEvent[]>([]);
+  const nextEventId = useRef(1);
+  const recordEvent = useCallback((message: string): void => {
+    const event = Object.freeze({ id: nextEventId.current, message });
+    nextEventId.current += 1;
+    setEventLog((current) => [event, ...current].slice(0, 8));
+  }, []);
 
   const handlePieceDrop = useCallback(
     (args: Readonly<ReactChessboardPieceDropHandlerArgs>): boolean => {
@@ -71,7 +98,7 @@ export default function ReactChessboardCompatibilityScreen() {
         targetSquare === sourceSquare ||
         source?.pieceType !== piece.pieceType
       ) {
-        setLastEvent('Rejected drop; controlled position was not changed.');
+        recordEvent('Rejected drop; controlled position was not changed.');
         return false;
       }
 
@@ -83,12 +110,12 @@ export default function ReactChessboardCompatibilityScreen() {
       }
       next[targetSquare] = Object.freeze({ pieceType: piece.pieceType });
       setPosition(Object.freeze(next));
-      setLastEvent(
+      recordEvent(
         `Accepted ${piece.pieceType}: ${sourceSquare} → ${targetSquare}.`,
       );
       return true;
     },
-    [position],
+    [position, recordEvent],
   );
 
   const handleArrowsChange = useCallback(
@@ -97,9 +124,48 @@ export default function ReactChessboardCompatibilityScreen() {
     }): void => {
       const next = detachArrows(args.arrows);
       setArrows(next);
-      setLastEvent(`Published ${String(next.length)} controlled arrow(s).`);
+      recordEvent(`Published ${String(next.length)} controlled arrow(s).`);
     },
-    [],
+    [recordEvent],
+  );
+  const handleCanDragPiece = useCallback(
+    (args: Readonly<ReactChessboardPieceHandlerArgs>): boolean => {
+      recordEvent(
+        `${describePieceCallback('canDragPiece', args)} Result=true.`,
+      );
+      return true;
+    },
+    [recordEvent],
+  );
+  const handlePieceClick = useCallback(
+    (args: Readonly<ReactChessboardPieceHandlerArgs>): void => {
+      recordEvent(describePieceCallback('onPieceClick', args));
+    },
+    [recordEvent],
+  );
+  const handlePieceDrag = useCallback(
+    (args: Readonly<ReactChessboardPieceHandlerArgs>): void => {
+      recordEvent(describePieceCallback('onPieceDrag', args));
+    },
+    [recordEvent],
+  );
+  const handleSquareClick = useCallback(
+    (args: Readonly<ReactChessboardSquareHandlerArgs>): void => {
+      recordEvent(describeSquareCallback('onSquareClick', args));
+    },
+    [recordEvent],
+  );
+  const handleSquareMouseDown = useCallback(
+    (args: Readonly<ReactChessboardSquareHandlerArgs>): void => {
+      recordEvent(describeSquareCallback('onSquareMouseDown', args));
+    },
+    [recordEvent],
+  );
+  const handleSquareMouseUp = useCallback(
+    (args: Readonly<ReactChessboardSquareHandlerArgs>): void => {
+      recordEvent(describeSquareCallback('onSquareMouseUp', args));
+    },
+    [recordEvent],
   );
 
   const options = useMemo<Readonly<ReactChessboardOptions>>(
@@ -111,6 +177,7 @@ export default function ReactChessboardCompatibilityScreen() {
       arrows,
       boardOrientation: 'white',
       boardStyle: { borderColor: '#5b4636', borderRadius: 12, borderWidth: 2 },
+      canDragPiece: handleCanDragPiece,
       clearArrowsOnClick: true,
       clearArrowsOnPositionChange: false,
       darkSquareStyle: { backgroundColor: '#8c684d' },
@@ -118,12 +185,28 @@ export default function ReactChessboardCompatibilityScreen() {
       id: 'react-chessboard-compat-example',
       lightSquareStyle: { backgroundColor: '#ead7b7' },
       onArrowsChange: handleArrowsChange,
+      onPieceClick: handlePieceClick,
+      onPieceDrag: handlePieceDrag,
       onPieceDrop: handlePieceDrop,
+      onSquareClick: handleSquareClick,
+      onSquareMouseDown: handleSquareMouseDown,
+      onSquareMouseUp: handleSquareMouseUp,
       position,
       showAnimations: true,
       showNotation: true,
     }),
-    [arrows, handleArrowsChange, handlePieceDrop, position],
+    [
+      arrows,
+      handleArrowsChange,
+      handleCanDragPiece,
+      handlePieceClick,
+      handlePieceDrag,
+      handlePieceDrop,
+      handleSquareClick,
+      handleSquareMouseDown,
+      handleSquareMouseUp,
+      position,
+    ],
   );
 
   return (
@@ -143,17 +226,30 @@ export default function ReactChessboardCompatibilityScreen() {
 
         <View style={styles.status}>
           <Text style={styles.statusText}>
-            Pieces: {Object.keys(position).length} · arrows: {arrows.length}
+            Pieces: {Object.keys(position).length} · arrows: {arrows.length} ·
+            callback log (newest first)
           </Text>
-          <Text accessibilityLiveRegion="polite" style={styles.eventText}>
-            {lastEvent}
-          </Text>
+          <View accessibilityLiveRegion="polite">
+            {eventLog.length === 0 ? (
+              <Text style={styles.eventText}>
+                No compatibility callback yet.
+              </Text>
+            ) : (
+              eventLog.map((event) => (
+                <Text key={event.id} style={styles.eventText}>
+                  {event.message}
+                </Text>
+              ))
+            )}
+          </View>
         </View>
 
         <Text style={styles.instructions}>
           Drag a piece to request a controlled position update. Draw an arrow
           with the native arrow gestures; the callback proposes a new array and
-          this screen publishes it back through options.arrows.
+          this screen publishes it back through options.arrows. Press or drag
+          pieces and press occupied or empty squares to inspect the native
+          compatibility callback payloads in the event card.
         </Text>
 
         <View style={styles.actions}>
@@ -161,7 +257,7 @@ export default function ReactChessboardCompatibilityScreen() {
             accessibilityRole="button"
             onPress={() => {
               setPosition(INITIAL_POSITION);
-              setLastEvent('Reset the app-owned position.');
+              recordEvent('Reset the app-owned position.');
             }}
             style={styles.button}
           >
@@ -171,7 +267,7 @@ export default function ReactChessboardCompatibilityScreen() {
             accessibilityRole="button"
             onPress={() => {
               setArrows(ALTERNATE_ARROWS);
-              setLastEvent('Replaced the app-owned arrow array.');
+              recordEvent('Replaced the app-owned arrow array.');
             }}
             style={styles.button}
           >
@@ -181,11 +277,20 @@ export default function ReactChessboardCompatibilityScreen() {
             accessibilityRole="button"
             onPress={() => {
               setArrows(Object.freeze([]));
-              setLastEvent('Cleared the app-owned arrow array.');
+              recordEvent('Cleared the app-owned arrow array.');
             }}
             style={styles.button}
           >
             <Text style={styles.buttonText}>Clear arrows</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setEventLog([]);
+            }}
+            style={styles.button}
+          >
+            <Text style={styles.buttonText}>Clear callback log</Text>
           </Pressable>
         </View>
 

@@ -11,6 +11,7 @@ export default tseslint.config(
       '**/build/**',
       '**/coverage/**',
       '**/dist/**',
+      'apps/example/.rnstorybook/storybook.requires.ts',
       'fixtures/parity/upstream-*/**',
       '**/lib/**',
       '**/node_modules/**',

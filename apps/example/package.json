@@ -7,16 +7,26 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
+    "storybook": "cross-env STORYBOOK_ENABLED=true expo start",
+    "storybook:android": "cross-env STORYBOOK_ENABLED=true expo start --android",
+    "storybook:ios": "cross-env STORYBOOK_ENABLED=true expo start --ios",
+    "storybook:generate": "sb-rn-get-stories --config-path .rnstorybook --no-doc-tools",
     "web": "expo start --web",
     "export:android": "expo export --platform android --output-dir dist/android",
     "export:ios": "expo export --platform ios --output-dir dist/ios",
     "export:native": "npm run export:android && npm run export:ios",
+    "export:storybook:android": "cross-env STORYBOOK_ENABLED=true STORYBOOK_SERVER=false expo export --platform android --output-dir dist/storybook/android",
+    "export:storybook:ios": "cross-env STORYBOOK_ENABLED=true STORYBOOK_SERVER=false expo export --platform ios --output-dir dist/storybook/ios",
+    "export:storybook:native": "npm run export:storybook:android && npm run export:storybook:ios",
     "export:web": "expo export --platform web --output-dir dist/web",
     "typecheck": "tsc --project tsconfig.json --noEmit"
   },
   "dependencies": {
     "@expo/log-box": "~57.0.0",
     "@expo/metro-runtime": "~57.0.3",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/datetimepicker": "9.1.0",
+    "@react-native-community/slider": "5.2.0",
     "@vibechess/chessboard-native": "workspace:*",
     "expo": "~57.0.4",
     "expo-constants": "~57.0.3",
@@ -35,7 +45,17 @@
     "react-native-worklets": "0.10.0"
   },
   "devDependencies": {
+    "@gorhom/bottom-sheet": "5.2.14",
+    "@storybook/addon-ondevice-actions": "10.4.4",
+    "@storybook/addon-ondevice-backgrounds": "10.4.4",
+    "@storybook/addon-ondevice-controls": "10.4.4",
+    "@storybook/addon-ondevice-notes": "10.4.4",
+    "@storybook/react": "10.4.4",
+    "@storybook/react-native": "10.4.4",
+    "@storybook/react-native-ui-lite": "10.4.4",
     "@types/react": "~19.2.4",
+    "cross-env": "10.1.0",
+    "storybook": "10.4.4",
     "typescript": "~6.0.3"
   }
 }

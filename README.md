@@ -181,6 +181,22 @@ React Native harness in [`apps/native-harness`](apps/native-harness/README.md)
 supplies package-resolution, native-build, and deterministic interaction/
 accessibility fixtures.
 
+## Native Storybook
+
+The same private Expo example app provides a searchable on-device Storybook
+with an args-driven public API playground, the complete Cburnett piece set, and
+every focused gallery workflow:
+
+```sh
+pnpm storybook:start
+```
+
+Storybook is enabled only through its alternate Metro entry point. Normal
+gallery bundles remain Storybook-free. The pull-request gate validates the
+exact 15-story inventory and exports Storybook for Android and iOS without
+running native builds. See the [Storybook guide](docs/storybook.md) for usage,
+maintenance, and deliberate limits.
+
 ## Development
 
 The repository pins Node.js 24.15.0 and pnpm 11.11.0.
@@ -193,14 +209,16 @@ pnpm verify
 
 Important commands:
 
-| Command               | Purpose                                                                                    |
-| --------------------- | ------------------------------------------------------------------------------------------ |
-| `pnpm check`          | Formatting, lint, docs, types, Jest, tooling, and parity evidence                          |
-| `pnpm verify`         | Complete pull-request gate, including build, API, package, release, and Expo export checks |
-| `pnpm api:check`      | Compare declarations with all three checked-in API reports                                 |
-| `pnpm package:check`  | Inspect one packed archive with Publint and Are The Types Wrong                            |
-| `pnpm parity:verify`  | Rebuild executable parity evidence and validate the ledger                                 |
-| `pnpm example:export` | Export Android and iOS Expo gallery bundles                                                |
+| Command                 | Purpose                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------ |
+| `pnpm check`            | Formatting, lint, docs, types, Jest, tooling, and parity evidence                          |
+| `pnpm verify`           | Complete pull-request gate, including build, API, package, release, and Expo export checks |
+| `pnpm api:check`        | Compare declarations with all three checked-in API reports                                 |
+| `pnpm package:check`    | Inspect one packed archive with Publint and Are The Types Wrong                            |
+| `pnpm parity:verify`    | Rebuild executable parity evidence and validate the ledger                                 |
+| `pnpm example:export`   | Export Android and iOS Expo gallery bundles                                                |
+| `pnpm storybook:check`  | Regenerate and validate the exact native Storybook inventory                               |
+| `pnpm storybook:export` | Export Android and iOS Storybook bundles without native builds                             |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for local workflow and pull-request
 requirements. Security reports follow [SECURITY.md](SECURITY.md).

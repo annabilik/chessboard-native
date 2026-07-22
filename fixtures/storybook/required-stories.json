@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "stories": [
+    "overview-chessboard-native--public-api-playground",
+    "overview-chessboard-native--cburnett-piece-set",
+    "gallery-controlled-state--controlled-annotations",
+    "gallery-controlled-state--controlled-selection",
+    "gallery-controlled-state--controlled-move-requests",
+    "gallery-controlled-state--promotion-and-premoves",
+    "gallery-interaction-and-composition--provider-coordination",
+    "gallery-interaction-and-composition--spare-pieces",
+    "gallery-interaction-and-composition--piece-callbacks",
+    "gallery-interaction-and-composition--square-press-callbacks",
+    "gallery-interaction-and-composition--interaction-hardening",
+    "gallery-presentation-and-accessibility--controlled-transitions",
+    "gallery-presentation-and-accessibility--visual-customization",
+    "gallery-presentation-and-accessibility--accessibility",
+    "gallery-migration--react-chessboard-compatibility"
+  ]
+}

@@ -14,7 +14,7 @@
     "api:update": "pnpm build && api-extractor run --local --config packages/chessboard-native/api-extractor.json --typescript-compiler-folder node_modules/typescript && api-extractor run --local --config packages/chessboard-native/api-extractor.pieces.json --typescript-compiler-folder node_modules/typescript && api-extractor run --local --config packages/chessboard-native/api-extractor.react-chessboard-compat.json --typescript-compiler-folder node_modules/typescript",
     "build": "pnpm --filter @vibechess/chessboard-native build",
     "changeset": "changeset",
-    "check": "pnpm format:check && pnpm lint && pnpm docs:check && pnpm typecheck && pnpm test:ci && pnpm test:tooling && pnpm parity:complete --results coverage/parity/jest.parity.json",
+    "check": "pnpm format:check && pnpm lint && pnpm docs:check && pnpm typecheck && pnpm test:ci && pnpm test:tooling && pnpm storybook:check && pnpm parity:complete --results coverage/parity/jest.parity.json",
     "clean": "pnpm --recursive --if-present run clean",
     "docs:check": "node scripts/check-documentation.mjs",
     "example:android": "pnpm --filter @vibechess/chessboard-native-example android",
@@ -25,7 +25,7 @@
     "format:check": "prettier --check .",
     "lint": "pnpm lint:code && pnpm lint:markdown",
     "lint:code": "eslint .",
-    "lint:markdown": "markdownlint-cli2 '**/*.md' '#**/node_modules/**' '#**/*.api.md'",
+    "lint:markdown": "markdownlint-cli2 '**/*.md' '#**/node_modules/**' '#**/.expo/**' '#**/*.api.md'",
     "native:android": "pnpm --filter @vibechess/chessboard-native-harness android",
     "native:android:accessibility": "pnpm --filter @vibechess/chessboard-native-harness android:accessibility",
     "native:android:accessibility:managed": "pnpm --filter @vibechess/chessboard-native-harness android:accessibility:managed",
@@ -42,11 +42,14 @@
     "parity:update": "node scripts/check-parity.mjs --write-doc",
     "parity:verify": "pnpm typecheck && pnpm test:ci && pnpm parity:complete --results coverage/parity/jest.parity.json",
     "release:check": "node scripts/check-prerelease.mjs",
+    "storybook:check": "node scripts/check-storybook.mjs",
+    "storybook:export": "pnpm --filter @vibechess/chessboard-native-example export:storybook:native",
+    "storybook:start": "pnpm --filter @vibechess/chessboard-native-example storybook",
     "test": "pnpm --filter @vibechess/chessboard-native test",
     "test:ci": "node scripts/run-jest-ci.mjs",
     "test:tooling": "node --test scripts/tests/*.test.mjs",
     "typecheck": "tsc --project tsconfig.json --noEmit && pnpm --recursive --if-present run typecheck",
-    "verify": "pnpm check && pnpm build && pnpm api:check && pnpm package:check && pnpm release:check && pnpm example:export"
+    "verify": "pnpm check && pnpm build && pnpm api:check && pnpm package:check && pnpm release:check && pnpm example:export && pnpm storybook:export"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",
