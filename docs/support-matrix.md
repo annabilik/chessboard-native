@@ -136,6 +136,8 @@ Every pull request and push to `main` requires:
 - API Extractor report comparison;
 - prerelease metadata validation;
 - Android and iOS Expo gallery bundle export;
+- generated-entry freshness and exact ordered 15-story Storybook inventory;
+- Android and iOS native Storybook bundle export;
 - one inspected npm archive;
 - clean installation of that archive into isolated Expo and bare React Native
   consumers;

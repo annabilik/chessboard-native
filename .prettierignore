@@ -7,6 +7,8 @@
 fixtures/parity/upstream-*/LICENSE*
 fixtures/parity/upstream-*/src/
 docs/parity/react-chessboard-5.10.md
+apps/example/.rnstorybook/storybook.requires.ts
+apps/example/expo-env.d.ts
 **/lib/
 **/node_modules/
 **/*.api.md

@@ -9,7 +9,7 @@
     "web": {
       "output": "static"
     },
-    "plugins": ["expo-router"],
+    "plugins": ["expo-router", "@react-native-community/datetimepicker"],
     "experiments": {
       "typedRoutes": true
     }

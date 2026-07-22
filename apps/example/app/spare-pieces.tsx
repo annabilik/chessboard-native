@@ -37,6 +37,10 @@ const TALL_POSITION = Object.freeze({
   b3: Object.freeze({ id: 'guide', pieceType: 'fairy' }),
   c5: Object.freeze({ id: 'black-king', pieceType: 'bK' }),
 }) satisfies PositionObject;
+const DISABLED_QUEEN = Object.freeze({
+  id: 'disabled-white-queen-offer',
+  pieceType: 'wQ',
+}) satisfies PieceData;
 
 const Fairy: PieceRenderer = ({ size }) => (
   <View
@@ -222,7 +226,8 @@ export default function SparePiecesExample() {
             Tap a spare and then tap a board square, drag it directly, or use
             the board's Place selected spare accessibility action. Each offered
             piece has a fresh stable ID; after a successful placement the
-            palette publishes the next reusable offer.
+            palette publishes the next reusable offer. The disabled queen stays
+            visible but cannot be selected or dragged.
           </Text>
           <View style={styles.paletteRow}>
             <View style={styles.spareOption}>
@@ -250,6 +255,20 @@ export default function SparePiecesExample() {
                 targetBoardId={BOARD_ID}
               />
               <Text style={styles.spareLabel}>Black knight</Text>
+            </View>
+            <View style={styles.spareOption}>
+              <SparePiece
+                accessibilityHint="This disabled offer cannot be selected or dragged."
+                accessibilityLabel="Disabled white queen spare piece"
+                disabled
+                piece={DISABLED_QUEEN}
+                pieceRenderers={EDITOR_RENDERERS}
+                size={64}
+                spareId="disabled-white-queen"
+                style={[styles.sparePiece, styles.disabledSparePiece]}
+                targetBoardId={BOARD_ID}
+              />
+              <Text style={styles.spareLabel}>Disabled queen</Text>
             </View>
           </View>
         </View>
@@ -399,6 +418,9 @@ const styles = StyleSheet.create({
     maxWidth: 520,
     width: '100%',
   },
+  disabledSparePiece: {
+    opacity: 0.42,
+  },
   eyebrow: {
     color: '#665c4d',
     fontSize: 12,
@@ -424,6 +446,7 @@ const styles = StyleSheet.create({
   },
   paletteRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 20,
   },
   primaryButton: {

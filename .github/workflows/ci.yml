@@ -59,6 +59,9 @@ jobs:
       - name: Test parity tooling
         run: pnpm test:tooling
 
+      - name: Validate Storybook inventory
+        run: pnpm storybook:check
+
       - name: Validate upstream parity manifest
         env:
           PARITY_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
@@ -75,6 +78,9 @@ jobs:
 
       - name: Export Expo gallery
         run: pnpm example:export
+
+      - name: Export native Storybook
+        run: pnpm storybook:export
 
   package-artifact:
     name: Package artifact

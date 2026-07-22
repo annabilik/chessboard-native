@@ -101,6 +101,7 @@ adds the authored API and migration material:
 - [Comparison](https://github.com/annabilik/chessboard-native/blob/main/docs/comparison.md)
 - [Support matrix](https://github.com/annabilik/chessboard-native/blob/main/docs/support-matrix.md)
 - [Pinned parity ledger](https://github.com/annabilik/chessboard-native/blob/main/docs/parity/react-chessboard-5.10.md)
+- [Native Storybook](https://github.com/annabilik/chessboard-native/blob/main/docs/storybook.md)
 
 ## Core contract
 

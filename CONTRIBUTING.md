@@ -39,6 +39,18 @@ pnpm native:ios:release
 pnpm native:ios:accessibility
 ```
 
+The Expo example also hosts an alternate native Storybook entry. Story changes
+must keep the generated entry and required inventory current:
+
+```sh
+pnpm storybook:check
+pnpm storybook:export
+```
+
+See [`docs/storybook.md`](./docs/storybook.md) before adding or renaming a
+story. The Storybook export is a Metro bundle gate, not a native Xcode or
+Gradle build.
+
 The Android accessibility command needs a running device or emulator. The iOS
 accessibility command selects an available iPhone simulator and requires iOS
 17 or newer. Native CI is temporarily disabled; setting the repository Actions
