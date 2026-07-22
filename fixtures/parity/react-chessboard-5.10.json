@@ -672,7 +672,7 @@
       },
       "status": "implemented",
       "contractTestId": "PARITY-EXPORT-DEFAULT-PIECES",
-      "compatibilityNotes": "The twelve standard piece keys remain, but published defaults use original permissive artwork rather than the fixture-only Cburnett set."
+      "compatibilityNotes": "The twelve standard piece keys remain; published defaults adapt the Wikimedia-attributed Cburnett design as native components. The frozen parity fixture was consulted as a conversion reference and remains package-excluded."
     },
     {
       "id": "export.generate-board",
@@ -1276,7 +1276,7 @@
       },
       "status": "implemented",
       "contractTestId": "PARITY-OPTION-PIECES",
-      "compatibilityNotes": "Whole-object renderer replacement remains explicit; published defaults use permissive native artwork."
+      "compatibilityNotes": "Whole-object renderer replacement remains explicit; published defaults use attributed CC BY-SA 3.0 native Cburnett artwork."
     },
     {
       "id": "option.position",
@@ -4010,7 +4010,7 @@
       },
       "status": "implemented",
       "contractTestId": "PARITY-BEHAVIOR-B48",
-      "compatibilityNotes": "Custom renderers receive square, native size/state, and the published default set uses original permissive artwork; Cburnett stays fixture-only."
+      "compatibilityNotes": "Custom renderers receive square and native size/state; published defaults are native Cburnett renderers attributed to Wikimedia Commons. The frozen parity fixture was consulted as a conversion reference and remains package-excluded."
     },
     {
       "id": "behavior.b49-rules-promotion-decisions-and-premove-absence",

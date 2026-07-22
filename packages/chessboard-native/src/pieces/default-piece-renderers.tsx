@@ -1,221 +1,24 @@
+/**
+ * Cburnett chess artwork from Wikimedia Commons, adapted as a React Native SVG
+ * derivative/port under CC BY-SA 3.0:
+ * https://commons.wikimedia.org/wiki/Category:SVG_chess_pieces
+ */
 import type { ReactElement } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Svg, { Circle, Ellipse, G, Line, Path, Polygon } from 'react-native-svg';
+import Svg, { Circle, G, Path } from 'react-native-svg';
 
 import type { PieceRendererProps, PieceRenderers } from '../public-types';
 
-type GeometricPieceKind =
-  'bishop' | 'king' | 'knight' | 'pawn' | 'queen' | 'rook';
+const BLACK = '#000000';
+const WHITE = '#ffffff';
 
-type GeometricPieceTone = 'dark' | 'light';
-
-interface PiecePalette {
-  readonly accent: string;
-  readonly fill: string;
-  readonly stroke: string;
-}
-
-const LIGHT_PALETTE: PiecePalette = Object.freeze({
-  accent: '#C9C0AE',
-  fill: '#F7F2E8',
-  stroke: '#272522',
-});
-
-const DARK_PALETTE: PiecePalette = Object.freeze({
-  accent: '#766C61',
-  fill: '#302C28',
-  stroke: '#F4EEE2',
-});
-
-function PieceBase({ palette }: { palette: PiecePalette }): ReactElement {
-  return (
-    <G
-      fill={palette.fill}
-      stroke={palette.stroke}
-      strokeLinejoin="round"
-      strokeWidth={4}
-    >
-      <Polygon points="24,72 76,72 84,88 16,88" />
-      <Line x1={20} x2={80} y1={82} y2={82} />
-    </G>
-  );
-}
-
-function Pawn({ palette }: { palette: PiecePalette }): ReactElement {
-  return (
-    <>
-      <G
-        fill={palette.fill}
-        stroke={palette.stroke}
-        strokeLinejoin="round"
-        strokeWidth={4}
-      >
-        <Circle cx={50} cy={28} r={12} />
-        <Path d="M39 42 C40 49 37 59 31 69 L69 69 C63 59 60 49 61 42 C55 47 45 47 39 42 Z" />
-      </G>
-      <PieceBase palette={palette} />
-    </>
-  );
-}
-
-function Rook({ palette }: { palette: PiecePalette }): ReactElement {
-  return (
-    <>
-      <G
-        fill={palette.fill}
-        stroke={palette.stroke}
-        strokeLinejoin="round"
-        strokeWidth={4}
-      >
-        <Polygon points="25,20 36,20 36,29 45,29 45,20 55,20 55,29 64,29 64,20 75,20 72,40 28,40" />
-        <Path d="M32 40 L68 40 L64 69 L36 69 Z" />
-      </G>
-      <Line
-        stroke={palette.accent}
-        strokeLinecap="round"
-        strokeWidth={4}
-        x1={39}
-        x2={61}
-        y1={50}
-        y2={50}
-      />
-      <PieceBase palette={palette} />
-    </>
-  );
-}
-
-function Knight({ palette }: { palette: PiecePalette }): ReactElement {
-  return (
-    <>
-      <Path
-        d="M29 70 C29 57 34 43 46 31 L42 18 L66 27 C75 34 77 45 70 55 C65 62 57 64 51 59 L44 70 Z"
-        fill={palette.fill}
-        stroke={palette.stroke}
-        strokeLinejoin="round"
-        strokeWidth={4}
-      />
-      <Path
-        d="M34 58 C43 51 52 50 62 52"
-        fill="none"
-        stroke={palette.accent}
-        strokeLinecap="round"
-        strokeWidth={4}
-      />
-      <Circle cx={61} cy={38} fill={palette.stroke} r={3} />
-      <PieceBase palette={palette} />
-    </>
-  );
-}
-
-function Bishop({ palette }: { palette: PiecePalette }): ReactElement {
-  return (
-    <>
-      <G
-        fill={palette.fill}
-        stroke={palette.stroke}
-        strokeLinejoin="round"
-        strokeWidth={4}
-      >
-        <Path d="M50 17 C37 27 35 39 50 50 C65 39 63 27 50 17 Z" />
-        <Path d="M39 51 C43 57 38 64 32 70 L68 70 C62 64 57 57 61 51 Z" />
-      </G>
-      <Line
-        stroke={palette.accent}
-        strokeLinecap="round"
-        strokeWidth={4}
-        x1={43}
-        x2={57}
-        y1={37}
-        y2={27}
-      />
-      <PieceBase palette={palette} />
-    </>
-  );
-}
-
-function Queen({ palette }: { palette: PiecePalette }): ReactElement {
-  return (
-    <>
-      <G
-        fill={palette.fill}
-        stroke={palette.stroke}
-        strokeLinejoin="round"
-        strokeWidth={4}
-      >
-        <Polygon points="24,34 30,20 43,31 50,15 57,31 70,20 76,34 68,46 32,46" />
-        <Path d="M33 46 L67 46 C63 55 62 63 68 70 L32 70 C38 63 37 55 33 46 Z" />
-      </G>
-      <G fill={palette.accent} stroke={palette.stroke} strokeWidth={3}>
-        <Circle cx={30} cy={20} r={4} />
-        <Circle cx={50} cy={15} r={4} />
-        <Circle cx={70} cy={20} r={4} />
-      </G>
-      <PieceBase palette={palette} />
-    </>
-  );
-}
-
-function King({ palette }: { palette: PiecePalette }): ReactElement {
-  return (
-    <>
-      <G
-        fill={palette.fill}
-        stroke={palette.stroke}
-        strokeLinejoin="round"
-        strokeWidth={4}
-      >
-        <Path d="M30 43 C35 34 42 32 50 38 C58 32 65 34 70 43 L63 55 C59 60 61 65 67 70 L33 70 C39 65 41 60 37 55 Z" />
-        <Path d="M46 13 H54 V33 H46 Z" />
-        <Path d="M38 19 H62 V27 H38 Z" />
-      </G>
-      <Line
-        stroke={palette.accent}
-        strokeLinecap="round"
-        strokeWidth={4}
-        x1={40}
-        x2={60}
-        y1={48}
-        y2={48}
-      />
-      <PieceBase palette={palette} />
-    </>
-  );
-}
-
-function PieceShape({
-  kind,
-  palette,
-}: {
-  kind: GeometricPieceKind;
-  palette: PiecePalette;
-}): ReactElement {
-  switch (kind) {
-    case 'bishop':
-      return <Bishop palette={palette} />;
-    case 'king':
-      return <King palette={palette} />;
-    case 'knight':
-      return <Knight palette={palette} />;
-    case 'pawn':
-      return <Pawn palette={palette} />;
-    case 'queen':
-      return <Queen palette={palette} />;
-    case 'rook':
-      return <Rook palette={palette} />;
-  }
-}
-
-function GeometricPiece({
-  kind,
+function CburnettPiece({
+  artwork,
   size,
-  tone,
 }: {
-  kind: GeometricPieceKind;
+  artwork: ReactElement;
   size: number;
-  tone: GeometricPieceTone;
 }): ReactElement {
-  const palette = tone === 'light' ? LIGHT_PALETTE : DARK_PALETTE;
-
   return (
     <View
       accessibilityElementsHidden
@@ -228,62 +31,503 @@ function GeometricPiece({
         accessible={false}
         height="100%"
         pointerEvents="none"
-        viewBox="0 0 100 100"
+        viewBox="0 0 45 45"
         width="100%"
       >
-        <Ellipse cx={50} cy={90} fill="#000000" opacity={0.16} rx={34} ry={3} />
-        <PieceShape kind={kind} palette={palette} />
+        {artwork}
       </Svg>
     </View>
   );
 }
 
 function WhitePawn(props: PieceRendererProps): ReactElement {
-  return <GeometricPiece kind="pawn" size={props.size} tone="light" />;
-}
-
-function WhiteKnight(props: PieceRendererProps): ReactElement {
-  return <GeometricPiece kind="knight" size={props.size} tone="light" />;
-}
-
-function WhiteBishop(props: PieceRendererProps): ReactElement {
-  return <GeometricPiece kind="bishop" size={props.size} tone="light" />;
+  return (
+    <CburnettPiece
+      artwork={
+        <Path
+          d="m 22.5,9 c -2.21,0 -4,1.79 -4,4 0,0.89 0.29,1.71 0.78,2.38 C 17.33,16.5 16,18.59 16,21 c 0,2.03 0.94,3.84 2.41,5.03 C 15.41,27.09 11,31.58 11,39.5 H 34 C 34,31.58 29.59,27.09 26.59,26.03 28.06,24.84 29,23.03 29,21 29,18.59 27.67,16.5 25.72,15.38 26.21,14.71 26.5,13.89 26.5,13 c 0,-2.21 -1.79,-4 -4,-4 z"
+          fill={WHITE}
+          fillRule="nonzero"
+          stroke={BLACK}
+          strokeLinecap="round"
+          strokeLinejoin="miter"
+          strokeMiterlimit={4}
+          strokeWidth={1.5}
+        />
+      }
+      size={props.size}
+    />
+  );
 }
 
 function WhiteRook(props: PieceRendererProps): ReactElement {
-  return <GeometricPiece kind="rook" size={props.size} tone="light" />;
+  return (
+    <CburnettPiece
+      artwork={
+        <G
+          fill={WHITE}
+          fillRule="evenodd"
+          stroke={BLACK}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeMiterlimit={4}
+          strokeWidth={1.5}
+        >
+          <Path
+            d="M 9,39 L 36,39 L 36,36 L 9,36 L 9,39 z "
+            strokeLinecap="butt"
+          />
+          <Path
+            d="M 12,36 L 12,32 L 33,32 L 33,36 L 12,36 z "
+            strokeLinecap="butt"
+          />
+          <Path
+            d="M 11,14 L 11,9 L 15,9 L 15,11 L 20,11 L 20,9 L 25,9 L 25,11 L 30,11 L 30,9 L 34,9 L 34,14"
+            strokeLinecap="butt"
+          />
+          <Path d="M 34,14 L 31,17 L 14,17 L 11,14" />
+          <Path
+            d="M 31,17 L 31,29.5 L 14,29.5 L 14,17"
+            strokeLinecap="butt"
+            strokeLinejoin="miter"
+          />
+          <Path d="M 31,29.5 L 32.5,32 L 12.5,32 L 14,29.5" />
+          <Path
+            d="M 11,14 L 34,14"
+            fill="none"
+            stroke={BLACK}
+            strokeLinejoin="miter"
+          />
+        </G>
+      }
+      size={props.size}
+    />
+  );
+}
+
+function WhiteKnight(props: PieceRendererProps): ReactElement {
+  return (
+    <CburnettPiece
+      artwork={
+        <G
+          fill="none"
+          fillRule="evenodd"
+          stroke={BLACK}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeMiterlimit={4}
+          strokeWidth={1.5}
+        >
+          <Path
+            d="M 22,10 C 32.5,11 38.5,18 38,39 L 15,39 C 15,30 25,32.5 23,18"
+            fill={WHITE}
+            stroke={BLACK}
+          />
+          <Path
+            d="M 24,18 C 24.38,20.91 18.45,25.37 16,27 C 13,29 13.18,31.34 11,31 C 9.958,30.06 12.41,27.96 11,28 C 10,28 11.19,29.23 10,30 C 9,30 5.997,31 6,26 C 6,24 12,14 12,14 C 12,14 13.89,12.1 14,10.5 C 13.27,9.506 13.5,8.5 13.5,7.5 C 14.5,6.5 16.5,10 16.5,10 L 18.5,10 C 18.5,10 19.28,8.008 21,7 C 22,7 22,10 22,10"
+            fill={WHITE}
+            stroke={BLACK}
+          />
+          <Path
+            d="M 9.5 25.5 A 0.5 0.5 0 1 1 8.5,25.5 A 0.5 0.5 0 1 1 9.5 25.5 z"
+            fill={BLACK}
+            stroke={BLACK}
+          />
+          <Path
+            d="M 15 15.5 A 0.5 1.5 0 1 1  14,15.5 A 0.5 1.5 0 1 1  15 15.5 z"
+            fill={BLACK}
+            stroke={BLACK}
+            transform="matrix(0.866,0.5,-0.5,0.866,9.693,-5.173)"
+          />
+        </G>
+      }
+      size={props.size}
+    />
+  );
+}
+
+function WhiteBishop(props: PieceRendererProps): ReactElement {
+  return (
+    <CburnettPiece
+      artwork={
+        <G
+          fill="none"
+          fillRule="evenodd"
+          stroke={BLACK}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeMiterlimit={4}
+          strokeWidth={1.5}
+        >
+          <G fill={WHITE} stroke={BLACK} strokeLinecap="butt">
+            <Path d="M 9,36 C 12.39,35.03 19.11,36.43 22.5,34 C 25.89,36.43 32.61,35.03 36,36 C 36,36 37.65,36.54 39,38 C 38.32,38.97 37.35,38.99 36,38.5 C 32.61,37.53 25.89,38.96 22.5,37.5 C 19.11,38.96 12.39,37.53 9,38.5 C 7.65,38.99 6.68,38.97 6,38 C 7.35,36.54 9,36 9,36 z" />
+            <Path d="M 15,32 C 17.5,34.5 27.5,34.5 30,32 C 30.5,30.5 30,30 30,30 C 30,27.5 27.5,26 27.5,26 C 33,24.5 33.5,14.5 22.5,10.5 C 11.5,14.5 12,24.5 17.5,26 C 17.5,26 15,27.5 15,30 C 15,30 14.5,30.5 15,32 z" />
+            <Path d="M 25 8 A 2.5 2.5 0 1 1  20,8 A 2.5 2.5 0 1 1  25 8 z" />
+          </G>
+          <Path
+            d="M 17.5,26 L 27.5,26 M 15,30 L 30,30 M 22.5,15.5 L 22.5,20.5 M 20,18 L 25,18"
+            fill="none"
+            stroke={BLACK}
+            strokeLinejoin="miter"
+          />
+        </G>
+      }
+      size={props.size}
+    />
+  );
 }
 
 function WhiteQueen(props: PieceRendererProps): ReactElement {
-  return <GeometricPiece kind="queen" size={props.size} tone="light" />;
+  return (
+    <CburnettPiece
+      artwork={
+        <G fill={WHITE} stroke={BLACK} strokeLinejoin="round" strokeWidth={1.5}>
+          <Path d="M 9,26 C 17.5,24.5 30,24.5 36,26 L 38.5,13.5 L 31,25 L 30.7,10.9 L 25.5,24.5 L 22.5,10 L 19.5,24.5 L 14.3,10.9 L 14,25 L 6.5,13.5 L 9,26 z" />
+          <Path d="M 9,26 C 9,28 10.5,28 11.5,30 C 12.5,31.5 12.5,31 12,33.5 C 10.5,34.5 11,36 11,36 C 9.5,37.5 11,38.5 11,38.5 C 17.5,39.5 27.5,39.5 34,38.5 C 34,38.5 35.5,37.5 34,36 C 34,36 34.5,34.5 33,33.5 C 32.5,31 32.5,31.5 33.5,30 C 34.5,28 36,28 36,26 C 27.5,24.5 17.5,24.5 9,26 z" />
+          <Path d="M 11.5,30 C 15,29 30,29 33.5,30" fill="none" />
+          <Path d="M 12,33.5 C 18,32.5 27,32.5 33,33.5" fill="none" />
+          <Circle cx={6} cy={12} r={2} />
+          <Circle cx={14} cy={9} r={2} />
+          <Circle cx={22.5} cy={8} r={2} />
+          <Circle cx={31} cy={9} r={2} />
+          <Circle cx={39} cy={12} r={2} />
+        </G>
+      }
+      size={props.size}
+    />
+  );
 }
 
 function WhiteKing(props: PieceRendererProps): ReactElement {
-  return <GeometricPiece kind="king" size={props.size} tone="light" />;
+  return (
+    <CburnettPiece
+      artwork={
+        <G
+          fill="none"
+          fillRule="evenodd"
+          stroke={BLACK}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeMiterlimit={4}
+          strokeWidth={1.5}
+        >
+          <Path
+            d="M 22.5,11.63 L 22.5,6"
+            fill="none"
+            stroke={BLACK}
+            strokeLinejoin="miter"
+          />
+          <Path
+            d="M 20,8 L 25,8"
+            fill="none"
+            stroke={BLACK}
+            strokeLinejoin="miter"
+          />
+          <Path
+            d="M 22.5,25 C 22.5,25 27,17.5 25.5,14.5 C 25.5,14.5 24.5,12 22.5,12 C 20.5,12 19.5,14.5 19.5,14.5 C 18,17.5 22.5,25 22.5,25"
+            fill={WHITE}
+            stroke={BLACK}
+            strokeLinecap="butt"
+            strokeLinejoin="miter"
+          />
+          <Path
+            d="M 12.5,37 C 18,40.5 27,40.5 32.5,37 L 32.5,30 C 32.5,30 41.5,25.5 38.5,19.5 C 34.5,13 25,16 22.5,23.5 L 22.5,27 L 22.5,23.5 C 20,16 10.5,13 6.5,19.5 C 3.5,25.5 12.5,30 12.5,30 L 12.5,37"
+            fill={WHITE}
+            stroke={BLACK}
+          />
+          <Path
+            d="M 12.5,30 C 18,27 27,27 32.5,30"
+            fill="none"
+            stroke={BLACK}
+          />
+          <Path
+            d="M 12.5,33.5 C 18,30.5 27,30.5 32.5,33.5"
+            fill="none"
+            stroke={BLACK}
+          />
+          <Path
+            d="M 12.5,37 C 18,34 27,34 32.5,37"
+            fill="none"
+            stroke={BLACK}
+          />
+        </G>
+      }
+      size={props.size}
+    />
+  );
 }
 
 function BlackPawn(props: PieceRendererProps): ReactElement {
-  return <GeometricPiece kind="pawn" size={props.size} tone="dark" />;
-}
-
-function BlackKnight(props: PieceRendererProps): ReactElement {
-  return <GeometricPiece kind="knight" size={props.size} tone="dark" />;
-}
-
-function BlackBishop(props: PieceRendererProps): ReactElement {
-  return <GeometricPiece kind="bishop" size={props.size} tone="dark" />;
+  return (
+    <CburnettPiece
+      artwork={
+        <Path
+          d="m 22.5,9 c -2.21,0 -4,1.79 -4,4 0,0.89 0.29,1.71 0.78,2.38 C 17.33,16.5 16,18.59 16,21 c 0,2.03 0.94,3.84 2.41,5.03 C 15.41,27.09 11,31.58 11,39.5 H 34 C 34,31.58 29.59,27.09 26.59,26.03 28.06,24.84 29,23.03 29,21 29,18.59 27.67,16.5 25.72,15.38 26.21,14.71 26.5,13.89 26.5,13 c 0,-2.21 -1.79,-4 -4,-4 z"
+          fill={BLACK}
+          fillRule="nonzero"
+          stroke={BLACK}
+          strokeLinecap="round"
+          strokeLinejoin="miter"
+          strokeMiterlimit={4}
+          strokeWidth={1.5}
+        />
+      }
+      size={props.size}
+    />
+  );
 }
 
 function BlackRook(props: PieceRendererProps): ReactElement {
-  return <GeometricPiece kind="rook" size={props.size} tone="dark" />;
+  return (
+    <CburnettPiece
+      artwork={
+        <G
+          fill={BLACK}
+          fillRule="evenodd"
+          stroke={BLACK}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeMiterlimit={4}
+          strokeWidth={1.5}
+        >
+          <Path
+            d="M 9,39 L 36,39 L 36,36 L 9,36 L 9,39 z "
+            strokeLinecap="butt"
+          />
+          <Path
+            d="M 12.5,32 L 14,29.5 L 31,29.5 L 32.5,32 L 12.5,32 z "
+            strokeLinecap="butt"
+          />
+          <Path
+            d="M 12,36 L 12,32 L 33,32 L 33,36 L 12,36 z "
+            strokeLinecap="butt"
+          />
+          <Path
+            d="M 14,29.5 L 14,16.5 L 31,16.5 L 31,29.5 L 14,29.5 z "
+            strokeLinecap="butt"
+            strokeLinejoin="miter"
+          />
+          <Path
+            d="M 14,16.5 L 11,14 L 34,14 L 31,16.5 L 14,16.5 z "
+            strokeLinecap="butt"
+          />
+          <Path
+            d="M 11,14 L 11,9 L 15,9 L 15,11 L 20,11 L 20,9 L 25,9 L 25,11 L 30,11 L 30,9 L 34,9 L 34,14 L 11,14 z "
+            strokeLinecap="butt"
+          />
+          <Path
+            d="M 12,35.5 L 33,35.5 L 33,35.5"
+            fill="none"
+            stroke={WHITE}
+            strokeLinejoin="miter"
+            strokeWidth={1}
+          />
+          <Path
+            d="M 13,31.5 L 32,31.5"
+            fill="none"
+            stroke={WHITE}
+            strokeLinejoin="miter"
+            strokeWidth={1}
+          />
+          <Path
+            d="M 14,29.5 L 31,29.5"
+            fill="none"
+            stroke={WHITE}
+            strokeLinejoin="miter"
+            strokeWidth={1}
+          />
+          <Path
+            d="M 14,16.5 L 31,16.5"
+            fill="none"
+            stroke={WHITE}
+            strokeLinejoin="miter"
+            strokeWidth={1}
+          />
+          <Path
+            d="M 11,14 L 34,14"
+            fill="none"
+            stroke={WHITE}
+            strokeLinejoin="miter"
+            strokeWidth={1}
+          />
+        </G>
+      }
+      size={props.size}
+    />
+  );
+}
+
+function BlackKnight(props: PieceRendererProps): ReactElement {
+  return (
+    <CburnettPiece
+      artwork={
+        <G
+          fill="none"
+          fillRule="evenodd"
+          stroke={BLACK}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeMiterlimit={4}
+          strokeWidth={1.5}
+        >
+          <Path
+            d="M 22,10 C 32.5,11 38.5,18 38,39 L 15,39 C 15,30 25,32.5 23,18"
+            fill={BLACK}
+            stroke={BLACK}
+          />
+          <Path
+            d="M 24,18 C 24.38,20.91 18.45,25.37 16,27 C 13,29 13.18,31.34 11,31 C 9.958,30.06 12.41,27.96 11,28 C 10,28 11.19,29.23 10,30 C 9,30 5.997,31 6,26 C 6,24 12,14 12,14 C 12,14 13.89,12.1 14,10.5 C 13.27,9.506 13.5,8.5 13.5,7.5 C 14.5,6.5 16.5,10 16.5,10 L 18.5,10 C 18.5,10 19.28,8.008 21,7 C 22,7 22,10 22,10"
+            fill={BLACK}
+            stroke={BLACK}
+          />
+          <Path
+            d="M 9.5 25.5 A 0.5 0.5 0 1 1 8.5,25.5 A 0.5 0.5 0 1 1 9.5 25.5 z"
+            fill={WHITE}
+            stroke={WHITE}
+          />
+          <Path
+            d="M 15 15.5 A 0.5 1.5 0 1 1  14,15.5 A 0.5 1.5 0 1 1  15 15.5 z"
+            fill={WHITE}
+            stroke={WHITE}
+            transform="matrix(0.866,0.5,-0.5,0.866,9.693,-5.173)"
+          />
+          <Path
+            d="M 24.55,10.4 L 24.1,11.85 L 24.6,12 C 27.75,13 30.25,14.49 32.5,18.75 C 34.75,23.01 35.75,29.06 35.25,39 L 35.2,39.5 L 37.45,39.5 L 37.5,39 C 38,28.94 36.62,22.15 34.25,17.66 C 31.88,13.17 28.46,11.02 25.06,10.5 L 24.55,10.4 z "
+            fill={WHITE}
+            stroke="none"
+          />
+        </G>
+      }
+      size={props.size}
+    />
+  );
+}
+
+function BlackBishop(props: PieceRendererProps): ReactElement {
+  return (
+    <CburnettPiece
+      artwork={
+        <G
+          fill="none"
+          fillRule="evenodd"
+          stroke={BLACK}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeMiterlimit={4}
+          strokeWidth={1.5}
+        >
+          <G fill={BLACK} stroke={BLACK} strokeLinecap="butt">
+            <Path d="M 9,36 C 12.39,35.03 19.11,36.43 22.5,34 C 25.89,36.43 32.61,35.03 36,36 C 36,36 37.65,36.54 39,38 C 38.32,38.97 37.35,38.99 36,38.5 C 32.61,37.53 25.89,38.96 22.5,37.5 C 19.11,38.96 12.39,37.53 9,38.5 C 7.65,38.99 6.68,38.97 6,38 C 7.35,36.54 9,36 9,36 z" />
+            <Path d="M 15,32 C 17.5,34.5 27.5,34.5 30,32 C 30.5,30.5 30,30 30,30 C 30,27.5 27.5,26 27.5,26 C 33,24.5 33.5,14.5 22.5,10.5 C 11.5,14.5 12,24.5 17.5,26 C 17.5,26 15,27.5 15,30 C 15,30 14.5,30.5 15,32 z" />
+            <Path d="M 25 8 A 2.5 2.5 0 1 1  20,8 A 2.5 2.5 0 1 1  25 8 z" />
+          </G>
+          <Path
+            d="M 17.5,26 L 27.5,26 M 15,30 L 30,30 M 22.5,15.5 L 22.5,20.5 M 20,18 L 25,18"
+            fill="none"
+            stroke={WHITE}
+            strokeLinejoin="miter"
+          />
+        </G>
+      }
+      size={props.size}
+    />
+  );
 }
 
 function BlackQueen(props: PieceRendererProps): ReactElement {
-  return <GeometricPiece kind="queen" size={props.size} tone="dark" />;
+  return (
+    <CburnettPiece
+      artwork={
+        <G
+          fill={BLACK}
+          stroke={BLACK}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.5}
+        >
+          <Path
+            d="M 9,26 C 17.5,24.5 30,24.5 36,26 L 38.5,13.5 L 31,25 L 30.7,10.9 L 25.5,24.5 L 22.5,10 L 19.5,24.5 L 14.3,10.9 L 14,25 L 6.5,13.5 L 9,26 z"
+            fill={BLACK}
+            strokeLinecap="butt"
+          />
+          <Path d="m 9,26 c 0,2 1.5,2 2.5,4 1,1.5 1,1 0.5,3.5 -1.5,1 -1,2.5 -1,2.5 -1.5,1.5 0,2.5 0,2.5 6.5,1 16.5,1 23,0 0,0 1.5,-1 0,-2.5 0,0 0.5,-1.5 -1,-2.5 -0.5,-2.5 -0.5,-2 0.5,-3.5 1,-2 2.5,-2 2.5,-4 -8.5,-1.5 -18.5,-1.5 -27,0 z" />
+          <Path d="M 11.5,30 C 15,29 30,29 33.5,30" />
+          <Path d="m 12,33.5 c 6,-1 15,-1 21,0" />
+          <Circle cx={6} cy={12} r={2} />
+          <Circle cx={14} cy={9} r={2} />
+          <Circle cx={22.5} cy={8} r={2} />
+          <Circle cx={31} cy={9} r={2} />
+          <Circle cx={39} cy={12} r={2} />
+          <Path
+            d="M 11,38.5 A 35,35 1 0 0 34,38.5"
+            fill="none"
+            stroke={BLACK}
+            strokeLinecap="butt"
+          />
+          <G fill="none" stroke={WHITE}>
+            <Path d="M 11,29 A 35,35 1 0 1 34,29" />
+            <Path d="M 12.5,31.5 L 32.5,31.5" />
+            <Path d="M 11.5,34.5 A 35,35 1 0 0 33.5,34.5" />
+            <Path d="M 10.5,37.5 A 35,35 1 0 0 34.5,37.5" />
+          </G>
+        </G>
+      }
+      size={props.size}
+    />
+  );
 }
 
 function BlackKing(props: PieceRendererProps): ReactElement {
-  return <GeometricPiece kind="king" size={props.size} tone="dark" />;
+  return (
+    <CburnettPiece
+      artwork={
+        <G
+          fill="none"
+          fillRule="evenodd"
+          stroke={BLACK}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeMiterlimit={4}
+          strokeWidth={1.5}
+        >
+          <Path
+            d="M 22.5,11.63 L 22.5,6"
+            fill="none"
+            stroke={BLACK}
+            strokeLinejoin="miter"
+          />
+          <Path
+            d="M 22.5,25 C 22.5,25 27,17.5 25.5,14.5 C 25.5,14.5 24.5,12 22.5,12 C 20.5,12 19.5,14.5 19.5,14.5 C 18,17.5 22.5,25 22.5,25"
+            fill={BLACK}
+            strokeLinecap="butt"
+            strokeLinejoin="miter"
+          />
+          <Path
+            d="M 12.5,37 C 18,40.5 27,40.5 32.5,37 L 32.5,30 C 32.5,30 41.5,25.5 38.5,19.5 C 34.5,13 25,16 22.5,23.5 L 22.5,27 L 22.5,23.5 C 20,16 10.5,13 6.5,19.5 C 3.5,25.5 12.5,30 12.5,30 L 12.5,37"
+            fill={BLACK}
+            stroke={BLACK}
+          />
+          <Path
+            d="M 20,8 L 25,8"
+            fill="none"
+            stroke={BLACK}
+            strokeLinejoin="miter"
+          />
+          <Path
+            d="M 32,29.5 C 32,29.5 40.5,25.5 38.03,19.85 C 34.15,14 25,18 22.5,24.5 L 22.5,26.6 L 22.5,24.5 C 20,18 10.85,14 6.97,19.85 C 4.5,25.5 13,29.5 13,29.5"
+            fill="none"
+            stroke={WHITE}
+          />
+          <Path
+            d="M 12.5,30 C 18,27 27,27 32.5,30 M 12.5,33.5 C 18,30.5 27,30.5 32.5,33.5 M 12.5,37 C 18,34 27,34 32.5,37"
+            fill="none"
+            stroke={WHITE}
+          />
+        </G>
+      }
+      size={props.size}
+    />
+  );
 }
 
 const standardRenderers = Object.assign(
@@ -307,7 +551,7 @@ const standardRenderers = Object.assign(
   },
 );
 
-/** Original MIT-licensed geometric artwork for the standard piece vocabulary. @public */
+/** Cburnett CC BY-SA 3.0 artwork for the standard piece vocabulary. @public */
 export const defaultPieceRenderers: PieceRenderers =
   Object.freeze(standardRenderers);
 

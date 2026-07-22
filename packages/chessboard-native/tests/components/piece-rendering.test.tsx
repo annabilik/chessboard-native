@@ -109,10 +109,12 @@ describe('controlled piece rendering', () => {
     expect(
       rootOf(fen).queryAll(
         (node) =>
-          node.props['minX'] === 0 &&
-          node.props['minY'] === 0 &&
-          node.props['vbWidth'] === 100 &&
-          node.props['vbHeight'] === 100,
+          node.props['accessible'] === false &&
+          node.props['pointerEvents'] === 'none' &&
+          node.props['width'] === '100%' &&
+          node.props['height'] === '100%' &&
+          typeof node.props['vbWidth'] === 'number' &&
+          typeof node.props['vbHeight'] === 'number',
       ),
     ).toHaveLength(32);
 
