@@ -122,7 +122,7 @@ apply the move; the consumer's next `position` prop is the commit.
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Primary root API          | You want revision correlation, asynchronous decisions, stable annotation IDs, square annotations, selection, accessibility customization, transitions, providers, or targeted spare pieces |
 | `react-chessboard-compat` | You are migrating a `react-chessboard@5.10.0` options object and accept native values and controlled semantics                                                                             |
-| `pieces`                  | You only need the bundled geometric `defaultPieceRenderers` value; renderer types remain on the root API                                                                                   |
+| `pieces`                  | You only need the bundled Cburnett `defaultPieceRenderers` value; renderer types remain on the root API                                                                                    |
 
 > [!IMPORTANT]
 > The prepared `0.1.0-next.2` package exports this compatibility entry point;
@@ -211,7 +211,11 @@ The compatibility target is frozen to `react-chessboard@5.10.0`, commit
 `b74704af988396d3da32a8c1627d95341e1e0061`. Its reviewed source fixture and
 licensing are kept under
 [`fixtures/parity/upstream-b74704a`](fixtures/parity/upstream-b74704a/PROVENANCE.md)
-for offline evidence; they are never included in the npm archive.
+for offline evidence; the fixture directory is never included in the npm
+archive. The published default renderers port Colin M.L. Burnett's Cburnett
+artwork, attributed to the individual Wikimedia Commons files recorded in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), into code-native React Native
+components. No fixture file is imported or shipped by the package.
 
 The machine-readable ledger covers all 39 root exports, 42 options, and 50
 reviewed behaviors. Required parity validation runs the complete gate: all 131
@@ -227,6 +231,9 @@ trusted OIDC only when explicitly requested.
 
 ## License
 
-Project code is available under the [MIT License](LICENSE). Third-party
-material retains its own attribution in [NOTICE.md](NOTICE.md) and
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Project code is available under the [MIT License](LICENSE). The built-in
+Cburnett chess-piece artwork and its adaptation are separately available under
+CC BY-SA 3.0. Attribution, source links, change notices, and the artwork license
+boundary are recorded in [NOTICE.md](NOTICE.md) and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); standalone copies of the
+notice and license are included in the published package.

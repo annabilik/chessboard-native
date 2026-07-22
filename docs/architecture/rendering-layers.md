@@ -101,10 +101,14 @@ the same value therefore produce the same output, and no durable rendered
 position exists beside the current prop.
 
 `defaultPieceRenderers` contains the twelve standard `wP` through `bK` keys and
-uses original geometric artwork authored for this project under its MIT
-license. It does not copy or adapt the fixture-only Cburnett SVG set. The
-interim geometry is sufficient for engineering and static examples; polished
-permissive artwork and its final provenance audit remain a pre-1.0 gate.
+adapts Colin M.L. Burnett's Cburnett artwork from the individual standard
+transparent SVG files on Wikimedia Commons. The SVG geometry and paint data are
+re-expressed as responsive `react-native-svg` components. The artwork
+adaptation is CC BY-SA 3.0 and is isolated from the surrounding MIT-licensed
+code through the package-local notice and license. Wikimedia Commons is the
+recorded artwork origin; the frozen `react-chessboard` fixture was consulted as
+a conversion reference but remains package-excluded. Lichess uses the same
+design as its default piece set.
 
 Supplying `pieceRenderers` replaces that lookup as a whole. Consumers that want
 one standard override spread `defaultPieceRenderers` explicitly; an absent key

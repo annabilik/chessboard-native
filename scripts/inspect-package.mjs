@@ -20,6 +20,7 @@ const repositoryRoot = path.resolve(
 );
 const packageRoot = path.join(repositoryRoot, 'packages/chessboard-native');
 const parityFixturesRoot = path.join(repositoryRoot, 'fixtures/parity');
+const expectedPackageLicense = '(MIT AND CC-BY-SA-3.0)';
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const argumentsList = process.argv.slice(2);
@@ -44,6 +45,8 @@ if (outputArchive && path.extname(outputArchive) !== '.tgz') {
 const requiredPackageFiles = new Set([
   'CHANGELOG.md',
   'LICENSE',
+  'LICENSE.CC-BY-SA-3.0.txt',
+  'NOTICE.md',
   'README.md',
   'lib/module/index.js',
   'lib/module/pieces/index.js',
@@ -61,14 +64,21 @@ const forbiddenPackagePathPatterns = [
   /(?:^|\/)parity(?:\/|$)/i,
   /(?:^|\/)provenance\.md$/i,
   /(?:^|\/)third_party_notices\.md$/i,
-  /(?:^|\/)license\.cc-by-sa-/i,
   /upstream-b74704a/i,
 ];
-const forbiddenPackageContentMarkers = [
-  'By en:User:Cburnett - Own work',
-  'commons.wikimedia.org/wiki/Category:SVG_chess_pieces',
-  'm 22.5,9 c -2.21,0 -4,1.79 -4,4',
-];
+const permittedFixtureDuplicates = new Set(['LICENSE.CC-BY-SA-3.0.txt']);
+const requiredNoticeMarkers = new Map([
+  [
+    'NOTICE.md',
+    [
+      'Colin M.L. Burnett',
+      'commons.wikimedia.org/wiki/Category:SVG_chess_pieces',
+      'Creative Commons Attribution-ShareAlike 3.0 Unported',
+      'LICENSE.CC-BY-SA-3.0.txt',
+    ],
+  ],
+  ['LICENSE.CC-BY-SA-3.0.txt', ['Attribution-ShareAlike 3.0 Unported']],
+]);
 const builtinModuleSpecifiers = new Set([
   ...builtinModules,
   ...builtinModules.map((moduleName) => `node:${moduleName}`),
@@ -133,6 +143,8 @@ function assertPackageContents(files) {
     (file) =>
       file !== 'CHANGELOG.md' &&
       file !== 'LICENSE' &&
+      file !== 'LICENSE.CC-BY-SA-3.0.txt' &&
+      file !== 'NOTICE.md' &&
       file !== 'README.md' &&
       file !== 'package.json' &&
       !file.startsWith('lib/') &&
@@ -188,11 +200,16 @@ async function collectFixtureHashes(directory, hashes = new Map()) {
   return hashes;
 }
 
-async function assertPackageExcludesParityMaterial(files) {
+async function assertPackageExcludesParityFixture(files) {
   const fixtureHashes = await collectFixtureHashes(parityFixturesRoot);
 
   for (const file of files) {
     const packedContent = await readFile(path.join(packageRoot, file.path));
+
+    if (permittedFixtureDuplicates.has(file.path)) {
+      continue;
+    }
+
     const exactFixtureMatches = fixtureHashes.get(sha256(packedContent)) ?? [];
     const exactFixtureMatch = exactFixtureMatches.find(({ content }) =>
       content.equals(packedContent),
@@ -203,15 +220,23 @@ async function assertPackageExcludesParityMaterial(files) {
         `Packed archive file ${file.path} duplicates parity fixture ${exactFixtureMatch.relativePath}`,
       );
     }
+  }
+}
 
-    const leakedMarker = forbiddenPackageContentMarkers.find((marker) =>
-      packedContent.includes(marker),
-    );
+async function assertPackageNotices(files) {
+  const filePaths = new Set(files.map((file) => file.path));
 
-    if (leakedMarker) {
-      throw new Error(
-        `Packed archive file ${file.path} contains vendored artwork/source marker: ${leakedMarker}`,
-      );
+  for (const [filePath, markers] of requiredNoticeMarkers) {
+    if (!filePaths.has(filePath)) {
+      continue;
+    }
+
+    const content = await readFile(path.join(packageRoot, filePath), 'utf8');
+
+    for (const marker of markers) {
+      if (!content.includes(marker)) {
+        throw new Error(`${filePath} is missing required notice: ${marker}`);
+      }
     }
   }
 }
@@ -333,6 +358,13 @@ async function assertPackageModuleGraph(files) {
   const manifest = JSON.parse(
     await readFile(path.join(packageRoot, 'package.json'), 'utf8'),
   );
+
+  if (manifest.license !== expectedPackageLicense) {
+    throw new Error(
+      `Package license must be ${expectedPackageLicense}; received ${String(manifest.license)}`,
+    );
+  }
+
   const declaredRuntimeDependencies = new Set([
     ...Object.keys(manifest.dependencies ?? {}),
     ...Object.keys(manifest.optionalDependencies ?? {}),
@@ -425,7 +457,8 @@ try {
   }
 
   assertPackageContents(packResults[0].files);
-  await assertPackageExcludesParityMaterial(packResults[0].files);
+  await assertPackageExcludesParityFixture(packResults[0].files);
+  await assertPackageNotices(packResults[0].files);
   await assertPackageModuleGraph(packResults[0].files);
 
   const archives = (await readdir(temporaryDirectory)).filter((file) =>

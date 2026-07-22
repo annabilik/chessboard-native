@@ -19,7 +19,7 @@ API reports are the exact declaration locks.
 | Import                                                 | Purpose                                                           |
 | ------------------------------------------------------ | ----------------------------------------------------------------- |
 | `@vibechess/chessboard-native`                         | Primary controlled components, types, defaults, and pure helpers  |
-| `@vibechess/chessboard-native/pieces`                  | Focused original geometric `defaultPieceRenderers` value          |
+| `@vibechess/chessboard-native/pieces`                  | Focused CC BY-SA 3.0 Cburnett `defaultPieceRenderers` value       |
 | `@vibechess/chessboard-native/react-chessboard-compat` | Native adapter with pinned `react-chessboard@5.10.0` option names |
 
 The package is ESM-only. Import public values and types from these entry points;

@@ -34,6 +34,8 @@
     "lib",
     "CHANGELOG.md",
     "LICENSE",
+    "LICENSE.CC-BY-SA-3.0.txt",
+    "NOTICE.md",
     "README.md"
   ],
   "sideEffects": false,
@@ -58,7 +60,7 @@
     "directory": "packages/chessboard-native"
   },
   "author": "Anna Bilik <iamannabilik@gmail.com> (https://github.com/annabilik)",
-  "license": "MIT",
+  "license": "(MIT AND CC-BY-SA-3.0)",
   "bugs": {
     "url": "https://github.com/annabilik/chessboard-native/issues"
   },

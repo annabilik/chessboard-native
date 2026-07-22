@@ -384,6 +384,14 @@ explicitly when overriding only one standard piece. A renderer may also
 introduce any custom piece type used by an object position. Ordinary,
 memoized, and forwarded-ref React components are accepted.
 
+The twelve defaults adapt the Cburnett design by Colin M.L. Burnett from the
+individual standard transparent SVG files on Wikimedia Commons. It is the same
+recognizable design used as Lichess's default, but the package artwork was
+sourced from Wikimedia Commons, not Lichess. The artwork and its adaptation are
+CC BY-SA 3.0; surrounding package code remains MIT-licensed. The packaged
+[`NOTICE.md`](NOTICE.md) records attribution, source links, and changes, and
+[`LICENSE.CC-BY-SA-3.0.txt`](LICENSE.CC-BY-SA-3.0.txt) contains the legal code.
+
 `defaultTheme` is safe to spread as a customization base. Unchanged nested
 notation defaults retain their responsive measured font size and insets; only
 fields changed by the derived theme become overrides.
