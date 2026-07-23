@@ -15,10 +15,11 @@ source for all 39 upstream root exports, 42 `ChessboardOptions` fields, and 50
 reviewed observable behaviors.
 
 > [!IMPORTANT]
-> This page describes the source prepared as `0.1.0-next.2`, including the
-> `react-chessboard-compat` subpath. npm `0.1.0-next.1` is an older immutable
-> archive without that export. Merging does not publish the prepared version;
-> check the exact registry and installed package version before using it.
+> This page describes the source prepared as `0.1.0-next.3`. The
+> `react-chessboard-compat` subpath is exported by published `0.1.0-next.2`
+> and later; npm `0.1.0-next.1` is an older immutable archive without that
+> export. Merging does not publish a prepared version; check the exact
+> registry and installed package version before using it.
 
 ## What parity means here
 
@@ -55,8 +56,8 @@ candidate has been published.
 ## Curated comparison
 
 “Compatibility” below means the
-`@vibechess/chessboard-native/react-chessboard-compat` adapter included in the
-prepared `0.1.0-next.2` package. It preserves a
+`@vibechess/chessboard-native/react-chessboard-compat` adapter included in
+published `0.1.0-next.2` and later packages. It preserves a
 familiar options object while reducing it to the primary native contracts. It
 does not emulate browser primitives.
 

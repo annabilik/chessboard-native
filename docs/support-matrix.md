@@ -7,11 +7,13 @@ physical-device, assistive-technology, performance, or release-candidate gate
 has finished.
 
 > [!IMPORTANT]
-> The matrices describe the source package prepared as `0.1.0-next.2` unless a
-> row explicitly says “published.” Merging does not publish that version. npm
-> `0.1.0-next.1`, published from commit `8d3c419`, is an older immutable archive
-> without the later compatibility export. Verify the exact registry version
-> before treating the prepared package as available from npm.
+> The matrices describe the source package prepared as `0.1.0-next.3` unless a
+> row explicitly says “published.” Merging does not publish that version.
+> Published `0.1.0-next.2`, from commit `addc0cb`, includes the compatibility
+> export but ships interim geometric pieces; npm `0.1.0-next.1`, published from
+> commit `8d3c419`, is an older immutable archive without the compatibility
+> export. Verify the exact registry version before treating a prepared package
+> as available from npm.
 
 ## Status vocabulary
 
@@ -67,7 +69,7 @@ another internal path are not public API.
 
 <!-- markdownlint-disable MD013 -->
 
-| Import                                                 | Current repository source | Prepared `0.1.0-next.2` | Contract                                                                                                                                                   |
+| Import                                                 | Current repository source | Prepared `0.1.0-next.3` | Contract                                                                                                                                                   |
 | ------------------------------------------------------ | ------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@vibechess/chessboard-native`                         | Supported                 | Present                 | Primary controlled component, provider, spare piece, public types, theme/defaults, and pure helpers. Consult the API report for the exact current symbols. |
 | `@vibechess/chessboard-native/pieces`                  | Supported                 | Present                 | Focused `defaultPieceRenderers` export.                                                                                                                    |
@@ -95,30 +97,30 @@ resolves declarations. There is no `require` condition.
 
 ## Feature support
 
-The feature status below applies to the prepared `0.1.0-next.2` package, not
-automatically to the older npm archive.
+The feature status below applies to the prepared `0.1.0-next.3` package, not
+automatically to any older npm archive.
 
 <!-- markdownlint-disable MD013 -->
 
-| Surface                                                                 | Current-source status | Evidence level                                                                                    | Remaining boundary                                                                                                |
-| ----------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Static controlled position rendering                                    | Supported             | Unit/component tests, API checks, gallery export, and packed Expo/bare consumers in normal CI     | Physical visual baselines remain pending.                                                                         |
-| White/black orientation and rectangular dimensions                      | Supported             | Unit and property tests plus gallery examples                                                     | Broad physical device and layout matrix remains pending.                                                          |
-| Strict FEN and sparse object positions                                  | Supported             | Unit/property contract evidence in normal CI                                                      | FEN remains 8 by 8 only; variants must use object positions.                                                      |
-| Default and custom piece renderers                                      | Supported             | Component tests, API checks, and gallery export                                                   | Supplied renderer maps replace the defaults as a whole.                                                           |
-| Native theme, instance styles, square styles, and square renderers      | Supported             | Component and parity contract evidence                                                            | Renderers are visual-only; board geometry and accessibility remain board-owned.                                   |
-| Controlled selection and square activation                              | Supported             | Component and parity contract evidence                                                            | The consumer must publish selection and position changes.                                                         |
-| Controlled move requests                                                | Supported             | Deterministic sync/async, cancellation, timeout, stale-result, and commit-correlation tests       | The component does not validate chess rules or commit position.                                                   |
-| Board and spare-piece drag                                              | Supported             | Component instrumentation; packed Android/iOS interaction harness available in opt-in native CI   | Physical gesture/device matrix and performance qualification remain pending.                                      |
-| Provider coordination and `SparePiece`                                  | Supported             | Component tests, examples, and packed interaction harness available in opt-in native CI           | Every spare must target one explicit board; the provider is not a semantic store.                                 |
-| Controlled arrows and square annotations                                | Supported             | Unit/component/parity evidence and gallery examples; packed native annotation fixtures are opt-in | Persistent state remains consumer-owned.                                                                          |
-| Touch annotation gestures                                               | Supported             | Deterministic component tests and the controlled-annotations gallery route                        | Physical gesture matrix remains pending.                                                                          |
-| Adjustable board accessibility model                                    | Supported contract    | Component tests; Android Espresso and iOS XCUITest audits are available in opt-in native CI       | Physical TalkBack and VoiceOver validation is a release gate and remains pending.                                 |
-| Reduced-motion policy                                                   | Supported             | Unit/component tests and gallery route                                                            | Physical platform confirmation remains part of the manual matrix.                                                 |
-| Controlled position transitions                                         | Supported             | Pure planning, component, interruption, and geometry-rebase tests                                 | Physical visual/performance baselines remain pending.                                                             |
-| `react-chessboard` 5.10 compatibility adapter                           | Supported             | API report, adapter/component tests, gallery route, and closed parity ledger                      | Included in prepared `0.1.0-next.2`; npm `0.1.0-next.1` lacks it, and browser-only exclusions remain intentional. |
-| Chess rules, legal moves, promotion choice, and premove queue           | Not provided          | Explicit architecture contract and gallery consumer example                                       | The application or a chess rules library owns them.                                                               |
-| Hover, right-click, modifier-key arrow colors, and ancestor auto-scroll | Not supported         | Explicit `drop` rows in the pinned parity ledger                                                  | React Native Web and browser-specific compatibility are post-1.0 work.                                            |
+| Surface                                                                 | Current-source status | Evidence level                                                                                    | Remaining boundary                                                                                                           |
+| ----------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Static controlled position rendering                                    | Supported             | Unit/component tests, API checks, gallery export, and packed Expo/bare consumers in normal CI     | Physical visual baselines remain pending.                                                                                    |
+| White/black orientation and rectangular dimensions                      | Supported             | Unit and property tests plus gallery examples                                                     | Broad physical device and layout matrix remains pending.                                                                     |
+| Strict FEN and sparse object positions                                  | Supported             | Unit/property contract evidence in normal CI                                                      | FEN remains 8 by 8 only; variants must use object positions.                                                                 |
+| Default and custom piece renderers                                      | Supported             | Component tests, API checks, and gallery export                                                   | Supplied renderer maps replace the defaults as a whole.                                                                      |
+| Native theme, instance styles, square styles, and square renderers      | Supported             | Component and parity contract evidence                                                            | Renderers are visual-only; board geometry and accessibility remain board-owned.                                              |
+| Controlled selection and square activation                              | Supported             | Component and parity contract evidence                                                            | The consumer must publish selection and position changes.                                                                    |
+| Controlled move requests                                                | Supported             | Deterministic sync/async, cancellation, timeout, stale-result, and commit-correlation tests       | The component does not validate chess rules or commit position.                                                              |
+| Board and spare-piece drag                                              | Supported             | Component instrumentation; packed Android/iOS interaction harness available in opt-in native CI   | Physical gesture/device matrix and performance qualification remain pending.                                                 |
+| Provider coordination and `SparePiece`                                  | Supported             | Component tests, examples, and packed interaction harness available in opt-in native CI           | Every spare must target one explicit board; the provider is not a semantic store.                                            |
+| Controlled arrows and square annotations                                | Supported             | Unit/component/parity evidence and gallery examples; packed native annotation fixtures are opt-in | Persistent state remains consumer-owned.                                                                                     |
+| Touch annotation gestures                                               | Supported             | Deterministic component tests and the controlled-annotations gallery route                        | Physical gesture matrix remains pending.                                                                                     |
+| Adjustable board accessibility model                                    | Supported contract    | Component tests; Android Espresso and iOS XCUITest audits are available in opt-in native CI       | Physical TalkBack and VoiceOver validation is a release gate and remains pending.                                            |
+| Reduced-motion policy                                                   | Supported             | Unit/component tests and gallery route                                                            | Physical platform confirmation remains part of the manual matrix.                                                            |
+| Controlled position transitions                                         | Supported             | Pure planning, component, interruption, and geometry-rebase tests                                 | Physical visual/performance baselines remain pending.                                                                        |
+| `react-chessboard` 5.10 compatibility adapter                           | Supported             | API report, adapter/component tests, gallery route, and closed parity ledger                      | Included in published `0.1.0-next.2` and later; npm `0.1.0-next.1` lacks it, and browser-only exclusions remain intentional. |
+| Chess rules, legal moves, promotion choice, and premove queue           | Not provided          | Explicit architecture contract and gallery consumer example                                       | The application or a chess rules library owns them.                                                                          |
+| Hover, right-click, modifier-key arrow colors, and ancestor auto-scroll | Not supported         | Explicit `drop` rows in the pinned parity ledger                                                  | React Native Web and browser-specific compatibility are post-1.0 work.                                                       |
 
 <!-- markdownlint-enable MD013 -->
 

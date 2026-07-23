@@ -3,18 +3,18 @@ import type { Meta, StoryObj } from '@storybook/react-native';
 import ReactChessboardCompatibilityScreen from '../app/react-chessboard-compat';
 
 const meta = {
-  parameters: { layout: 'fullscreen' },
-  title: 'Gallery/Migration',
+  title: 'Migration',
 } satisfies Meta;
 
 export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-export const ReactChessboardCompatibility = {
+export const FromReactChessboard = {
+  name: 'From react-chessboard',
   parameters: {
     notes:
-      'Familiar react-chessboard option names and native piece, square, drop, and arrow callback payloads over the controlled pipeline.',
+      'Familiar react-chessboard option and callback names over the controlled pipeline. Upstream docs teach a chessGameRef workaround for stale onPieceDrop closures; revisioned positions with committedIntentId correlation make that bug class unrepresentable here.',
   },
   render: () => <ReactChessboardCompatibilityScreen />,
 } satisfies Story;

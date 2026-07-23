@@ -2,7 +2,13 @@
 
 <!-- markdownlint-disable MD013 -->
 
+[![npm @next](https://img.shields.io/npm/v/%40vibechess%2Fchessboard-native/next?label=npm%20%40next&color=236a5b)](https://www.npmjs.com/package/@vibechess/chessboard-native)
+[![CI](https://github.com/annabilik/chessboard-native/actions/workflows/ci.yml/badge.svg)](https://github.com/annabilik/chessboard-native/actions/workflows/ci.yml)
+[![License: MIT AND CC BY-SA 3.0](https://img.shields.io/badge/license-MIT%20AND%20CC--BY--SA--3.0-blue)](LICENSE)
+
 A controlled, rules-free React Native chessboard for Android and iOS.
+
+![A React Native chessboard rendering the Scholar's Mate threat with Cburnett pieces and an analysis arrow from h5 to f7](docs/assets/hero-board.svg)
 
 `@vibechess/chessboard-native` targets the useful surface of pinned
 `react-chessboard@5.10.0` with native gestures, rendering, accessibility, and
@@ -12,10 +18,9 @@ truth.
 
 > [!WARNING]
 > The package is in prerelease. This source tree is prepared as
-> `0.1.0-next.2` and includes the `react-chessboard-compat` entry point. Merging
-> a version commit does not publish it, so npm's moving `next` tag can still
-> resolve an older prerelease. Verify the installed version and exports, then
-> pin an exact `0.1.0-next.N` version after evaluation.
+> `0.1.0-next.3`, and merging a version commit does not publish it, so npm's
+> moving `next` tag can lag `main`. Verify the installed version and exports,
+> then pin an exact `0.1.0-next.N` version after evaluation.
 
 ## Highlights
 
@@ -24,12 +29,15 @@ truth.
 - Controlled moves, selection, square/arrow annotations, and transitions.
 - Native drag, tap, spare-piece, annotation, and adjustable-control input.
 - Declarative themes, styles, custom pieces, and visual-only square renderers.
+- Bundled Cburnett piece renderers as code-native React Native SVG components.
 - Multiple-board coordination without provider-owned chess state.
 - A `react-chessboard-compat` entry point for incremental migration.
 - ESM package exports verified in clean Expo and bare React Native consumers.
 
 The library does not contain chess rules, legal-move validation, application
-state, clocks, engines, networking, or product protocol code.
+state, clocks, engines, networking, or product protocol code. Pair it with a
+rules engine you own — the [native Storybook](#gallery-and-native-storybook)
+includes a complete chess.js recipe.
 
 ## Install
 
@@ -45,6 +53,15 @@ npm install \
   react-native-svg@15.15.x \
   react-native-worklets@0.10.x
 ```
+
+| Required peer                  | Supported line |
+| ------------------------------ | -------------- |
+| `react`                        | `19.2.x`       |
+| `react-native`                 | `0.86.x`       |
+| `react-native-gesture-handler` | `2.32.x`       |
+| `react-native-reanimated`      | `4.5.x`        |
+| `react-native-svg`             | `15.15.x`      |
+| `react-native-worklets`        | `0.10.x`       |
 
 Mount the app beneath `GestureHandlerRootView`, configure Reanimated/Worklets
 for the host app, and give the board a constrained parent width. See the
@@ -124,12 +141,6 @@ apply the move; the consumer's next `position` prop is the commit.
 | `react-chessboard-compat` | You are migrating a `react-chessboard@5.10.0` options object and accept native values and controlled semantics                                                                             |
 | `pieces`                  | You only need the bundled Cburnett `defaultPieceRenderers` value; renderer types remain on the root API                                                                                    |
 
-> [!IMPORTANT]
-> The prepared `0.1.0-next.2` package exports this compatibility entry point;
-> npm `0.1.0-next.1` does not. After installing `@next`, confirm the resolved
-> package is `0.1.0-next.2` or a later version that retains the export before
-> using the import below.
-
 ```tsx
 import { Chessboard } from '@vibechess/chessboard-native/react-chessboard-compat';
 
@@ -140,17 +151,33 @@ The compatibility adapter keeps familiar names, not browser primitives or
 upstream shadow state. Read the migration guide before treating it as a
 replacement.
 
+## Prerelease versions
+
+| Version        | Status             | Notable surface                                                                       |
+| -------------- | ------------------ | ------------------------------------------------------------------------------------- |
+| `0.1.0-next.3` | prepared on `main` | Bundled Cburnett default piece renderers (CC BY-SA 3.0)                               |
+| `0.1.0-next.2` | published          | `react-chessboard-compat` entry point; frozen public API and complete parity evidence |
+| `0.1.0-next.1` | published          | npm trusted-publishing (OIDC) proof release                                           |
+| `0.1.0-next.0` | published          | Bootstrap release                                                                     |
+
+Versions before `0.1.0-next.3` ship interim geometric placeholder pieces, and
+versions before `0.1.0-next.2` lack the compatibility entry point. Confirm the
+resolved version before relying on a newly documented surface.
+
 ## Documentation
 
-- [Documentation index](docs/README.md)
-- [API reference](docs/api-reference.md)
-- [Migration from `react-chessboard`](docs/migrating-from-react-chessboard.md)
-- [Comparison with `react-chessboard@5.10.0`](docs/comparison.md)
-- [Support and validation matrix](docs/support-matrix.md)
-- [Pinned parity ledger](docs/parity/react-chessboard-5.10.md)
-- [Accessibility contract](docs/accessibility.md)
-- [Architecture decisions](docs/architecture/invariants.md)
-- [Prerelease runbook](docs/releasing.md)
+| Guide                                                                        | Covers                                                                                     |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| [Documentation index](docs/README.md)                                        | Entry point for every guide                                                                |
+| [API reference](docs/api-reference.md)                                       | Entry points, components, controlled contracts, callbacks, defaults, utilities, and errors |
+| [Migration from `react-chessboard`](docs/migrating-from-react-chessboard.md) | Incremental compatibility-subpath and primary-API migration paths                          |
+| [Comparison](docs/comparison.md)                                             | Semantic differences from `react-chessboard@5.10.0`                                        |
+| [Support and validation matrix](docs/support-matrix.md)                      | Supported lines, platforms, entry points, and the evidence behind each claim               |
+| [Pinned parity ledger](docs/parity/react-chessboard-5.10.md)                 | Source-addressed implementation evidence for all pinned exports, options, and behaviors    |
+| [Accessibility contract](docs/accessibility.md)                              | The single adjustable control, cursor, announcements, and manual checklists                |
+| [Architecture decisions](docs/architecture/invariants.md)                    | The invariant registry and its governing ADRs                                              |
+| [Native Storybook](docs/storybook.md)                                        | Running and maintaining the on-device catalog                                              |
+| [Prerelease runbook](docs/releasing.md)                                      | Version preparation, dry runs, and trusted publishing                                      |
 
 ## Support boundary
 
@@ -164,38 +191,30 @@ certification. Consult the [support matrix](docs/support-matrix.md) for exact
 evidence and the remaining TalkBack, VoiceOver, performance, visual, and device
 coverage gates.
 
-## Gallery
+## Gallery and native Storybook
 
-The Expo gallery contains categorized labs for controlled state, moves,
-selection, providers, spares, annotations, transitions, customization,
-accessibility, compatibility, and interaction hardening.
+The private Expo example app hosts two catalogs:
+
+| Catalog             | Start it               | What it shows                                                                                                                                                                                                                                    |
+| ------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Expo Router gallery | `pnpm example:start`   | Focused labs for every controlled workflow, from move requests to accessibility                                                                                                                                                                  |
+| On-device Storybook | `pnpm storybook:start` | A chess-concept catalog: playing against chess.js, validation, promotion and premoves, game replay and puzzles, board-editor palettes, theming, accessibility, and migration, plus an args-driven playground and the complete Cburnett piece set |
 
 ```sh
 corepack enable
 pnpm install --frozen-lockfile
-pnpm example:start
+pnpm example:start   # or: pnpm storybook:start
 ```
 
-Gallery source lives in [`apps/example`](apps/example/app/index.tsx). The bare
-React Native harness in [`apps/native-harness`](apps/native-harness/README.md)
-supplies package-resolution, native-build, and deterministic interaction/
-accessibility fixtures.
-
-## Native Storybook
-
-The same private Expo example app provides a searchable on-device Storybook
-with an args-driven public API playground, the complete Cburnett piece set, and
-every focused gallery workflow:
-
-```sh
-pnpm storybook:start
-```
-
-Storybook is enabled only through its alternate Metro entry point. Normal
-gallery bundles remain Storybook-free. The pull-request gate validates the
-exact 15-story inventory and exports Storybook for Android and iOS without
-running native builds. See the [Storybook guide](docs/storybook.md) for usage,
-maintenance, and deliberate limits.
+Gallery source lives in [`apps/example`](apps/example/app/index.tsx). Storybook
+is enabled only through its alternate Metro entry point, and normal gallery
+bundles remain Storybook-free; the pull-request gate validates the exact pinned
+story inventory and exports both catalogs for Android and iOS without running
+native builds. The bare React Native harness in
+[`apps/native-harness`](apps/native-harness/README.md) supplies
+package-resolution, native-build, and deterministic interaction/accessibility
+fixtures. See the [Storybook guide](docs/storybook.md) for usage, maintenance,
+and deliberate limits.
 
 ## Development
 
@@ -230,10 +249,11 @@ The compatibility target is frozen to `react-chessboard@5.10.0`, commit
 licensing are kept under
 [`fixtures/parity/upstream-b74704a`](fixtures/parity/upstream-b74704a/PROVENANCE.md)
 for offline evidence; the fixture directory is never included in the npm
-archive. The published default renderers port Colin M.L. Burnett's Cburnett
+archive. The bundled default renderers port Colin M.L. Burnett's Cburnett
 artwork, attributed to the individual Wikimedia Commons files recorded in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), into code-native React Native
-components. No fixture file is imported or shipped by the package.
+components; prepared `0.1.0-next.3` is the first version that ships them. No
+fixture file is imported or shipped by the package.
 
 The machine-readable ledger covers all 39 root exports, 42 options, and 50
 reviewed behaviors. Required parity validation runs the complete gate: all 131
@@ -245,7 +265,8 @@ support, or production readiness.
 
 Merging does not publish. A manual protected workflow builds and inspects one
 archive, performs a registry-safe dry run by default, and publishes through npm
-trusted OIDC only when explicitly requested.
+trusted OIDC only when explicitly requested; the release process is npm
+dist-tag based and is documented in the [prerelease runbook](docs/releasing.md).
 
 ## License
 
