@@ -13,9 +13,9 @@ than the DOM, CSS, and dnd-kit. Position, annotations, and optional selection
 remain controlled by the application.
 
 > [!IMPORTANT]
-> This guide describes the source prepared as `0.1.0-next.2`, which includes
-> the `react-chessboard-compat` entry point. npm `0.1.0-next.1` predates that
-> export, and merging the prepared version does not publish it. Check the exact
+> This guide describes the source prepared as `0.1.0-next.3`. The
+> `react-chessboard-compat` entry point is exported by published
+> `0.1.0-next.2` and later; npm `0.1.0-next.1` predates it. Check the exact
 > installed version, release notes, and package exports before importing the
 > compatibility subpath from npm.
 

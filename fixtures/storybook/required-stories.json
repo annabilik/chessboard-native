@@ -1,20 +1,23 @@
 {
   "schemaVersion": 1,
   "stories": [
-    "overview-chessboard-native--public-api-playground",
-    "overview-chessboard-native--cburnett-piece-set",
-    "gallery-controlled-state--controlled-annotations",
-    "gallery-controlled-state--controlled-selection",
-    "gallery-controlled-state--controlled-move-requests",
-    "gallery-controlled-state--promotion-and-premoves",
-    "gallery-interaction-and-composition--provider-coordination",
-    "gallery-interaction-and-composition--spare-pieces",
-    "gallery-interaction-and-composition--piece-callbacks",
-    "gallery-interaction-and-composition--square-press-callbacks",
-    "gallery-interaction-and-composition--interaction-hardening",
-    "gallery-presentation-and-accessibility--controlled-transitions",
-    "gallery-presentation-and-accessibility--visual-customization",
-    "gallery-presentation-and-accessibility--accessibility",
-    "gallery-migration--react-chessboard-compatibility"
+    "overview--public-api-playground",
+    "overview--cburnett-piece-set",
+    "play-a-game--play-vs-random",
+    "play-a-game--moves-and-validation",
+    "play-a-game--selection-and-legal-move-hints",
+    "play-a-game--promotion-and-premoves",
+    "play-a-game--move-animation-and-special-moves",
+    "analysis-and-training--arrows-and-highlights",
+    "analysis-and-training--game-replay",
+    "analysis-and-training--mate-in-two-puzzle",
+    "board-setup-and-variants--piece-palette-and-drops",
+    "board-setup-and-variants--multiple-boards-and-cross-board-drag",
+    "look-and-feel--themes-and-custom-pieces",
+    "look-and-feel--piece-touch-feedback",
+    "look-and-feel--square-press-feedback",
+    "accessibility--screen-reader-play",
+    "migration--from-react-chessboard",
+    "engineering-lab--interaction-hardening"
   ]
 }

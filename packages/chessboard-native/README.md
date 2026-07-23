@@ -1,12 +1,16 @@
 # @vibechess/chessboard-native
 
+![A React Native chessboard rendering the Scholar's Mate threat with Cburnett pieces and an analysis arrow from h5 to f7](https://raw.githubusercontent.com/annabilik/chessboard-native/main/docs/assets/hero-board.svg)
+
 > **Prerelease status:** `0.1.0-next.*` releases are for evaluation and
 > integration testing, not production use; APIs may change before 1.0. The
 > installation command targets whichever published prerelease owns `next`.
-> This source tree is prepared as `0.1.0-next.2`, including the compatibility
-> entry point described below, but merging does not publish it. Verify that an
-> `@next` installation resolves `0.1.0-next.2` or a later version that retains
-> the export before relying on it.
+> This source tree is prepared as `0.1.0-next.3`, the first version bundling
+> the Cburnett default piece renderers; earlier published prereleases ship
+> interim geometric pieces, and versions before `0.1.0-next.2` lack the
+> compatibility entry point described below. Merging does not publish. Verify
+> the version an `@next` installation resolves before relying on a newly
+> documented surface.
 
 ## Installation
 

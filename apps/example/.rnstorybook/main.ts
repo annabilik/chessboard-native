@@ -3,7 +3,6 @@ import type { StorybookConfig } from '@storybook/react-native';
 const config = {
   deviceAddons: [
     '@storybook/addon-ondevice-actions',
-    '@storybook/addon-ondevice-backgrounds',
     '@storybook/addon-ondevice-controls',
     '@storybook/addon-ondevice-notes',
   ],

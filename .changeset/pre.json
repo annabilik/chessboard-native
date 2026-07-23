@@ -9,6 +9,7 @@
   "changesets": [
     "accessible-annotation-actions",
     "board-actions-drag-bounds",
+    "cburnett-default-pieces",
     "controlled-annotation-operations",
     "controlled-annotations",
     "controlled-move-requests",

@@ -5,15 +5,19 @@ import {
   type BoardOrientation,
   type ChessboardTheme,
   type PlainSelection,
-  type PositionInput,
+  type PositionObject,
   type ReduceMotion,
 } from '@vibechess/chessboard-native';
 import { defaultPieceRenderers } from '@vibechess/chessboard-native/pieces';
 import type { Meta, StoryObj } from '@storybook/react-native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { action } from 'storybook/actions';
 
-type AnnotationPreset = 'none' | 'shapes' | 'tactics';
-type BoardPreset = 'five-by-three' | 'starting-position' | 'tactics';
+import { replayGame } from '../src/chess-demo';
+
+type AnnotationPreset = 'none' | 'scene';
+type BoardPreset = 'ladder-mate' | 'scholars-mate' | 'starting-position';
+type PositionVariant = 'after-moves' | 'initial';
 type SelectionPreset = 'disabled' | 'none' | 'selected';
 type ThemePreset = 'blue' | 'default' | 'high-contrast';
 
@@ -21,6 +25,7 @@ interface PlaygroundArgs {
   annotationPreset: AnnotationPreset;
   boardPreset: BoardPreset;
   orientation: BoardOrientation;
+  positionVariant: PositionVariant;
   reduceMotion: ReduceMotion;
   selectionPreset: SelectionPreset;
   showNotation: boolean;
@@ -28,97 +33,159 @@ interface PlaygroundArgs {
   transitionDurationMs: number;
 }
 
-interface BoardFixture {
+interface PlaygroundScene {
+  readonly annotations: readonly BoardAnnotation[];
   readonly dimensions?: BoardDimensions;
-  readonly position: PositionInput;
+  readonly selections: Readonly<
+    Record<'disabled' | 'selected', PlainSelection>
+  >;
+  readonly variants: Readonly<Record<PositionVariant, PositionObject>>;
 }
 
-const FIVE_BY_THREE = Object.freeze({
-  dimensions: Object.freeze({ columns: 5, rows: 3 }),
-  position: Object.freeze({
-    a1: Object.freeze({ id: 'white-rook', pieceType: 'wR' }),
-    b2: Object.freeze({ id: 'white-knight', pieceType: 'wN' }),
-    c2: Object.freeze({ id: 'white-pawn', pieceType: 'wP' }),
-    d2: Object.freeze({ id: 'black-pawn', pieceType: 'bP' }),
-    e3: Object.freeze({ id: 'black-king', pieceType: 'bK' }),
-  }),
-}) satisfies BoardFixture;
+// Every scene is real chess: chess.js validates the replayed lines, stable
+// piece IDs make the after-moves variant animate as moves, and every arrow,
+// destination, and highlight is a legal, thematically correct move.
+const OPENING = replayGame(['e4', 'e5', 'Nf3', 'Nc6']);
+const SCHOLARS = replayGame(['e4', 'e5', 'Bc4', 'Nc6', 'Qh5', 'Nf6', 'Qxf7#']);
 
-const STARTING_POSITION = Object.freeze({
-  position: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR',
-}) satisfies BoardFixture;
-
-const TACTICS_POSITION = Object.freeze({
-  position: Object.freeze({
-    a8: Object.freeze({ id: 'black-rook-a8', pieceType: 'bR' }),
-    c6: Object.freeze({ id: 'black-knight-c6', pieceType: 'bN' }),
-    d5: Object.freeze({ id: 'black-pawn-d5', pieceType: 'bP' }),
-    e8: Object.freeze({ id: 'black-king-e8', pieceType: 'bK' }),
-    f7: Object.freeze({ id: 'black-pawn-f7', pieceType: 'bP' }),
-    b2: Object.freeze({ id: 'white-pawn-b2', pieceType: 'wP' }),
-    c3: Object.freeze({ id: 'white-knight-c3', pieceType: 'wN' }),
-    d4: Object.freeze({ id: 'white-queen-d4', pieceType: 'wQ' }),
-    e1: Object.freeze({ id: 'white-king-e1', pieceType: 'wK' }),
-    h1: Object.freeze({ id: 'white-rook-h1', pieceType: 'wR' }),
-  }),
-}) satisfies BoardFixture;
-
-const BOARD_FIXTURES: Readonly<Record<BoardPreset, BoardFixture>> =
-  Object.freeze({
-    'five-by-three': FIVE_BY_THREE,
-    'starting-position': STARTING_POSITION,
-    tactics: TACTICS_POSITION,
-  });
-
-const ANNOTATIONS = Object.freeze({
-  none: Object.freeze([]),
-  shapes: Object.freeze([
-    Object.freeze({
-      color: 'rgba(118, 81, 181, 0.45)',
-      id: 'focus-circle',
-      shape: 'circle',
-      square: 'b2',
-      type: 'square',
-    }),
-    Object.freeze({
-      color: 'rgba(45, 143, 88, 0.45)',
-      id: 'destination-dot',
-      shape: 'dot',
-      square: 'c2',
-      type: 'square',
-    }),
-  ]),
-  tactics: Object.freeze([
+// The starting position; after-moves plays 1.e4 e5 2.Nf3 Nc6.
+const STARTING_SCENE = Object.freeze({
+  annotations: Object.freeze([
     Object.freeze({
       color: '#e46f18',
-      from: 'a1',
-      id: 'candidate-arrow',
-      to: 'c2',
+      from: 'e2',
+      id: 'kings-pawn-arrow',
+      to: 'e4',
       type: 'arrow',
     }),
     Object.freeze({
       color: '#246bc2',
-      from: 'b2',
+      from: 'g1',
       id: 'knight-arrow',
       shape: 'knight',
-      to: 'd3',
+      to: 'f3',
       type: 'arrow',
     }),
   ]),
-}) satisfies Readonly<Record<AnnotationPreset, readonly BoardAnnotation[]>>;
+  // The b1 knight's real developing moves; Na3 is grayed in the disabled
+  // preset because a knight on the rim is dim.
+  selections: Object.freeze({
+    disabled: Object.freeze({
+      destinationSquares: Object.freeze(['a3', 'c3']),
+      disabledSquares: Object.freeze(['a3']),
+      selectedSquare: 'b1',
+    }),
+    selected: Object.freeze({
+      destinationSquares: Object.freeze(['a3', 'c3']),
+      selectedSquare: 'b1',
+    }),
+  }),
+  variants: Object.freeze({
+    'after-moves': OPENING.positions[4],
+    initial: OPENING.positions[0],
+  }),
+}) satisfies PlaygroundScene;
 
-const SELECTIONS = Object.freeze({
-  disabled: Object.freeze({
-    destinationSquares: Object.freeze(['a3', 'c3']),
-    disabledSquares: Object.freeze(['c3']),
-    selectedSquare: 'b2',
+// The Scholar's Mate threat after 1.e4 e5 2.Bc4 Nc6 3.Qh5; after-moves plays
+// the blunder 3...Nf6?? and the mate 4.Qxf7#.
+const SCHOLARS_SCENE = Object.freeze({
+  annotations: Object.freeze([
+    Object.freeze({
+      color: 'rgba(228, 111, 24, 0.4)',
+      id: 'weak-square-circle',
+      shape: 'circle',
+      square: 'f7',
+      type: 'square',
+    }),
+    Object.freeze({
+      color: '#e46f18',
+      from: 'h5',
+      id: 'mate-threat-arrow',
+      to: 'f7',
+      type: 'arrow',
+    }),
+    Object.freeze({
+      color: '#246bc2',
+      from: 'g8',
+      id: 'blunder-arrow',
+      shape: 'knight',
+      to: 'f6',
+      type: 'arrow',
+    }),
+  ]),
+  // The h5 queen's thematic captures; Qxe5+ is grayed because the e5 pawn
+  // is defended by the c6 knight.
+  selections: Object.freeze({
+    disabled: Object.freeze({
+      destinationSquares: Object.freeze(['e5', 'f7']),
+      disabledSquares: Object.freeze(['e5']),
+      selectedSquare: 'h5',
+    }),
+    selected: Object.freeze({
+      destinationSquares: Object.freeze(['e5', 'f7']),
+      selectedSquare: 'h5',
+    }),
   }),
-  none: undefined,
-  selected: Object.freeze({
-    destinationSquares: Object.freeze(['a3', 'c3']),
-    selectedSquare: 'b2',
+  variants: Object.freeze({
+    'after-moves': SCHOLARS.positions[7],
+    initial: SCHOLARS.positions[5],
   }),
-}) satisfies Readonly<Record<SelectionPreset, PlainSelection | undefined>>;
+}) satisfies PlaygroundScene;
+
+// A ladder mate on a rectangular five-by-three board: the a2 rook cuts off
+// the second rank and Rb1-b3 mates along the top rank.
+const LADDER_INITIAL = Object.freeze({
+  a1: Object.freeze({ id: 'white-king', pieceType: 'wK' }),
+  a2: Object.freeze({ id: 'white-rook-a2', pieceType: 'wR' }),
+  b1: Object.freeze({ id: 'white-rook-b1', pieceType: 'wR' }),
+  e3: Object.freeze({ id: 'black-king', pieceType: 'bK' }),
+}) satisfies PositionObject;
+
+const LADDER_SCENE = Object.freeze({
+  annotations: Object.freeze([
+    Object.freeze({
+      color: '#e46f18',
+      from: 'b1',
+      id: 'mating-rook-arrow',
+      to: 'b3',
+      type: 'arrow',
+    }),
+    Object.freeze({
+      color: 'rgba(45, 143, 88, 0.45)',
+      id: 'mating-square-dot',
+      shape: 'dot',
+      square: 'b3',
+      type: 'square',
+    }),
+  ]),
+  dimensions: Object.freeze({ columns: 5, rows: 3 }),
+  selections: Object.freeze({
+    disabled: Object.freeze({
+      destinationSquares: Object.freeze(['b2', 'b3']),
+      disabledSquares: Object.freeze(['b2']),
+      selectedSquare: 'b1',
+    }),
+    selected: Object.freeze({
+      destinationSquares: Object.freeze(['b2', 'b3']),
+      selectedSquare: 'b1',
+    }),
+  }),
+  variants: Object.freeze({
+    'after-moves': Object.freeze({
+      a1: LADDER_INITIAL.a1,
+      a2: LADDER_INITIAL.a2,
+      b3: LADDER_INITIAL.b1,
+      e3: LADDER_INITIAL.e3,
+    }),
+    initial: LADDER_INITIAL,
+  }),
+}) satisfies PlaygroundScene;
+
+const SCENES: Readonly<Record<BoardPreset, PlaygroundScene>> = Object.freeze({
+  'ladder-mate': LADDER_SCENE,
+  'scholars-mate': SCHOLARS_SCENE,
+  'starting-position': STARTING_SCENE,
+});
 
 const THEMES = Object.freeze({
   blue: Object.freeze({
@@ -155,34 +222,48 @@ const CBURNETT_POSITION = Object.freeze({
   e2: Object.freeze({ id: 'black-queen', pieceType: 'bQ' }),
   f1: Object.freeze({ id: 'white-king', pieceType: 'wK' }),
   f2: Object.freeze({ id: 'black-king', pieceType: 'bK' }),
-}) satisfies PositionInput;
+}) satisfies PositionObject;
+
+const logPiecePress = action('onPiecePress');
+const logSquareActivate = action('onSquareActivate');
+const logSquarePressIn = action('onSquarePressIn');
+const logSquarePressOut = action('onSquarePressOut');
 
 function PublicApiPlaygroundScreen(args: PlaygroundArgs) {
-  const fixture = BOARD_FIXTURES[args.boardPreset];
-  const selection = SELECTIONS[args.selectionPreset];
+  const scene = SCENES[args.boardPreset];
+  const selection =
+    args.selectionPreset === 'none'
+      ? undefined
+      : scene.selections[args.selectionPreset];
   const theme = THEMES[args.themePreset];
 
   return (
     <ScrollView contentContainerStyle={styles.content} style={styles.screen}>
       <Text style={styles.title}>Public API playground</Text>
       <Text style={styles.description}>
-        Change presets in the Controls panel. Every visual below comes from
-        controlled props; this story keeps no shadow board state, so pieces do
-        not move here. Open Gallery → Controlled State → Controlled Move
-        Requests to try accepted, rejected, and cancelled moves.
+        Every visual comes from controlled props; the story keeps no shadow
+        board state. Toggle positionVariant to watch the scene&apos;s real moves
+        animate, and watch touches arrive as payloads in the Actions tab. To
+        move pieces yourself, open Play a Game → Play vs Random.
       </Text>
       <View style={styles.boardFrame}>
         <Chessboard
-          annotations={ANNOTATIONS[args.annotationPreset]}
+          annotations={
+            args.annotationPreset === 'none' ? [] : scene.annotations
+          }
           boardId="storybook-public-api"
+          onPiecePress={logPiecePress}
+          onSquareActivate={logSquareActivate}
+          onSquarePressIn={logSquarePressIn}
+          onSquarePressOut={logSquarePressOut}
           orientation={args.orientation}
-          position={fixture.position}
+          position={scene.variants[args.positionVariant]}
           reduceMotion={args.reduceMotion}
           showNotation={args.showNotation}
           transitionDurationMs={args.transitionDurationMs}
-          {...(fixture.dimensions === undefined
+          {...(scene.dimensions === undefined
             ? {}
-            : { dimensions: fixture.dimensions })}
+            : { dimensions: scene.dimensions })}
           {...(selection === undefined ? {} : { selection })}
           {...(theme === undefined ? {} : { theme })}
         />
@@ -216,14 +297,18 @@ function CburnettPieceSetScreen() {
 const meta = {
   argTypes: {
     annotationPreset: {
-      control: 'select',
-      options: ['none', 'tactics', 'shapes'],
+      control: 'radio',
+      options: ['none', 'scene'],
     },
     boardPreset: {
       control: 'select',
-      options: ['starting-position', 'tactics', 'five-by-three'],
+      options: ['starting-position', 'scholars-mate', 'ladder-mate'],
     },
     orientation: { control: 'radio', options: ['white', 'black'] },
+    positionVariant: {
+      control: 'radio',
+      options: ['initial', 'after-moves'],
+    },
     reduceMotion: {
       control: 'radio',
       options: ['system', 'always', 'never'],
@@ -242,17 +327,17 @@ const meta = {
     },
   },
   args: {
-    annotationPreset: 'tactics',
+    annotationPreset: 'scene',
     boardPreset: 'starting-position',
     orientation: 'white',
+    positionVariant: 'initial',
     reduceMotion: 'never',
     selectionPreset: 'none',
     showNotation: true,
     themePreset: 'default',
     transitionDurationMs: 300,
   },
-  parameters: { layout: 'fullscreen' },
-  title: 'Overview/Chessboard Native',
+  title: 'Overview',
 } satisfies Meta<PlaygroundArgs>;
 
 export default meta;
@@ -262,7 +347,7 @@ type Story = StoryObj<PlaygroundArgs>;
 export const PublicApiPlayground = {
   parameters: {
     notes:
-      'A read-only, args-driven tour of position, dimensions, orientation, notation, annotations, selection, themes, and reduced motion.',
+      'Args-driven tour of position, dimensions, orientation, notation, annotations, selection, themes, and reduced motion over three real-chess scenes. positionVariant animates each scene through its verified moves, and observational callbacks stream to the Actions tab.',
   },
   render: (args: PlaygroundArgs) => <PublicApiPlaygroundScreen {...args} />,
 } satisfies Story;

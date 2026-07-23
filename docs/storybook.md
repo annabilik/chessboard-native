@@ -38,19 +38,42 @@ pnpm --filter @vibechess/chessboard-native-example storybook:android
 
 ## Catalog scope
 
-The catalog has 15 required stories:
+The catalog is organized by chess-product concept, so a consumer finds the
+feature they are building rather than the library's internal taxonomy. Every
+story title names a chess concept; every story note names the concept first
+and then the public APIs that implement it. The required inventory is pinned
+in `fixtures/storybook/required-stories.json` and covers these sections:
 
-- an args-driven public API playground;
-- all twelve bundled Cburnett piece renderers;
-- every focused Expo gallery workflow for controlled annotations, selection,
-  move requests (including decision and commit timeouts), rules-owned promotion
-  and premoves, provider coordination, active and disabled spare pieces,
-  callbacks, interaction hardening, transitions, customization, accessibility
-  formatters, and `react-chessboard` migration callback payloads.
+- **Overview** — an args-driven public API playground over three real-chess
+  scenes (the starting position, the Scholar's Mate threat, and a ladder mate
+  on a rectangular board; the `positionVariant` arg animates each scene's
+  verified moves, and observational callbacks stream to the Actions tab), and
+  all twelve bundled Cburnett piece renderers.
+- **Play a Game** — the "using with chess.js" recipe (chess.js validates
+  inside `onMoveRequest`, legal-move hints flow through `selection`, and a
+  random opponent replies with revisioned positions), move validation with
+  decision/commit timeouts, selection and legal-move hints, rules-owned
+  promotion and premoves, and move animation with special moves.
+- **Analysis and Training** — analysis arrows and highlights, Opera Game
+  replay, and the Opera Game's forced finish as a mate-in-two puzzle.
+- **Board Setup and Variants** — a spare-piece board-editor palette and
+  cross-board drag through one explicit provider.
+- **Look and Feel** — themes and custom pieces, piece touch feedback, and
+  square press feedback.
+- **Accessibility** — screen-reader play as one adjustable control.
+- **Migration** — familiar `react-chessboard` names over the controlled
+  pipeline.
+- **Engineering Lab** — the interaction-hardening QA stress lab, deliberately
+  kept outside the chess-concept sections.
 
-The route-backed stories reuse the same public examples as the Expo Router
-gallery. The gallery index itself is not a story because Storybook already
-provides navigation.
+Most stories reuse the same public example screens as the Expo Router
+gallery; the chess.js-powered recipes live in `apps/example/src` as
+Storybook-only screens. chess.js is a dependency of the private example app
+only — the published package stays rules-free. Every board position is real
+chess: replayed lines are validated by chess.js at bundle time, and arrows,
+destinations, and highlights depict legal, thematically correct moves. The
+gallery index itself is not a story because Storybook already provides
+navigation.
 
 Some stories are intentionally manual labs. Timers, native gestures,
 accessibility speech, lifecycle changes, and performance behavior cannot be
@@ -81,7 +104,7 @@ pnpm storybook:check
 
 That check regenerates the entry and fails if it was stale. It also builds the
 CSF index through Storybook's public Node API and requires the exact committed
-15-story inventory, with no missing or accidental stories.
+story inventory, with no missing or accidental stories.
 
 ## Bundle validation
 
