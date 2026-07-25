@@ -109,6 +109,8 @@ alongside `xcrun simctl io booted recordVideo`; that pass is manual.
 
 ## Web preview (unsupported)
 
+Deployed at **<https://chessboard-native.vercel.app>**.
+
 The same story files also build as an ordinary web Storybook through
 `@storybook/react-native-web-vite`, which renders them with
 `react-native-web`. This exists so the catalog can be linked from a browser;

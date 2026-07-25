@@ -211,13 +211,14 @@ pnpm example:start   # or: pnpm storybook:start
 | ![Play vs random Storybook story](docs/assets/storybook/play-vs-random.png) | ![Game replay Storybook story](docs/assets/storybook/game-replay.png) | ![Themes Storybook story](docs/assets/storybook/themes.png) |
 
 Simulator captures of three of the eighteen stories; the
-[Storybook guide](docs/storybook.md#preview-the-catalog) previews more. The
-same stories also build as a browser
-[web preview](docs/storybook.md#web-preview-unsupported) for linking and
-first looks (`pnpm storybook:web`), rendered through `react-native-web`. That
+[Storybook guide](docs/storybook.md#preview-the-catalog) previews more.
+
+**[Browse the catalog in your browser →](https://chessboard-native.vercel.app)**
+The same stories also render on the web through `react-native-web`. That
 preview is a demo artifact only: React Native Web is not a supported target,
 and gesture, animation, and accessibility fidelity are exactly what a DOM
-substitute cannot reproduce, so the on-device catalog stays authoritative.
+substitute cannot reproduce, so the on-device catalog stays authoritative. See
+[web preview](docs/storybook.md#web-preview-unsupported) for its known gaps.
 
 Gallery source lives in [`apps/example`](apps/example/app/index.tsx). Storybook
 is enabled only through its alternate Metro entry point, and normal gallery
