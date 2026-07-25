@@ -211,11 +211,13 @@ pnpm example:start   # or: pnpm storybook:start
 | ![Play vs random Storybook story](docs/assets/storybook/play-vs-random.png) | ![Game replay Storybook story](docs/assets/storybook/game-replay.png) | ![Themes Storybook story](docs/assets/storybook/themes.png) |
 
 Simulator captures of three of the eighteen stories; the
-[Storybook guide](docs/storybook.md#preview-the-catalog) previews more. There is
-no hosted browser catalog: rendering it in a browser would require
-`react-native-web`, which this project does not support, and gestures,
-transitions, and the accessibility surface are precisely what a DOM substitute
-cannot show faithfully — so the catalog runs on devices and simulators.
+[Storybook guide](docs/storybook.md#preview-the-catalog) previews more. The
+same stories also build as a browser
+[web preview](docs/storybook.md#web-preview-unsupported) for linking and
+first looks (`pnpm storybook:web`), rendered through `react-native-web`. That
+preview is a demo artifact only: React Native Web is not a supported target,
+and gesture, animation, and accessibility fidelity are exactly what a DOM
+substitute cannot reproduce, so the on-device catalog stays authoritative.
 
 Gallery source lives in [`apps/example`](apps/example/app/index.tsx). Storybook
 is enabled only through its alternate Metro entry point, and normal gallery

@@ -45,6 +45,8 @@
     "storybook:check": "node scripts/check-storybook.mjs",
     "storybook:export": "pnpm --filter @vibechess/chessboard-native-example export:storybook:native",
     "storybook:start": "pnpm --filter @vibechess/chessboard-native-example storybook",
+    "storybook:web": "pnpm --filter @vibechess/chessboard-native-example storybook:web",
+    "storybook:web:build": "pnpm --filter @vibechess/chessboard-native-example storybook:web:build",
     "test": "pnpm --filter @vibechess/chessboard-native test",
     "test:ci": "node scripts/run-jest-ci.mjs",
     "test:tooling": "node --test scripts/tests/*.test.mjs",
@@ -62,6 +64,7 @@
     "markdownlint-cli2": "0.23.0",
     "prettier": "3.9.5",
     "publint": "0.3.21",
+    "react-native-web": "0.21.2",
     "typescript": "6.0.3",
     "typescript-eslint": "8.63.0"
   }

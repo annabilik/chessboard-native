@@ -39,13 +39,9 @@ exists to demonstrate only exists on a device.
 
 <!-- markdownlint-enable MD013 -->
 
-There is no hosted browser Storybook. Rendering this catalog in a browser
-would require `react-native-web`, which is outside the current support
-contract, and the board's gestures, Reanimated transitions, and single-control
-accessibility surface are exactly the parts a DOM substitute cannot
-demonstrate faithfully. See the
-[support matrix](./support-matrix.md) for the platform boundary and
-[Deliberate limits](#deliberate-limits) below.
+For an interactive browser version, see the
+[web preview](#web-preview-unsupported) below — with the caveat that it is a
+demo artifact, not a supported target.
 
 ## Run it
 
@@ -110,6 +106,73 @@ Pass a story ID and file name to capture one story
 that alters what a featured story looks like, and commit the updated PNGs.
 Recording interaction video additionally requires driving the gestures by hand
 alongside `xcrun simctl io booted recordVideo`; that pass is manual.
+
+## Web preview (unsupported)
+
+The same story files also build as an ordinary web Storybook through
+`@storybook/react-native-web-vite`, which renders them with
+`react-native-web`. This exists so the catalog can be linked from a browser;
+it does **not** extend the support contract. React Native Web remains
+unsupported for the library itself, every claim in the
+[support matrix](./support-matrix.md) is about Android and iOS, and the
+authoritative catalog is the on-device one.
+
+```sh
+pnpm storybook:web         # dev server on http://localhost:6006
+pnpm storybook:web:build   # static site into apps/example/dist/storybook-web
+```
+
+Two pieces of configuration make it work, both in `apps/example/.storybook-web`:
+
+- `react-native-web` is a **root** dev dependency, not an app-level one.
+  pnpm otherwise isolates it from `packages/chessboard-native`, so the bare
+  `react-native` → `react-native-web` alias cannot resolve from the library's
+  own files and the build fails with `Could not load react-native-web`.
+- The preview wraps every story in `GestureHandlerRootView` and
+  `SafeAreaProvider`. The native entry mounts those once for the whole app;
+  on web the story is the root, and without the safe-area provider the
+  gallery screens that render inside `SafeAreaView` produce an empty page.
+
+### What the web preview does and does not show
+
+Verified by rendering every story in headless Chrome: 17 of the 18 stories
+paint a board, with correct measured geometry, theme colours, notation,
+Cburnett SVG pieces, and an `aria-label`/`role="slider"` accessibility host.
+
+Known gaps:
+
+<!-- markdownlint-disable MD013 -->
+
+| Gap                              | Detail                                                                                             |
+| -------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Migration story renders no board | `migration--from-react-chessboard` silently renders nothing on web; it works on device             |
+| Touch fidelity                   | Gestures are driven by mouse through the DOM, so drag feel, momentum, and arbitration differ       |
+| Animation fidelity               | Reanimated runs as plain JavaScript on web instead of on the UI thread                             |
+| Accessibility fidelity           | RN Web maps to ARIA; TalkBack and VoiceOver behaviour cannot be judged from it                     |
+| Dev server                       | `storybook dev` currently fails on an `expo-modules-core` type-declaration export; the build works |
+
+<!-- markdownlint-enable MD013 -->
+
+Treat a web-only failure as a bug in the preview, not evidence about the
+library, and reproduce it on device before filing it against the board.
+
+### Deploying the web preview
+
+`vercel.json` at the repository root configures the deployment: it installs
+with a frozen lockfile, runs `pnpm build` (the library must be built first,
+because the web preview consumes `packages/chessboard-native/lib`) followed by
+`pnpm storybook:web:build`, and serves
+`apps/example/dist/storybook-web`.
+
+Connect the repository once in the Vercel dashboard, or run `vercel` from the
+repository root. Two things to check on the first deploy:
+
+- The project must use **Node.js 24**. The repository pins `node@24.15.0` in
+  `engines` with `engine-strict=true` in `.npmrc`, so an older Node on the
+  build image fails during install.
+- The web preview is not part of `pnpm verify`. A break shows up as a failed
+  Vercel deployment rather than a failed pull-request gate, which is
+  deliberate: an unsupported preview should not block library work.
 
 ### Installable builds
 
@@ -209,11 +272,12 @@ native builds.
 
 ## Deliberate limits
 
-This repository currently supports Android and iOS, not React Native Web.
-Consequently, this slice does not publish a hosted browser Storybook; the
-committed previews above are the browser-visible substitute. A web catalog,
-automated gesture traversal, and screenshot baselines should each be separate
-changes after their support and maintenance costs are accepted.
+This repository supports Android and iOS, not React Native Web. The
+[web preview](#web-preview-unsupported) is a demo artifact built from the same
+stories; it is not a support claim, and no parity, accessibility, or
+performance evidence is collected from it. Automated gesture traversal and
+screenshot baselines remain separate changes after their maintenance costs are
+accepted.
 
 The committed previews are documentation, not a visual-regression baseline.
 Nothing fails when they age, so refresh them deliberately with the capture
