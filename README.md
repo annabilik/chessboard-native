@@ -206,6 +206,17 @@ pnpm install --frozen-lockfile
 pnpm example:start   # or: pnpm storybook:start
 ```
 
+| Play vs random (chess.js)                                                   | Game replay                                                           | Themes and custom pieces                                    |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------- |
+| ![Play vs random Storybook story](docs/assets/storybook/play-vs-random.png) | ![Game replay Storybook story](docs/assets/storybook/game-replay.png) | ![Themes Storybook story](docs/assets/storybook/themes.png) |
+
+Simulator captures of three of the eighteen stories; the
+[Storybook guide](docs/storybook.md#preview-the-catalog) previews more. There is
+no hosted browser catalog: rendering it in a browser would require
+`react-native-web`, which this project does not support, and gestures,
+transitions, and the accessibility surface are precisely what a DOM substitute
+cannot show faithfully — so the catalog runs on devices and simulators.
+
 Gallery source lives in [`apps/example`](apps/example/app/index.tsx). Storybook
 is enabled only through its alternate Metro entry point, and normal gallery
 bundles remain Storybook-free; the pull-request gate validates the exact pinned
