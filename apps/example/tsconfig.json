@@ -10,6 +10,8 @@
     ".expo/types/**/*.ts",
     ".rnstorybook/**/*.ts",
     ".rnstorybook/**/*.tsx",
+    ".storybook-web/**/*.ts",
+    ".storybook-web/**/*.tsx",
     "expo-env.d.ts"
   ]
 }

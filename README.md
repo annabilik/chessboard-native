@@ -6,21 +6,16 @@
 [![CI](https://github.com/annabilik/chessboard-native/actions/workflows/ci.yml/badge.svg)](https://github.com/annabilik/chessboard-native/actions/workflows/ci.yml)
 [![License: MIT AND CC BY-SA 3.0](https://img.shields.io/badge/license-MIT%20AND%20CC--BY--SA--3.0-blue)](LICENSE)
 
-A controlled, rules-free React Native chessboard for Android and iOS.
+A React Native chessboard with native gestures and animations — bring your own
+engine.
 
 ![A React Native chessboard rendering the Scholar's Mate threat with Cburnett pieces and an analysis arrow from h5 to f7](docs/assets/hero-board.svg)
 
-`@vibechess/chessboard-native` targets the useful surface of pinned
-`react-chessboard@5.10.0` with native gestures, rendering, accessibility, and
-explicit browser-only exclusions. Consumers own position, annotations, and
-optional selection; the component never creates a second semantic source of
-truth.
-
-> [!WARNING]
-> The package is in prerelease. This source tree is prepared as
-> `0.1.0-next.3`, and merging a version commit does not publish it, so npm's
-> moving `next` tag can lag `main`. Verify the installed version and exports,
-> then pin an exact `0.1.0-next.N` version after evaluation.
+`@vibechess/chessboard-native` runs on Android and iOS and targets the useful
+surface of pinned `react-chessboard@5.10.0`, with explicit browser-only
+exclusions. Your app owns position, annotations, and optional selection; the
+board owns only transient presentation and never creates a second semantic
+source of truth.
 
 ## Highlights
 
@@ -205,6 +200,20 @@ corepack enable
 pnpm install --frozen-lockfile
 pnpm example:start   # or: pnpm storybook:start
 ```
+
+| Play vs random (chess.js)                                                   | Game replay                                                           | Themes and custom pieces                                    |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------- |
+| ![Play vs random Storybook story](docs/assets/storybook/play-vs-random.png) | ![Game replay Storybook story](docs/assets/storybook/game-replay.png) | ![Themes Storybook story](docs/assets/storybook/themes.png) |
+
+Simulator captures of three of the eighteen stories; the
+[Storybook guide](docs/storybook.md#preview-the-catalog) previews more.
+
+**[Browse the catalog in your browser →](https://chessboard-native.vercel.app)**
+The same stories also render on the web through `react-native-web`. That
+preview is a demo artifact only: React Native Web is not a supported target,
+and gesture, animation, and accessibility fidelity are exactly what a DOM
+substitute cannot reproduce, so the on-device catalog stays authoritative. See
+[web preview](docs/storybook.md#web-preview-unsupported) for its known gaps.
 
 Gallery source lives in [`apps/example`](apps/example/app/index.tsx). Storybook
 is enabled only through its alternate Metro entry point, and normal gallery
