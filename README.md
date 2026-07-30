@@ -6,15 +6,16 @@
 [![CI](https://github.com/annabilik/chessboard-native/actions/workflows/ci.yml/badge.svg)](https://github.com/annabilik/chessboard-native/actions/workflows/ci.yml)
 [![License: MIT AND CC BY-SA 3.0](https://img.shields.io/badge/license-MIT%20AND%20CC--BY--SA--3.0-blue)](LICENSE)
 
-A controlled, rules-free React Native chessboard for Android and iOS.
+A React Native chessboard with native gestures and animations — bring your own
+engine.
 
 ![A React Native chessboard rendering the Scholar's Mate threat with Cburnett pieces and an analysis arrow from h5 to f7](docs/assets/hero-board.svg)
 
-`@vibechess/chessboard-native` targets the useful surface of pinned
-`react-chessboard@5.10.0` with native gestures, rendering, accessibility, and
-explicit browser-only exclusions. Consumers own position, annotations, and
-optional selection; the component never creates a second semantic source of
-truth.
+`@vibechess/chessboard-native` runs on Android and iOS and targets the useful
+surface of pinned `react-chessboard@5.10.0`, with explicit browser-only
+exclusions. Your app owns position, annotations, and optional selection; the
+board owns only transient presentation and never creates a second semantic
+source of truth.
 
 ## Highlights
 
