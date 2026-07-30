@@ -16,12 +16,6 @@ explicit browser-only exclusions. Consumers own position, annotations, and
 optional selection; the component never creates a second semantic source of
 truth.
 
-> [!WARNING]
-> The package is in prerelease. This source tree is prepared as
-> `0.1.0-next.3`, and merging a version commit does not publish it, so npm's
-> moving `next` tag can lag `main`. Verify the installed version and exports,
-> then pin an exact `0.1.0-next.N` version after evaluation.
-
 ## Highlights
 
 - Responsive standard and rectangular boards with either orientation.
