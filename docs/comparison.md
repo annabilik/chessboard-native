@@ -15,7 +15,7 @@ source for all 39 upstream root exports, 42 `ChessboardOptions` fields, and 50
 reviewed observable behaviors.
 
 > [!IMPORTANT]
-> This page describes the source prepared as `0.1.0-next.3`. The
+> This page describes the source prepared as `0.1.0`. The
 > `react-chessboard-compat` subpath is exported by published `0.1.0-next.2`
 > and later; npm `0.1.0-next.1` is an older immutable archive without that
 > export. Merging does not publish a prepared version; check the exact

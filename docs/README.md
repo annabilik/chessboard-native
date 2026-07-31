@@ -35,7 +35,7 @@ newly documented surface.
 ## Quality and release
 
 - [Accessibility contract](accessibility.md)
-- [Prerelease runbook](releasing.md)
+- [Release runbook](releasing.md)
 
 The Expo gallery and its native Storybook are source-controlled in
 [`apps/example`](../apps/example/app/index.tsx). They demonstrate mounted public

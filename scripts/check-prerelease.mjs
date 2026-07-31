@@ -59,6 +59,27 @@ const dependencyGroups = [
 const localDependencyPattern = /^(?:file|link|portal|workspace):/;
 const prereleasePattern =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)-next\.(0|[1-9]\d*)$/;
+const stablePattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+
+/**
+ * A version selects its release channel, and the channel fixes the npm
+ * dist-tag the archive must publish under: stable releases own `latest`,
+ * while `X.Y.Z-next.N` prereleases stay on `next`.
+ */
+export function resolveReleaseChannel(version) {
+  if (typeof version !== 'string') {
+    throw new Error('version must be a string');
+  }
+  if (prereleasePattern.test(version)) {
+    return { distTag: 'next', name: 'prerelease' };
+  }
+  if (stablePattern.test(version)) {
+    return { distTag: 'latest', name: 'stable' };
+  }
+  throw new Error(
+    'version must match X.Y.Z or X.Y.Z-next.N with no leading zeroes',
+  );
+}
 
 function usage() {
   return 'Usage: node scripts/check-prerelease.mjs [--manifest <package.json>] [--expected-version <version>]';
@@ -108,9 +129,14 @@ function assertVersion(version, expectedVersion) {
     throw new Error('version must be a string');
   }
 
-  const match = prereleasePattern.exec(version);
+  const channel = resolveReleaseChannel(version);
+  const match = (
+    channel.name === 'prerelease' ? prereleasePattern : stablePattern
+  ).exec(version);
   if (!match) {
-    throw new Error('version must match X.Y.Z-next.N with no leading zeroes');
+    throw new Error(
+      'version must match X.Y.Z or X.Y.Z-next.N with no leading zeroes',
+    );
   }
 
   const numericIdentifiers = match.slice(1).map(Number);
@@ -133,7 +159,7 @@ function assertVersion(version, expectedVersion) {
   }
 }
 
-function assertPublishConfig(publishConfig) {
+function assertPublishConfig(publishConfig, channel) {
   assertRecord(publishConfig, 'publishConfig');
 
   if (publishConfig.access !== 'public') {
@@ -146,8 +172,10 @@ function assertPublishConfig(publishConfig) {
     );
   }
 
-  if (publishConfig.tag !== 'next') {
-    throw new Error('publishConfig.tag must be next');
+  if (publishConfig.tag !== channel.distTag) {
+    throw new Error(
+      `publishConfig.tag must be ${channel.distTag} for a ${channel.name} version`,
+    );
   }
 }
 
@@ -230,7 +258,10 @@ function validateManifest(manifest, expectedVersion) {
   }
 
   assertVersion(manifest.version, expectedVersion);
-  assertPublishConfig(manifest.publishConfig);
+  assertPublishConfig(
+    manifest.publishConfig,
+    resolveReleaseChannel(manifest.version),
+  );
   assertRepository(manifest.repository);
   assertResolverFields(manifest);
   assertExports(manifest.exports);

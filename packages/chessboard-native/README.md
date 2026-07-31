@@ -2,15 +2,14 @@
 
 ![A React Native chessboard rendering the Scholar's Mate threat with Cburnett pieces and an analysis arrow from h5 to f7](https://raw.githubusercontent.com/annabilik/chessboard-native/main/docs/assets/hero-board.svg)
 
-> **Prerelease status:** `0.1.0-next.*` releases are for evaluation and
-> integration testing, not production use; APIs may change before 1.0. The
-> installation command targets whichever published prerelease owns `next`.
-> This source tree is prepared as `0.1.0-next.3`, the first version bundling
-> the Cburnett default piece renderers; earlier published prereleases ship
-> interim geometric pieces, and versions before `0.1.0-next.2` lack the
-> compatibility entry point described below. Merging does not publish. Verify
-> the version an `@next` installation resolves before relying on a newly
-> documented surface.
+> **0.x status:** `0.1.0` is the first release on the npm `latest` channel.
+> The public API is frozen and the `react-chessboard@5.10.0` parity ledger is
+> closed, but this is a 0.x release: physical-device accessibility, visual,
+> gesture, compatibility, and performance gates are still outstanding, and 1.0
+> production support is not declared. See the
+> [support matrix](https://github.com/annabilik/chessboard-native/blob/main/docs/support-matrix.md)
+> before depending on it in production. The `next` dist-tag continues to track
+> prereleases and can resolve older than `latest` between cycles.
 
 ## Installation
 
@@ -18,7 +17,7 @@ Install the package and every required peer on their supported release lines:
 
 ```sh
 npm install \
-  @vibechess/chessboard-native@next \
+  @vibechess/chessboard-native \
   react@19.2.x \
   react-native@0.86.x \
   react-native-gesture-handler@2.32.x \
@@ -89,8 +88,9 @@ for the current bare-app steps.
 
 ## Support
 
-Pin an exact `0.1.0-next.N` version after evaluating it if reproducible builds
-matter to your application. Report package defects and compatibility findings
+Pin an exact version after evaluating it if reproducible builds matter to your
+application; a 0.x line can change between minor versions. Report package
+defects and compatibility findings
 in the repository's
 [GitHub issues](https://github.com/annabilik/chessboard-native/issues). Include
 the exact package and peer versions, platform, and a minimal reproduction.
@@ -133,10 +133,9 @@ import { Chessboard } from '@vibechess/chessboard-native';
 ## `react-chessboard` compatibility subpath
 
 > [!IMPORTANT]
-> The prepared `0.1.0-next.2` package exports this entry point; npm
-> `0.1.0-next.1` does not. After installing `@next`, confirm the resolved
-> package is `0.1.0-next.2` or a later version that retains
-> `./react-chessboard-compat` before using the import below.
+> This entry point exists in `0.1.0` and in prereleases from `0.1.0-next.2`
+> onward; the earlier `0.1.0-next.0` and `0.1.0-next.1` archives do not export
+> it.
 
 Applications migrating from `react-chessboard@5.10` can keep its single
 `options` object and familiar option names through a separate entry point:

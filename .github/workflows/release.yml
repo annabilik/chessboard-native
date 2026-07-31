@@ -43,6 +43,7 @@ jobs:
     outputs:
       artifact-id: ${{ steps.upload.outputs.artifact-id }}
       digest: ${{ steps.metadata.outputs.digest }}
+      npm-tag: ${{ steps.metadata.outputs.npm-tag }}
       version: ${{ steps.metadata.outputs.version }}
 
     steps:
@@ -139,9 +140,18 @@ jobs:
             exit 1
           fi
 
+          # The version selects the channel: X.Y.Z publishes to latest,
+          # X.Y.Z-next.N publishes to next.
+          if [[ "$archive_version" == *-* ]]; then
+            npm_tag="next"
+          else
+            npm_tag="latest"
+          fi
+
           digest="$(sha256sum "$RELEASE_ARCHIVE" | cut -d ' ' -f 1)"
           echo "version=$archive_version" >> "$GITHUB_OUTPUT"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "npm-tag=$npm_tag" >> "$GITHUB_OUTPUT"
 
       - name: Upload the exact inspected package
         id: upload
@@ -207,7 +217,8 @@ jobs:
       - name: Dry-run publication
         env:
           ARCHIVE: ${{ runner.temp }}/package/chessboard-native.tgz
-        run: npm publish "$ARCHIVE" --dry-run --access public --tag next
+          NPM_TAG: ${{ needs.prepare.outputs.npm-tag }}
+        run: npm publish "$ARCHIVE" --dry-run --access public --tag "$NPM_TAG"
 
   publish:
     name: Publish npm prerelease
@@ -230,6 +241,7 @@ jobs:
       EXPECTED_DIGEST: ${{ needs.prepare.outputs.digest }}
       EXPECTED_VERSION: ${{ needs.prepare.outputs.version }}
       EXPO_NO_TELEMETRY: 1
+      NPM_TAG: ${{ needs.prepare.outputs.npm-tag }}
       PACKAGE_NAME: '@vibechess/chessboard-native'
       RELEASE_MODE: ${{ inputs.mode }}
 
@@ -318,7 +330,7 @@ jobs:
             echo "The npm environment must provide NPM_TOKEN for bootstrap-token mode." >&2
             exit 1
           fi
-          npm publish "$ARCHIVE" --access public --tag next --provenance
+          npm publish "$ARCHIVE" --access public --tag "$NPM_TAG" --provenance
 
       - name: Publish with npm trusted publishing
         if: ${{ inputs.mode == 'trusted-oidc' }}
@@ -329,7 +341,7 @@ jobs:
             echo "trusted-oidc mode must not receive npm token authentication or a generated npm userconfig." >&2
             exit 1
           fi
-          npm publish "$ARCHIVE" --access public --tag next --provenance
+          npm publish "$ARCHIVE" --access public --tag "$NPM_TAG" --provenance
 
   registry-verification:
     name: Verify published npm prerelease
@@ -413,7 +425,14 @@ jobs:
             observed_version="$(npm view "$PACKAGE_NAME@$EXPECTED_VERSION" version 2>/dev/null || true)"
             next_version="$(npm view "$PACKAGE_NAME@next" version 2>/dev/null || true)"
             latest_version="$(npm view "$PACKAGE_NAME@latest" version 2>/dev/null || true)"
-            if [[ "$observed_version" == "$EXPECTED_VERSION" && "$next_version" == "$EXPECTED_VERSION" && "$latest_version" == "$EXPECTED_LATEST" ]]; then
+            # A stable release only claims `latest`; `next` keeps pointing at
+            # the most recent prerelease, so do not wait for it to move.
+            if [[ "$EXPECTED_VERSION" == *-* ]]; then
+              next_ready="$([[ "$next_version" == "$EXPECTED_VERSION" ]] && echo true || echo false)"
+            else
+              next_ready="$([[ -n "$next_version" ]] && echo true || echo false)"
+            fi
+            if [[ "$observed_version" == "$EXPECTED_VERSION" && "$next_ready" == "true" && "$latest_version" == "$EXPECTED_LATEST" ]]; then
               break
             fi
             echo "Registry has not exposed the expected version and dist-tags yet (attempt $attempt/20)."

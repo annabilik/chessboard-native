@@ -7,7 +7,7 @@ physical-device, assistive-technology, performance, or release-candidate gate
 has finished.
 
 > [!IMPORTANT]
-> The matrices describe the source package prepared as `0.1.0-next.3` unless a
+> The matrices describe the source package prepared as `0.1.0` unless a
 > row explicitly says “published.” Merging does not publish that version.
 > Published `0.1.0-next.2`, from commit `addc0cb`, includes the compatibility
 > export but ships interim geometric pieces; npm `0.1.0-next.1`, published from
@@ -69,13 +69,13 @@ another internal path are not public API.
 
 <!-- markdownlint-disable MD013 -->
 
-| Import                                                 | Current repository source | Prepared `0.1.0-next.3` | Contract                                                                                                                                                   |
-| ------------------------------------------------------ | ------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@vibechess/chessboard-native`                         | Supported                 | Present                 | Primary controlled component, provider, spare piece, public types, theme/defaults, and pure helpers. Consult the API report for the exact current symbols. |
-| `@vibechess/chessboard-native/pieces`                  | Supported                 | Present                 | Focused `defaultPieceRenderers` export.                                                                                                                    |
-| `@vibechess/chessboard-native/react-chessboard-compat` | Supported                 | Present                 | Native options-name adapter for the pinned `react-chessboard` 5.10 migration surface.                                                                      |
-| `@vibechess/chessboard-native/package.json`            | Supported metadata export | Present                 | Package metadata only.                                                                                                                                     |
-| `@vibechess/chessboard-native/src/*` or `lib/*`        | Not supported             | Not supported           | Internal layout may change without notice.                                                                                                                 |
+| Import                                                 | Current repository source | Prepared `0.1.0` | Contract                                                                                                                                                   |
+| ------------------------------------------------------ | ------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@vibechess/chessboard-native`                         | Supported                 | Present          | Primary controlled component, provider, spare piece, public types, theme/defaults, and pure helpers. Consult the API report for the exact current symbols. |
+| `@vibechess/chessboard-native/pieces`                  | Supported                 | Present          | Focused `defaultPieceRenderers` export.                                                                                                                    |
+| `@vibechess/chessboard-native/react-chessboard-compat` | Supported                 | Present          | Native options-name adapter for the pinned `react-chessboard` 5.10 migration surface.                                                                      |
+| `@vibechess/chessboard-native/package.json`            | Supported metadata export | Present          | Package metadata only.                                                                                                                                     |
+| `@vibechess/chessboard-native/src/*` or `lib/*`        | Not supported             | Not supported    | Internal layout may change without notice.                                                                                                                 |
 
 <!-- markdownlint-enable MD013 -->
 
@@ -97,7 +97,7 @@ resolves declarations. There is no `require` condition.
 
 ## Feature support
 
-The feature status below applies to the prepared `0.1.0-next.3` package, not
+The feature status below applies to the prepared `0.1.0` package, not
 automatically to any older npm archive.
 
 <!-- markdownlint-disable MD013 -->

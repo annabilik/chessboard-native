@@ -1,6 +1,6 @@
-# Prerelease runbook
+# Release runbook
 
-This runbook releases only the standalone
+This runbook releases both stable versions and prereleases of the standalone
 `@vibechess/chessboard-native` package from this repository. It must not read,
 modify, build, or publish any VibeChess application or private codebase. A
 release is sourced from `annabilik/chessboard-native`, and the package archive
@@ -10,15 +10,38 @@ Do not infer current npm registry state from this document. npm versions are
 immutable once accepted, even when a later workflow verification step fails.
 Record publication and verification as separate release evidence.
 
+## Release channels
+
+The manifest version selects the channel, and every tool derives the dist-tag
+from it rather than hardcoding one:
+
+<!-- markdownlint-disable MD013 -->
+
+| Version shape  | Channel    | npm dist-tag | `latest` after publishing                |
+| -------------- | ---------- | ------------ | ---------------------------------------- |
+| `X.Y.Z-next.N` | prerelease | `next`       | preserved at its exact pre-publish value |
+| `X.Y.Z`        | stable     | `latest`     | moves to the published version           |
+
+<!-- markdownlint-enable MD013 -->
+
+`scripts/check-prerelease.mjs` requires `publishConfig.tag` to match the
+channel, the workflow computes `npm-tag` from the archive version, and
+`scripts/check-release-tags.mjs` derives the expected `latest` from it.
+
+A stable release publishes under `latest` only. Trusted publishing authorizes
+`npm publish` and not `npm dist-tag`, so `next` keeps pointing at the most
+recent prerelease and can resolve _older_ than `latest` between cycles; that is
+expected, and the verifier only requires `next` to remain a valid version. Move
+it deliberately with `npm dist-tag add` if a release should also claim `next`.
+
 ## Release rules
 
-- Publish prereleases only under the npm `next` dist-tag. The package manifest
-  pins `publishConfig.tag` to `next` as a backstop, and the workflow still
-  supplies `--tag next` explicitly. npm necessarily initializes `latest` when
-  the first version of a new package is published, even with `--tag next`.
-  Bootstrap verification requires that initial value to equal the first
-  version; every later prerelease must preserve the exact pre-publish `latest`
-  value.
+- Publish prereleases only under the npm `next` dist-tag, and stable versions
+  only under `latest`. npm necessarily initializes `latest` when the first
+  version of a new package is published, even with `--tag next`. Bootstrap
+  verification requires that initial value to equal the first version; every
+  later **prerelease** must preserve the exact pre-publish `latest` value,
+  while a **stable** release is the one operation that legitimately moves it.
 - Release only a clean commit on `main` after its required CI checks pass.
 - Use `.github/workflows/release.yml` through GitHub Actions. Do not publish a
   separately packed local archive.
@@ -29,8 +52,31 @@ Record publication and verification as separate release evidence.
   the dry-run and publish jobs, requires an explicit `expected-latest`, and
   receives no npm token, protected environment, or OIDC write permission.
 - Both publishing modes use the protected GitHub environment named `npm`.
-- Never reuse a version. Every correction receives a new
-  `0.1.0-next.N` version.
+- Never reuse a version. Every correction receives a new version.
+
+## Prepare a stable release with Changesets
+
+A stable version leaves Changesets prerelease mode and consumes the
+accumulated changesets:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm changeset status
+pnpm changeset pre exit
+pnpm changeset version
+pnpm install
+```
+
+`pre exit` removes `.changeset/pre.json`. Then set `publishConfig.tag` to
+`latest` in `packages/chessboard-native/package.json`, because
+`pnpm release:check` requires the tag to match the channel the version selects.
+Review the resulting version and changelog, commit the manifest, lockfile,
+changelog, and Changesets state in a pull request, and run `pnpm verify` before
+merging. Everything after this point — dry run, publish, post-release
+verification — is identical for both channels; only the dist-tag differs.
+
+To return to prereleases afterwards, run `pnpm changeset pre enter next` and
+set `publishConfig.tag` back to `next`.
 
 ## Prepare a prerelease with Changesets
 
@@ -211,10 +257,10 @@ and environment secret scopes contain no replacement npm token. Trusted
 publishing is now the automated release path; do not recreate or fall back to a
 long-lived publish token when OIDC needs correction.
 
-## Subsequent OIDC prereleases
+## Subsequent OIDC releases
 
-For every later prerelease, prepare and merge a new Changesets version, run the
-workflow in `dry-run`, and then dispatch it on `main` with:
+For every later release on either channel, prepare and merge a new Changesets
+version, run the workflow in `dry-run`, and then dispatch it on `main` with:
 
 - `mode`: `trusted-oidc`
 - `expected-version`: the exact reviewed `0.1.0-next.N` manifest version
@@ -267,7 +313,9 @@ unpublishing because consumers and lockfiles may already reference it.
    ```
 
 2. If a known-good prerelease exists, point `next` back to it; otherwise remove
-   the `next` tag until a correction is ready. Never move `latest`:
+   the `next` tag until a correction is ready. Never move `latest` backwards to
+   recover a prerelease; a bad stable release is corrected by publishing a new
+   stable version that claims `latest`:
 
    ```sh
    npm dist-tag add @vibechess/chessboard-native@0.1.0-next.M next

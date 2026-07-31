@@ -9,6 +9,12 @@ const verificationModes = new Set([
 ]);
 const commands = new Set(['before', 'expected-latest', 'after']);
 const registryVersionPattern = /^[0-9A-Za-z][0-9A-Za-z.+-]*$/u;
+const stableVersionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u;
+
+/** A version with no prerelease identifier owns the `latest` dist-tag. */
+export function isStableVersion(version) {
+  return typeof version === 'string' && stableVersionPattern.test(version);
+}
 const optionNames = new Set([
   'mode',
   'expected-version',
@@ -104,6 +110,11 @@ export function resolveExpectedLatest({
   }
 
   if (mode === 'trusted-oidc') {
+    // A stable release claims `latest`; a prerelease must preserve whatever
+    // `latest` already pointed at, because it publishes under `next` only.
+    if (isStableVersion(expectedVersion)) {
+      return expectedVersion;
+    }
     requireRegistryVersion(latestBefore, 'latestBefore');
     return latestBefore;
   }
@@ -133,7 +144,13 @@ export function validateRegistryAfter({
       `registry version is ${observedVersion || '<missing>'}, expected ${expectedVersion}`,
     );
   }
-  if (nextVersion !== expectedVersion) {
+  if (isStableVersion(expectedVersion)) {
+    // A stable release publishes under `latest` only. Trusted publishing
+    // authorizes `npm publish` and not `npm dist-tag`, so `next` keeps
+    // pointing at the most recent prerelease; require only that it stays a
+    // valid registry version.
+    requireRegistryVersion(nextVersion, 'nextVersion');
+  } else if (nextVersion !== expectedVersion) {
     throw new Error(
       `dist-tags.next is ${nextVersion || '<missing>'}, expected ${expectedVersion}`,
     );

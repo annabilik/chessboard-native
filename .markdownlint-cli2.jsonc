@@ -1,0 +1,9 @@
+{
+  // Generated changelogs repeat "### Minor Changes" and "### Patch Changes"
+  // under every version heading. Those are not real duplicates: they live
+  // under different parents, and relying on an inline disable comment inside
+  // a changeset body breaks whenever Changesets regenerates the file.
+  "config": {
+    "MD024": { "siblings_only": true },
+  },
+}

@@ -2,7 +2,7 @@
 
 <!-- markdownlint-disable MD013 -->
 
-[![npm @next](https://img.shields.io/npm/v/%40vibechess%2Fchessboard-native/next?label=npm%20%40next&color=236a5b)](https://www.npmjs.com/package/@vibechess/chessboard-native)
+[![npm](https://img.shields.io/npm/v/%40vibechess%2Fchessboard-native?label=npm&color=236a5b)](https://www.npmjs.com/package/@vibechess/chessboard-native)
 [![CI](https://github.com/annabilik/chessboard-native/actions/workflows/ci.yml/badge.svg)](https://github.com/annabilik/chessboard-native/actions/workflows/ci.yml)
 [![License: MIT AND CC BY-SA 3.0](https://img.shields.io/badge/license-MIT%20AND%20CC--BY--SA--3.0-blue)](LICENSE)
 
@@ -36,11 +36,11 @@ includes a complete chess.js recipe.
 
 ## Install
 
-Install the prerelease and its required peers on the supported lines:
+Install the package and its required peers on the supported lines:
 
 ```sh
 npm install \
-  @vibechess/chessboard-native@next \
+  @vibechess/chessboard-native \
   react@19.2.x \
   react-native@0.86.x \
   react-native-gesture-handler@2.32.x \
@@ -146,18 +146,27 @@ The compatibility adapter keeps familiar names, not browser primitives or
 upstream shadow state. Read the migration guide before treating it as a
 replacement.
 
-## Prerelease versions
+## Versions
 
 | Version        | Status             | Notable surface                                                                       |
 | -------------- | ------------------ | ------------------------------------------------------------------------------------- |
-| `0.1.0-next.3` | prepared on `main` | Bundled Cburnett default piece renderers (CC BY-SA 3.0)                               |
+| `0.1.0`        | prepared on `main` | First stable-channel release; publishes to npm `latest`                               |
+| `0.1.0-next.3` | published          | Bundled Cburnett default piece renderers (CC BY-SA 3.0)                               |
 | `0.1.0-next.2` | published          | `react-chessboard-compat` entry point; frozen public API and complete parity evidence |
 | `0.1.0-next.1` | published          | npm trusted-publishing (OIDC) proof release                                           |
 | `0.1.0-next.0` | published          | Bootstrap release                                                                     |
 
 Versions before `0.1.0-next.3` ship interim geometric placeholder pieces, and
-versions before `0.1.0-next.2` lack the compatibility entry point. Confirm the
-resolved version before relying on a newly documented surface.
+versions before `0.1.0-next.2` lack the compatibility entry point. `0.1.0` is
+the first release on the `latest` channel; `next` continues to track
+prereleases and may therefore resolve older than `latest` between cycles.
+
+`0.1.0` is a 0.x release. The API is frozen and the parity ledger is closed,
+but the physical-device gates listed in the
+[support matrix](docs/support-matrix.md#release-validation-still-pending) —
+TalkBack, VoiceOver, visual baselines, gesture and lifecycle matrix,
+compatibility matrix, and performance budgets — remain outstanding, and 1.0
+production support is still not declared.
 
 ## Documentation
 
@@ -172,7 +181,7 @@ resolved version before relying on a newly documented surface.
 | [Accessibility contract](docs/accessibility.md)                              | The single adjustable control, cursor, announcements, and manual checklists                |
 | [Architecture decisions](docs/architecture/invariants.md)                    | The invariant registry and its governing ADRs                                              |
 | [Native Storybook](docs/storybook.md)                                        | Running and maintaining the on-device catalog                                              |
-| [Prerelease runbook](docs/releasing.md)                                      | Version preparation, dry runs, and trusted publishing                                      |
+| [Release runbook](docs/releasing.md)                                         | Version preparation, dry runs, and trusted publishing                                      |
 
 ## Support boundary
 
@@ -261,7 +270,7 @@ for offline evidence; the fixture directory is never included in the npm
 archive. The bundled default renderers port Colin M.L. Burnett's Cburnett
 artwork, attributed to the individual Wikimedia Commons files recorded in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), into code-native React Native
-components; prepared `0.1.0-next.3` is the first version that ships them. No
+components; `0.1.0-next.3` was the first version that shipped them. No
 fixture file is imported or shipped by the package.
 
 The machine-readable ledger covers all 39 root exports, 42 options, and 50
@@ -275,7 +284,7 @@ support, or production readiness.
 Merging does not publish. A manual protected workflow builds and inspects one
 archive, performs a registry-safe dry run by default, and publishes through npm
 trusted OIDC only when explicitly requested; the release process is npm
-dist-tag based and is documented in the [prerelease runbook](docs/releasing.md).
+dist-tag based and is documented in the [release runbook](docs/releasing.md).
 
 ## License
 

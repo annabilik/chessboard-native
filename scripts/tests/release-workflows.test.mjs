@@ -84,7 +84,7 @@ test('publishes only an unpublished exact archive under next', () => {
   assert.match(prepare, /sha256sum "\$RELEASE_ARCHIVE"/u);
   assert.match(
     dryRun,
-    /npm publish "\$ARCHIVE" --dry-run --access public --tag next/u,
+    /npm publish "\$ARCHIVE" --dry-run --access public --tag "\$NPM_TAG"/u,
   );
   assert.match(dryRun, /if:.*inputs\.mode != 'verify-registry'/u);
   assert.match(dryRun, /read-registry-state\.mjs/u);
@@ -105,10 +105,14 @@ test('publishes only an unpublished exact archive under next', () => {
   assert.equal(publish.match(/registry-url:/gu)?.length, 1);
   assert.equal(
     publish.match(
-      /npm publish "\$ARCHIVE" --access public --tag next --provenance/gu,
+      /npm publish "\$ARCHIVE" --access public --tag "\$NPM_TAG" --provenance/gu,
     )?.length,
     2,
   );
+  // The dist-tag is derived from the version, never hardcoded, so a stable
+  // X.Y.Z release claims latest while X.Y.Z-next.N stays on next.
+  assert.match(prepare, /npm-tag=\$npm_tag/u);
+  assert.match(publish, /NPM_TAG:.*needs\.prepare\.outputs\.npm-tag/u);
   assert.match(publish, /secrets\.NPM_TOKEN/u);
   assert.match(trustedPublish, /NODE_AUTH_TOKEN/u);
   assert.match(trustedPublish, /NPM_TOKEN/u);
