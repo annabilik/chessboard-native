@@ -8,9 +8,12 @@ import {
   type MoveIntent,
   type OnMoveRequest,
   type PieceData,
+  type PieceRenderer,
+  type PieceRenderers,
   type PositionObject,
   type SquareRenderer,
 } from '@vibechess/chessboard-native';
+import { defaultPieceRenderers } from '@vibechess/chessboard-native/pieces';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -20,6 +23,7 @@ const INITIAL_POSITION = Object.freeze({
   a1: Object.freeze({ id: 'white-rook', pieceType: 'wR' }),
   d4: Object.freeze({ id: 'white-queen', pieceType: 'wQ' }),
   e5: Object.freeze({ id: 'black-pawn', pieceType: 'bP' }),
+  h1: Object.freeze({ id: 'white-king', pieceType: 'wK' }),
   h8: Object.freeze({ id: 'black-king', pieceType: 'bK' }),
 }) satisfies PositionObject;
 
@@ -79,6 +83,45 @@ const VISUAL_SQUARE_STYLES = Object.freeze({
   b2: Object.freeze({ backgroundColor: '#aecfc5' }),
   g7: Object.freeze({ backgroundColor: '#244d49' }),
 });
+
+const BrandedPiece: PieceRenderer = (props) => {
+  const DefaultRenderer = defaultPieceRenderers[props.piece.pieceType];
+  if (DefaultRenderer === undefined) {
+    return null;
+  }
+  const badgeSize = Math.max(12, props.size * 0.22);
+  return (
+    <View
+      pointerEvents="none"
+      style={{ height: props.size, width: props.size }}
+    >
+      <DefaultRenderer {...props} />
+      <View
+        style={[
+          styles.brandBadge,
+          {
+            borderRadius: badgeSize / 2,
+            height: badgeSize,
+            width: badgeSize,
+          },
+        ]}
+      >
+        <Text style={[styles.brandBadgeText, { fontSize: badgeSize * 0.58 }]}>
+          V
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+const BRANDED_PIECE_RENDERERS = Object.freeze(
+  Object.fromEntries(
+    Object.keys(defaultPieceRenderers).map((pieceType) => [
+      pieceType,
+      BrandedPiece,
+    ]),
+  ),
+) satisfies PieceRenderers;
 
 type DemoPosition = Omit<ControlledPosition, 'value'> & {
   readonly value: PositionObject;
@@ -233,9 +276,10 @@ export default function VisualCustomizationExample() {
       <Text style={styles.title}>Consumer paint, board-owned behavior</Text>
       <Text style={styles.description}>
         The position remains controlled while renderSquare receives frozen
-        visual props. Theme defaults and per-instance styles layer onto drop
-        targets, drag overlays, and source ghosts without adding another state
-        owner.
+        visual props. A custom piece renderer wraps every bundled Cburnett piece
+        with a purple V brand badge. Theme defaults and per-instance styles
+        layer onto drop targets, drag overlays, and source ghosts without adding
+        another state owner. This is a rules-free styling fixture.
       </Text>
 
       <ChessboardProvider>
@@ -250,6 +294,7 @@ export default function VisualCustomizationExample() {
           <SparePiece
             accessibilityLabel="White knight customization spare"
             piece={SPARE_PIECE}
+            pieceRenderers={BRANDED_PIECE_RENDERERS}
             size={68}
             spareId="palette-knight"
             style={styles.sparePiece}
@@ -267,6 +312,7 @@ export default function VisualCustomizationExample() {
             boardId={BOARD_ID}
             interactionPermissions={{ accessibility: true, drag: true }}
             onMoveRequest={onMoveRequest}
+            pieceRenderers={BRANDED_PIECE_RENDERERS}
             position={position}
             reduceMotion="never"
             renderSquare={VisualSquare}
@@ -308,8 +354,9 @@ export default function VisualCustomizationExample() {
         <Text style={styles.cardCopy}>
           SELECT and MOVE come from controlled selection. PRESS, DROP, SOURCE,
           and WAIT are transient projections. BLOCK is a declarative disabled
-          square. The renderer is visual-only: no press or gesture handlers are
-          passed into it.
+          square. The purple V badge comes from the custom piece renderer. Both
+          renderer kinds are visual-only: no press or gesture handlers are
+          passed into them.
         </Text>
       </View>
     </ScrollView>
@@ -317,6 +364,20 @@ export default function VisualCustomizationExample() {
 }
 
 const styles = StyleSheet.create({
+  brandBadge: {
+    alignItems: 'center',
+    backgroundColor: '#7651b5',
+    borderColor: '#ffffff',
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  brandBadgeText: {
+    color: '#ffffff',
+    fontWeight: '900',
+  },
   boardCard: {
     borderColor: '#183a36',
     borderRadius: 18,

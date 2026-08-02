@@ -13,6 +13,7 @@ import {
   type PositionObject,
   type SquareId,
 } from '@vibechess/chessboard-native';
+import { Chess } from 'chess.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
@@ -29,6 +30,7 @@ const PROMOTION_SOURCE = 'g7';
 const PROMOTION_TARGET = 'g8';
 const PREMOVE_SOURCE = 'e2';
 const PREMOVE_TARGET = 'e4';
+const PREMOVE_START_FEN = '7k/4p3/8/8/8/8/4P3/K7 b - - 0 1';
 
 const PROMOTION_CHOICES = Object.freeze([
   Object.freeze({ label: 'Queen', pieceType: 'wQ' }),
@@ -98,6 +100,29 @@ function movePiece(
   }
   value[targetSquare] = piece;
   return Object.freeze(value);
+}
+
+function canQueueWhitePremove(
+  fen: string,
+  sourceSquare: SquareId,
+  targetSquare: SquareId,
+): boolean {
+  const fields = fen.split(' ');
+  if (fields.length !== 6) {
+    return false;
+  }
+  fields[1] = 'w';
+  try {
+    const candidate = new Chess(fields.join(' '));
+    candidate.move({
+      from: sourceSquare,
+      promotion: 'q',
+      to: targetSquare,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function emptySelection(revision: number): ControlledSelection {
@@ -300,6 +325,7 @@ export default function RulesOwnedMovesScreen() {
     revision: 0,
     value: PREMOVE_START,
   });
+  const [premoveChess] = useState(() => new Chess(PREMOVE_START_FEN));
   const [premoveSelection, setPremoveSelection] = useState<ControlledSelection>(
     () => emptySelection(0),
   );
@@ -309,7 +335,7 @@ export default function RulesOwnedMovesScreen() {
     null,
   );
   const [premoveStatus, setPremoveStatus] = useState(
-    'Select e2 and then e4. The consumer will queue and annotate the premove without opening a move request.',
+    'Black is to move. Select e2 and then e4 to queue White’s premove without opening a move request.',
   );
 
   const clearPremovePresentation = useCallback((): void => {
@@ -338,6 +364,12 @@ export default function RulesOwnedMovesScreen() {
       }
 
       if (premoveSelection.selectedSquare === null) {
+        if (premoveChess.turn() !== 'b') {
+          setPremoveStatus(
+            'It is already White’s turn, so e2-e4 would be an ordinary move. Reset before demonstrating a premove.',
+          );
+          return;
+        }
         const piece = premovePosition.value[intent.square];
         if (
           intent.square !== PREMOVE_SOURCE ||
@@ -374,6 +406,25 @@ export default function RulesOwnedMovesScreen() {
         );
         return;
       }
+      if (premoveChess.turn() !== 'b') {
+        setPremoveSelection(emptySelection(premoveSelection.revision + 1));
+        setPremoveStatus(
+          'Black has already moved, so e2-e4 is now an ordinary White move. The stale staged premove was cleared.',
+        );
+        return;
+      }
+      if (
+        !canQueueWhitePremove(
+          premoveChess.fen(),
+          PREMOVE_SOURCE,
+          PREMOVE_TARGET,
+        )
+      ) {
+        setPremoveStatus(
+          'chess.js rejected e2-e4 as a candidate in the current board geometry, so nothing was queued.',
+        );
+        return;
+      }
       const annotationId = `premove:${intent.intentId}`;
       setQueuedPremove(
         Object.freeze({
@@ -402,16 +453,29 @@ export default function RulesOwnedMovesScreen() {
         ]),
       });
       setPremoveStatus(
-        'Queued in consumer state. No onMoveRequest exists on this board, so no board commit timeout is running.',
+        'Queued while Black is to move. No onMoveRequest exists on this board, so no board commit timeout is running; chess.js will revalidate after Black moves.',
       );
     },
-    [premoveAnnotations.revision, premovePosition, premoveSelection],
+    [
+      premoveAnnotations.revision,
+      premoveChess,
+      premovePosition,
+      premoveSelection,
+    ],
   );
 
   const publishOpponentUpdate = useCallback((): void => {
     const pawn = premovePosition.value.e7;
-    if (pawn?.id !== 'premove-black-pawn') {
+    if (pawn?.id !== 'premove-black-pawn' || premoveChess.turn() !== 'b') {
       setPremoveStatus('The opponent update has already been published.');
+      return;
+    }
+    try {
+      premoveChess.move({ from: 'e7', to: 'e5' });
+    } catch {
+      setPremoveStatus(
+        'chess.js rejected the simulated opponent update; position is unchanged.',
+      );
       return;
     }
     const nextRevision = premovePosition.revision + 1;
@@ -426,9 +490,9 @@ export default function RulesOwnedMovesScreen() {
       value: movePiece(premovePosition.value, 'e7', 'e5', pawn),
     });
     setPremoveStatus(
-      'The opponent published a newer controlled revision. The queued premove remains consumer data and must now be revalidated.',
+      'Black legally played e7-e5. The queued premove remains consumer data and must now be revalidated for White’s turn.',
     );
-  }, [premovePosition]);
+  }, [premoveChess, premovePosition]);
 
   const applyQueuedPremove = useCallback((): void => {
     const queued = queuedPremove;
@@ -445,13 +509,25 @@ export default function RulesOwnedMovesScreen() {
       return;
     }
     const sourcePiece = premovePosition.value[queued.sourceSquare];
-    if (
-      !piecesMatch(sourcePiece, queued.piece) ||
-      premovePosition.value[queued.targetSquare] !== undefined
-    ) {
+    if (!piecesMatch(sourcePiece, queued.piece)) {
       clearPremovePresentation();
       setPremoveStatus(
-        'The consumer discarded the stale premove because its current source or target no longer matches.',
+        'The consumer discarded the stale premove because its current source no longer matches.',
+      );
+      return;
+    }
+
+    let san: string;
+    try {
+      san = premoveChess.move({
+        from: queued.sourceSquare,
+        promotion: 'q',
+        to: queued.targetSquare,
+      }).san;
+    } catch {
+      clearPremovePresentation();
+      setPremoveStatus(
+        'chess.js found the queued premove illegal in the current position, so the consumer discarded it.',
       );
       return;
     }
@@ -474,9 +550,9 @@ export default function RulesOwnedMovesScreen() {
     });
     clearPremovePresentation();
     setPremoveStatus(
-      'The consumer revalidated against the current revision and published the premove as a fresh external controlled update.',
+      `chess.js revalidated ${san}; the consumer published it as a fresh external controlled update.`,
     );
-  }, [clearPremovePresentation, premovePosition, queuedPremove]);
+  }, [clearPremovePresentation, premoveChess, premovePosition, queuedPremove]);
 
   const invalidatePremoveSource = useCallback((): void => {
     const value: Record<string, Readonly<PieceData>> = {};
@@ -489,10 +565,11 @@ export default function RulesOwnedMovesScreen() {
       revision: premovePosition.revision + 1,
       value: Object.freeze(value),
     });
+    premoveChess.remove(PREMOVE_SOURCE);
     setPremoveStatus(
       'A simulated external update removed the queued source. Applying now will revalidate and discard the premove.',
     );
-  }, [premovePosition]);
+  }, [premoveChess, premovePosition]);
 
   return (
     <ScrollView
@@ -576,9 +653,9 @@ export default function RulesOwnedMovesScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Consumer-owned premove queue</Text>
         <Text style={styles.sectionBody}>
-          Activate e2 and then e4. This board intentionally has no
-          onMoveRequest: controlled selection stages the squares and a
-          controlled arrow presents the queue.
+          Black is to move. Activate e2 and then e4 to queue White’s reply. This
+          board intentionally has no onMoveRequest: controlled selection stages
+          the squares and a controlled arrow presents the queue.
         </Text>
         <View style={styles.board}>
           <Chessboard
@@ -627,13 +704,14 @@ export default function RulesOwnedMovesScreen() {
           {actionButton(
             'Reset premove board',
             () => {
+              premoveChess.load(PREMOVE_START_FEN);
               setPremovePosition((current) => ({
                 revision: current.revision + 1,
                 value: PREMOVE_START,
               }));
               clearPremovePresentation();
               setPremoveStatus(
-                'The consumer reset every controlled premove domain.',
+                'The consumer reset every controlled premove domain; Black is to move again.',
               );
             },
             true,
@@ -646,7 +724,7 @@ export default function RulesOwnedMovesScreen() {
         uses the request AbortSignal and exact intent correlation. The premove
         path never reports an accepted request that waits indefinitely; after an
         opponent update it validates its own queue against the latest controlled
-        position and publishes an ordinary external revision.
+        position with chess.js and publishes an ordinary external revision.
       </Text>
     </ScrollView>
   );

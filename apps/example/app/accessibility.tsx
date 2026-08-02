@@ -2,6 +2,7 @@ import {
   Chessboard,
   type BoardOrientation,
   type ChessboardAccessibility,
+  type PlainSelection,
   type PositionInput,
   type ReduceMotion,
 } from '@vibechess/chessboard-native';
@@ -14,15 +15,55 @@ const POSITIONS = Object.freeze([
   {
     d4: { id: 'white-knight', pieceType: 'wN' },
     f5: { id: 'black-queen', pieceType: 'bQ' },
+    a8: { id: 'black-king', pieceType: 'bK' },
     h1: { id: 'white-king', pieceType: 'wK' },
   },
   {
     a8: { id: 'black-rook', pieceType: 'bR' },
     d4: { id: 'white-bishop', pieceType: 'wB' },
     e5: { id: 'black-pawn', pieceType: 'bP' },
+    h8: { id: 'black-king', pieceType: 'bK' },
     h1: { id: 'white-king', pieceType: 'wK' },
   },
 ] as const satisfies readonly PositionInput[]);
+
+const SELECTIONS = Object.freeze([
+  Object.freeze({
+    destinationSquares: Object.freeze([
+      'b3',
+      'b5',
+      'c2',
+      'c6',
+      'e2',
+      'e6',
+      'f3',
+      'f5',
+    ]),
+    disabledSquares: Object.freeze(['a1']),
+    selectedSquare: 'd4',
+  }),
+  Object.freeze({
+    destinationSquares: Object.freeze([
+      'a1',
+      'a7',
+      'b2',
+      'b6',
+      'c3',
+      'c5',
+      'e3',
+      'e5',
+      'f2',
+      'g1',
+    ]),
+    disabledSquares: Object.freeze(['a1']),
+    selectedSquare: 'd4',
+  }),
+] as const satisfies readonly PlainSelection[]);
+
+const POSITION_DESCRIPTIONS = Object.freeze([
+  'White to move: every legal destination for the knight on d4 is highlighted, including the capture Nxf5.',
+  'White to move: every legal destination for the bishop on d4 is highlighted. a1 is legal chess geometry but disabled by an explicit consumer policy.',
+]);
 
 type ScheduledChange = 'orientation' | 'position' | 'reduce-motion';
 const SCHEDULE_DELAY_MS = 10_000;
@@ -36,6 +77,7 @@ export default function AccessibilityPrototype() {
   const [scheduledChange, setScheduledChange] =
     useState<ScheduledChange | null>(null);
   const position = POSITIONS[positionIndex] ?? POSITIONS[0];
+  const selection = SELECTIONS[positionIndex] ?? SELECTIONS[0];
   const accessibility = useMemo<ChessboardAccessibility>(
     () => ({
       ...(announcementId === 0
@@ -101,6 +143,10 @@ export default function AccessibilityPrototype() {
         props.
       </Text>
 
+      <Text style={[styles.positionNote, { color: colors.secondaryText }]}>
+        {POSITION_DESCRIPTIONS[positionIndex] ?? POSITION_DESCRIPTIONS[0]}
+      </Text>
+
       <View style={styles.board}>
         <Chessboard
           accessibility={accessibility}
@@ -108,11 +154,7 @@ export default function AccessibilityPrototype() {
           orientation={orientation}
           position={position}
           reduceMotion={reduceMotion}
-          selection={{
-            destinationSquares: ['c2', 'e2', 'f5'],
-            disabledSquares: ['a1'],
-            selectedSquare: 'd4',
-          }}
+          selection={selection}
         />
       </View>
 
@@ -229,6 +271,13 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 16,
     lineHeight: 24,
+    maxWidth: 520,
+    width: '100%',
+  },
+  positionNote: {
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 21,
     maxWidth: 520,
     width: '100%',
   },

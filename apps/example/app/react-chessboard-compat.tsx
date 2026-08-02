@@ -6,6 +6,7 @@ import {
   type ReactChessboardPieceHandlerArgs,
   type ReactChessboardSquareHandlerArgs,
 } from '@vibechess/chessboard-native/react-chessboard-compat';
+import { Chess } from 'chess.js';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,16 +20,23 @@ interface CallbackEvent {
   readonly message: string;
 }
 
-const INITIAL_POSITION = Object.freeze({
-  a1: Object.freeze({ pieceType: 'wR' }),
-  d1: Object.freeze({ pieceType: 'wQ' }),
-  e1: Object.freeze({ pieceType: 'wK' }),
-  d4: Object.freeze({ pieceType: 'wN' }),
-  d5: Object.freeze({ pieceType: 'bP' }),
-  d8: Object.freeze({ pieceType: 'bQ' }),
-  e8: Object.freeze({ pieceType: 'bK' }),
-  h8: Object.freeze({ pieceType: 'bR' }),
-}) satisfies CompatibilityPosition;
+const INITIAL_FEN = '3qk2r/8/8/3p4/3N4/8/8/R2QK3 w - - 0 1';
+
+function compatibilityPositionFromChess(
+  chess: Readonly<Chess>,
+): CompatibilityPosition {
+  const position: Record<string, Readonly<{ pieceType: string }>> = {};
+  for (const row of chess.board()) {
+    for (const piece of row) {
+      if (piece !== null) {
+        position[piece.square] = Object.freeze({
+          pieceType: `${piece.color}${piece.type.toUpperCase()}`,
+        });
+      }
+    }
+  }
+  return Object.freeze(position);
+}
 
 const INITIAL_ARROWS = Object.freeze([
   Object.freeze({
@@ -38,18 +46,22 @@ const INITIAL_ARROWS = Object.freeze([
   }),
 ]) satisfies readonly Readonly<ReactChessboardArrow>[];
 
-const ALTERNATE_ARROWS = Object.freeze([
-  Object.freeze({
-    color: '#2563eb',
-    endSquare: 'h6',
-    startSquare: 'd2',
-  }),
-  Object.freeze({
-    color: '#b91c1c',
-    endSquare: 'd4',
-    startSquare: 'd8',
-  }),
-]) satisfies readonly Readonly<ReactChessboardArrow>[];
+function legalCandidateArrows(
+  chess: Readonly<Chess>,
+): readonly Readonly<ReactChessboardArrow>[] {
+  return Object.freeze(
+    chess
+      .moves({ verbose: true })
+      .slice(0, 2)
+      .map((move, index) =>
+        Object.freeze({
+          color: index === 0 ? '#2563eb' : '#b91c1c',
+          endSquare: move.to,
+          startSquare: move.from,
+        }),
+      ),
+  );
+}
 
 function detachArrows(
   arrows: readonly Readonly<ReactChessboardArrow>[],
@@ -76,8 +88,10 @@ function describeSquareCallback(
 }
 
 export default function ReactChessboardCompatibilityScreen() {
-  const [position, setPosition] =
-    useState<CompatibilityPosition>(INITIAL_POSITION);
+  const [chess] = useState(() => new Chess(INITIAL_FEN));
+  const [position, setPosition] = useState<CompatibilityPosition>(() =>
+    compatibilityPositionFromChess(chess),
+  );
   const [arrows, setArrows] =
     useState<readonly Readonly<ReactChessboardArrow>[]>(INITIAL_ARROWS);
   const [eventLog, setEventLog] = useState<readonly CallbackEvent[]>([]);
@@ -91,31 +105,34 @@ export default function ReactChessboardCompatibilityScreen() {
   const handlePieceDrop = useCallback(
     (args: Readonly<ReactChessboardPieceDropHandlerArgs>): boolean => {
       const { piece, sourceSquare, targetSquare } = args;
-      const source = position[sourceSquare];
       if (
         piece.isSparePiece ||
         targetSquare === null ||
         targetSquare === sourceSquare ||
-        source?.pieceType !== piece.pieceType
+        position[sourceSquare]?.pieceType !== piece.pieceType
       ) {
         recordEvent('Rejected drop; controlled position was not changed.');
         return false;
       }
 
-      const next: Record<string, Readonly<{ pieceType: string }>> = {};
-      for (const [square, currentPiece] of Object.entries(position)) {
-        if (square !== sourceSquare && currentPiece !== undefined) {
-          next[square] = Object.freeze({ pieceType: currentPiece.pieceType });
-        }
+      try {
+        const move = chess.move({
+          from: sourceSquare,
+          promotion: 'q',
+          to: targetSquare,
+        });
+        setPosition(compatibilityPositionFromChess(chess));
+        setArrows(Object.freeze([]));
+        recordEvent(`Accepted ${move.san}; chess.js published the position.`);
+        return true;
+      } catch {
+        recordEvent(
+          `Rejected illegal ${piece.pieceType} drop: ${sourceSquare} → ${targetSquare}.`,
+        );
+        return false;
       }
-      next[targetSquare] = Object.freeze({ pieceType: piece.pieceType });
-      setPosition(Object.freeze(next));
-      recordEvent(
-        `Accepted ${piece.pieceType}: ${sourceSquare} → ${targetSquare}.`,
-      );
-      return true;
     },
-    [position, recordEvent],
+    [chess, position, recordEvent],
   );
 
   const handleArrowsChange = useCallback(
@@ -129,13 +146,9 @@ export default function ReactChessboardCompatibilityScreen() {
     [recordEvent],
   );
   const handleCanDragPiece = useCallback(
-    (args: Readonly<ReactChessboardPieceHandlerArgs>): boolean => {
-      recordEvent(
-        `${describePieceCallback('canDragPiece', args)} Result=true.`,
-      );
-      return true;
-    },
-    [recordEvent],
+    (args: Readonly<ReactChessboardPieceHandlerArgs>): boolean =>
+      args.square !== null && args.piece.pieceType.startsWith(chess.turn()),
+    [chess],
   );
   const handlePieceClick = useCallback(
     (args: Readonly<ReactChessboardPieceHandlerArgs>): void => {
@@ -216,8 +229,8 @@ export default function ReactChessboardCompatibilityScreen() {
         <Text style={styles.title}>Compatibility subpath</Text>
         <Text style={styles.description}>
           This route imports only the compatibility entry point. Position and
-          arrows live in this screen; Boolean callbacks merely request the next
-          controlled values.
+          arrows live in this screen; chess.js validates drops before this
+          consumer publishes the next controlled value.
         </Text>
 
         <View style={styles.board}>
@@ -226,8 +239,9 @@ export default function ReactChessboardCompatibilityScreen() {
 
         <View style={styles.status}>
           <Text style={styles.statusText}>
-            Pieces: {Object.keys(position).length} · arrows: {arrows.length} ·
-            callback log (newest first)
+            Turn: {chess.turn() === 'w' ? 'White' : 'Black'} · pieces:{' '}
+            {Object.keys(position).length} · arrows: {arrows.length} · callback
+            log (newest first)
           </Text>
           <View accessibilityLiveRegion="polite">
             {eventLog.length === 0 ? (
@@ -249,14 +263,18 @@ export default function ReactChessboardCompatibilityScreen() {
           with the native arrow gestures; the callback proposes a new array and
           this screen publishes it back through options.arrows. Press or drag
           pieces and press occupied or empty squares to inspect the native
-          compatibility callback payloads in the event card.
+          compatibility callback payloads in the event card. Programmatic arrows
+          show legal candidate moves for the current side; user-drawn arrows
+          remain free-form analysis marks.
         </Text>
 
         <View style={styles.actions}>
           <Pressable
             accessibilityRole="button"
             onPress={() => {
-              setPosition(INITIAL_POSITION);
+              chess.load(INITIAL_FEN);
+              setPosition(compatibilityPositionFromChess(chess));
+              setArrows(INITIAL_ARROWS);
               recordEvent('Reset the app-owned position.');
             }}
             style={styles.button}
@@ -266,12 +284,15 @@ export default function ReactChessboardCompatibilityScreen() {
           <Pressable
             accessibilityRole="button"
             onPress={() => {
-              setArrows(ALTERNATE_ARROWS);
-              recordEvent('Replaced the app-owned arrow array.');
+              const candidates = legalCandidateArrows(chess);
+              setArrows(candidates);
+              recordEvent(
+                `Published ${String(candidates.length)} current legal candidate arrow(s).`,
+              );
             }}
             style={styles.button}
           >
-            <Text style={styles.buttonText}>Replace arrows</Text>
+            <Text style={styles.buttonText}>Show legal candidate arrows</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -298,7 +319,8 @@ export default function ReactChessboardCompatibilityScreen() {
           The adapter keeps familiar option names, not browser behavior: styles
           and renderers are React Native values, mouse hover/right-click and
           ancestor auto-scroll are unavailable, and no callback commits board
-          state inside the component.
+          state inside the component. chess.js is example-app code, not part of
+          the published board package.
         </Text>
       </ScrollView>
     </SafeAreaView>

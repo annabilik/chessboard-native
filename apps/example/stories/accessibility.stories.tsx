@@ -11,9 +11,10 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const ScreenReaderPlay = {
+  name: 'Screen-reader board navigation',
   parameters: {
     notes:
-      'Playing by VoiceOver or TalkBack: the board is one adjustable control with a stable virtual cursor, custom formatters, correlated announcements, and reduced motion.',
+      'Board navigation with VoiceOver or TalkBack: one adjustable control with a stable virtual cursor, correlated announcements, legal position-specific move hints, and reduced motion.',
   },
   render: () => <AccessibilityScreen />,
 } satisfies Story;

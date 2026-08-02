@@ -220,8 +220,8 @@ export default function MoveRequestExample() {
       contentInsetAdjustmentBehavior="automatic"
       style={styles.screen}
     >
-      <Text style={styles.eyebrow}>PHASE 2 · CONTROLLED MOVE REQUESTS</Text>
-      <Text style={styles.title}>One source of truth</Text>
+      <Text style={styles.eyebrow}>PHASE 2 · RULES-FREE REQUEST LIFECYCLE</Text>
+      <Text style={styles.title}>Request lifecycle, not chess validation</Text>
       <Text style={styles.description}>
         The callback decides only whether to wait for a controlled update. This
         route manually relocates the requested piece; it deliberately contains

@@ -14,15 +14,16 @@ type Story = StoryObj<typeof meta>;
 export const PiecePaletteAndDrops = {
   parameters: {
     notes:
-      'A board-editor palette: reusable and disabled SparePiece sources drop onto a named rectangular board, the Crazyhouse-style building block.',
+      'A rules-free variant-editor palette: reusable and disabled SparePiece sources drop onto one named rectangular board. A consumer rules engine could use the same primitive for a drop variant such as Crazyhouse.',
   },
   render: () => <SparePiecesScreen />,
 } satisfies Story;
 
 export const MultipleBoardsAndCrossBoardDrag = {
+  name: 'Multiple boards and isolated state',
   parameters: {
     notes:
-      'Simul and editor views: two independently controlled boards share one explicit ChessboardProvider and drag overlay without sharing any semantic state.',
+      'Two independently controlled boards share one explicit ChessboardProvider and drag overlay without sharing semantic state. This story does not implement cross-board transfer or simul rules.',
   },
   render: () => <ProviderCoordinationScreen />,
 } satisfies Story;
