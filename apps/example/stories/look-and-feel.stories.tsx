@@ -15,7 +15,7 @@ type Story = StoryObj<typeof meta>;
 export const ThemesAndCustomPieces = {
   parameters: {
     notes:
-      'Product branding: theme, per-instance styles, squareStyles, visual-only renderSquare content, and custom piece renderers.',
+      'Product branding: theme, per-instance styles, squareStyles, visual-only renderSquare content, and a custom PieceRenderer that wraps every bundled Cburnett piece with a visible purple V badge.',
   },
   render: () => <VisualCustomizationScreen />,
 } satisfies Story;

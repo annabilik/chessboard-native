@@ -19,26 +19,25 @@ interface DemoPosition {
 
 type DemoTransition = Omit<BoardTransition, 'fromRevision' | 'toRevision'>;
 
-const MAIN_STEPS: readonly PositionObject[] = Object.freeze([
-  Object.freeze({
-    a1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
-    c1: Object.freeze({ id: 'captured', pieceType: 'bN' }),
-    e1: Object.freeze({ id: 'departing', pieceType: 'wB' }),
-  }),
-  Object.freeze({
-    b1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
-    c1: Object.freeze({ id: 'captured', pieceType: 'bN' }),
-    d1: Object.freeze({ id: 'added', pieceType: 'wQ' }),
-  }),
-  Object.freeze({
-    c1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
-    d1: Object.freeze({ id: 'added', pieceType: 'wQ' }),
-  }),
-  Object.freeze({
-    d1: Object.freeze({ id: 'added', pieceType: 'wQ' }),
-    e1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
-  }),
-]);
+const MOVE_START: PositionObject = Object.freeze({
+  a1: Object.freeze({ id: 'move-rook', pieceType: 'wR' }),
+});
+const MOVE_END: PositionObject = Object.freeze({
+  b1: Object.freeze({ id: 'move-rook', pieceType: 'wR' }),
+});
+const ENTER_EXIT_START: PositionObject = Object.freeze({
+  e1: Object.freeze({ id: 'exiting-bishop', pieceType: 'wB' }),
+});
+const ENTER_EXIT_END: PositionObject = Object.freeze({
+  d1: Object.freeze({ id: 'entering-queen', pieceType: 'wQ' }),
+});
+const CAPTURE_START: PositionObject = Object.freeze({
+  a1: Object.freeze({ id: 'capture-rook', pieceType: 'wR' }),
+  c1: Object.freeze({ id: 'captured-knight', pieceType: 'bN' }),
+});
+const CAPTURE_END: PositionObject = Object.freeze({
+  c1: Object.freeze({ id: 'capture-rook', pieceType: 'wR' }),
+});
 
 const AMBIGUOUS_STEPS: readonly PositionObject[] = Object.freeze([
   Object.freeze({
@@ -80,25 +79,35 @@ function nextHintedPosition(
 }
 
 const PROMOTION_START: PositionObject = Object.freeze({
+  a1: Object.freeze({ id: 'promotion-white-king', pieceType: 'wK' }),
+  a8: Object.freeze({ id: 'promotion-black-king', pieceType: 'bK' }),
   g7: Object.freeze({ id: 'promoting-pawn', pieceType: 'wP' }),
 });
 const PROMOTION_END: PositionObject = Object.freeze({
-  h8: Object.freeze({ id: 'promoting-pawn', pieceType: 'wQ' }),
+  a1: PROMOTION_START.a1,
+  a8: PROMOTION_START.a8,
+  g8: Object.freeze({ id: 'promoting-pawn', pieceType: 'wQ' }),
 });
 const CASTLING_START: PositionObject = Object.freeze({
+  a8: Object.freeze({ id: 'castling-black-king', pieceType: 'bK' }),
   e1: Object.freeze({ id: 'castle-king', pieceType: 'wK' }),
   h1: Object.freeze({ id: 'castle-rook', pieceType: 'wR' }),
 });
 const CASTLING_END: PositionObject = Object.freeze({
+  a8: CASTLING_START.a8,
   f1: Object.freeze({ id: 'castle-rook', pieceType: 'wR' }),
   g1: Object.freeze({ id: 'castle-king', pieceType: 'wK' }),
 });
 const EN_PASSANT_START: PositionObject = Object.freeze({
+  a1: Object.freeze({ id: 'en-passant-white-king', pieceType: 'wK' }),
   d5: Object.freeze({ id: 'en-passant-victim', pieceType: 'bP' }),
   e5: Object.freeze({ id: 'en-passant-pawn', pieceType: 'wP' }),
+  h8: Object.freeze({ id: 'en-passant-black-king', pieceType: 'bK' }),
 });
 const EN_PASSANT_END: PositionObject = Object.freeze({
+  a1: EN_PASSANT_START.a1,
   d6: Object.freeze({ id: 'en-passant-pawn', pieceType: 'wP' }),
+  h8: EN_PASSANT_START.h8,
 });
 
 const CONTINUITY_STEPS: readonly PositionObject[] = Object.freeze([
@@ -117,14 +126,74 @@ const HANDOFF_START: PositionObject = Object.freeze({
   a1: Object.freeze({ id: 'handoff-runner', pieceType: 'wR' }),
 });
 
+interface TransitionPrimitiveProps {
+  readonly afterDescription: string;
+  readonly beforeDescription: string;
+  readonly boardId: string;
+  readonly end: PositionObject;
+  readonly forwardLabel: string;
+  readonly reduceMotion: ReduceMotion;
+  readonly reverseLabel: string;
+  readonly start: PositionObject;
+  readonly title: string;
+  readonly transitionDurationMs: number;
+}
+
+function TransitionPrimitive({
+  afterDescription,
+  beforeDescription,
+  boardId,
+  end,
+  forwardLabel,
+  reduceMotion,
+  reverseLabel,
+  start,
+  title,
+  transitionDurationMs,
+}: TransitionPrimitiveProps) {
+  const [position, setPosition] = useState<DemoPosition>({
+    revision: 1,
+    value: start,
+  });
+  const forward = position.value === start;
+
+  return (
+    <View style={styles.transitionExample}>
+      <Text style={styles.exampleTitle}>{title}</Text>
+      <View style={styles.boardCard}>
+        <Chessboard
+          boardId={boardId}
+          dimensions={{ columns: 5, rows: 1 }}
+          position={position}
+          reduceMotion={reduceMotion}
+          showNotation={false}
+          transitionDurationMs={transitionDurationMs}
+        />
+      </View>
+      <Text style={styles.caption}>
+        {forward ? beforeDescription : afterDescription}
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+          setPosition((current) => ({
+            revision: current.revision + 1,
+            value: current.value === start ? end : start,
+          }));
+        }}
+        style={styles.primaryButton}
+      >
+        <Text style={styles.primaryButtonText}>
+          {forward ? forwardLabel : reverseLabel}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function TransitionsRoute() {
   const [durationMs, setDurationMs] = useState(600);
   const [reduceMotion, setReduceMotion] = useState<ReduceMotion>('never');
-  const [mainIndex, setMainIndex] = useState(0);
-  const [mainPosition, setMainPosition] = useState<DemoPosition>({
-    revision: 1,
-    value: MAIN_STEPS[0] ?? Object.freeze({}),
-  });
   const [ambiguousIndex, setAmbiguousIndex] = useState(0);
   const [ambiguousPosition, setAmbiguousPosition] = useState<DemoPosition>({
     revision: 1,
@@ -267,7 +336,9 @@ export default function TransitionsRoute() {
         <Text style={styles.description}>
           Every button publishes a new consumer-owned revision. The board
           animates detached presentation operations while the latest position
-          remains authoritative.
+          remains authoritative. Compact rectangular fixtures isolate rendering
+          and request mechanics and are rules-free; the full-board special-move
+          fixtures below use validated chess positions.
         </Text>
 
         <View style={styles.controls}>
@@ -398,38 +469,52 @@ export default function TransitionsRoute() {
           crossfades in place instead of replaying from its source.
         </Text>
 
-        <Text style={styles.sectionTitle}>Move, enter, exit, and capture</Text>
-        <View style={styles.boardCard}>
-          <Chessboard
-            boardId="transition-main"
-            dimensions={{ columns: 5, rows: 1 }}
-            position={mainPosition}
-            reduceMotion={reduceMotion}
-            showNotation={false}
-            transitionDurationMs={durationMs}
-          />
-        </View>
+        <Text style={styles.sectionTitle}>Basic controlled transitions</Text>
         <Text style={styles.caption}>
-          Revision {mainPosition.revision} · step {mainIndex + 1}/
-          {MAIN_STEPS.length}
+          Each strip publishes one isolated position change. The compact boards
+          are rules-free, while the move and capture below still use legal rook
+          geometry.
         </Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            const nextIndex = (mainIndex + 1) % MAIN_STEPS.length;
-            setMainIndex(nextIndex);
-            setMainPosition((current) =>
-              nextPosition(current, MAIN_STEPS, nextIndex),
-            );
-          }}
-          style={styles.primaryButton}
-        >
-          <Text style={styles.primaryButtonText}>
-            Publish next controlled revision
-          </Text>
-        </Pressable>
+        <TransitionPrimitive
+          afterDescription="After: the same rook is on b1. Its stable ID produces one move operation."
+          beforeDescription="Before: a white rook is on a1. Publish the next revision to move it one clear square."
+          boardId="transition-basic-move"
+          end={MOVE_END}
+          forwardLabel="Move rook a1 → b1"
+          reduceMotion={reduceMotion}
+          reverseLabel="Replay rook b1 → a1"
+          start={MOVE_START}
+          title="1. Ordinary move"
+          transitionDurationMs={durationMs}
+        />
+        <TransitionPrimitive
+          afterDescription="After: the bishop exited e1 and the queen entered d1. Their different IDs produce independent exit and enter fades."
+          beforeDescription="Before: a bishop is on e1. The next external position removes it and independently adds a queen on d1."
+          boardId="transition-basic-enter-exit"
+          end={ENTER_EXIT_END}
+          forwardLabel="Publish bishop exit + queen entry"
+          reduceMotion={reduceMotion}
+          reverseLabel="Replay entry and exit in reverse"
+          start={ENTER_EXIT_START}
+          title="2. Independent enter and exit"
+          transitionDurationMs={durationMs}
+        />
+        <TransitionPrimitive
+          afterDescription="After: the rook is on c1 and the captured knight has exited from that destination."
+          beforeDescription="Before: a white rook is on a1, a black knight is on c1, and b1 is clear."
+          boardId="transition-basic-capture"
+          end={CAPTURE_END}
+          forwardLabel="Rook a1 captures knight on c1"
+          reduceMotion={reduceMotion}
+          reverseLabel="Replay capture in reverse"
+          start={CAPTURE_START}
+          title="3. Rook capture geometry"
+          transitionDurationMs={durationMs}
+        />
 
-        <Text style={styles.sectionTitle}>Ambiguous identity crossfade</Text>
+        <Text style={styles.sectionTitle}>
+          Synthetic ambiguous identity replacement
+        </Text>
         <View style={styles.boardCard}>
           <Chessboard
             boardId="transition-ambiguous"
@@ -442,7 +527,9 @@ export default function TransitionsRoute() {
         </View>
         <Text style={styles.caption}>
           Anonymous identical rooks have no authoritative pairing, so the old
-          actors fade out and the new actors fade in.
+          actors fade out and the new actors fade in. Both rooks relocate in one
+          external revision: this is intentionally a synthetic position diff,
+          not one legal chess ply.
         </Text>
         <Pressable
           accessibilityRole="button"
@@ -472,7 +559,8 @@ export default function TransitionsRoute() {
         <Text style={styles.caption}>
           The old pawn and authoritative promoted piece share one path and
           crossfade without a shadow position. The reverse demonstrates replay
-          choreography.
+          choreography. Both kings are present, and the forward move is the
+          legal promotion g7-g8=Q+.
         </Text>
         <Pressable
           accessibilityRole="button"
@@ -482,10 +570,10 @@ export default function TransitionsRoute() {
                 ? nextHintedPosition(current, PROMOTION_END, {
                     from: 'g7',
                     promotion: 'wQ',
-                    to: 'h8',
+                    to: 'g8',
                   })
                 : nextHintedPosition(current, PROMOTION_START, {
-                    from: 'h8',
+                    from: 'g8',
                     promotion: 'wP',
                     to: 'g7',
                   }),
@@ -510,7 +598,9 @@ export default function TransitionsRoute() {
         </View>
         <Text style={styles.caption}>
           The king move and explicit rookMove are detached actors on the same
-          board-local clock. No intermediate semantic position is created.
+          board-local clock. This minimal legal fixture assumes White retains
+          kingside castling rights; both kings are present and the path is clear
+          and unattacked. No intermediate semantic position is created.
         </Text>
         <Pressable
           accessibilityRole="button"
@@ -547,8 +637,9 @@ export default function TransitionsRoute() {
           />
         </View>
         <Text style={styles.caption}>
-          capturedSquare identifies d5 even though the moving pawn finishes on
-          d6, so the exact victim fades beneath the mover.
+          This minimal legal fixture assumes Black has just played d7-d5.
+          capturedSquare identifies the victim on d5 while the white pawn moves
+          from e5 to d6, so the off-target capture animates correctly.
         </Text>
         <Pressable
           accessibilityRole="button"
@@ -662,6 +753,18 @@ const styles = StyleSheet.create({
   },
   compactBoardCard: {
     maxWidth: 320,
+  },
+  transitionExample: {
+    marginTop: 20,
+    maxWidth: 560,
+    width: '100%',
+  },
+  exampleTitle: {
+    color: '#1e1b17',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 8,
+    width: '100%',
   },
   caption: {
     color: '#665c4d',

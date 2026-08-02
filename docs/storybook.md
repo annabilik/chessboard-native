@@ -22,10 +22,10 @@ exists to demonstrate only exists on a device.
 
 <!-- markdownlint-disable MD013 -->
 
-| Public API playground                                             | Play vs random (chess.js)                                    |
-| ----------------------------------------------------------------- | ------------------------------------------------------------ |
-| ![Public API playground story](assets/storybook/playground.png)   | ![Play vs random story](assets/storybook/play-vs-random.png) |
-| Args-driven tour of real-chess scenes, themes, and reduced motion | chess.js validates every move through `onMoveRequest`        |
+| Public API playground                                           | Play vs random (chess.js)                                    |
+| --------------------------------------------------------------- | ------------------------------------------------------------ |
+| ![Public API playground story](assets/storybook/playground.png) | ![Play vs random story](assets/storybook/play-vs-random.png) |
+| Args-driven tour of validated chess and mini-chess scenes       | chess.js validates requests and generates legal replies      |
 
 | Game replay                                            | Mate in two                                                 |
 | ------------------------------------------------------ | ----------------------------------------------------------- |
@@ -35,7 +35,7 @@ exists to demonstrate only exists on a device.
 | Themes and custom pieces                                       | Cburnett piece set                                                |
 | -------------------------------------------------------------- | ----------------------------------------------------------------- |
 | ![Themes and custom pieces story](assets/storybook/themes.png) | ![Cburnett piece set story](assets/storybook/cburnett-pieces.png) |
-| Board theming with visual-only `renderSquare` content          | The twelve bundled renderers on a rectangular board               |
+| Board theming with custom square and piece renderers           | The twelve bundled renderers on a rectangular board               |
 
 <!-- markdownlint-enable MD013 -->
 
@@ -93,9 +93,9 @@ Story IDs are the values pinned in `fixtures/storybook/required-stories.json`.
 
 ### Refresh the previews
 
-The screenshots in [Preview the catalog](#preview-the-catalog) are regenerated
-from the running catalog, so they cannot silently drift from it. With Storybook
-running on port 8082 and an iOS simulator booted:
+The screenshots in [Preview the catalog](#preview-the-catalog) are manually
+regenerated from the running catalog. With Storybook running on port 8082 and
+an iOS simulator booted:
 
 ```sh
 apps/example/scripts/capture-storybook-screenshots.sh
@@ -190,42 +190,47 @@ of keeping it current.
 
 ## Catalog scope
 
-The catalog is organized by chess-product concept, so a consumer finds the
-feature they are building rather than the library's internal taxonomy. Every
-story title names a chess concept; every story note names the concept first
-and then the public APIs that implement it. The required inventory is pinned
+The catalog is organized by consumer task, so a consumer finds the feature
+they are building rather than the library's internal taxonomy. Story titles
+and notes distinguish playable chess scenarios from rules-free protocol,
+editor, renderer, and engineering fixtures. The required inventory is pinned
 in `fixtures/storybook/required-stories.json` and covers these sections:
 
-- **Overview** — an args-driven public API playground over three real-chess
-  scenes (the starting position, the Scholar's Mate threat, and a ladder mate
-  on a rectangular board; the `positionVariant` arg animates each scene's
-  verified moves, and observational callbacks stream to the Actions tab), and
-  all twelve bundled Cburnett piece renderers.
+- **Overview** — an args-driven public API playground over two orthodox chess
+  scenes (an opening move and the Scholar's Mate finish) plus an explicitly
+  labelled 5×3 mini-chess ladder mate; each pair of `positionVariant` frames is
+  one legal ply apart and can animate forward or backward, while observational
+  callbacks stream to the Actions tab. A separate renderer inventory shows all
+  twelve bundled Cburnett pieces.
 - **Play a Game** — the "using with chess.js" recipe (chess.js validates
   inside `onMoveRequest`, legal-move hints flow through `selection`, and a
-  random opponent replies with revisioned positions), move validation with
-  decision/commit timeouts, selection and legal-move hints, rules-owned
-  promotion and premoves, and move animation with special moves.
+  random opponent replies with revisioned positions), a clearly rules-free
+  move-request lifecycle lab for decision/commit timeouts, chess.js-backed
+  selection and legal-move hints, consumer-owned promotion and a premove that
+  chess.js revalidates after the opponent move, and move animation with legal
+  special-move fixtures plus labelled synthetic labs.
 - **Analysis and Training** — analysis arrows and highlights, Opera Game
   replay, and the Opera Game's forced finish as a mate-in-two puzzle.
-- **Board Setup and Variants** — a spare-piece board-editor palette and
-  cross-board drag through one explicit provider.
+- **Board Setup and Variants** — a rules-free spare-piece variant-editor
+  palette and multiple independently controlled boards coordinated by one
+  explicit provider.
 - **Look and Feel** — themes and custom pieces, piece touch feedback, and
   square press feedback.
-- **Accessibility** — screen-reader play as one adjustable control.
-- **Migration** — familiar `react-chessboard` names over the controlled
-  pipeline.
+- **Accessibility** — screen-reader board navigation as one adjustable control.
+- **Migration** — familiar `react-chessboard` names over a controlled pipeline
+  whose example consumer validates drops and candidate arrows with chess.js.
 - **Engineering Lab** — the interaction-hardening QA stress lab, deliberately
   kept outside the chess-concept sections.
 
-Most stories reuse the same public example screens as the Expo Router
-gallery; the chess.js-powered recipes live in `apps/example/src` as
-Storybook-only screens. chess.js is a dependency of the private example app
-only — the published package stays rules-free. Every board position is real
-chess: replayed lines are validated by chess.js at bundle time, and arrows,
-destinations, and highlights depict legal, thematically correct moves. The
-gallery index itself is not a story because Storybook already provides
-navigation.
+Most stories reuse the same public example screens as the Expo Router gallery,
+while a few focused recipes in `apps/example/src` exist only for Storybook.
+chess.js is a dependency of the private example app only — the published
+package stays rules-free. Stories that claim playable or orthodox chess use
+complete positions and validated moves. Renderer
+inventories, variant editors, request-lifecycle labs, and multi-piece position
+diffs may be synthetic; those stories identify that boundary in their visible
+copy instead of presenting it as chess legality. The gallery index itself is
+not a story because Storybook already provides navigation.
 
 Some stories are intentionally manual labs. Timers, native gestures,
 accessibility speech, lifecycle changes, and performance behavior cannot be

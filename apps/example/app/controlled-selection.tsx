@@ -2,30 +2,17 @@ import {
   Chessboard,
   type ControlledPosition,
   type ControlledSelection,
-  type MoveIntent,
   type OnMoveRequest,
   type OnSquareActivate,
   type PieceData,
   type PositionObject,
   type SquareId,
 } from '@vibechess/chessboard-native';
+import { Chess, type Move, type Square } from 'chess.js';
 import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-const INITIAL_POSITION: PositionObject = Object.freeze({
-  b1: Object.freeze({ id: 'white-knight', pieceType: 'wN' }),
-  e2: Object.freeze({ id: 'white-pawn', pieceType: 'wP' }),
-  e7: Object.freeze({ id: 'black-pawn', pieceType: 'bP' }),
-  h8: Object.freeze({ id: 'black-rook', pieceType: 'bR' }),
-});
-
-const DESTINATIONS: Readonly<Partial<Record<SquareId, readonly SquareId[]>>> =
-  Object.freeze({
-    b1: Object.freeze(['a3', 'c3']),
-    e2: Object.freeze(['e3', 'e4']),
-    e7: Object.freeze(['e5', 'e6']),
-    h8: Object.freeze(['h6', 'h7']),
-  });
+import { applyVerboseMove, positionFromChess } from '../src/chess-demo';
 
 const DISABLED_SQUARES = Object.freeze(['c3'] satisfies readonly SquareId[]);
 
@@ -44,31 +31,15 @@ function piecesMatch(
   );
 }
 
-function applyMove(
+function commitMove(
   current: Readonly<DemoPosition>,
-  intent: Readonly<MoveIntent>,
-): Readonly<DemoPosition> | null {
-  if (
-    intent.source.kind !== 'board' ||
-    intent.targetSquare === null ||
-    intent.basePositionRevision !== current.revision ||
-    !piecesMatch(current.value[intent.source.square], intent.piece)
-  ) {
-    return null;
-  }
-
-  const value: Record<string, Readonly<PieceData>> = {};
-  for (const [square, piece] of Object.entries(current.value)) {
-    if (square !== intent.source.square && piece !== undefined) {
-      value[square] = piece;
-    }
-  }
-  value[intent.targetSquare] = intent.piece;
-
+  move: Readonly<Move>,
+  committedIntentId: string,
+): Readonly<DemoPosition> {
   return Object.freeze({
-    committedIntentId: intent.intentId,
+    committedIntentId,
     revision: current.revision + 1,
-    value: Object.freeze(value),
+    value: applyVerboseMove(current.value, move),
   });
 }
 
@@ -84,10 +55,11 @@ function clearedSelection(
 }
 
 export default function ControlledSelectionExample() {
-  const [position, setPosition] = useState<DemoPosition>({
+  const [chess] = useState(() => new Chess());
+  const [position, setPosition] = useState<DemoPosition>(() => ({
     revision: 0,
-    value: INITIAL_POSITION,
-  });
+    value: positionFromChess(chess),
+  }));
   const [selection, setSelection] = useState<ControlledSelection>({
     destinationSquares: [],
     disabledSquares: DISABLED_SQUARES,
@@ -95,12 +67,15 @@ export default function ControlledSelectionExample() {
     selectedSquare: null,
   });
   const [status, setStatus] = useState(
-    'Tap any square. Piece squares publish the example destinations from the consumer store.',
+    'White to move. Select a white piece to publish its chess.js legal destinations.',
   );
 
   const onSquareActivate = useCallback<OnSquareActivate>(
     (intent) => {
-      if (intent.baseSelectionRevision !== selection.revision) {
+      if (
+        intent.basePositionRevision !== position.revision ||
+        intent.baseSelectionRevision !== selection.revision
+      ) {
         return;
       }
 
@@ -115,36 +90,65 @@ export default function ControlledSelectionExample() {
         return;
       }
 
-      const destinationSquares = DESTINATIONS[intent.square] ?? [];
+      const piece = position.value[intent.square];
+      if (piece?.pieceType.startsWith(chess.turn()) !== true) {
+        setSelection(clearedSelection(selection));
+        setStatus(
+          `${intent.square} does not contain a ${chess.turn() === 'w' ? 'White' : 'Black'} piece that can move now.`,
+        );
+        return;
+      }
+
+      const destinationSquares = chess
+        .moves({ square: intent.square as Square, verbose: true })
+        .map((move) => move.to);
       setSelection({
-        destinationSquares,
+        destinationSquares: Object.freeze(destinationSquares),
         disabledSquares: DISABLED_SQUARES,
         revision: selection.revision + 1,
         selectedSquare: intent.square,
       });
       setStatus(
-        `${intent.input} activation selected ${intent.square}; the consumer published ${String(destinationSquares.length)} destination${destinationSquares.length === 1 ? '' : 's'}.`,
+        `${intent.input} activation selected ${intent.square}; chess.js published ${String(destinationSquares.length)} legal destination${destinationSquares.length === 1 ? '' : 's'}.`,
       );
     },
-    [selection],
+    [chess, position, selection],
   );
 
   const onMoveRequest = useCallback<OnMoveRequest>(
     (intent) => {
-      const nextPosition = applyMove(position, intent);
-      if (nextPosition === null) {
+      if (
+        intent.source.kind !== 'board' ||
+        intent.targetSquare === null ||
+        intent.basePositionRevision !== position.revision ||
+        !piecesMatch(position.value[intent.source.square], intent.piece) ||
+        DISABLED_SQUARES.includes(intent.targetSquare)
+      ) {
         setStatus('The consumer rejected an obsolete or unsupported request.');
         return { status: 'rejected', reason: 'Example request is obsolete' };
       }
 
+      let move: Move;
+      try {
+        move = chess.move({
+          from: intent.source.square,
+          promotion: 'q',
+          to: intent.targetSquare,
+        });
+      } catch {
+        setStatus('chess.js rejected the requested move as illegal.');
+        return { status: 'rejected', reason: 'Illegal chess move' };
+      }
+
+      const nextPosition = commitMove(position, move, intent.intentId);
       setPosition(nextPosition);
       setSelection((current) => clearedSelection(current));
       setStatus(
-        `${intent.input} destination ${intent.targetSquare ?? 'off board'} emitted one move request. The consumer committed it and cleared selection.`,
+        `${intent.input} submitted ${move.san}. chess.js accepted it; the consumer committed revision ${String(nextPosition.revision)} and cleared selection.`,
       );
       return { status: 'accepted' };
     },
-    [position],
+    [chess, position],
   );
   const destinationSummary =
     selection.destinationSquares === undefined ||
@@ -163,7 +167,8 @@ export default function ControlledSelectionExample() {
       <Text style={styles.description}>
         Selection, destinations, disabled squares, and position all come from
         revisioned consumer state. The board emits one square activation or one
-        destination move request; it never mutates either store value.
+        destination move request; chess.js derives and validates the chess data,
+        while the board never mutates either store value.
       </Text>
 
       <View style={styles.board}>
@@ -197,10 +202,11 @@ export default function ControlledSelectionExample() {
       </View>
 
       <Text style={styles.boundary}>
-        This route contains no chess engine. Its destination table is hard-coded
-        demo data. c3 is both a destination and disabled, showing that disabled
-        presentation wins and activation is blocked. Activating the selected
-        square again is a consumer policy that clears it.
+        chess.js runs only in this private example app; the published board
+        remains rules-free. c3 is a legal b1-knight destination but an explicit
+        consumer policy disables it, showing that policy presentation wins and
+        activation is blocked. Activating the selected square again is another
+        consumer policy that clears it.
       </Text>
     </ScrollView>
   );

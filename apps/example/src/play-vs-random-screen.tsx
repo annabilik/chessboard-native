@@ -1,5 +1,6 @@
 import {
   Chessboard,
+  type PieceData,
   type ControlledPosition,
   type OnMoveRequest,
   type OnSquareActivate,
@@ -41,11 +42,16 @@ export default function PlayVsRandomScreen() {
     undefined,
   );
   const [status, setStatus] = useState('White to move.');
+  const [computerThinking, setComputerThinking] = useState(false);
   const revisionRef = useRef(0);
   const replyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const replyGenerationRef = useRef(0);
+  const computerThinkingRef = useRef(false);
 
   useEffect(
     () => () => {
+      replyGenerationRef.current += 1;
+      computerThinkingRef.current = false;
       if (replyTimeoutRef.current !== null) {
         clearTimeout(replyTimeoutRef.current);
       }
@@ -62,19 +68,47 @@ export default function PlayVsRandomScreen() {
     }));
   }, []);
 
-  const scheduleComputerReply = useCallback(() => {
-    replyTimeoutRef.current = setTimeout(() => {
-      replyTimeoutRef.current = null;
-      const replies = chess.moves({ verbose: true });
-      if (replies.length === 0) {
-        return;
+  const scheduleComputerReply = useCallback(
+    (expectedRevision: number) => {
+      if (replyTimeoutRef.current !== null) {
+        clearTimeout(replyTimeoutRef.current);
       }
-      const reply = replies[Math.floor(Math.random() * replies.length)];
-      const played = chess.move(reply.san);
-      publish(played);
-      setStatus(describeGame(chess));
-    }, COMPUTER_REPLY_DELAY_MS);
-  }, [chess, publish]);
+      const generation = replyGenerationRef.current + 1;
+      replyGenerationRef.current = generation;
+      computerThinkingRef.current = true;
+      setComputerThinking(true);
+      replyTimeoutRef.current = setTimeout(() => {
+        if (replyGenerationRef.current !== generation) {
+          return;
+        }
+        replyTimeoutRef.current = null;
+        if (
+          revisionRef.current !== expectedRevision ||
+          chess.turn() !== 'b' ||
+          chess.isGameOver()
+        ) {
+          computerThinkingRef.current = false;
+          setComputerThinking(false);
+          setStatus(describeGame(chess));
+          return;
+        }
+        const replies = chess.moves({ verbose: true });
+        if (replies.length === 0) {
+          computerThinkingRef.current = false;
+          setComputerThinking(false);
+          setStatus(describeGame(chess));
+          return;
+        }
+        const reply = replies[Math.floor(Math.random() * replies.length)];
+        const played = chess.move(reply.san);
+        publish(played);
+        computerThinkingRef.current = false;
+        setComputerThinking(false);
+        setStatus(describeGame(chess));
+      }, COMPUTER_REPLY_DELAY_MS);
+    },
+    [chess, publish],
+  );
 
   // chess.js is the rules engine: it validates the intent, and the accepted
   // decision only permits pending presentation. The next controlled position,
@@ -83,6 +117,16 @@ export default function PlayVsRandomScreen() {
     (intent) => {
       if (intent.source.kind !== 'board' || intent.targetSquare === null) {
         return { status: 'rejected', reason: 'Move a board piece.' };
+      }
+      if (
+        computerThinkingRef.current ||
+        chess.turn() !== 'w' ||
+        !intent.piece.pieceType.startsWith('w')
+      ) {
+        return {
+          status: 'rejected',
+          reason: 'You play White. Wait for the computer reply.',
+        };
       }
       if (intent.basePositionRevision !== revisionRef.current) {
         return { status: 'rejected', reason: 'Stale position.' };
@@ -97,7 +141,9 @@ export default function PlayVsRandomScreen() {
         publish(move, intent.intentId);
         setStatus(describeGame(chess));
         if (!chess.isGameOver()) {
-          scheduleComputerReply();
+          const expectedRevision = revisionRef.current;
+          setStatus(`${describeGame(chess)} Computer thinking…`);
+          scheduleComputerReply(expectedRevision);
         }
         return { status: 'accepted' };
       } catch {
@@ -115,7 +161,11 @@ export default function PlayVsRandomScreen() {
         setSelection(undefined);
         return;
       }
-      if (!intent.piece.pieceType.startsWith(chess.turn())) {
+      if (
+        computerThinkingRef.current ||
+        chess.turn() !== 'w' ||
+        !intent.piece.pieceType.startsWith('w')
+      ) {
         setSelection(undefined);
         return;
       }
@@ -131,10 +181,13 @@ export default function PlayVsRandomScreen() {
   );
 
   const onNewGame = useCallback(() => {
+    replyGenerationRef.current += 1;
     if (replyTimeoutRef.current !== null) {
       clearTimeout(replyTimeoutRef.current);
       replyTimeoutRef.current = null;
     }
+    computerThinkingRef.current = false;
+    setComputerThinking(false);
     chess.reset();
     revisionRef.current += 1;
     setPosition({
@@ -151,12 +204,22 @@ export default function PlayVsRandomScreen() {
       <Text style={styles.description}>
         chess.js owns the rules. Drag a piece, or tap it to see its legal moves
         and tap a destination. Illegal moves snap back; pawns promote to a queen
-        for simplicity. The computer replies with a random legal move.
+        for simplicity. You always play White; input is locked while the
+        computer chooses a random legal Black move.
       </Text>
       <Text style={styles.status}>{status}</Text>
       <View style={styles.boardFrame}>
         <Chessboard
           boardId="play-vs-random"
+          canDragPiece={({ piece }: { readonly piece: PieceData }) =>
+            !computerThinking &&
+            chess.turn() === 'w' &&
+            piece.pieceType.startsWith('w')
+          }
+          interactionPermissions={{
+            accessibility: !computerThinking,
+            drag: !computerThinking,
+          }}
           onMoveRequest={onMoveRequest}
           onSquareActivate={onSquareActivate}
           position={position}

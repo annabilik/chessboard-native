@@ -12,6 +12,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 const MAIN_POSITION = Object.freeze({
   a1: Object.freeze({ id: 'main-rook', pieceType: 'wR' }),
+  e1: Object.freeze({ id: 'main-white-king', pieceType: 'wK' }),
   e2: Object.freeze({ id: 'main-pawn', pieceType: 'wP' }),
   e7: Object.freeze({ id: 'main-target', pieceType: 'bP' }),
   h8: Object.freeze({ id: 'main-king', pieceType: 'bK' }),
@@ -20,6 +21,7 @@ const MAIN_POSITION = Object.freeze({
 const VARIATION_POSITION = Object.freeze({
   b1: Object.freeze({ id: 'variation-knight', pieceType: 'wN' }),
   d4: Object.freeze({ id: 'variation-queen', pieceType: 'wQ' }),
+  e1: Object.freeze({ id: 'variation-white-king', pieceType: 'wK' }),
   f6: Object.freeze({ id: 'variation-bishop', pieceType: 'bB' }),
   g8: Object.freeze({ id: 'variation-king', pieceType: 'bK' }),
 }) satisfies PositionObject;
@@ -136,9 +138,10 @@ export default function ProviderCoordinationExample() {
       <Text style={styles.eyebrow}>PHASE 2 · PROVIDER COORDINATION</Text>
       <Text style={styles.title}>Shared gesture plumbing, isolated state</Text>
       <Text style={styles.description}>
-        Both boards reuse one explicit provider and its shared pointerless drag
-        overlay. Position, revision, callback, virtual cursor, and accessibility
-        value remain board-local and consumer controlled.
+        Both boards reuse one explicit provider and its shared drag overlay.
+        Position, revision, callback, virtual cursor, and accessibility value
+        remain board-local and consumer controlled. This is a rules-free
+        coordination fixture: gestures never transfer pieces between boards.
       </Text>
 
       <View style={styles.providerRegion}>

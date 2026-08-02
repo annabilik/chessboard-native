@@ -16,7 +16,10 @@ import { useCallback, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { replayGame } from '../src/chess-demo';
+
 const BOARD_ID = 'controlled-annotation-lab';
+const ANNOTATION_GAME = replayGame([]);
 
 const ARROW_TOOL = Object.freeze({
   color: '#e46f18',
@@ -52,7 +55,7 @@ const INITIAL_ANNOTATIONS = Object.freeze({
 
 const INITIAL_POSITION = Object.freeze({
   revision: 8,
-  value: Object.freeze({}),
+  value: ANNOTATION_GAME.positions[0],
 }) satisfies ControlledPosition;
 
 const annotationPolicies = Object.freeze({
@@ -271,7 +274,8 @@ export default function ControlledAnnotationsRoute() {
           Touch and accessibility input emit deltas through one transient
           runtime. This route applies each operation against the latest
           consumer-owned envelope and publishes the returned value as the next
-          controlled prop.
+          controlled prop. The complete starting position makes the blue b1–c3
+          candidate arrow a legal knight development.
         </Text>
 
         <Text style={styles.sectionTitle}>Drawing tool</Text>
