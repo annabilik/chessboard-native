@@ -1,5 +1,6 @@
 # @vibechess/chessboard-native
 
+<!-- markdownlint-disable-next-line MD013 -->
 <img src="https://raw.githubusercontent.com/annabilik/chessboard-native/main/docs/assets/nativechessboard.png" alt="Cburnett chessboard showing Scholar's Mate with arrows converging on f7" width="400" />
 
 > **0.x status:** `0.1.0` is the first stable version intentionally published
