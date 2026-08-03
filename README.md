@@ -9,7 +9,7 @@
 A React Native chessboard with native gestures and animations — bring your own
 engine.
 
-![A React Native chessboard rendering the Scholar's Mate threat with Cburnett pieces and an analysis arrow from h5 to f7](docs/assets/hero-board.svg)
+![Cburnett chessboard showing Scholar's Mate with arrows converging on f7](docs/assets/hero-board.png)
 
 `@vibechess/chessboard-native` runs on Android and iOS and targets the useful
 surface of pinned `react-chessboard@5.10.0`, with explicit browser-only
