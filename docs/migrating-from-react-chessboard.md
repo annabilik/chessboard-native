@@ -327,8 +327,8 @@ Before removing the web component:
 7. Replace CSS assumptions, DOM event fields, hover, and right-click flows.
 8. Run with reduced motion enabled.
 9. Follow the [manual TalkBack and VoiceOver checklist](./accessibility.md).
-10. Pin the exact prerelease evaluated by the application; do not rely on a
-    moving `next` tag.
+10. Pin the exact package version evaluated by the application; do not rely on
+    a moving npm dist-tag.
 
 The physical assistive-technology pass, broad compatibility matrix, performance
 budgets, publication, and release-candidate burn-in remain separate release

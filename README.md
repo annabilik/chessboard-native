@@ -158,8 +158,9 @@ replacement.
 
 Versions before `0.1.0-next.3` ship interim geometric placeholder pieces, and
 versions before `0.1.0-next.2` lack the compatibility entry point. `0.1.0` is
-the first release on the `latest` channel; `next` continues to track
-prereleases and may therefore resolve older than `latest` between cycles.
+the first stable version intentionally published to the `latest` channel;
+`next` continues to track prereleases and may therefore resolve older than
+`latest` between cycles.
 
 `0.1.0` is a 0.x release. The API is frozen and the parity ledger is closed,
 but the physical-device gates listed in the

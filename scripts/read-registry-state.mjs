@@ -22,6 +22,7 @@ export function interpretRegistryResponse({
       packageExists: false,
       versionExists: false,
       latestBefore: '',
+      nextBefore: '',
     };
   }
 
@@ -53,10 +54,24 @@ export function interpretRegistryResponse({
     );
   }
 
+  const nextBefore = body['dist-tags'].next ?? '';
+  if (typeof nextBefore !== 'string') {
+    throw new Error('registry dist-tags.next must be a string when present');
+  }
+  if (
+    nextBefore.length > 0 &&
+    (nextBefore.length > 256 || !registryVersionPattern.test(nextBefore))
+  ) {
+    throw new Error(
+      'registry dist-tags.next must be a single safe npm version',
+    );
+  }
+
   return {
     packageExists: true,
     versionExists: Object.hasOwn(body.versions, version),
     latestBefore,
+    nextBefore,
   };
 }
 
@@ -171,13 +186,14 @@ async function main() {
         `package-exists=${state.packageExists}`,
         `version-exists=${state.versionExists}`,
         `latest-before=${state.latestBefore}`,
+        `next-before=${state.nextBefore}`,
         '',
       ].join('\n'),
     );
   }
 
   process.stdout.write(
-    `${packageName}: packageExists=${state.packageExists}, versionExists=${state.versionExists}, latest=${state.latestBefore || '<absent>'}\n`,
+    `${packageName}: packageExists=${state.packageExists}, versionExists=${state.versionExists}, latest=${state.latestBefore || '<absent>'}, next=${state.nextBefore || '<absent>'}\n`,
   );
 }
 

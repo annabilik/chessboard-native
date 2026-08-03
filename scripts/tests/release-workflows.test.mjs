@@ -43,7 +43,7 @@ function stepBlock(job, stepName) {
   );
 }
 
-test('keeps prerelease publication manual, main-only, and dry-run first', () => {
+test('keeps release publication manual, main-only, and dry-run first', () => {
   assert.match(releaseWorkflow, /^on:\n {2}workflow_dispatch:/mu);
   assert.doesNotMatch(
     releaseWorkflow,
@@ -59,7 +59,7 @@ test('keeps prerelease publication manual, main-only, and dry-run first', () => 
   assert.match(releaseWorkflow, /refs\/heads\/main/u);
 });
 
-test('publishes only an unpublished exact archive under next', () => {
+test('publishes only an unpublished exact archive under its derived tag', () => {
   const prepare = jobBlock(releaseWorkflow, 'prepare');
   const dryRun = jobBlock(releaseWorkflow, 'dry-run');
   const publish = jobBlock(releaseWorkflow, 'publish');
@@ -96,6 +96,10 @@ test('publishes only an unpublished exact archive under next', () => {
     publish,
     /latest-before:.*steps\.registry-before\.outputs\.latest-before/u,
   );
+  assert.match(
+    publish,
+    /next-before:.*steps\.registry-before\.outputs\.next-before/u,
+  );
   assert.match(publish, /read-registry-state\.mjs/u);
   assert.match(publish, /check-release-tags\.mjs before/u);
   assert.match(bootstrapSetup, /if:.*inputs\.mode == 'bootstrap-token'/u);
@@ -111,7 +115,12 @@ test('publishes only an unpublished exact archive under next', () => {
   );
   // The dist-tag is derived from the version, never hardcoded, so a stable
   // X.Y.Z release claims latest while X.Y.Z-next.N stays on next.
-  assert.match(prepare, /npm-tag=\$npm_tag/u);
+  const metadata = stepBlock(prepare, 'Record exact package metadata');
+  assert.match(
+    metadata,
+    /if \[\[ "\$archive_version" == \*-\* \]\]; then\s+npm_tag="next"\s+else\s+npm_tag="latest"/u,
+  );
+  assert.match(metadata, /npm-tag=\$npm_tag/u);
   assert.match(publish, /NPM_TAG:.*needs\.prepare\.outputs\.npm-tag/u);
   assert.match(publish, /secrets\.NPM_TOKEN/u);
   assert.match(trustedPublish, /NODE_AUTH_TOKEN/u);
@@ -132,6 +141,8 @@ test('verifies publish or recovery without credentials or a second publish', () 
   assert.match(verification, /EXPECTED_LATEST_INPUT/u);
   assert.match(verification, /check-release-tags\.mjs expected-latest/u);
   assert.match(verification, /check-release-tags\.mjs after/u);
+  assert.match(verification, /NEXT_BEFORE/u);
+  assert.match(verification, /--next-before "\$NEXT_BEFORE"/u);
   assert.match(verification, /npm view "\$PACKAGE_NAME@next" version/u);
   assert.match(verification, /npm view "\$PACKAGE_NAME@latest" version/u);
   assert.match(verification, /dist\.attestations/u);

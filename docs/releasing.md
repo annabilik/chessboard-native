@@ -31,8 +31,9 @@ channel, the workflow computes `npm-tag` from the archive version, and
 A stable release publishes under `latest` only. Trusted publishing authorizes
 `npm publish` and not `npm dist-tag`, so `next` keeps pointing at the most
 recent prerelease and can resolve _older_ than `latest` between cycles; that is
-expected, and the verifier only requires `next` to remain a valid version. Move
-it deliberately with `npm dist-tag add` if a release should also claim `next`.
+expected. Publishing runs snapshot `next` immediately before publication and
+require that exact value to remain unchanged. Move it deliberately with
+`npm dist-tag add` if a release should also claim `next`.
 
 ## Release rules
 
@@ -50,7 +51,8 @@ it deliberately with `npm dist-tag add` if a release should also claim `next`.
   `expected-version`.
 - `verify-registry` verifies an already published immutable version. It skips
   the dry-run and publish jobs, requires an explicit `expected-latest`, and
-  receives no npm token, protected environment, or OIDC write permission.
+  receives no npm token, protected environment, or OIDC write permission. For
+  a stable-only package, the optional `next` dist-tag may be absent.
 - Both publishing modes use the protected GitHub environment named `npm`.
 - Never reuse a version. Every correction receives a new version.
 
@@ -110,7 +112,7 @@ required `expected-version`; do not infer it from the most recent npm tag.
 
 ## Dry run
 
-From the repository's **Actions** tab, run the **npm prerelease** workflow on
+From the repository's **Actions** tab, run the **npm release** workflow on
 `main`:
 
 1. Leave `mode` at its default, `dry-run`.
@@ -150,7 +152,7 @@ Before the bootstrap:
 5. Complete a successful `dry-run` for the same commit and
    `expected-version`.
 
-Dispatch the **npm prerelease** workflow on `main` with:
+Dispatch the **npm release** workflow on `main` with:
 
 - `mode`: `bootstrap-token`
 - `expected-version`: the exact reviewed `0.1.0-next.N` manifest version
@@ -182,7 +184,7 @@ initial `latest` tag; it must never be rerun in a publishing mode.
 
 When npm accepted a version but a later workflow check failed, never rerun the
 publishing mode and never attempt to reuse the version. After correcting only
-the verification code, dispatch **npm prerelease** on `main` with:
+the verification code, dispatch **npm release** on `main` with:
 
 - `mode`: `verify-registry`
 - `expected-version`: the exact immutable version already on npm
@@ -190,10 +192,11 @@ the verification code, dispatch **npm prerelease** on `main` with:
   release
 
 Recovery mode prepares and inspects the package from `main`, compares its exact
-SHA-256 digest with the registry tarball, checks the supplied `next` and
-`latest` expectations and provenance, and repeats the clean Expo and bare React
-Native consumer checks. It cannot publish: the job does not enter the protected
-`npm` environment, request an OIDC token, or receive `NPM_TOKEN`.
+SHA-256 digest with the registry tarball, checks the observed `next` value and
+the supplied `latest` expectation and provenance, and repeats the clean Expo
+and bare React Native consumer checks. It cannot publish: the job does not
+enter the protected `npm` environment, request an OIDC token, or receive
+`NPM_TOKEN`.
 
 For the accepted bootstrap release, supply `0.1.0-next.0` for both version
 inputs. This records a green, credential-free verification of the bytes that
@@ -263,14 +266,17 @@ For every later release on either channel, prepare and merge a new Changesets
 version, run the workflow in `dry-run`, and then dispatch it on `main` with:
 
 - `mode`: `trusted-oidc`
-- `expected-version`: the exact reviewed `0.1.0-next.N` manifest version
+- `expected-version`: the exact reviewed manifest version
 
 The protected `npm` environment provides approval policy, while GitHub's OIDC
 identity authorizes npm. `trusted-oidc` must run without `NPM_TOKEN` or another
 long-lived npm credential. The workflow publishes the one inspected archive
-under `next`, then redownloads the immutable registry version and repeats the
-artifact and clean-consumer installation checks. Do not proceed if GitHub asks
-for a token instead of using trusted publishing.
+under the version-derived tag: `latest` for a stable version or `next` for a
+prerelease. It then redownloads the immutable registry version and repeats the
+artifact and clean-consumer installation checks. A stable publish must preserve
+the exact pre-publish `next` value; a prerelease must preserve the exact
+pre-publish `latest` value. Do not proceed if GitHub asks for a token instead
+of using trusted publishing.
 
 ## Post-release checks
 
@@ -278,17 +284,25 @@ After either publishing mode succeeds, verify the public registry state from a
 credential-free shell:
 
 ```sh
+npm view @vibechess/chessboard-native@0.1.0 version
+npm view @vibechess/chessboard-native@latest version
 npm view @vibechess/chessboard-native@next version
 npm dist-tag ls @vibechess/chessboard-native
-npm pack @vibechess/chessboard-native@0.1.0-next.N --ignore-scripts
+npm pack @vibechess/chessboard-native@0.1.0 --ignore-scripts
 ```
+
+Replace `0.1.0` in the exact-version commands with the workflow's reviewed
+`expected-version` when checking another release.
 
 Confirm all of the following:
 
-- `@next` resolves to the exact workflow `expected-version`.
-- for the bootstrap version, `latest` equals that first version; for every
-  subsequent prerelease, `latest` remains equal to its recorded pre-publish
-  value;
+- the exact version resolves to the workflow `expected-version`;
+- the selected channel tag resolves to that version: `latest` for stable or
+  `next` for prerelease;
+- the other channel tag remains at its recorded pre-publish value: `next` for
+  stable or `latest` for prerelease;
+- for a first-package bootstrap, npm's mandatory `latest` initialization
+  matches the published version;
 - the registry archive passes the workflow's artifact checks and clean Expo
   and bare React Native installs;
 - npm displays repository, license, README, provenance, and public access as
@@ -299,7 +313,7 @@ Confirm all of the following:
 Do not update documentation to claim the package is published until these
 checks pass.
 
-## Bad prerelease or rollback
+## Bad release or rollback
 
 npm versions are immutable. Never try to overwrite a bad version, and avoid
 unpublishing because consumers and lockfiles may already reference it.
@@ -307,10 +321,14 @@ unpublishing because consumers and lockfiles may already reference it.
 1. Deprecate the affected version with an actionable reason:
 
    ```sh
+   affected_version=0.1.0
    npm deprecate \
-     @vibechess/chessboard-native@0.1.0-next.N \
+     "@vibechess/chessboard-native@$affected_version" \
      "Do not use: <reason>; upgrade to <replacement>"
    ```
+
+   Replace the example value with the exact affected stable or prerelease
+   version.
 
 2. If a known-good prerelease exists, point `next` back to it; otherwise remove
    the `next` tag until a correction is ready. Never move `latest` backwards to
@@ -323,8 +341,9 @@ unpublishing because consumers and lockfiles may already reference it.
    npm dist-tag rm @vibechess/chessboard-native next
    ```
 
-3. Add a corrective changeset, produce a new `0.1.0-next.N` version, and repeat
-   the complete dry-run and trusted-publishing workflow.
+3. Add a corrective changeset, produce a new stable or prerelease version as
+   appropriate, and repeat the complete dry-run and trusted-publishing
+   workflow.
 
 Use `npm unpublish` only for an exceptional legal or security incident after
 checking npm policy and coordinating the response. Unpublishing is not a

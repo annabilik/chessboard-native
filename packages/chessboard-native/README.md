@@ -2,8 +2,9 @@
 
 ![A React Native chessboard rendering the Scholar's Mate threat with Cburnett pieces and an analysis arrow from h5 to f7](https://raw.githubusercontent.com/annabilik/chessboard-native/main/docs/assets/hero-board.svg)
 
-> **0.x status:** `0.1.0` is the first release on the npm `latest` channel.
-> The public API is frozen and the `react-chessboard@5.10.0` parity ledger is
+> **0.x status:** `0.1.0` is the first stable version intentionally published
+> to the npm `latest` channel. The public API is frozen and the
+> `react-chessboard@5.10.0` parity ledger is
 > closed, but this is a 0.x release: physical-device accessibility, visual,
 > gesture, compatibility, and performance gates are still outstanding, and 1.0
 > production support is not declared. See the
