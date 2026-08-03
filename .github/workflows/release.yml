@@ -1,10 +1,10 @@
-name: npm prerelease
+name: npm release
 
 on:
   workflow_dispatch:
     inputs:
       expected-version:
-        description: Exact prerelease version from packages/chessboard-native/package.json
+        description: Exact package version from packages/chessboard-native/package.json
         required: true
         type: string
       expected-latest:
@@ -26,7 +26,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: npm-prerelease
+  group: npm-release
   cancel-in-progress: false
 
 jobs:
@@ -43,6 +43,7 @@ jobs:
     outputs:
       artifact-id: ${{ steps.upload.outputs.artifact-id }}
       digest: ${{ steps.metadata.outputs.digest }}
+      npm-tag: ${{ steps.metadata.outputs.npm-tag }}
       version: ${{ steps.metadata.outputs.version }}
 
     steps:
@@ -51,7 +52,7 @@ jobs:
           RELEASE_REF: ${{ github.ref }}
         run: |
           if [[ "$RELEASE_REF" != "refs/heads/main" ]]; then
-            echo "Prereleases may only be prepared from refs/heads/main." >&2
+            echo "Releases may only be prepared from refs/heads/main." >&2
             exit 1
           fi
 
@@ -92,7 +93,7 @@ jobs:
       - name: Run the full verification suite
         run: pnpm verify
 
-      - name: Validate prerelease metadata
+      - name: Validate release metadata
         run: >-
           node scripts/check-prerelease.mjs
           --expected-version "$EXPECTED_VERSION"
@@ -139,15 +140,24 @@ jobs:
             exit 1
           fi
 
+          # The version selects the channel: X.Y.Z publishes to latest,
+          # X.Y.Z-next.N publishes to next.
+          if [[ "$archive_version" == *-* ]]; then
+            npm_tag="next"
+          else
+            npm_tag="latest"
+          fi
+
           digest="$(sha256sum "$RELEASE_ARCHIVE" | cut -d ' ' -f 1)"
           echo "version=$archive_version" >> "$GITHUB_OUTPUT"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "npm-tag=$npm_tag" >> "$GITHUB_OUTPUT"
 
       - name: Upload the exact inspected package
         id: upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: chessboard-native-prerelease
+          name: chessboard-native-release
           path: ${{ runner.temp }}/package/chessboard-native.tgz
           compression-level: 0
           if-no-files-found: error
@@ -207,10 +217,11 @@ jobs:
       - name: Dry-run publication
         env:
           ARCHIVE: ${{ runner.temp }}/package/chessboard-native.tgz
-        run: npm publish "$ARCHIVE" --dry-run --access public --tag next
+          NPM_TAG: ${{ needs.prepare.outputs.npm-tag }}
+        run: npm publish "$ARCHIVE" --dry-run --access public --tag "$NPM_TAG"
 
   publish:
-    name: Publish npm prerelease
+    name: Publish npm package
     if: ${{ inputs.mode == 'bootstrap-token' || inputs.mode == 'trusted-oidc' }}
     needs:
       - prepare
@@ -221,6 +232,7 @@ jobs:
 
     outputs:
       latest-before: ${{ steps.registry-before.outputs.latest-before }}
+      next-before: ${{ steps.registry-before.outputs.next-before }}
 
     permissions:
       contents: read
@@ -230,6 +242,7 @@ jobs:
       EXPECTED_DIGEST: ${{ needs.prepare.outputs.digest }}
       EXPECTED_VERSION: ${{ needs.prepare.outputs.version }}
       EXPO_NO_TELEMETRY: 1
+      NPM_TAG: ${{ needs.prepare.outputs.npm-tag }}
       PACKAGE_NAME: '@vibechess/chessboard-native'
       RELEASE_MODE: ${{ inputs.mode }}
 
@@ -239,7 +252,7 @@ jobs:
           RELEASE_REF: ${{ github.ref }}
         run: |
           if [[ "$RELEASE_REF" != "refs/heads/main" ]]; then
-            echo "Prereleases may only be published from refs/heads/main." >&2
+            echo "Releases may only be published from refs/heads/main." >&2
             exit 1
           fi
 
@@ -318,7 +331,7 @@ jobs:
             echo "The npm environment must provide NPM_TOKEN for bootstrap-token mode." >&2
             exit 1
           fi
-          npm publish "$ARCHIVE" --access public --tag next --provenance
+          npm publish "$ARCHIVE" --access public --tag "$NPM_TAG" --provenance
 
       - name: Publish with npm trusted publishing
         if: ${{ inputs.mode == 'trusted-oidc' }}
@@ -329,10 +342,10 @@ jobs:
             echo "trusted-oidc mode must not receive npm token authentication or a generated npm userconfig." >&2
             exit 1
           fi
-          npm publish "$ARCHIVE" --access public --tag next --provenance
+          npm publish "$ARCHIVE" --access public --tag "$NPM_TAG" --provenance
 
   registry-verification:
-    name: Verify published npm prerelease
+    name: Verify published npm package
     needs:
       - prepare
       - publish
@@ -357,6 +370,7 @@ jobs:
       EXPECTED_VERSION: ${{ needs.prepare.outputs.version }}
       EXPO_NO_TELEMETRY: 1
       LATEST_BEFORE: ${{ needs.publish.outputs.latest-before }}
+      NEXT_BEFORE: ${{ needs.publish.outputs.next-before }}
       PACKAGE_NAME: '@vibechess/chessboard-native'
       RELEASE_MODE: ${{ inputs.mode }}
 
@@ -413,7 +427,16 @@ jobs:
             observed_version="$(npm view "$PACKAGE_NAME@$EXPECTED_VERSION" version 2>/dev/null || true)"
             next_version="$(npm view "$PACKAGE_NAME@next" version 2>/dev/null || true)"
             latest_version="$(npm view "$PACKAGE_NAME@latest" version 2>/dev/null || true)"
-            if [[ "$observed_version" == "$EXPECTED_VERSION" && "$next_version" == "$EXPECTED_VERSION" && "$latest_version" == "$EXPECTED_LATEST" ]]; then
+            # A stable release only claims `latest`; `next` must remain equal
+            # to the pre-publish registry snapshot (including being absent).
+            if [[ "$EXPECTED_VERSION" == *-* ]]; then
+              next_ready="$([[ "$next_version" == "$EXPECTED_VERSION" ]] && echo true || echo false)"
+            elif [[ "$RELEASE_MODE" == "verify-registry" ]]; then
+              next_ready="true"
+            else
+              next_ready="$([[ "$next_version" == "$NEXT_BEFORE" ]] && echo true || echo false)"
+            fi
+            if [[ "$observed_version" == "$EXPECTED_VERSION" && "$next_ready" == "true" && "$latest_version" == "$EXPECTED_LATEST" ]]; then
               break
             fi
             echo "Registry has not exposed the expected version and dist-tags yet (attempt $attempt/20)."
@@ -424,6 +447,7 @@ jobs:
             --mode "$RELEASE_MODE" \
             --expected-version "$EXPECTED_VERSION" \
             --latest-before "$LATEST_BEFORE" \
+            --next-before "$NEXT_BEFORE" \
             --expected-latest "$EXPECTED_LATEST_INPUT" \
             --observed-version "$observed_version" \
             --next-version "$next_version" \

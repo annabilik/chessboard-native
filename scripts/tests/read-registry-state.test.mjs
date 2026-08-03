@@ -20,6 +20,7 @@ test('treats only a registry 404 as package absence', () => {
       packageExists: false,
       versionExists: false,
       latestBefore: '',
+      nextBefore: '',
     },
   );
 
@@ -62,6 +63,28 @@ test('reads an existing package, exact version, and mandatory latest tag', () =>
       packageExists: true,
       versionExists: true,
       latestBefore: '0.1.0-next.0',
+      nextBefore: version,
+    },
+  );
+});
+
+test('allows an existing stable-only package without a next tag', () => {
+  assert.deepEqual(
+    interpretRegistryResponse({
+      status: 200,
+      packageName,
+      version: '1.0.0',
+      body: {
+        name: packageName,
+        versions: { '1.0.0': {} },
+        'dist-tags': { latest: '1.0.0' },
+      },
+    }),
+    {
+      packageExists: true,
+      versionExists: true,
+      latestBefore: '1.0.0',
+      nextBefore: '',
     },
   );
 });
@@ -108,6 +131,23 @@ test('rejects malformed successful responses instead of inferring absence', () =
         },
       }),
     /must be a single safe npm version/u,
+  );
+  assert.throws(
+    () =>
+      interpretRegistryResponse({
+        status: 200,
+        packageName,
+        version,
+        body: {
+          name: packageName,
+          versions: {},
+          'dist-tags': {
+            latest: '1.0.0',
+            next: '1.0.0\ninjected-output=true',
+          },
+        },
+      }),
+    /dist-tags\.next must be a single safe npm version/u,
   );
 });
 

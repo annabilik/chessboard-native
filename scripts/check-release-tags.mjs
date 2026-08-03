@@ -9,11 +9,18 @@ const verificationModes = new Set([
 ]);
 const commands = new Set(['before', 'expected-latest', 'after']);
 const registryVersionPattern = /^[0-9A-Za-z][0-9A-Za-z.+-]*$/u;
+const stableVersionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u;
+
+/** A version with no prerelease identifier owns the `latest` dist-tag. */
+export function isStableVersion(version) {
+  return typeof version === 'string' && stableVersionPattern.test(version);
+}
 const optionNames = new Set([
   'mode',
   'expected-version',
   'package-exists',
   'latest-before',
+  'next-before',
   'expected-latest',
   'observed-version',
   'next-version',
@@ -30,6 +37,15 @@ function requireRegistryVersion(value, fieldName) {
   requireString(value, fieldName);
   if (value.length > 256 || !registryVersionPattern.test(value)) {
     throw new Error(`${fieldName} must be a single safe npm version`);
+  }
+}
+
+function requireOptionalRegistryVersion(value, fieldName) {
+  if (typeof value !== 'string') {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  if (value.length > 0) {
+    requireRegistryVersion(value, fieldName);
   }
 }
 
@@ -104,6 +120,11 @@ export function resolveExpectedLatest({
   }
 
   if (mode === 'trusted-oidc') {
+    // A stable release claims `latest`; a prerelease must preserve whatever
+    // `latest` already pointed at, because it publishes under `next` only.
+    if (isStableVersion(expectedVersion)) {
+      return expectedVersion;
+    }
     requireRegistryVersion(latestBefore, 'latestBefore');
     return latestBefore;
   }
@@ -116,6 +137,7 @@ export function validateRegistryAfter({
   mode,
   expectedVersion,
   latestBefore = '',
+  nextBefore = '',
   expectedLatest = '',
   observedVersion,
   nextVersion,
@@ -133,7 +155,23 @@ export function validateRegistryAfter({
       `registry version is ${observedVersion || '<missing>'}, expected ${expectedVersion}`,
     );
   }
-  if (nextVersion !== expectedVersion) {
+  if (isStableVersion(expectedVersion)) {
+    // A stable release publishes under `latest` only. Trusted publishing
+    // authorizes `npm publish` and not `npm dist-tag`. Publishing modes can
+    // therefore prove that `next` is unchanged from the pre-publish snapshot.
+    // Recovery mode has no pre-publish snapshot, so it only validates the
+    // observed `next` value when that optional dist-tag exists.
+    if (mode === 'verify-registry') {
+      requireOptionalRegistryVersion(nextVersion, 'nextVersion');
+    } else {
+      requireOptionalRegistryVersion(nextBefore, 'nextBefore');
+      if (nextVersion !== nextBefore) {
+        throw new Error(
+          `dist-tags.next is ${nextVersion || '<missing>'}, expected unchanged value ${nextBefore || '<missing>'}`,
+        );
+      }
+    }
+  } else if (nextVersion !== expectedVersion) {
     throw new Error(
       `dist-tags.next is ${nextVersion || '<missing>'}, expected ${expectedVersion}`,
     );
@@ -152,7 +190,7 @@ function usage() {
     'Usage:',
     '  node scripts/check-release-tags.mjs before --mode <bootstrap-token|trusted-oidc> --package-exists <true|false> --latest-before <version-or-empty>',
     '  node scripts/check-release-tags.mjs expected-latest --mode <bootstrap-token|trusted-oidc|verify-registry> --expected-version <version> --latest-before <version-or-empty> --expected-latest <version-or-empty>',
-    '  node scripts/check-release-tags.mjs after --mode <bootstrap-token|trusted-oidc|verify-registry> --expected-version <version> --latest-before <version-or-empty> --expected-latest <version-or-empty> --observed-version <version-or-empty> --next-version <version-or-empty> --latest-version <version-or-empty>',
+    '  node scripts/check-release-tags.mjs after --mode <bootstrap-token|trusted-oidc|verify-registry> --expected-version <version> --latest-before <version-or-empty> --next-before <version-or-empty> --expected-latest <version-or-empty> --observed-version <version-or-empty> --next-version <version-or-empty> --latest-version <version-or-empty>',
   ].join('\n');
 }
 
@@ -211,6 +249,7 @@ function runCli(argumentsList) {
     mode,
     expectedVersion: options.get('expected-version'),
     latestBefore: options.get('latest-before') ?? '',
+    nextBefore: options.get('next-before') ?? '',
     expectedLatest: options.get('expected-latest') ?? '',
   };
 

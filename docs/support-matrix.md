@@ -7,7 +7,7 @@ physical-device, assistive-technology, performance, or release-candidate gate
 has finished.
 
 > [!IMPORTANT]
-> The matrices describe the source package prepared as `0.1.0-next.3` unless a
+> The matrices describe the source package prepared as `0.1.0` unless a
 > row explicitly says “published.” Merging does not publish that version.
 > Published `0.1.0-next.2`, from commit `addc0cb`, includes the compatibility
 > export but ships interim geometric pieces; npm `0.1.0-next.1`, published from
@@ -69,13 +69,13 @@ another internal path are not public API.
 
 <!-- markdownlint-disable MD013 -->
 
-| Import                                                 | Current repository source | Prepared `0.1.0-next.3` | Contract                                                                                                                                                   |
-| ------------------------------------------------------ | ------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@vibechess/chessboard-native`                         | Supported                 | Present                 | Primary controlled component, provider, spare piece, public types, theme/defaults, and pure helpers. Consult the API report for the exact current symbols. |
-| `@vibechess/chessboard-native/pieces`                  | Supported                 | Present                 | Focused `defaultPieceRenderers` export.                                                                                                                    |
-| `@vibechess/chessboard-native/react-chessboard-compat` | Supported                 | Present                 | Native options-name adapter for the pinned `react-chessboard` 5.10 migration surface.                                                                      |
-| `@vibechess/chessboard-native/package.json`            | Supported metadata export | Present                 | Package metadata only.                                                                                                                                     |
-| `@vibechess/chessboard-native/src/*` or `lib/*`        | Not supported             | Not supported           | Internal layout may change without notice.                                                                                                                 |
+| Import                                                 | Current repository source | Prepared `0.1.0` | Contract                                                                                                                                                   |
+| ------------------------------------------------------ | ------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@vibechess/chessboard-native`                         | Supported                 | Present          | Primary controlled component, provider, spare piece, public types, theme/defaults, and pure helpers. Consult the API report for the exact current symbols. |
+| `@vibechess/chessboard-native/pieces`                  | Supported                 | Present          | Focused `defaultPieceRenderers` export.                                                                                                                    |
+| `@vibechess/chessboard-native/react-chessboard-compat` | Supported                 | Present          | Native options-name adapter for the pinned `react-chessboard` 5.10 migration surface.                                                                      |
+| `@vibechess/chessboard-native/package.json`            | Supported metadata export | Present          | Package metadata only.                                                                                                                                     |
+| `@vibechess/chessboard-native/src/*` or `lib/*`        | Not supported             | Not supported    | Internal layout may change without notice.                                                                                                                 |
 
 <!-- markdownlint-enable MD013 -->
 
@@ -97,7 +97,7 @@ resolves declarations. There is no `require` condition.
 
 ## Feature support
 
-The feature status below applies to the prepared `0.1.0-next.3` package, not
+The feature status below applies to the prepared `0.1.0` package, not
 automatically to any older npm archive.
 
 <!-- markdownlint-disable MD013 -->
@@ -138,7 +138,7 @@ Every pull request and push to `main` requires:
 - API Extractor report comparison;
 - prerelease metadata validation;
 - Android and iOS Expo gallery bundle export;
-- generated-entry freshness and exact ordered 15-story Storybook inventory;
+- generated-entry freshness and exact ordered 18-story Storybook inventory;
 - Android and iOS native Storybook bundle export;
 - one inspected npm archive;
 - clean installation of that archive into isolated Expo and bare React Native
@@ -205,7 +205,7 @@ normal CI run:
 | Parity closure               | Complete       | All 131 ledger rows have one passing executable contract; the ten intentional drops are tested exclusions.                 |
 | API freeze                   | Complete       | Three reviewed TypeScript entry-point reports plus the exact package resolver map are required in normal CI.               |
 | Release candidate            | Not published  | Fresh clean-install, native, accessibility, performance, and burn-in gates must precede an RC claim.                       |
-| 1.0 production support       | Not declared   | The current package remains a prerelease evaluation surface.                                                               |
+| 1.0 production support       | Not declared   | The current package remains a 0.x evaluation surface.                                                                      |
 
 <!-- markdownlint-enable MD013 -->
 
@@ -227,8 +227,8 @@ A supported application must:
 5. constrain the board with a parent width;
 6. keep position, annotations, and optional selection in application state;
 7. keep chess rules and game state outside the component; and
-8. pin the exact prerelease it evaluated instead of relying indefinitely on the
-   moving npm `next` tag.
+8. pin the exact package version it evaluated instead of relying indefinitely
+   on a moving npm dist-tag.
 
 Report a compatibility result with the exact package version, peer versions,
 platform and OS, architecture, and a minimal reproduction.

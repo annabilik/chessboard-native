@@ -87,10 +87,13 @@ test('keeps every public entry-point snapshot in API check and update scripts', 
   }
 });
 
-test('rejects malformed and zero-base prerelease versions', async (t) => {
+test('rejects malformed and zero-base versions', async (t) => {
   const invalidVersions = [
-    ['0.1.0', /must match X\.Y\.Z-next\.N/],
-    ['01.1.0-next.0', /must match X\.Y\.Z-next\.N/],
+    ['0.1', /must match X\.Y\.Z or X\.Y\.Z-next\.N/],
+    ['01.1.0-next.0', /must match X\.Y\.Z or X\.Y\.Z-next\.N/],
+    // Only the `next` prerelease channel is a supported release channel.
+    ['0.1.0-beta.0', /must match X\.Y\.Z or X\.Y\.Z-next\.N/],
+    ['0.1.0-next', /must match X\.Y\.Z or X\.Y\.Z-next\.N/],
     ['0.0.0-next.0', /version base must not be 0\.0\.0/],
   ];
 
@@ -136,11 +139,34 @@ test('rejects a non-public npm registry configuration', async (t) => {
   );
 });
 
-test('requires the prerelease-safe next publish tag', async (t) => {
+test('requires the publish tag to match the release channel', async (t) => {
   const { manifestPath } = await createManifest(t, (manifest) => {
+    manifest.version = '0.1.0-next.4';
     manifest.publishConfig.tag = 'latest';
   });
-  assertFailure(runCheck(manifestPath), /publishConfig\.tag must be next/);
+  assertFailure(
+    runCheck(manifestPath),
+    /publishConfig\.tag must be next for a prerelease version/,
+  );
+
+  const stable = await createManifest(t, (manifest) => {
+    manifest.version = '0.1.0';
+    manifest.publishConfig.tag = 'next';
+  });
+  assertFailure(
+    runCheck(stable.manifestPath),
+    /publishConfig\.tag must be latest for a stable version/,
+  );
+});
+
+test('accepts a stable version published under latest', async (t) => {
+  const { manifestPath } = await createManifest(t, (manifest) => {
+    manifest.version = '0.1.0';
+    manifest.publishConfig.tag = 'latest';
+  });
+  const result = runCheck(manifestPath);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /@vibechess\/chessboard-native@0\.1\.0/u);
 });
 
 test('rejects incorrect repository metadata', async (t) => {

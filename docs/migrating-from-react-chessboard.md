@@ -13,7 +13,7 @@ than the DOM, CSS, and dnd-kit. Position, annotations, and optional selection
 remain controlled by the application.
 
 > [!IMPORTANT]
-> This guide describes the source prepared as `0.1.0-next.3`. The
+> This guide describes the source prepared as `0.1.0`. The
 > `react-chessboard-compat` entry point is exported by published
 > `0.1.0-next.2` and later; npm `0.1.0-next.1` predates it. Check the exact
 > installed version, release notes, and package exports before importing the
@@ -49,7 +49,7 @@ React Native's New Architecture. Install the package with every required peer:
 
 ```sh
 npm install \
-  @vibechess/chessboard-native@next \
+  @vibechess/chessboard-native \
   react@19.2.x \
   react-native@0.86.x \
   react-native-gesture-handler@2.32.x \
@@ -327,8 +327,8 @@ Before removing the web component:
 7. Replace CSS assumptions, DOM event fields, hover, and right-click flows.
 8. Run with reduced motion enabled.
 9. Follow the [manual TalkBack and VoiceOver checklist](./accessibility.md).
-10. Pin the exact prerelease evaluated by the application; do not rely on a
-    moving `next` tag.
+10. Pin the exact package version evaluated by the application; do not rely on
+    a moving npm dist-tag.
 
 The physical assistive-technology pass, broad compatibility matrix, performance
 budgets, publication, and release-candidate burn-in remain separate release
