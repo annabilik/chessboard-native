@@ -5,5 +5,8 @@
   // a changeset body breaks whenever Changesets regenerates the file.
   "config": {
     "MD024": { "siblings_only": true },
+    // READMEs size their images with an <img width> tag; Markdown image
+    // syntax cannot express a display size.
+    "MD033": { "allowed_elements": ["img"] },
   },
 }
