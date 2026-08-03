@@ -1,6 +1,6 @@
 # @vibechess/chessboard-native
 
-![Cburnett chessboard showing Scholar's Mate with arrows converging on f7](https://raw.githubusercontent.com/annabilik/chessboard-native/main/docs/assets/hero-board.png)
+![Cburnett chessboard showing Scholar's Mate with arrows converging on f7](https://raw.githubusercontent.com/annabilik/chessboard-native/main/docs/assets/nativechessboard.png)
 
 > **0.x status:** `0.1.0` is the first stable version intentionally published
 > to the npm `latest` channel. The public API is frozen and the
