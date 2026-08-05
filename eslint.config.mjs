@@ -11,6 +11,8 @@ export default tseslint.config(
       '**/build/**',
       '**/coverage/**',
       '**/dist/**',
+      // Local `vercel build` output; generated bundles, never sources.
+      '**/.vercel/**',
       'apps/example/.rnstorybook/storybook.requires.ts',
       'fixtures/parity/upstream-*/**',
       '**/lib/**',
