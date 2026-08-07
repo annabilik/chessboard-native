@@ -1,0 +1,110 @@
+{
+  "$schema": "../../fixtures/accessibility/physical-results.schema.json",
+  "schemaVersion": 1,
+  "package": {
+    "name": "@vibechess/chessboard-native",
+    "version": "0.1.0",
+    "sourceCommit": "f8aa4653e9d75d3141dfcbae52a1223a327f6945",
+    "archiveSha256": "7457c0f66774c03ca18a3bc05496471d1bf58f4163069f5e15245b64aeb8ea67",
+    "publicationRun": "https://github.com/annabilik/chessboard-native/actions/runs/30806201340"
+  },
+  "galleryCommit": null,
+  "sessions": [
+    {
+      "platform": "android",
+      "assistiveTechnology": "TalkBack",
+      "tester": null,
+      "observedAt": null,
+      "locale": null,
+      "device": {
+        "kind": "physical",
+        "manufacturer": null,
+        "model": null,
+        "osVersion": null,
+        "architecture": null,
+        "assistiveTechnologyVersion": null
+      },
+      "runtime": {
+        "expoGoVersion": null,
+        "reactNativeVersion": "0.86.0"
+      },
+      "evidence": [],
+      "results": [
+        { "id": "A11Y-01", "status": "not-run", "notes": null },
+        { "id": "A11Y-02", "status": "not-run", "notes": null },
+        { "id": "A11Y-03", "status": "not-run", "notes": null },
+        { "id": "A11Y-04", "status": "not-run", "notes": null },
+        { "id": "A11Y-05", "status": "not-run", "notes": null },
+        { "id": "A11Y-06", "status": "not-run", "notes": null },
+        { "id": "A11Y-07", "status": "not-run", "notes": null },
+        { "id": "A11Y-08", "status": "not-run", "notes": null },
+        { "id": "A11Y-09", "status": "not-run", "notes": null },
+        { "id": "A11Y-10", "status": "not-run", "notes": null },
+        { "id": "A11Y-11", "status": "not-run", "notes": null },
+        { "id": "A11Y-12", "status": "not-run", "notes": null },
+        { "id": "A11Y-13", "status": "not-run", "notes": null },
+        { "id": "A11Y-14", "status": "not-run", "notes": null },
+        { "id": "A11Y-15", "status": "not-run", "notes": null },
+        { "id": "A11Y-16", "status": "not-run", "notes": null },
+        { "id": "A11Y-17", "status": "not-run", "notes": null },
+        { "id": "A11Y-18", "status": "not-run", "notes": null },
+        { "id": "A11Y-19", "status": "not-run", "notes": null },
+        { "id": "A11Y-20", "status": "not-run", "notes": null },
+        { "id": "A11Y-21", "status": "not-run", "notes": null },
+        { "id": "A11Y-22", "status": "not-run", "notes": null },
+        { "id": "A11Y-23", "status": "not-run", "notes": null },
+        { "id": "A11Y-24", "status": "not-run", "notes": null },
+        { "id": "A11Y-25", "status": "not-run", "notes": null },
+        { "id": "A11Y-26", "status": "not-run", "notes": null }
+      ]
+    },
+    {
+      "platform": "ios",
+      "assistiveTechnology": "VoiceOver",
+      "tester": null,
+      "observedAt": null,
+      "locale": null,
+      "device": {
+        "kind": "physical",
+        "manufacturer": null,
+        "model": null,
+        "osVersion": null,
+        "architecture": null,
+        "assistiveTechnologyVersion": null
+      },
+      "runtime": {
+        "expoGoVersion": null,
+        "reactNativeVersion": "0.86.0"
+      },
+      "evidence": [],
+      "results": [
+        { "id": "A11Y-01", "status": "not-run", "notes": null },
+        { "id": "A11Y-02", "status": "not-run", "notes": null },
+        { "id": "A11Y-03", "status": "not-run", "notes": null },
+        { "id": "A11Y-04", "status": "not-run", "notes": null },
+        { "id": "A11Y-05", "status": "not-run", "notes": null },
+        { "id": "A11Y-06", "status": "not-run", "notes": null },
+        { "id": "A11Y-07", "status": "not-run", "notes": null },
+        { "id": "A11Y-08", "status": "not-run", "notes": null },
+        { "id": "A11Y-09", "status": "not-run", "notes": null },
+        { "id": "A11Y-10", "status": "not-run", "notes": null },
+        { "id": "A11Y-11", "status": "not-run", "notes": null },
+        { "id": "A11Y-12", "status": "not-run", "notes": null },
+        { "id": "A11Y-13", "status": "not-run", "notes": null },
+        { "id": "A11Y-14", "status": "not-run", "notes": null },
+        { "id": "A11Y-15", "status": "not-run", "notes": null },
+        { "id": "A11Y-16", "status": "not-run", "notes": null },
+        { "id": "A11Y-17", "status": "not-run", "notes": null },
+        { "id": "A11Y-18", "status": "not-run", "notes": null },
+        { "id": "A11Y-19", "status": "not-run", "notes": null },
+        { "id": "A11Y-20", "status": "not-run", "notes": null },
+        { "id": "A11Y-21", "status": "not-run", "notes": null },
+        { "id": "A11Y-22", "status": "not-run", "notes": null },
+        { "id": "A11Y-23", "status": "not-run", "notes": null },
+        { "id": "A11Y-24", "status": "not-run", "notes": null },
+        { "id": "A11Y-25", "status": "not-run", "notes": null },
+        { "id": "A11Y-26", "status": "not-run", "notes": null }
+      ]
+    }
+  ]
+}

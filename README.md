@@ -152,12 +152,12 @@ replacement.
 | -------------- | ------------------ | ------------------------------------------------------------------------------------- |
 | `0.1.0`        | prepared on `main` | First stable-channel release; publishes to npm `latest`                               |
 | `0.1.0-next.3` | published          | Bundled Cburnett default piece renderers (CC BY-SA 3.0)                               |
-| `0.1.0-next.2` | published          | `react-chessboard-compat` entry point; frozen public API and complete parity evidence |
+| `0.1.0`        | published          | `react-chessboard-compat` entry point; frozen public API and complete parity evidence |
 | `0.1.0-next.1` | published          | npm trusted-publishing (OIDC) proof release                                           |
 | `0.1.0-next.0` | published          | Bootstrap release                                                                     |
 
 Versions before `0.1.0-next.3` ship interim geometric placeholder pieces, and
-versions before `0.1.0-next.2` lack the compatibility entry point. `0.1.0` is
+versions before `0.1.0` lack the compatibility entry point. `0.1.0` is
 the first stable version intentionally published to the `latest` channel;
 `next` continues to track prereleases and may therefore resolve older than
 `latest` between cycles.
@@ -171,18 +171,19 @@ production support is still not declared.
 
 ## Documentation
 
-| Guide                                                                        | Covers                                                                                     |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| [Documentation index](docs/README.md)                                        | Entry point for every guide                                                                |
-| [API reference](docs/api-reference.md)                                       | Entry points, components, controlled contracts, callbacks, defaults, utilities, and errors |
-| [Migration from `react-chessboard`](docs/migrating-from-react-chessboard.md) | Incremental compatibility-subpath and primary-API migration paths                          |
-| [Comparison](docs/comparison.md)                                             | Semantic differences from `react-chessboard@5.10.0`                                        |
-| [Support and validation matrix](docs/support-matrix.md)                      | Supported lines, platforms, entry points, and the evidence behind each claim               |
-| [Pinned parity ledger](docs/parity/react-chessboard-5.10.md)                 | Source-addressed implementation evidence for all pinned exports, options, and behaviors    |
-| [Accessibility contract](docs/accessibility.md)                              | The single adjustable control, cursor, announcements, and manual checklists                |
-| [Architecture decisions](docs/architecture/invariants.md)                    | The invariant registry and its governing ADRs                                              |
-| [Native Storybook](docs/storybook.md)                                        | Running and maintaining the on-device catalog                                              |
-| [Release runbook](docs/releasing.md)                                         | Version preparation, dry runs, and trusted publishing                                      |
+| Guide                                                                          | Covers                                                                                     |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| [Documentation index](docs/README.md)                                          | Entry point for every guide                                                                |
+| [API reference](docs/api-reference.md)                                         | Entry points, components, controlled contracts, callbacks, defaults, utilities, and errors |
+| [Migration from `react-chessboard`](docs/migrating-from-react-chessboard.md)   | Incremental compatibility-subpath and primary-API migration paths                          |
+| [Comparison](docs/comparison.md)                                               | Semantic differences from `react-chessboard@5.10.0`                                        |
+| [Support and validation matrix](docs/support-matrix.md)                        | Supported lines, platforms, entry points, and the evidence behind each claim               |
+| [Pinned parity ledger](docs/parity/react-chessboard-5.10.md)                   | Source-addressed implementation evidence for all pinned exports, options, and behaviors    |
+| [Accessibility contract](docs/accessibility.md)                                | The single adjustable control, cursor, announcements, and manual checklists                |
+| [Physical accessibility validation](docs/physical-accessibility-validation.md) | Recording and verifying physical TalkBack and VoiceOver evidence                           |
+| [Architecture decisions](docs/architecture/invariants.md)                      | The invariant registry and its governing ADRs                                              |
+| [Native Storybook](docs/storybook.md)                                          | Running and maintaining the on-device catalog                                              |
+| [Release runbook](docs/releasing.md)                                           | Version preparation, dry runs, and trusted publishing                                      |
 
 ## Support boundary
 
@@ -247,16 +248,17 @@ pnpm verify
 
 Important commands:
 
-| Command                 | Purpose                                                                                    |
-| ----------------------- | ------------------------------------------------------------------------------------------ |
-| `pnpm check`            | Formatting, lint, docs, types, Jest, tooling, and parity evidence                          |
-| `pnpm verify`           | Complete pull-request gate, including build, API, package, release, and Expo export checks |
-| `pnpm api:check`        | Compare declarations with all three checked-in API reports                                 |
-| `pnpm package:check`    | Inspect one packed archive with Publint and Are The Types Wrong                            |
-| `pnpm parity:verify`    | Rebuild executable parity evidence and validate the ledger                                 |
-| `pnpm example:export`   | Export Android and iOS Expo gallery bundles                                                |
-| `pnpm storybook:check`  | Regenerate and validate the exact native Storybook inventory                               |
-| `pnpm storybook:export` | Export Android and iOS Storybook bundles without native builds                             |
+| Command                             | Purpose                                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------------------ |
+| `pnpm check`                        | Formatting, lint, docs, types, Jest, tooling, and parity evidence                          |
+| `pnpm verify`                       | Complete pull-request gate, including build, API, package, release, and Expo export checks |
+| `pnpm accessibility:evidence:check` | Validate the recorded physical-evidence record and checklist coverage                      |
+| `pnpm api:check`                    | Compare declarations with all three checked-in API reports                                 |
+| `pnpm package:check`                | Inspect one packed archive with Publint and Are The Types Wrong                            |
+| `pnpm parity:verify`                | Rebuild executable parity evidence and validate the ledger                                 |
+| `pnpm example:export`               | Export Android and iOS Expo gallery bundles                                                |
+| `pnpm storybook:check`              | Regenerate and validate the exact native Storybook inventory                               |
+| `pnpm storybook:export`             | Export Android and iOS Storybook bundles without native builds                             |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for local workflow and pull-request
 requirements. Security reports follow [SECURITY.md](SECURITY.md).

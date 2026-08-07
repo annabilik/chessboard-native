@@ -35,6 +35,7 @@ newly documented surface.
 ## Quality and release
 
 - [Accessibility contract](accessibility.md)
+- [Physical accessibility validation](physical-accessibility-validation.md)
 - [Release runbook](releasing.md)
 
 The Expo gallery and its native Storybook are source-controlled in
