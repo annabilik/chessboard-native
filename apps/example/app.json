@@ -12,6 +12,9 @@
     "plugins": ["expo-router", "@react-native-community/datetimepicker"],
     "experiments": {
       "typedRoutes": true
+    },
+    "ios": {
+      "bundleIdentifier": "com.vibechess.chessboard-native-gallery"
     }
   }
 }
