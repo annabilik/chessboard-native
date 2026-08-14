@@ -3,31 +3,25 @@ import {
   type ControlledPosition,
   type OnSquarePressIn,
   type OnSquarePressOut,
+  type PositionObject,
   type SquarePressContext,
 } from '@vibechess/chessboard-native';
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-const POSITIONS = Object.freeze([
-  Object.freeze({
-    revision: 40,
-    value: Object.freeze({
-      a2: Object.freeze({ id: 'white-pawn', pieceType: 'wP' }),
-      d4: Object.freeze({ id: 'white-knight', pieceType: 'wN' }),
-      e5: Object.freeze({ id: 'black-knight', pieceType: 'bN' }),
-      h7: Object.freeze({ id: 'black-pawn', pieceType: 'bP' }),
-    }),
-  }),
-  Object.freeze({
-    revision: 41,
-    value: Object.freeze({
-      a3: Object.freeze({ id: 'white-pawn', pieceType: 'wP' }),
-      c6: Object.freeze({ id: 'white-knight', pieceType: 'wN' }),
-      f3: Object.freeze({ id: 'black-knight', pieceType: 'bN' }),
-      h6: Object.freeze({ id: 'black-pawn', pieceType: 'bP' }),
-    }),
-  }),
-] satisfies readonly ControlledPosition[]);
+const INITIAL_VALUE = Object.freeze({
+  a2: Object.freeze({ id: 'white-pawn', pieceType: 'wP' }),
+  d4: Object.freeze({ id: 'white-knight', pieceType: 'wN' }),
+  e5: Object.freeze({ id: 'black-knight', pieceType: 'bN' }),
+  h7: Object.freeze({ id: 'black-pawn', pieceType: 'bP' }),
+}) satisfies PositionObject;
+
+const REPLACEMENT_VALUE = Object.freeze({
+  a3: Object.freeze({ id: 'white-pawn', pieceType: 'wP' }),
+  c6: Object.freeze({ id: 'white-knight', pieceType: 'wN' }),
+  f3: Object.freeze({ id: 'black-knight', pieceType: 'bN' }),
+  h6: Object.freeze({ id: 'black-pawn', pieceType: 'bP' }),
+}) satisfies PositionObject;
 
 interface PressEvent {
   readonly id: number;
@@ -44,9 +38,11 @@ function describe(
 export default function SquarePressCallbacksExample() {
   const [events, setEvents] = useState<readonly PressEvent[]>([]);
   const [orientation, setOrientation] = useState<'white' | 'black'>('white');
-  const [positionIndex, setPositionIndex] = useState(0);
+  const [position, setPosition] = useState<ControlledPosition>({
+    revision: 40,
+    value: INITIAL_VALUE,
+  });
   const nextEventId = useRef(0);
-  const position = POSITIONS[positionIndex] ?? POSITIONS[0];
 
   const record = useCallback(
     (
@@ -98,7 +94,13 @@ export default function SquarePressCallbacksExample() {
         <Pressable
           accessibilityRole="button"
           onPress={() => {
-            setPositionIndex((current) => (current === 0 ? 1 : 0));
+            setPosition((current) => ({
+              revision: current.revision + 1,
+              value:
+                current.value === INITIAL_VALUE
+                  ? REPLACEMENT_VALUE
+                  : INITIAL_VALUE,
+            }));
           }}
           style={styles.button}
         >
@@ -135,7 +137,7 @@ export default function SquarePressCallbacksExample() {
 
       <View style={styles.card}>
         <View style={styles.logHeading}>
-          <Text style={styles.cardTitle}>Committed callback log</Text>
+          <Text style={styles.cardTitle}>Observed callback log</Text>
           <Pressable
             accessibilityRole="button"
             onPress={() => {

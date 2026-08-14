@@ -159,11 +159,16 @@ export default function MoveRequestExample() {
     'No terminal move outcome yet.',
   );
   const decisionModeRef = useRef(decisionMode);
+  const positionRef = useRef(position);
   const actionsRef = useRef<ChessboardActions | null>(null);
 
   useEffect(() => {
     decisionModeRef.current = decisionMode;
   }, [decisionMode]);
+
+  useEffect(() => {
+    positionRef.current = position;
+  }, [position]);
 
   const formatMoveOutcome = useCallback(
     (context: MoveOutcomeAccessibilityContext): string => {
@@ -205,6 +210,18 @@ export default function MoveRequestExample() {
         `Accepted ${intent.intentId} without publishing a matching controlled revision; the ${String(COMMIT_TIMEOUT_MS)} ms commit budget will expire.`,
       );
       return { status: 'accepted' };
+    }
+
+    const base = positionRef.current;
+    if (
+      intent.source.kind !== 'board' ||
+      intent.basePositionRevision !== base.revision ||
+      !piecesMatch(base.value[intent.source.square], intent.piece)
+    ) {
+      setStatus(
+        'The controlled position changed while deciding; the consumer rejected the stale request.',
+      );
+      return { status: 'rejected', reason: 'Request base is stale' };
     }
 
     setPosition((current) => applyIntent(current, intent));
