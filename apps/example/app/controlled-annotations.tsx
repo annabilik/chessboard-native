@@ -150,7 +150,7 @@ export default function ControlledAnnotationsRoute() {
       annotationId: `manual-square-${String(identity)}`,
       baseAnnotationRevision: base.revision,
       boardId: BOARD_ID,
-      input: 'keyboard',
+      input: 'touch',
       operationId: `add-${String(identity)}`,
       type: 'add',
     }) satisfies AnnotationOperation;
@@ -173,7 +173,7 @@ export default function ControlledAnnotationsRoute() {
       annotationId: `candidate-arrow-${String(identity)}`,
       baseAnnotationRevision: base.revision,
       boardId: BOARD_ID,
-      input: 'keyboard',
+      input: 'touch',
       matchingIdsAtBase: Object.freeze(matchingIdsAtBase),
       operationId: `toggle-${String(identity)}`,
       type: 'toggle',
@@ -194,7 +194,7 @@ export default function ControlledAnnotationsRoute() {
       annotationId: annotation.id,
       baseAnnotationRevision: base.revision,
       boardId: BOARD_ID,
-      input: 'keyboard',
+      input: 'touch',
       operationId: `remove-${String(identity)}`,
       type: 'remove',
     }) satisfies AnnotationOperation;

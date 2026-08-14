@@ -161,7 +161,7 @@ export default function PieceCallbacksExample() {
 
       <View style={styles.card}>
         <View style={styles.logHeading}>
-          <Text style={styles.cardTitle}>Committed callback log</Text>
+          <Text style={styles.cardTitle}>Observed callback log</Text>
           <Pressable
             accessibilityRole="button"
             onPress={() => {

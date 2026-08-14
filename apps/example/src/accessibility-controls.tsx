@@ -40,7 +40,7 @@ export function useScreenColors(): ScreenColors {
     buttonText: Platform.select({
       android: Color.android.attr.colorForegroundInverse,
       default: '#ffffff',
-      ios: Color.ios.white,
+      ios: '#ffffff',
     }),
     card: Platform.select({
       android: Color.android.attr.colorBackgroundFloating,
