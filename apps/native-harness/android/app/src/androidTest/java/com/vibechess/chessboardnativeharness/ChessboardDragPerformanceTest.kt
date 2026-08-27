@@ -271,8 +271,10 @@ class ChessboardDragPerformanceTest {
                                     durationMs * moveIndex / (moveCount - 1)
                                 }
                         }
-                    } else if (moveIndex <= 1 || moveCount <= 2) {
+                    } else if (moveIndex == 0 || moveCount <= 2) {
                         SystemClock.uptimeMillis()
+                    } else if (moveIndex == 1) {
+                        firstMoveAt + ACTIVATION_FOLLOW_UP_DELAY_MS
                     } else {
                         pacedMovesStartAt +
                             durationMs * (moveIndex - 1) / (moveCount - 2)
@@ -290,6 +292,12 @@ class ChessboardDragPerformanceTest {
                         runIndex = checkNotNull(runIndex),
                         kind = DrawProbeKind.ACTIVATION,
                         eventTimeNs = eventTime * NANOSECONDS_PER_MILLISECOND_LONG,
+                        expectedCenter = coordinates,
+                    )
+                } else if (moveIndex == 1 && drawProbe !== null) {
+                    drawProbe.addExpectedCenter(
+                        runIndex = checkNotNull(runIndex),
+                        kind = DrawProbeKind.ACTIVATION,
                         expectedCenter = coordinates,
                     )
                 }
@@ -310,15 +318,20 @@ class ChessboardDragPerformanceTest {
                 }
                 if (moveIndex == 0) {
                     firstMoveAt = eventTime
-                    if (drawProbe !== null) {
-                        awaitDrawProbeMatch(
-                            uiController = uiController,
-                            drawProbe = drawProbe,
-                            runIndex = checkNotNull(runIndex),
-                            kind = DrawProbeKind.ACTIVATION,
-                        )
-                        pacedMovesStartAt = SystemClock.uptimeMillis()
-                    }
+                }
+                if (moveIndex == 1 && drawProbe !== null) {
+                    // A physical pan continues delivering MOVE events while
+                    // the provider overlay mounts and resolves its window
+                    // origin. Give that activation pipeline one real 60 Hz
+                    // follow-up sample before waiting for the painted result;
+                    // latency remains anchored to the first activating MOVE.
+                    awaitDrawProbeMatch(
+                        uiController = uiController,
+                        drawProbe = drawProbe,
+                        runIndex = checkNotNull(runIndex),
+                        kind = DrawProbeKind.ACTIVATION,
+                    )
+                    pacedMovesStartAt = SystemClock.uptimeMillis()
                 }
                 lastMoveAt = eventTime
             }
@@ -403,7 +416,8 @@ class ChessboardDragPerformanceTest {
         } while (SystemClock.uptimeMillis() < deadline)
         drawProbe.throwIfFailed(runIndex)
         throw AssertionError(
-            "performance run ${runIndex + 1} did not draw the $kind overlay probe",
+            "performance run ${runIndex + 1} did not draw the $kind overlay probe: " +
+                drawProbe.describePending(runIndex, kind),
         )
     }
 
@@ -906,9 +920,13 @@ class ChessboardDragPerformanceTest {
 
     private data class ArmedDrawProbe(
         val eventTimeNs: Long,
-        val expectedCenterX: Float,
-        val expectedCenterY: Float,
+        val expectedCenters: List<DrawProbeCenter>,
         val kind: DrawProbeKind,
+    )
+
+    private data class DrawProbeCenter(
+        val x: Float,
+        val y: Float,
     )
 
     private data class DrawProbeDatum(
@@ -971,8 +989,11 @@ class ChessboardDragPerformanceTest {
         private var activeRun: Int? = null
         private var armed: ArmedDrawProbe? = null
         private var activation: DrawProbeDatum? = null
+        private var armedFrameCallbackCount = 0
+        private var armedOnDrawCount = 0
         private var choreographerFrameTimeNs = -1L
         private var failure: String? = null
+        private var lastObservation = "not observed"
         private var terminal: DrawProbeDatum? = null
 
         fun attach() {
@@ -997,8 +1018,11 @@ class ChessboardDragPerformanceTest {
                 activeRun = runIndex
                 armed = null
                 activation = null
+                armedFrameCallbackCount = 0
+                armedOnDrawCount = 0
                 choreographerFrameTimeNs = -1L
                 failure = null
+                lastObservation = "not observed"
                 terminal = null
             }
         }
@@ -1020,12 +1044,50 @@ class ChessboardDragPerformanceTest {
                 armed =
                     ArmedDrawProbe(
                         eventTimeNs = eventTimeNs,
-                        expectedCenterX = expectedCenter[0],
-                        expectedCenterY = expectedCenter[1],
+                        expectedCenters =
+                            listOf(
+                                DrawProbeCenter(
+                                    x = expectedCenter[0],
+                                    y = expectedCenter[1],
+                                ),
+                            ),
                         kind = kind,
                     )
+                armedFrameCallbackCount = 0
+                armedOnDrawCount = 0
+                lastObservation = "armed; no draw observed"
             }
             Choreographer.getInstance().postFrameCallback(this)
+        }
+
+        fun addExpectedCenter(
+            runIndex: Int,
+            kind: DrawProbeKind,
+            expectedCenter: FloatArray,
+        ) {
+            check(expectedCenter.size == 2) { "draw-probe center must contain x and y" }
+            synchronized(lock) {
+                check(activeRun == runIndex) { "overlay draw-probe run $runIndex is not active" }
+                val armedSnapshot = armed
+                if (armedSnapshot === null) {
+                    val matched =
+                        if (kind == DrawProbeKind.ACTIVATION) activation !== null else terminal !== null
+                    check(matched) { "$kind overlay draw probe is neither armed nor captured" }
+                    return
+                }
+                check(armedSnapshot.kind == kind) {
+                    "cannot add a $kind center to ${armedSnapshot.kind} draw probe"
+                }
+                armed =
+                    armedSnapshot.copy(
+                        expectedCenters =
+                            armedSnapshot.expectedCenters +
+                                DrawProbeCenter(
+                                    x = expectedCenter[0],
+                                    y = expectedCenter[1],
+                                ),
+                    )
+            }
         }
 
         fun hasMatched(
@@ -1043,6 +1105,25 @@ class ChessboardDragPerformanceTest {
                 failure?.let { message -> throw AssertionError(message) }
             }
         }
+
+        fun describePending(
+            runIndex: Int,
+            kind: DrawProbeKind,
+        ): String =
+            synchronized(lock) {
+                check(activeRun == runIndex) { "overlay draw-probe run $runIndex is not active" }
+                val armedSnapshot = armed
+                val expected =
+                    armedSnapshot
+                        ?.takeIf { it.kind == kind }
+                        ?.expectedCenters
+                        ?.joinToString(prefix = "[", postfix = "]") { center ->
+                            "(${center.x},${center.y})"
+                        } ?: "none"
+                "expected=$expected, onDraw=$armedOnDrawCount, " +
+                    "frameCallbacks=$armedFrameCallbackCount, " +
+                    "lastFrameTimeNs=$choreographerFrameTimeNs, $lastObservation"
+            }
 
         fun finishRun(runIndex: Int): DrawProbeSample =
             synchronized(lock) {
@@ -1072,6 +1153,7 @@ class ChessboardDragPerformanceTest {
                     if (armed === null) {
                         false
                     } else {
+                        armedFrameCallbackCount += 1
                         choreographerFrameTimeNs = frameTimeNanos
                         true
                     }
@@ -1082,11 +1164,22 @@ class ChessboardDragPerformanceTest {
         }
 
         override fun onDraw() {
-            val armedSnapshot = synchronized(lock) { armed } ?: return
+            val armedSnapshot =
+                synchronized(lock) {
+                    val snapshot = armed ?: return
+                    armedOnDrawCount += 1
+                    snapshot
+                }
+            val descendants = descendantViews(root).toList()
             val overlays =
-                descendantViews(root).filter { view ->
+                descendants.filter { view ->
                     view.getTag(R.id.react_test_id) == DRAG_OVERLAY_TEST_ID
                 }
+            val taggedTestIds =
+                descendants
+                    .mapNotNull { view -> view.getTag(R.id.react_test_id) as? String }
+                    .filter { testId -> testId.startsWith("chessboard-native:") }
+                    .distinct()
             if (overlays.size > 1) {
                 synchronized(lock) {
                     if (armed == armedSnapshot) {
@@ -1096,21 +1189,44 @@ class ChessboardDragPerformanceTest {
                 }
                 return
             }
-            val overlay = overlays.singleOrNull() ?: return
-            val visibleRect = Rect()
-            if (
-                !overlay.isShown ||
-                !overlay.getGlobalVisibleRect(visibleRect) ||
-                visibleRect.isEmpty
-            ) {
+            val overlay = overlays.singleOrNull()
+            if (overlay === null) {
+                synchronized(lock) {
+                    if (armed == armedSnapshot) {
+                        lastObservation =
+                            "overlayCount=0, taggedTestIds=${taggedTestIds.ifEmpty { listOf("none") }}"
+                    }
+                }
                 return
             }
-            val centerX = visibleRect.exactCenterX()
-            val centerY = visibleRect.exactCenterY()
-            if (
-                abs(centerX - armedSnapshot.expectedCenterX) > centerTolerancePx ||
-                abs(centerY - armedSnapshot.expectedCenterY) > centerTolerancePx
-            ) {
+            val visibleRect = Rect()
+            val hasVisibleRect = overlay.getGlobalVisibleRect(visibleRect)
+            // The injected MotionEvent coordinates are in screen space.
+            // getGlobalVisibleRect can clip the overlay and shift the rect's
+            // center, so use it only as the visibility proof and compare the
+            // native host's un-clipped screen-space center instead.
+            val screenLocation = IntArray(2).also(overlay::getLocationOnScreen)
+            val centerX = screenLocation[0] + overlay.width / 2f
+            val centerY = screenLocation[1] + overlay.height / 2f
+            val rootLocation = IntArray(2).also(root::getLocationOnScreen)
+            val centerMatched =
+                armedSnapshot.expectedCenters.any { expectedCenter ->
+                    abs(centerX - expectedCenter.x) <= centerTolerancePx &&
+                        abs(centerY - expectedCenter.y) <= centerTolerancePx
+                }
+            synchronized(lock) {
+                if (armed == armedSnapshot) {
+                    lastObservation =
+                        "overlayCount=1, taggedTestIds=$taggedTestIds, " +
+                            "attached=${overlay.isAttachedToWindow}, shown=${overlay.isShown}, " +
+                            "visibility=${overlay.visibility}, alpha=${overlay.alpha}, " +
+                            "size=${overlay.width}x${overlay.height}, " +
+                            "screenCenter=($centerX,$centerY), visibleRect=$visibleRect, " +
+                            "hasVisibleRect=$hasVisibleRect, rootScreen=(${rootLocation[0]}," +
+                            "${rootLocation[1]}), centerMatched=$centerMatched"
+                }
+            }
+            if (!overlay.isShown || !hasVisibleRect || visibleRect.isEmpty || !centerMatched) {
                 return
             }
             val frameTimeNs = synchronized(lock) { choreographerFrameTimeNs }
@@ -1325,6 +1441,7 @@ class ChessboardDragPerformanceTest {
     private companion object {
         const val BOARD_DIMENSION = 8
         const val BOARD_LABEL = "Interaction test board, white orientation"
+        const val ACTIVATION_FOLLOW_UP_DELAY_MS = 17L
         const val DISPLAY_MODE_SETTLE_MS = 1_000L
         const val DRAG_OVERLAY_TEST_ID =
             "chessboard-native:native-interaction:provider-drag-overlay"
