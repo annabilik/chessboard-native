@@ -75,7 +75,10 @@ origin and subtracts that origin from the active pointer's window coordinates,
 so board and spare sources share one coordinate-correct overlay without
 wrapping or reflowing provider children. The provider-level sibling escapes a
 clipping palette child. It is not a native window portal, so an ancestor that
-clips the entire provider scope can still crop it.
+clips the entire provider scope can still crop it. Android's first active
+UI-runtime style pass synchronously reads the transient host's fresh window
+origin; the generation-guarded `measureInWindow` callback remains the fallback
+and subsequent-frame cache.
 
 Terminal release clears the semantic lease immediately. The same native
 overlay host then remains through one full quiescent frame with its animated

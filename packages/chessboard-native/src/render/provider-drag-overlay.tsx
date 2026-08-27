@@ -7,7 +7,7 @@ import {
   type ReactElement,
 } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { useSharedValue } from 'react-native-reanimated';
+import { useAnimatedRef, useSharedValue } from 'react-native-reanimated';
 
 import { useChessboardProvider } from '../internal/provider-context';
 import { DragOverlay } from './drag-overlay';
@@ -38,7 +38,7 @@ export function ProviderDragOverlay(): ReactElement | null {
     runtime.drag.getSnapshot,
     runtime.drag.getSnapshot,
   );
-  const hostRef = useRef<View | null>(null);
+  const hostRef = useAnimatedRef<View>();
   const originX = useSharedValue(0);
   const originY = useSharedValue(0);
   const originReady = useSharedValue(0);
@@ -180,7 +180,7 @@ export function ProviderDragOverlay(): ReactElement | null {
     size: displayedActive.size,
     style: displayedActive.style,
     testID: `chessboard-native:${displayedActive.boardId}:provider-drag-${quiescent ? 'retiring-' : ''}overlay`,
-    windowOrigin: { ready: originReady, x: originX, y: originY },
+    windowOrigin: { hostRef, ready: originReady, x: originX, y: originY },
   } as const;
 
   const overlay =

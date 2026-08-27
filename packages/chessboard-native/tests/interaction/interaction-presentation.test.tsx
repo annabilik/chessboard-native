@@ -29,6 +29,7 @@ import {
   DragOverlay,
   resolveDragOverlayAnimatedStyle,
   resolveDragOverlayStaticTransform,
+  resolveDragOverlayWindowOrigin,
 } from '../../src/render/drag-overlay';
 import {
   InteractionPieceVisual,
@@ -570,6 +571,32 @@ describe('interaction presentation foundation', () => {
     expect(
       resolveDragOverlayStaticTransform([{ scale: 1.35 }], false, false, false),
     ).toBeUndefined();
+  });
+
+  it('uses a fresh UI-runtime host origin until the asynchronous cache is ready', () => {
+    expect(
+      resolveDragOverlayWindowOrigin(10, 20, 0, {
+        pageX: 45,
+        pageY: 55,
+      }),
+    ).toEqual({ ready: 1, x: 45, y: 55 });
+    expect(
+      resolveDragOverlayWindowOrigin(10, 20, 1, {
+        pageX: 45,
+        pageY: 55,
+      }),
+    ).toEqual({ ready: 1, x: 10, y: 20 });
+    expect(
+      resolveDragOverlayWindowOrigin(10, 20, 0, {
+        pageX: Number.NaN,
+        pageY: 55,
+      }),
+    ).toEqual({ ready: 0, x: 10, y: 20 });
+    expect(resolveDragOverlayWindowOrigin(10, 20, 0, null)).toEqual({
+      ready: 0,
+      x: 10,
+      y: 20,
+    });
   });
 
   it.each([

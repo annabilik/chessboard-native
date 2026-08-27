@@ -241,7 +241,10 @@ pointerless and hidden from accessibility while active. The layout-neutral
 provider projects that overlay as one transient absolute sibling after its
 children. It translates window pointer coordinates through the freshly
 measured overlay-host origin, so a clipping palette child cannot crop a drag
-that leaves the source. `SparePiece` keeps the overlay visible through
+that leaves the source. On Android, the first active UI-runtime style pass
+measures that transient host synchronously; the generation-guarded
+`measureInWindow` callback remains the fallback and cache. `SparePiece` keeps
+the overlay visible through
 asynchronous release verification, then routes the verified result through the
 target board's current move-request runtime.
 

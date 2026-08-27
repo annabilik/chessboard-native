@@ -1,6 +1,8 @@
 import { type ReactElement } from 'react';
-import { Platform, StyleSheet, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, type View, type ViewStyle } from 'react-native';
 import Animated, {
+  measure,
+  type AnimatedRef,
   useAnimatedStyle,
   type SharedValue,
 } from 'react-native-reanimated';
@@ -43,9 +45,40 @@ export function resolveDragOverlayStaticTransform(
 }
 
 export interface DragOverlayWindowOrigin {
+  readonly hostRef: AnimatedRef<View>;
   readonly ready: SharedValue<number>;
   readonly x: SharedValue<number>;
   readonly y: SharedValue<number>;
+}
+
+interface MeasuredDragOverlayWindowOrigin {
+  readonly pageX: number;
+  readonly pageY: number;
+}
+
+interface ResolvedDragOverlayWindowOrigin {
+  readonly ready: number;
+  readonly x: number;
+  readonly y: number;
+}
+
+/** Prefer a fresh UI-runtime host measurement until the JS fallback is ready. */
+export function resolveDragOverlayWindowOrigin(
+  cachedX: number,
+  cachedY: number,
+  cachedReady: number,
+  measured: Readonly<MeasuredDragOverlayWindowOrigin> | null,
+): Readonly<ResolvedDragOverlayWindowOrigin> {
+  'worklet';
+  if (
+    cachedReady !== 1 &&
+    measured !== null &&
+    Number.isFinite(measured.pageX) &&
+    Number.isFinite(measured.pageY)
+  ) {
+    return { ready: 1, x: measured.pageX, y: measured.pageY };
+  }
+  return { ready: cachedReady, x: cachedX, y: cachedY };
 }
 
 type DragOverlayProps = {
@@ -147,29 +180,39 @@ export function DragOverlay({
   windowOrigin,
 }: DragOverlayProps): ReactElement {
   const useLayoutPosition = Platform.OS === 'android';
-  const animatedStyle = useAnimatedStyle(
-    () =>
-      resolveDragOverlayAnimatedStyle(
-        presentation,
-        size,
-        reducedMotion,
-        windowOrigin?.x.value ?? 0,
-        windowOrigin?.y.value ?? 0,
-        windowOrigin?.ready.value ?? 1,
-        style.transform,
-        bounds,
-        useLayoutPosition,
-      ),
-    [
-      bounds,
+  const animatedStyle = useAnimatedStyle(() => {
+    const cachedReady = windowOrigin?.ready.value ?? 1;
+    const resolvedOrigin =
+      windowOrigin === undefined
+        ? { ready: 1, x: 0, y: 0 }
+        : resolveDragOverlayWindowOrigin(
+            windowOrigin.x.value,
+            windowOrigin.y.value,
+            cachedReady,
+            useLayoutPosition && cachedReady !== 1
+              ? measure(windowOrigin.hostRef)
+              : null,
+          );
+    return resolveDragOverlayAnimatedStyle(
       presentation,
-      reducedMotion,
       size,
+      reducedMotion,
+      resolvedOrigin.x,
+      resolvedOrigin.y,
+      resolvedOrigin.ready,
       style.transform,
+      bounds,
       useLayoutPosition,
-      windowOrigin,
-    ],
-  );
+    );
+  }, [
+    bounds,
+    presentation,
+    reducedMotion,
+    size,
+    style.transform,
+    useLayoutPosition,
+    windowOrigin,
+  ]);
   const staticTransform = resolveDragOverlayStaticTransform(
     style.transform,
     reducedMotion,
