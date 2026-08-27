@@ -36,12 +36,6 @@ because it does not wrap or size its children. A standalone board creates a
 private provider, so board-local composition works without an explicit wrapper;
 a public external source requires an explicit provider shared with its target.
 
-Android resolves the freshly mounted host's window origin synchronously from
-the first active UI-runtime style pass. The generation-guarded React Native
-`measureInWindow` callback remains a null-safe fallback and supplies the cached
-origin for following frames. This avoids an extra JS measurement round trip
-without retaining an idle native host or weakening scroll-coordinate freshness.
-
 SVG paths do not use document-global marker IDs. Every board owns its visual
 and animation state. Orientation changes coordinate projection only; canonical
 square IDs and consumer data remain unchanged.
