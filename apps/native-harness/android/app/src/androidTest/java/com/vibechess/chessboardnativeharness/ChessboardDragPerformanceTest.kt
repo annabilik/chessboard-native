@@ -362,6 +362,12 @@ class ChessboardDragPerformanceTest {
                         eventTime = eventTime,
                         action = MotionEvent.ACTION_MOVE,
                         coordinates = coordinates,
+                        // Waiting for each MOVE to finish throttles this
+                        // synthetic stream to one event per display frame.
+                        // Queue MOVE events asynchronously so the producer can
+                        // hold the requested 75 Hz cadence independently of
+                        // app dispatch.
+                        waitForCompletion = false,
                     ),
                 )
                 lastCoordinates = coordinates
@@ -802,10 +808,11 @@ class ChessboardDragPerformanceTest {
         eventTime: Long,
         action: Int,
         coordinates: FloatArray,
+        waitForCompletion: Boolean = true,
     ): Boolean {
         val event = touchEvent(downTime, eventTime, action, coordinates)
         return try {
-            uiAutomation.injectInputEvent(event, true)
+            uiAutomation.injectInputEvent(event, waitForCompletion)
         } finally {
             event.recycle()
         }
