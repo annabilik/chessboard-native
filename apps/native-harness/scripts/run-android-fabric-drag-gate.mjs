@@ -50,9 +50,11 @@ const dragPerformanceThresholds = Object.freeze({
   maximumMeasurementSpanMs: 4_100,
   maximumPlausibleDeadlinePeriods: 4,
   maximumRefreshRateHz: 60.5,
-  maximumCoverageGapMs: 50,
+  maximumActivationLatencyMs: 50,
+  maximumFinalMoveLatencyMs: 50,
   maximumTotalDurationMs: 50,
-  measuredMoveCount: 240,
+  maximumSustainedVsyncGapMs: 50,
+  measuredMoveCount: 241,
   measuredRunCount: 5,
   minimumDeliveryPercent: 95,
   minimumFrameCount: 228,
@@ -416,8 +418,36 @@ function extractAndroidDragPerformancePayload(logcat) {
   return directPayloads[0];
 }
 
-export function parseAndroidDragPerformance(logcat) {
+class AndroidDragPerformanceThresholdError extends Error {
+  constructor(violations, summary) {
+    super(violations.map((violation) => violation.message).join('\n'));
+    this.name = 'AndroidDragPerformanceThresholdError';
+    this.summary = summary;
+    this.violations = violations;
+  }
+}
+
+function performanceViolation({
+  code,
+  message,
+  metric,
+  observed,
+  run = null,
+  threshold,
+}) {
+  return {
+    code,
+    message,
+    metric,
+    observed,
+    run,
+    threshold,
+  };
+}
+
+export function evaluateAndroidDragPerformance(logcat) {
   const payload = extractAndroidDragPerformancePayload(logcat);
+  const violations = [];
 
   let summary;
   try {
@@ -435,8 +465,8 @@ export function parseAndroidDragPerformance(logcat) {
   ) {
     throw new Error('Android drag performance record must be an object.');
   }
-  if (summary.schemaVersion !== 3) {
-    throw new Error('Android drag performance schemaVersion must equal 3.');
+  if (summary.schemaVersion !== 4) {
+    throw new Error('Android drag performance schemaVersion must equal 4.');
   }
   const refreshRate = requireFiniteNumber(
     summary.displayRefreshHz,
@@ -446,8 +476,17 @@ export function parseAndroidDragPerformance(logcat) {
     refreshRate < dragPerformanceThresholds.minimumRefreshRateHz ||
     refreshRate > dragPerformanceThresholds.maximumRefreshRateHz
   ) {
-    throw new Error(
-      `Android drag performance display refresh ${String(refreshRate)} Hz is outside 59.5–60.5 Hz.`,
+    violations.push(
+      performanceViolation({
+        code: 'display-refresh-rate',
+        message: `Android drag performance display refresh ${String(refreshRate)} Hz is outside 59.5–60.5 Hz.`,
+        metric: 'displayRefreshHz',
+        observed: refreshRate,
+        threshold: {
+          maximum: dragPerformanceThresholds.maximumRefreshRateHz,
+          minimum: dragPerformanceThresholds.minimumRefreshRateHz,
+        },
+      }),
     );
   }
   const expectedFrameDurationMs = requireNonNegativeNumber(
@@ -534,17 +573,13 @@ export function parseAndroidDragPerformance(logcat) {
       run.intendedVsyncSpanMs,
       `run ${String(index + 1)} intendedVsyncSpanMs`,
     );
-    const leadingCoverageGapMs = requireNonNegativeNumber(
-      run.leadingCoverageGapMs,
-      `run ${String(index + 1)} leadingCoverageGapMs`,
+    const activationLatencyMs = requireNonNegativeNumber(
+      run.activationLatencyMs,
+      `run ${String(index + 1)} activationLatencyMs`,
     );
-    const trailingCoverageGapMs = requireNonNegativeNumber(
-      run.trailingCoverageGapMs,
-      `run ${String(index + 1)} trailingCoverageGapMs`,
-    );
-    const worstCoverageGapMs = requireNonNegativeNumber(
-      run.worstCoverageGapMs,
-      `run ${String(index + 1)} worstCoverageGapMs`,
+    const finalMoveLatencyMs = requireNonNegativeNumber(
+      run.finalMoveLatencyMs,
+      `run ${String(index + 1)} finalMoveLatencyMs`,
     );
     const expectedVsyncSlots = requireNonNegativeInteger(
       run.expectedVsyncSlots,
@@ -566,9 +601,9 @@ export function parseAndroidDragPerformance(logcat) {
       run.p99VsyncGapMs,
       `run ${String(index + 1)} p99VsyncGapMs`,
     );
-    const worstVsyncGapMs = requireNonNegativeNumber(
-      run.worstVsyncGapMs,
-      `run ${String(index + 1)} worstVsyncGapMs`,
+    const worstSustainedVsyncGapMs = requireNonNegativeNumber(
+      run.worstSustainedVsyncGapMs,
+      `run ${String(index + 1)} worstSustainedVsyncGapMs`,
     );
     const p95UiDurationMs = requireNonNegativeNumber(
       run.p95UiDurationMs,
@@ -636,49 +671,86 @@ export function parseAndroidDragPerformance(logcat) {
       );
     }
     if (successfulMoves !== dragPerformanceThresholds.measuredMoveCount) {
-      throw new Error(
-        `Android drag performance run ${String(index + 1)} did not deliver 240 moves.`,
+      violations.push(
+        performanceViolation({
+          code: 'successful-move-count',
+          message: `Android drag performance run ${String(index + 1)} did not deliver ${String(dragPerformanceThresholds.measuredMoveCount)} moves.`,
+          metric: 'successfulMoves',
+          observed: successfulMoves,
+          run: runNumber,
+          threshold: dragPerformanceThresholds.measuredMoveCount,
+        }),
       );
     }
     if (
       inputSpanMs < dragPerformanceThresholds.minimumInputSpanMs ||
       inputSpanMs > dragPerformanceThresholds.maximumInputSpanMs
     ) {
-      throw new Error(
-        `Android drag performance run ${String(index + 1)} input span is out of range.`,
+      violations.push(
+        performanceViolation({
+          code: 'input-span',
+          message: `Android drag performance run ${String(index + 1)} input span is out of range.`,
+          metric: 'inputSpanMs',
+          observed: inputSpanMs,
+          run: runNumber,
+          threshold: {
+            maximum: dragPerformanceThresholds.maximumInputSpanMs,
+            minimum: dragPerformanceThresholds.minimumInputSpanMs,
+          },
+        }),
       );
     }
     if (
       measurementSpanMs < dragPerformanceThresholds.minimumMeasurementSpanMs ||
       measurementSpanMs > dragPerformanceThresholds.maximumMeasurementSpanMs
     ) {
-      throw new Error(
-        `Android drag performance run ${String(index + 1)} measurement span is out of range.`,
+      violations.push(
+        performanceViolation({
+          code: 'measurement-span',
+          message: `Android drag performance run ${String(index + 1)} measurement span is out of range.`,
+          metric: 'measurementSpanMs',
+          observed: measurementSpanMs,
+          run: runNumber,
+          threshold: {
+            maximum: dragPerformanceThresholds.maximumMeasurementSpanMs,
+            minimum: dragPerformanceThresholds.minimumMeasurementSpanMs,
+          },
+        }),
       );
     }
     if (
       intendedVsyncSpanMs <= 0 ||
-      intendedVsyncSpanMs > measurementSpanMs + 1
+      Math.abs(intendedVsyncSpanMs - measurementSpanMs) > 1.1
     ) {
       throw new Error(
         `Android drag performance run ${String(index + 1)} intended-vsync span is inconsistent with its measurement window.`,
       );
     }
     if (
-      leadingCoverageGapMs > measurementSpanMs + 1 ||
-      trailingCoverageGapMs > measurementSpanMs + 1 ||
-      worstCoverageGapMs > measurementSpanMs + 1
+      activationLatencyMs > measurementSpanMs + 1 ||
+      finalMoveLatencyMs > measurementSpanMs + 1 ||
+      worstSustainedVsyncGapMs > measurementSpanMs + 1
     ) {
       throw new Error(
-        `Android drag performance run ${String(index + 1)} has a coverage gap outside its measurement window.`,
+        `Android drag performance run ${String(index + 1)} has latency diagnostics outside its measurement window.`,
       );
     }
     if (
       frameCount < dragPerformanceThresholds.minimumFrameCount ||
       frameCount > dragPerformanceThresholds.maximumFrameCount
     ) {
-      throw new Error(
-        `Android drag performance run ${String(index + 1)} collected a frame count outside the cadence range.`,
+      violations.push(
+        performanceViolation({
+          code: 'frame-count',
+          message: `Android drag performance run ${String(index + 1)} collected a frame count outside the cadence range.`,
+          metric: 'frameCount',
+          observed: frameCount,
+          run: runNumber,
+          threshold: {
+            maximum: dragPerformanceThresholds.maximumFrameCount,
+            minimum: dragPerformanceThresholds.minimumFrameCount,
+          },
+        }),
       );
     }
     if (
@@ -718,40 +790,67 @@ export function parseAndroidDragPerformance(logcat) {
       );
     }
     if (deliveryPercent < dragPerformanceThresholds.minimumDeliveryPercent) {
-      throw new Error(
-        `Android drag performance run ${String(index + 1)} delivered less than 95% of expected vsync slots.`,
+      violations.push(
+        performanceViolation({
+          code: 'vsync-delivery',
+          message: `Android drag performance run ${String(index + 1)} delivered less than 95% of expected vsync slots.`,
+          metric: 'deliveryPercent',
+          observed: deliveryPercent,
+          run: runNumber,
+          threshold: dragPerformanceThresholds.minimumDeliveryPercent,
+        }),
       );
     }
-    if (!(p95VsyncGapMs <= p99VsyncGapMs && p99VsyncGapMs <= worstVsyncGapMs)) {
+    if (!(
+      p95VsyncGapMs <= p99VsyncGapMs &&
+      p99VsyncGapMs <= worstSustainedVsyncGapMs
+    )) {
       throw new Error(
         `Android drag performance run ${String(index + 1)} has inconsistent vsync gap percentiles.`,
       );
     }
-    const derivedWorstCoverageGapMs = Math.max(
-      leadingCoverageGapMs,
-      trailingCoverageGapMs,
-      worstVsyncGapMs,
-    );
-    if (Math.abs(worstCoverageGapMs - derivedWorstCoverageGapMs) > 0.001) {
-      throw new Error(
-        `Android drag performance run ${String(index + 1)} has an inconsistent worst coverage gap.`,
+    if (
+      activationLatencyMs >=
+      dragPerformanceThresholds.maximumActivationLatencyMs
+    ) {
+      violations.push(
+        performanceViolation({
+          code: 'activation-latency',
+          message: `Android drag performance run ${String(index + 1)} had activation latency at or above 50 ms.`,
+          metric: 'activationLatencyMs',
+          observed: activationLatencyMs,
+          run: runNumber,
+          threshold: dragPerformanceThresholds.maximumActivationLatencyMs,
+        }),
       );
     }
     if (
-      Math.abs(
-        leadingCoverageGapMs +
-          intendedVsyncSpanMs +
-          trailingCoverageGapMs -
-          measurementSpanMs,
-      ) > 1.1
+      finalMoveLatencyMs >= dragPerformanceThresholds.maximumFinalMoveLatencyMs
     ) {
-      throw new Error(
-        `Android drag performance run ${String(index + 1)} has inconsistent boundary coverage.`,
+      violations.push(
+        performanceViolation({
+          code: 'final-move-latency',
+          message: `Android drag performance run ${String(index + 1)} had final-move latency at or above 50 ms.`,
+          metric: 'finalMoveLatencyMs',
+          observed: finalMoveLatencyMs,
+          run: runNumber,
+          threshold: dragPerformanceThresholds.maximumFinalMoveLatencyMs,
+        }),
       );
     }
-    if (worstCoverageGapMs >= dragPerformanceThresholds.maximumCoverageGapMs) {
-      throw new Error(
-        `Android drag performance run ${String(index + 1)} contained a 50 ms measurement-coverage gap.`,
+    if (
+      worstSustainedVsyncGapMs >=
+      dragPerformanceThresholds.maximumSustainedVsyncGapMs
+    ) {
+      violations.push(
+        performanceViolation({
+          code: 'sustained-vsync-gap',
+          message: `Android drag performance run ${String(index + 1)} contained a sustained vsync gap at or above 50 ms.`,
+          metric: 'worstSustainedVsyncGapMs',
+          observed: worstSustainedVsyncGapMs,
+          run: runNumber,
+          threshold: dragPerformanceThresholds.maximumSustainedVsyncGapMs,
+        }),
       );
     }
     if (!(
@@ -761,14 +860,30 @@ export function parseAndroidDragPerformance(logcat) {
         `Android drag performance run ${String(index + 1)} has inconsistent UI-duration percentiles.`,
       );
     }
-    if (heuristicJankCount !== 0 || heuristicJankPercent !== 0) {
+    const derivedHeuristicJankPercent =
+      frameCount === 0 ? 0 : (heuristicJankCount * 100) / frameCount;
+    if (Math.abs(heuristicJankPercent - derivedHeuristicJankPercent) > 0.001) {
       throw new Error(
-        `Android drag performance run ${String(index + 1)} reported heuristic UI jank.`,
+        `Android drag performance run ${String(index + 1)} has an inconsistent heuristic jank percentage.`,
       );
     }
-    if (worstUiDurationMs > expectedFrameDurationMs * jankHeuristicMultiplier) {
+    if (heuristicJankCount !== 0) {
+      violations.push(
+        performanceViolation({
+          code: 'heuristic-ui-jank',
+          message: `Android drag performance run ${String(index + 1)} reported heuristic UI jank.`,
+          metric: 'heuristicJankCount',
+          observed: heuristicJankCount,
+          run: runNumber,
+          threshold: 0,
+        }),
+      );
+    }
+    const worstUiDurationIsJanky =
+      worstUiDurationMs > expectedFrameDurationMs * jankHeuristicMultiplier;
+    if (heuristicJankCount > 0 !== worstUiDurationIsJanky) {
       throw new Error(
-        `Android drag performance run ${String(index + 1)} has UI duration inconsistent with zero heuristic jank.`,
+        `Android drag performance run ${String(index + 1)} has UI duration inconsistent with its heuristic jank count.`,
       );
     }
     if (!(
@@ -782,8 +897,15 @@ export function parseAndroidDragPerformance(logcat) {
     if (
       worstTotalDurationMs >= dragPerformanceThresholds.maximumTotalDurationMs
     ) {
-      throw new Error(
-        `Android drag performance run ${String(index + 1)} contained a 50 ms total-duration frame.`,
+      violations.push(
+        performanceViolation({
+          code: 'total-frame-duration',
+          message: `Android drag performance run ${String(index + 1)} contained a total-duration frame at or above 50 ms.`,
+          metric: 'worstTotalDurationMs',
+          observed: worstTotalDurationMs,
+          run: runNumber,
+          threshold: dragPerformanceThresholds.maximumTotalDurationMs,
+        }),
       );
     }
     if (implausibleDeadlineCount > frameCount) {
@@ -816,22 +938,78 @@ export function parseAndroidDragPerformance(logcat) {
       );
     }
     if (droppedReports !== 0) {
-      throw new Error(
-        `Android drag performance run ${String(index + 1)} dropped frame reports.`,
+      violations.push(
+        performanceViolation({
+          code: 'dropped-frame-reports',
+          message: `Android drag performance run ${String(index + 1)} dropped frame reports.`,
+          metric: 'droppedReports',
+          observed: droppedReports,
+          run: runNumber,
+          threshold: 0,
+        }),
       );
     }
     if (invalidMetrics !== 0) {
-      throw new Error(
-        `Android drag performance run ${String(index + 1)} contained invalid frame metrics.`,
+      violations.push(
+        performanceViolation({
+          code: 'invalid-frame-metrics',
+          message: `Android drag performance run ${String(index + 1)} contained invalid frame metrics.`,
+          metric: 'invalidMetrics',
+          observed: invalidMetrics,
+          run: runNumber,
+          threshold: 0,
+        }),
       );
     }
     if (duplicatePayloadMismatchCount !== 0) {
-      throw new Error(
-        `Android drag performance run ${String(index + 1)} contained mismatched duplicate payloads.`,
+      violations.push(
+        performanceViolation({
+          code: 'duplicate-payload-mismatch',
+          message: `Android drag performance run ${String(index + 1)} contained mismatched duplicate payloads.`,
+          metric: 'duplicatePayloadMismatchCount',
+          observed: duplicatePayloadMismatchCount,
+          run: runNumber,
+          threshold: 0,
+        }),
       );
     }
   }
-  return summary;
+  return { summary, violations };
+}
+
+export function parseAndroidDragPerformance(logcat) {
+  const evaluation = evaluateAndroidDragPerformance(logcat);
+  if (evaluation.violations.length > 0) {
+    throw new AndroidDragPerformanceThresholdError(
+      evaluation.violations,
+      evaluation.summary,
+    );
+  }
+  return evaluation.summary;
+}
+
+export function buildAndroidDragPerformanceEvidence(logcat) {
+  try {
+    const evaluation = evaluateAndroidDragPerformance(logcat);
+    return {
+      error:
+        evaluation.violations.length === 0
+          ? null
+          : evaluation.violations
+              .map((violation) => violation.message)
+              .join('\n'),
+      required: true,
+      summary: evaluation.summary,
+      violations: evaluation.violations,
+    };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : String(error),
+      required: true,
+      summary: null,
+      violations: [],
+    };
+  }
 }
 
 function resolveAdbExecutable(environment) {
@@ -1108,15 +1286,15 @@ export async function main(environment = process.env) {
   const gradleError = gradleResult?.error?.message ?? null;
   const gradleExitCode = gradleResult?.status ?? null;
   const performanceRequired = testClass === androidDragPerformanceTest;
-  let performanceSummary = null;
-  let performanceError = null;
-  if (performanceRequired) {
-    try {
-      performanceSummary = parseAndroidDragPerformance(logcat);
-    } catch (error) {
-      performanceError = error instanceof Error ? error.message : String(error);
-    }
-  }
+  const performance = performanceRequired
+    ? buildAndroidDragPerformanceEvidence(logcat)
+    : {
+        error: null,
+        required: false,
+        summary: null,
+        violations: [],
+      };
+  const performanceError = performance.error;
   const passed = didAndroidFabricGatePass({
     findings,
     gradleError,
@@ -1140,11 +1318,7 @@ export async function main(environment = process.env) {
       task: gradleArguments[0],
       testClass,
     },
-    performance: {
-      error: performanceError,
-      required: performanceRequired,
-      summary: performanceSummary,
-    },
+    performance,
     logcat: {
       capturePrematureExit: logcatPrematureExit,
       findingCount: findings.length,

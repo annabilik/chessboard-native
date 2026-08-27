@@ -2,17 +2,20 @@ package com.vibechess.chessboardnativeharness
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.SystemClock
 import android.util.Base64
 import android.util.Log
+import android.view.Choreographer
 import android.view.FrameMetrics
 import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.Window
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso.onView
@@ -41,6 +44,7 @@ import org.junit.runner.RunWith
 import java.security.MessageDigest
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -75,11 +79,13 @@ class ChessboardDragPerformanceTest {
         val metricsThread = HandlerThread("chessboard-drag-frame-metrics").apply { start() }
         val metricsHandler = Handler(metricsThread.looper)
         val collector = FrameMetricsCollector()
+        lateinit var overlayDrawProbe: OverlayDrawProbe
         activityRule.scenario.onActivity { activity ->
             activity.window.addOnFrameMetricsAvailableListener(
                 collector,
                 metricsHandler,
             )
+            overlayDrawProbe = OverlayDrawProbe(activity.window.decorView).also { it.attach() }
         }
 
         val summaries = mutableListOf<PerformanceRunSummary>()
@@ -103,15 +109,18 @@ class ChessboardDragPerformanceTest {
 
             repeat(MEASURED_RUN_COUNT) { runIndex ->
                 drainMetricsHandler(metricsHandler)
+                overlayDrawProbe.beginRun(runIndex)
                 collector.beginRun(runIndex)
                 var frameSample: FrameSample? = null
                 onView(boardMatcher()).perform(
                     sustainedDrag(
                         durationMs = MEASURED_RUN_DURATION_MS,
                         moveCount = MEASURED_MOVE_COUNT,
-                        beforeCancel = { measurementWindow ->
+                        drawProbe = overlayDrawProbe,
+                        runIndex = runIndex,
+                        beforeCancel = { probeSample ->
                             drainMetricsHandler(metricsHandler)
-                            frameSample = collector.finishRun(runIndex, measurementWindow)
+                            frameSample = collector.finishRun(runIndex, probeSample)
                         },
                     ),
                 )
@@ -127,7 +136,7 @@ class ChessboardDragPerformanceTest {
                     summarizeRun(
                         runIndex = runIndex,
                         refreshRate = refreshRate,
-                        successfulMoves = MEASURED_MOVE_COUNT,
+                        successfulMoves = MEASURED_MOVE_COUNT + TERMINAL_PROBE_MOVE_COUNT,
                         sample =
                             frameSample
                                 ?: throw AssertionError("missing frame sample for run $runIndex"),
@@ -159,6 +168,7 @@ class ChessboardDragPerformanceTest {
 
         } finally {
             activityRule.scenario.onActivity { activity ->
+                overlayDrawProbe.detach()
                 activity.window.removeOnFrameMetricsAvailableListener(collector)
             }
             metricsThread.quitSafely()
@@ -206,7 +216,9 @@ class ChessboardDragPerformanceTest {
         durationMs: Long,
         moveCount: Int,
         clearLingeringInput: Boolean = false,
-        beforeCancel: ((MeasurementWindow) -> Unit)? = null,
+        drawProbe: OverlayDrawProbe? = null,
+        runIndex: Int? = null,
+        beforeCancel: ((DrawProbeSample) -> Unit)? = null,
     ): ViewAction = object : ViewAction {
         override fun getConstraints(): Matcher<View> = isDisplayed()
 
@@ -217,6 +229,13 @@ class ChessboardDragPerformanceTest {
             val source = squareCenterOnView(view, file = 3, rank = 4)
             val upper = squareCenterOnView(view, file = 3, rank = 5)
             val lower = squareCenterOnView(view, file = 3, rank = 3)
+            val terminal = squareCenterOnView(view, file = 6, rank = 2)
+            check((drawProbe === null) == (runIndex === null)) {
+                "draw probe and run index must be provided together"
+            }
+            check(drawProbe === null || beforeCancel !== null) {
+                "a measured drag requires its frame-sample callback"
+            }
             // Clear contamination from a previously interrupted test once,
             // before warm-up. Every drag below asserts its terminal CANCEL,
             // so repeating a best-effort orphan CANCEL before measured runs
@@ -236,31 +255,50 @@ class ChessboardDragPerformanceTest {
                 down.recycle()
             }
 
-            val firstMoveAt = SystemClock.uptimeMillis()
-            var lastMoveAt = firstMoveAt
-            var measurementStartNs = -1L
+            var firstMoveAt = -1L
+            var lastMoveAt = -1L
+            var pacedMovesStartAt = -1L
             repeat(moveCount) { moveIndex ->
                 val targetTime =
-                    firstMoveAt +
-                        if (moveCount == 1) {
-                            0L
+                    if (drawProbe === null) {
+                        if (firstMoveAt < 0) {
+                            SystemClock.uptimeMillis()
                         } else {
-                            durationMs * moveIndex / (moveCount - 1)
+                            firstMoveAt +
+                                if (moveCount == 1) {
+                                    0L
+                                } else {
+                                    durationMs * moveIndex / (moveCount - 1)
+                                }
                         }
-                val waitMs = targetTime - SystemClock.uptimeMillis()
-                if (waitMs > 0) {
-                    uiController.loopMainThreadForAtLeast(waitMs)
-                }
-                if (moveIndex == 0) {
-                    measurementStartNs = System.nanoTime()
+                    } else if (moveIndex <= 1 || moveCount <= 2) {
+                        SystemClock.uptimeMillis()
+                    } else {
+                        pacedMovesStartAt +
+                            durationMs * (moveIndex - 1) / (moveCount - 2)
+                    }
+                if (moveIndex > 0 || drawProbe === null) {
+                    val waitMs = targetTime - SystemClock.uptimeMillis()
+                    if (waitMs > 0) {
+                        uiController.loopMainThreadForAtLeast(waitMs)
+                    }
                 }
                 val eventTime = SystemClock.uptimeMillis()
+                val coordinates = zigzagCoordinate(upper, lower, moveIndex)
+                if (moveIndex == 0 && drawProbe !== null) {
+                    drawProbe.arm(
+                        runIndex = checkNotNull(runIndex),
+                        kind = DrawProbeKind.ACTIVATION,
+                        eventTimeNs = eventTime * NANOSECONDS_PER_MILLISECOND_LONG,
+                        expectedCenter = coordinates,
+                    )
+                }
                 val move =
                     touchEvent(
                         downTime,
                         eventTime,
                         MotionEvent.ACTION_MOVE,
-                        zigzagCoordinate(upper, lower, moveIndex),
+                        coordinates,
                     )
                 try {
                     assertTrue(
@@ -270,25 +308,63 @@ class ChessboardDragPerformanceTest {
                 } finally {
                     move.recycle()
                 }
+                if (moveIndex == 0) {
+                    firstMoveAt = eventTime
+                    if (drawProbe !== null) {
+                        awaitDrawProbeMatch(
+                            uiController = uiController,
+                            drawProbe = drawProbe,
+                            runIndex = checkNotNull(runIndex),
+                            kind = DrawProbeKind.ACTIVATION,
+                        )
+                        pacedMovesStartAt = SystemClock.uptimeMillis()
+                    }
+                }
                 lastMoveAt = eventTime
             }
 
-            // Close the measured interval immediately after the final MOVE.
-            // Keep the pointer held while pending callbacks drain so the
-            // listener can retain every record whose intended-vsync belongs
-            // to that exact input interval before CANCEL tears down the drag.
-            val measurementEndNs = System.nanoTime()
+            var cancelCoordinates = zigzagCoordinate(upper, lower, moveCount - 1)
+            if (drawProbe !== null) {
+                val measuredRunIndex = checkNotNull(runIndex)
+                val terminalEventTime = SystemClock.uptimeMillis()
+                drawProbe.arm(
+                    runIndex = measuredRunIndex,
+                    kind = DrawProbeKind.TERMINAL,
+                    eventTimeNs = terminalEventTime * NANOSECONDS_PER_MILLISECOND_LONG,
+                    expectedCenter = terminal,
+                )
+                val terminalMove =
+                    touchEvent(
+                        downTime,
+                        terminalEventTime,
+                        MotionEvent.ACTION_MOVE,
+                        terminal,
+                    )
+                try {
+                    assertTrue(
+                        "performance drag terminal ACTION_MOVE injection must succeed",
+                        uiController.injectMotionEvent(terminalMove),
+                    )
+                } finally {
+                    terminalMove.recycle()
+                }
+                awaitDrawProbeMatch(
+                    uiController = uiController,
+                    drawProbe = drawProbe,
+                    runIndex = measuredRunIndex,
+                    kind = DrawProbeKind.TERMINAL,
+                )
+                lastMoveAt = terminalEventTime
+                cancelCoordinates = terminal
+
+                // Keep the pointer held while the exact terminal draw's frame
+                // metrics cross the asynchronous listener before CANCEL.
+                uiController.loopMainThreadForAtLeast(FRAME_METRICS_DRAIN_MS)
+                beforeCancel?.invoke(drawProbe.finishRun(measuredRunIndex))
+            }
             assertTrue(
-                "performance drag measurement window must start before it ends",
-                measurementStartNs > 0 && measurementEndNs > measurementStartNs,
-            )
-            uiController.loopMainThreadForAtLeast(FRAME_METRICS_DRAIN_MS)
-            beforeCancel?.invoke(
-                MeasurementWindow(
-                    endNs = measurementEndNs,
-                    inputSpanMs = lastMoveAt - firstMoveAt,
-                    startNs = measurementStartNs,
-                ),
+                "performance drag input span must be positive",
+                firstMoveAt > 0 && lastMoveAt > firstMoveAt,
             )
 
             val cancelTime = SystemClock.uptimeMillis()
@@ -297,7 +373,7 @@ class ChessboardDragPerformanceTest {
                     downTime,
                     cancelTime,
                     MotionEvent.ACTION_CANCEL,
-                    zigzagCoordinate(upper, lower, moveCount - 1),
+                    cancelCoordinates,
                 )
             try {
                 assertTrue(
@@ -309,6 +385,26 @@ class ChessboardDragPerformanceTest {
             }
             uiController.loopMainThreadForAtLeast(OVERLAY_RETIRE_SETTLE_MS)
         }
+    }
+
+    private fun awaitDrawProbeMatch(
+        uiController: UiController,
+        drawProbe: OverlayDrawProbe,
+        runIndex: Int,
+        kind: DrawProbeKind,
+    ) {
+        val deadline = SystemClock.uptimeMillis() + DRAW_PROBE_TIMEOUT_MS
+        do {
+            drawProbe.throwIfFailed(runIndex)
+            if (drawProbe.hasMatched(runIndex, kind)) {
+                return
+            }
+            uiController.loopMainThreadForAtLeast(DRAW_PROBE_POLL_INTERVAL_MS)
+        } while (SystemClock.uptimeMillis() < deadline)
+        drawProbe.throwIfFailed(runIndex)
+        throw AssertionError(
+            "performance run ${runIndex + 1} did not draw the $kind overlay probe",
+        )
     }
 
     private fun zigzagCoordinate(
@@ -370,20 +466,6 @@ class ChessboardDragPerformanceTest {
             max(1, (measurementSpanNs.toDouble() / expectedFrameDurationNs).roundToInt())
         val expectedVsyncSlots = maxOf(frameCount, internalVsyncSlots, nominalVsyncSlots)
         val missedVsyncSlots = expectedVsyncSlots - frameCount
-        val leadingCoverageGapNs =
-            orderedFrames.firstOrNull()?.let { firstFrame ->
-                firstFrame.intendedVsyncTimestampNs - sample.measurementStartNs
-            } ?: measurementSpanNs
-        val trailingCoverageGapNs =
-            orderedFrames.lastOrNull()?.let { lastFrame ->
-                sample.measurementEndNs - lastFrame.intendedVsyncTimestampNs
-            } ?: measurementSpanNs
-        val worstCoverageGapNs =
-            maxOf(
-                leadingCoverageGapNs,
-                trailingCoverageGapNs,
-                sortedVsyncGaps.lastOrNull() ?: 0L,
-            )
         val heuristicJankCount =
             orderedFrames.count { frame -> frame.uiDurationNs > heuristicJankThresholdNs }
         val maximumPlausibleDeadlineNs =
@@ -393,6 +475,7 @@ class ChessboardDragPerformanceTest {
                 frame.deadlineNs <= 0 || frame.deadlineNs > maximumPlausibleDeadlineNs
             }
         return PerformanceRunSummary(
+            activationLatencyMs = sample.activationLatencyNs.toMilliseconds(),
             callbackCount = sample.callbackCount,
             deadlinePlausible = implausibleDeadlineCount == 0,
             deliveryPercent =
@@ -405,6 +488,7 @@ class ChessboardDragPerformanceTest {
             duplicateMetrics = sample.duplicateMetrics,
             duplicatePayloadMismatchCount = sample.duplicatePayloadMismatchCount,
             expectedVsyncSlots = expectedVsyncSlots,
+            finalMoveLatencyMs = sample.finalMoveLatencyNs.toMilliseconds(),
             frameCount = frameCount,
             heuristicJankCount = heuristicJankCount,
             heuristicJankPercent =
@@ -420,7 +504,6 @@ class ChessboardDragPerformanceTest {
                         orderedFrames.first().intendedVsyncTimestampNs) /
                         NANOSECONDS_PER_MILLISECOND
                 },
-            leadingCoverageGapMs = leadingCoverageGapNs.toMilliseconds(),
             maximumDeadlineMs = sortedDeadlines.lastOrNull()?.toMilliseconds() ?: 0.0,
             measurementSpanMs = sample.measurementSpanMs,
             minimumDeadlineMs = sortedDeadlines.firstOrNull()?.toMilliseconds() ?: 0.0,
@@ -436,17 +519,20 @@ class ChessboardDragPerformanceTest {
             p99VsyncGapMs = percentileMsOrZero(sortedVsyncGaps, 0.99),
             run = runIndex + 1,
             successfulMoves = successfulMoves,
-            trailingCoverageGapMs = trailingCoverageGapNs.toMilliseconds(),
-            worstCoverageGapMs = worstCoverageGapNs.toMilliseconds(),
+            worstSustainedVsyncGapMs =
+                sortedVsyncGaps.lastOrNull()?.toMilliseconds() ?: 0.0,
             worstTotalDurationMs = sortedTotalDurations.lastOrNull()?.toMilliseconds() ?: 0.0,
             worstUiDurationMs = sortedUiDurations.lastOrNull()?.toMilliseconds() ?: 0.0,
-            worstVsyncGapMs = sortedVsyncGaps.lastOrNull()?.toMilliseconds() ?: 0.0,
         )
     }
 
     private fun assertRunWithinBudget(summary: PerformanceRunSummary) {
         val label = "performance run ${summary.run}"
-        assertEquals("$label move count", MEASURED_MOVE_COUNT, summary.successfulMoves)
+        assertEquals(
+            "$label move count",
+            MEASURED_MOVE_COUNT + TERMINAL_PROBE_MOVE_COUNT,
+            summary.successfulMoves,
+        )
         assertTrue(
             "$label input span was ${summary.inputSpanMs} ms",
             summary.inputSpanMs in MINIMUM_INPUT_SPAN_MS..MAXIMUM_INPUT_SPAN_MS,
@@ -479,8 +565,16 @@ class ChessboardDragPerformanceTest {
             summary.deliveryPercent >= MINIMUM_VSYNC_DELIVERY_PERCENT,
         )
         assertTrue(
-            "$label worst coverage gap was ${summary.worstCoverageGapMs} ms",
-            summary.worstCoverageGapMs < MAXIMUM_COVERAGE_GAP_MS,
+            "$label activation latency was ${summary.activationLatencyMs} ms",
+            summary.activationLatencyMs < MAXIMUM_ACTIVATION_LATENCY_MS,
+        )
+        assertTrue(
+            "$label final-move latency was ${summary.finalMoveLatencyMs} ms",
+            summary.finalMoveLatencyMs < MAXIMUM_FINAL_MOVE_LATENCY_MS,
+        )
+        assertTrue(
+            "$label worst sustained vsync gap was ${summary.worstSustainedVsyncGapMs} ms",
+            summary.worstSustainedVsyncGapMs < MAXIMUM_SUSTAINED_VSYNC_GAP_MS,
         )
         assertTrue(
             "$label worst total duration was ${summary.worstTotalDurationMs} ms",
@@ -506,7 +600,7 @@ class ChessboardDragPerformanceTest {
         summaries: List<PerformanceRunSummary>,
     ): String =
         JSONObject()
-            .put("schemaVersion", 3)
+            .put("schemaVersion", 4)
             .put("displayRefreshHz", refreshRate.toDouble())
             .put(
                 "expectedFrameDurationMs",
@@ -521,6 +615,8 @@ class ChessboardDragPerformanceTest {
                             JSONObject()
                                 .put("run", summary.run)
                                 .put("successfulMoves", summary.successfulMoves)
+                                .put("activationLatencyMs", summary.activationLatencyMs)
+                                .put("finalMoveLatencyMs", summary.finalMoveLatencyMs)
                                 .put("inputSpanMs", summary.inputSpanMs)
                                 .put("measurementSpanMs", summary.measurementSpanMs)
                                 .put("invalidMetrics", summary.invalidMetrics)
@@ -536,12 +632,12 @@ class ChessboardDragPerformanceTest {
                                 .put("expectedVsyncSlots", summary.expectedVsyncSlots)
                                 .put("missedVsyncSlots", summary.missedVsyncSlots)
                                 .put("deliveryPercent", summary.deliveryPercent)
-                                .put("leadingCoverageGapMs", summary.leadingCoverageGapMs)
-                                .put("trailingCoverageGapMs", summary.trailingCoverageGapMs)
-                                .put("worstCoverageGapMs", summary.worstCoverageGapMs)
                                 .put("p95VsyncGapMs", summary.p95VsyncGapMs)
                                 .put("p99VsyncGapMs", summary.p99VsyncGapMs)
-                                .put("worstVsyncGapMs", summary.worstVsyncGapMs)
+                                .put(
+                                    "worstSustainedVsyncGapMs",
+                                    summary.worstSustainedVsyncGapMs,
+                                )
                                 .put("p95UiDurationMs", summary.p95UiDurationMs)
                                 .put("p99UiDurationMs", summary.p99UiDurationMs)
                                 .put("worstUiDurationMs", summary.worstUiDurationMs)
@@ -765,6 +861,7 @@ class ChessboardDragPerformanceTest {
         val syncDurationNs: Long,
         val totalDurationNs: Long,
         val unknownDelayDurationNs: Long,
+        val vsyncTimestampNs: Long,
     ) {
         val uiDurationNs: Long
             get() =
@@ -782,14 +879,17 @@ class ChessboardDragPerformanceTest {
                 layoutMeasureDurationNs == other.layoutMeasureDurationNs &&
                 drawDurationNs == other.drawDurationNs &&
                 syncDurationNs == other.syncDurationNs &&
-                totalDurationNs == other.totalDurationNs
+                totalDurationNs == other.totalDurationNs &&
+                vsyncTimestampNs == other.vsyncTimestampNs
     }
 
     private data class FrameSample(
+        val activationLatencyNs: Long,
         val callbackCount: Int,
         val droppedReports: Int,
         val duplicateMetrics: Int,
         val duplicatePayloadMismatchCount: Int,
+        val finalMoveLatencyNs: Long,
         val frames: List<FrameDatum>,
         val inputSpanMs: Long,
         val invalidMetrics: Int,
@@ -799,13 +899,30 @@ class ChessboardDragPerformanceTest {
         val outOfWindowMetrics: Int,
     )
 
-    private data class MeasurementWindow(
-        val endNs: Long,
-        val inputSpanMs: Long,
-        val startNs: Long,
+    private enum class DrawProbeKind {
+        ACTIVATION,
+        TERMINAL,
+    }
+
+    private data class ArmedDrawProbe(
+        val eventTimeNs: Long,
+        val expectedCenterX: Float,
+        val expectedCenterY: Float,
+        val kind: DrawProbeKind,
+    )
+
+    private data class DrawProbeDatum(
+        val drawVsyncTimestampNs: Long,
+        val eventTimeNs: Long,
+    )
+
+    private data class DrawProbeSample(
+        val activation: DrawProbeDatum,
+        val terminal: DrawProbeDatum,
     )
 
     private data class PerformanceRunSummary(
+        val activationLatencyMs: Double,
         val callbackCount: Int,
         val deadlinePlausible: Boolean,
         val deliveryPercent: Double,
@@ -813,6 +930,7 @@ class ChessboardDragPerformanceTest {
         val duplicateMetrics: Int,
         val duplicatePayloadMismatchCount: Int,
         val expectedVsyncSlots: Int,
+        val finalMoveLatencyMs: Double,
         val frameCount: Int,
         val heuristicJankCount: Int,
         val heuristicJankPercent: Double,
@@ -820,7 +938,6 @@ class ChessboardDragPerformanceTest {
         val inputSpanMs: Long,
         val invalidMetrics: Int,
         val intendedVsyncSpanMs: Double,
-        val leadingCoverageGapMs: Double,
         val maximumDeadlineMs: Double,
         val measurementSpanMs: Long,
         val minimumDeadlineMs: Double,
@@ -836,12 +953,189 @@ class ChessboardDragPerformanceTest {
         val p99VsyncGapMs: Double,
         val run: Int,
         val successfulMoves: Int,
-        val trailingCoverageGapMs: Double,
-        val worstCoverageGapMs: Double,
+        val worstSustainedVsyncGapMs: Double,
         val worstTotalDurationMs: Double,
         val worstUiDurationMs: Double,
-        val worstVsyncGapMs: Double,
     )
+
+    private inner class OverlayDrawProbe(
+        private val root: View,
+    ) : Choreographer.FrameCallback,
+        ViewTreeObserver.OnDrawListener {
+        private val lock = Any()
+        private val centerTolerancePx =
+            max(
+                MINIMUM_DRAW_PROBE_CENTER_TOLERANCE_PX,
+                DRAW_PROBE_CENTER_TOLERANCE_DP * root.resources.displayMetrics.density,
+            )
+        private var activeRun: Int? = null
+        private var armed: ArmedDrawProbe? = null
+        private var activation: DrawProbeDatum? = null
+        private var choreographerFrameTimeNs = -1L
+        private var failure: String? = null
+        private var terminal: DrawProbeDatum? = null
+
+        fun attach() {
+            check(root.viewTreeObserver.isAlive) { "overlay draw observer is not alive" }
+            root.viewTreeObserver.addOnDrawListener(this)
+        }
+
+        fun detach() {
+            synchronized(lock) {
+                activeRun = null
+                armed = null
+            }
+            Choreographer.getInstance().removeFrameCallback(this)
+            if (root.viewTreeObserver.isAlive) {
+                root.viewTreeObserver.removeOnDrawListener(this)
+            }
+        }
+
+        fun beginRun(runIndex: Int) {
+            synchronized(lock) {
+                check(activeRun === null) { "another overlay draw-probe run is active" }
+                activeRun = runIndex
+                armed = null
+                activation = null
+                choreographerFrameTimeNs = -1L
+                failure = null
+                terminal = null
+            }
+        }
+
+        fun arm(
+            runIndex: Int,
+            kind: DrawProbeKind,
+            eventTimeNs: Long,
+            expectedCenter: FloatArray,
+        ) {
+            check(expectedCenter.size == 2) { "draw-probe center must contain x and y" }
+            check(eventTimeNs > 0) { "draw-probe MotionEvent timestamp must be positive" }
+            synchronized(lock) {
+                check(activeRun == runIndex) { "overlay draw-probe run $runIndex is not active" }
+                check(failure === null) { failure ?: "overlay draw probe failed" }
+                check(armed === null) { "another overlay draw probe is already armed" }
+                val prior = if (kind == DrawProbeKind.ACTIVATION) activation else terminal
+                check(prior === null) { "$kind overlay draw probe was already captured" }
+                armed =
+                    ArmedDrawProbe(
+                        eventTimeNs = eventTimeNs,
+                        expectedCenterX = expectedCenter[0],
+                        expectedCenterY = expectedCenter[1],
+                        kind = kind,
+                    )
+            }
+            Choreographer.getInstance().postFrameCallback(this)
+        }
+
+        fun hasMatched(
+            runIndex: Int,
+            kind: DrawProbeKind,
+        ): Boolean =
+            synchronized(lock) {
+                check(activeRun == runIndex) { "overlay draw-probe run $runIndex is not active" }
+                if (kind == DrawProbeKind.ACTIVATION) activation !== null else terminal !== null
+            }
+
+        fun throwIfFailed(runIndex: Int) {
+            synchronized(lock) {
+                check(activeRun == runIndex) { "overlay draw-probe run $runIndex is not active" }
+                failure?.let { message -> throw AssertionError(message) }
+            }
+        }
+
+        fun finishRun(runIndex: Int): DrawProbeSample =
+            synchronized(lock) {
+                check(activeRun == runIndex) { "overlay draw-probe run $runIndex is not active" }
+                failure?.let { message -> throw AssertionError(message) }
+                check(armed === null) { "an overlay draw probe remains armed" }
+                val activationDatum =
+                    checkNotNull(activation) { "activation overlay draw probe was not captured" }
+                val terminalDatum =
+                    checkNotNull(terminal) { "terminal overlay draw probe was not captured" }
+                check(terminalDatum.eventTimeNs > activationDatum.eventTimeNs) {
+                    "terminal MotionEvent must follow the activation MotionEvent"
+                }
+                check(terminalDatum.drawVsyncTimestampNs > activationDatum.drawVsyncTimestampNs) {
+                    "terminal overlay draw must follow the activation overlay draw"
+                }
+                activeRun = null
+                DrawProbeSample(
+                    activation = activationDatum,
+                    terminal = terminalDatum,
+                )
+            }
+
+        override fun doFrame(frameTimeNanos: Long) {
+            val remainsArmed =
+                synchronized(lock) {
+                    if (armed === null) {
+                        false
+                    } else {
+                        choreographerFrameTimeNs = frameTimeNanos
+                        true
+                    }
+                }
+            if (remainsArmed) {
+                Choreographer.getInstance().postFrameCallback(this)
+            }
+        }
+
+        override fun onDraw() {
+            val armedSnapshot = synchronized(lock) { armed } ?: return
+            val overlays =
+                descendantViews(root).filter { view ->
+                    view.getTag(R.id.react_test_id) == DRAG_OVERLAY_TEST_ID
+                }
+            if (overlays.size > 1) {
+                synchronized(lock) {
+                    if (armed == armedSnapshot) {
+                        failure =
+                            "${armedSnapshot.kind} draw probe found ${overlays.size} active overlays"
+                    }
+                }
+                return
+            }
+            val overlay = overlays.singleOrNull() ?: return
+            val visibleRect = Rect()
+            if (
+                !overlay.isShown ||
+                !overlay.getGlobalVisibleRect(visibleRect) ||
+                visibleRect.isEmpty
+            ) {
+                return
+            }
+            val centerX = visibleRect.exactCenterX()
+            val centerY = visibleRect.exactCenterY()
+            if (
+                abs(centerX - armedSnapshot.expectedCenterX) > centerTolerancePx ||
+                abs(centerY - armedSnapshot.expectedCenterY) > centerTolerancePx
+            ) {
+                return
+            }
+            val frameTimeNs = synchronized(lock) { choreographerFrameTimeNs }
+            synchronized(lock) {
+                if (armed != armedSnapshot) {
+                    return
+                }
+                if (frameTimeNs <= 0) {
+                    failure = "${armedSnapshot.kind} draw probe observed no Choreographer frame time"
+                    return
+                }
+                val datum =
+                    DrawProbeDatum(
+                        drawVsyncTimestampNs = frameTimeNs,
+                        eventTimeNs = armedSnapshot.eventTimeNs,
+                    )
+                if (armedSnapshot.kind == DrawProbeKind.ACTIVATION) {
+                    activation = datum
+                } else {
+                    terminal = datum
+                }
+                armed = null
+            }
+        }
+    }
 
     private class FrameMetricsCollector : Window.OnFrameMetricsAvailableListener {
         private val lock = Any()
@@ -864,30 +1158,23 @@ class ChessboardDragPerformanceTest {
 
         fun finishRun(
             runIndex: Int,
-            measurementWindow: MeasurementWindow,
+            probeSample: DrawProbeSample,
         ): FrameSample =
             synchronized(lock) {
                 check(activeRun == runIndex) { "performance run $runIndex is not active" }
-                check(measurementWindow.startNs > 0) {
-                    "performance run $runIndex has no measurement start"
-                }
-                check(measurementWindow.endNs > measurementWindow.startNs) {
-                    "performance run $runIndex has an invalid measurement window"
+                check(
+                    probeSample.terminal.eventTimeNs > probeSample.activation.eventTimeNs,
+                ) {
+                    "performance run $runIndex has an invalid probe input span"
                 }
                 activeRun = null
 
-                val uniqueFrames = mutableListOf<FrameDatum>()
+                val allUniqueFrames = mutableListOf<FrameDatum>()
                 val intendedVsyncs = mutableMapOf<Long, FrameDatum>()
                 var duplicateMetricCount = 0
                 var duplicatePayloadMismatchCount = 0
-                var outOfWindowMetricCount = 0
                 for (frame in frames.remove(runIndex).orEmpty()) {
-                    if (
-                        frame.intendedVsyncTimestampNs < measurementWindow.startNs ||
-                        frame.intendedVsyncTimestampNs > measurementWindow.endNs
-                    ) {
-                        outOfWindowMetricCount += 1
-                    } else if (intendedVsyncs.containsKey(frame.intendedVsyncTimestampNs)) {
+                    if (intendedVsyncs.containsKey(frame.intendedVsyncTimestampNs)) {
                         // Android can deliver a completely duplicated FrameMetrics
                         // record for one intended-vsync timestamp (b/206956036).
                         // Keep the first report, matching AndroidX JankStats.
@@ -901,21 +1188,73 @@ class ChessboardDragPerformanceTest {
                         }
                     } else {
                         intendedVsyncs[frame.intendedVsyncTimestampNs] = frame
-                        uniqueFrames.add(frame)
+                        allUniqueFrames.add(frame)
                     }
                 }
+                fun exactProbeFrame(
+                    label: String,
+                    probe: DrawProbeDatum,
+                ): FrameDatum {
+                    val matches =
+                        allUniqueFrames.filter { frame ->
+                            frame.vsyncTimestampNs == probe.drawVsyncTimestampNs
+                        }
+                    check(matches.size == 1) {
+                        "performance run $runIndex $label draw timestamp " +
+                            "${probe.drawVsyncTimestampNs} matched ${matches.size} frame metrics"
+                    }
+                    return matches.single()
+                }
+
+                val activationFrame = exactProbeFrame("activation", probeSample.activation)
+                val terminalFrame = exactProbeFrame("terminal", probeSample.terminal)
+                val measurementStartNs = activationFrame.intendedVsyncTimestampNs
+                val measurementEndNs = terminalFrame.intendedVsyncTimestampNs
+                check(measurementEndNs > measurementStartNs) {
+                    "performance run $runIndex terminal frame must follow activation frame"
+                }
+                val bracketedFrames =
+                    allUniqueFrames.filter { frame ->
+                        frame.intendedVsyncTimestampNs in measurementStartNs..measurementEndNs
+                    }
+                check(bracketedFrames.contains(activationFrame)) {
+                    "performance run $runIndex activation frame escaped the measured bracket"
+                }
+                check(bracketedFrames.contains(terminalFrame)) {
+                    "performance run $runIndex terminal frame escaped the measured bracket"
+                }
+                val outOfWindowMetricCount = allUniqueFrames.size - bracketedFrames.size
+                val activationCompletionNs =
+                    activationFrame.intendedVsyncTimestampNs + activationFrame.totalDurationNs
+                val terminalCompletionNs =
+                    terminalFrame.intendedVsyncTimestampNs + terminalFrame.totalDurationNs
+                val activationLatencyNs =
+                    activationCompletionNs - probeSample.activation.eventTimeNs
+                val finalMoveLatencyNs =
+                    terminalCompletionNs - probeSample.terminal.eventTimeNs
+                check(activationLatencyNs >= 0) {
+                    "performance run $runIndex activation completed before its MotionEvent"
+                }
+                check(finalMoveLatencyNs >= 0) {
+                    "performance run $runIndex terminal draw completed before its MotionEvent"
+                }
                 FrameSample(
+                    activationLatencyNs = activationLatencyNs,
                     callbackCount = callbackCounts.remove(runIndex) ?: 0,
                     droppedReports = droppedReports.remove(runIndex) ?: 0,
                     duplicateMetrics = duplicateMetricCount,
                     duplicatePayloadMismatchCount = duplicatePayloadMismatchCount,
-                    frames = uniqueFrames,
-                    inputSpanMs = measurementWindow.inputSpanMs,
+                    finalMoveLatencyNs = finalMoveLatencyNs,
+                    frames = bracketedFrames,
+                    inputSpanMs =
+                        (probeSample.terminal.eventTimeNs -
+                            probeSample.activation.eventTimeNs) /
+                            NANOSECONDS_PER_MILLISECOND_LONG,
                     invalidMetrics = invalidMetrics.remove(runIndex) ?: 0,
-                    measurementEndNs = measurementWindow.endNs,
-                    measurementStartNs = measurementWindow.startNs,
+                    measurementEndNs = measurementEndNs,
+                    measurementStartNs = measurementStartNs,
                     measurementSpanMs =
-                        (measurementWindow.endNs - measurementWindow.startNs) /
+                        (measurementEndNs - measurementStartNs) /
                             NANOSECONDS_PER_MILLISECOND_LONG,
                     outOfWindowMetrics = outOfWindowMetricCount,
                 )
@@ -933,6 +1272,7 @@ class ChessboardDragPerformanceTest {
                     droppedReports.getValue(runIndex) + dropCountSinceLastInvocation
                 val intendedVsyncTimestamp =
                     frameMetrics.getMetric(FrameMetrics.INTENDED_VSYNC_TIMESTAMP)
+                val vsyncTimestamp = frameMetrics.getMetric(FrameMetrics.VSYNC_TIMESTAMP)
                 val unknownDelayDuration =
                     frameMetrics.getMetric(FrameMetrics.UNKNOWN_DELAY_DURATION)
                 val inputHandlingDuration =
@@ -946,6 +1286,7 @@ class ChessboardDragPerformanceTest {
                 val deadline = frameMetrics.getMetric(FrameMetrics.DEADLINE)
                 if (
                     intendedVsyncTimestamp <= 0 ||
+                    vsyncTimestamp <= 0 ||
                     totalDuration <= 0 ||
                     unknownDelayDuration < 0 ||
                     inputHandlingDuration < 0 ||
@@ -974,6 +1315,7 @@ class ChessboardDragPerformanceTest {
                         syncDurationNs = syncDuration,
                         totalDurationNs = totalDuration,
                         unknownDelayDurationNs = unknownDelayDuration,
+                        vsyncTimestampNs = vsyncTimestamp,
                     ),
                 )
             }
@@ -986,17 +1328,22 @@ class ChessboardDragPerformanceTest {
         const val DISPLAY_MODE_SETTLE_MS = 1_000L
         const val DRAG_OVERLAY_TEST_ID =
             "chessboard-native:native-interaction:provider-drag-overlay"
+        const val DRAW_PROBE_CENTER_TOLERANCE_DP = 2f
+        const val DRAW_PROBE_POLL_INTERVAL_MS = 1L
+        const val DRAW_PROBE_TIMEOUT_MS = 2_000L
         const val FRAME_METRICS_DRAIN_MS = 150L
         const val HEX_DIGITS = "0123456789abcdef"
         const val INPUT_PRECONDITION_SETTLE_MS = 50L
         const val INTERACTION_TIMEOUT_MS = 30_000L
         const val JANK_HEURISTIC_MULTIPLIER = 2.0
-        const val MAXIMUM_COVERAGE_GAP_MS = 50.0
+        const val MAXIMUM_ACTIVATION_LATENCY_MS = 50.0
+        const val MAXIMUM_FINAL_MOVE_LATENCY_MS = 50.0
         const val MAXIMUM_INPUT_SPAN_MS = 4_100L
         const val MAXIMUM_MEASURED_FRAMES = 270
         const val MAXIMUM_MEASUREMENT_SPAN_MS = 4_100L
         const val MAXIMUM_PLAUSIBLE_DEADLINE_PERIODS = 4.0
         const val MAXIMUM_REFRESH_RATE_HZ = 60.5f
+        const val MAXIMUM_SUSTAINED_VSYNC_GAP_MS = 50.0
         const val MAXIMUM_TOTAL_DURATION_MS = 50.0
         const val MEASURED_MOVE_COUNT = 240
         const val MEASURED_RUN_COUNT = 5
@@ -1004,6 +1351,7 @@ class ChessboardDragPerformanceTest {
         const val METRICS_THREAD_JOIN_TIMEOUT_MS = 2_000L
         const val METRICS_HANDLER_DRAIN_TIMEOUT_MS = 2_000L
         const val MINIMUM_INPUT_SPAN_MS = 3_950L
+        const val MINIMUM_DRAW_PROBE_CENTER_TOLERANCE_PX = 2f
         const val MINIMUM_MEASURED_FRAMES = 228
         const val MINIMUM_MEASUREMENT_SPAN_MS = 3_950L
         const val MINIMUM_REFRESH_RATE_HZ = 59.5f
@@ -1020,6 +1368,7 @@ class ChessboardDragPerformanceTest {
         const val PERFORMANCE_LOG_TRANSPORT_VERSION = 1
         const val POLL_INTERVAL_MS = 50L
         const val POSITION_REVISION_DESCRIPTION = "Position revision: 7"
+        const val TERMINAL_PROBE_MOVE_COUNT = 1
         const val WARM_UP_DURATION_MS = 1_000L
         const val WARM_UP_MOVE_COUNT = 60
         const val ZIGZAG_MOVES_PER_LEG = 60
