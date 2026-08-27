@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.SystemClock
+import android.util.Base64
 import android.util.Log
 import android.view.FrameMetrics
 import android.view.InputDevice
@@ -37,6 +38,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.security.MessageDigest
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.math.ceil
@@ -86,6 +88,7 @@ class ChessboardDragPerformanceTest {
             // frame is counted.
             onView(boardMatcher()).perform(
                 sustainedDrag(
+                    clearLingeringInput = true,
                     durationMs = WARM_UP_DURATION_MS,
                     moveCount = WARM_UP_MOVE_COUNT,
                 ),
@@ -134,10 +137,7 @@ class ChessboardDragPerformanceTest {
 
             // Emit the one machine-readable record before threshold assertions
             // so a failed run retains the measured diagnostics that explain it.
-            Log.i(
-                PERFORMANCE_LOG_TAG,
-                PERFORMANCE_LOG_PREFIX + performanceJson(refreshRate, summaries),
-            )
+            logPerformanceRecord(performanceJson(refreshRate, summaries))
             summaries.forEach(::assertRunWithinBudget)
 
             // The final measured CANCEL must leave the board reusable, not
@@ -205,6 +205,7 @@ class ChessboardDragPerformanceTest {
     private fun sustainedDrag(
         durationMs: Long,
         moveCount: Int,
+        clearLingeringInput: Boolean = false,
         beforeCancel: ((MeasurementWindow) -> Unit)? = null,
     ): ViewAction = object : ViewAction {
         override fun getConstraints(): Matcher<View> = isDisplayed()
@@ -216,7 +217,13 @@ class ChessboardDragPerformanceTest {
             val source = squareCenterOnView(view, file = 3, rank = 4)
             val upper = squareCenterOnView(view, file = 3, rank = 5)
             val lower = squareCenterOnView(view, file = 3, rank = 3)
-            cancelLingeringInjectedTouchStream(uiController, source)
+            // Clear contamination from a previously interrupted test once,
+            // before warm-up. Every drag below asserts its terminal CANCEL,
+            // so repeating a best-effort orphan CANCEL before measured runs
+            // only makes InputDispatcher emit expensive diagnostics.
+            if (clearLingeringInput) {
+                cancelLingeringInjectedTouchStream(uiController, source)
+            }
 
             val downTime = SystemClock.uptimeMillis()
             val down = touchEvent(downTime, downTime, MotionEvent.ACTION_DOWN, source)
@@ -557,6 +564,37 @@ class ChessboardDragPerformanceTest {
                     }
                 },
             ).toString()
+
+    private fun logPerformanceRecord(json: String) {
+        val jsonBytes = json.toByteArray(Charsets.UTF_8)
+        val checksum =
+            MessageDigest
+                .getInstance(PERFORMANCE_LOG_CHECKSUM_ALGORITHM)
+                .digest(jsonBytes)
+                .joinToString(separator = "") { byte ->
+                    val value = byte.toInt() and 0xff
+                    "${HEX_DIGITS[value ushr 4]}${HEX_DIGITS[value and 0x0f]}"
+                }
+        val recordId = checksum.take(PERFORMANCE_LOG_RECORD_ID_LENGTH)
+        val chunks =
+            Base64
+                .encodeToString(jsonBytes, Base64.NO_WRAP)
+                .chunked(PERFORMANCE_LOG_CHUNK_PAYLOAD_CHARACTERS)
+
+        check(chunks.isNotEmpty()) { "performance log record must not be empty" }
+        chunks.forEachIndexed { index, chunk ->
+            Log.i(
+                PERFORMANCE_LOG_TAG,
+                "$PERFORMANCE_LOG_CHUNK_PREFIX" +
+                    "v=$PERFORMANCE_LOG_TRANSPORT_VERSION " +
+                    "id=$recordId " +
+                    "sha256=$checksum " +
+                    "part=${index + 1}/${chunks.size} " +
+                    "bytes=${jsonBytes.size} " +
+                    "data=$chunk",
+            )
+        }
+    }
 
     private fun cancelLingeringInjectedTouchStream(
         uiController: UiController,
@@ -949,6 +987,7 @@ class ChessboardDragPerformanceTest {
         const val DRAG_OVERLAY_TEST_ID =
             "chessboard-native:native-interaction:provider-drag-overlay"
         const val FRAME_METRICS_DRAIN_MS = 150L
+        const val HEX_DIGITS = "0123456789abcdef"
         const val INPUT_PRECONDITION_SETTLE_MS = 50L
         const val INTERACTION_TIMEOUT_MS = 30_000L
         const val JANK_HEURISTIC_MULTIPLIER = 2.0
@@ -973,8 +1012,12 @@ class ChessboardDragPerformanceTest {
         const val NANOSECONDS_PER_MILLISECOND_LONG = 1_000_000L
         const val NANOSECONDS_PER_SECOND = 1_000_000_000.0
         const val OVERLAY_RETIRE_SETTLE_MS = 250L
-        const val PERFORMANCE_LOG_PREFIX = "CHESSBOARD_DRAG_PERF "
+        const val PERFORMANCE_LOG_CHECKSUM_ALGORITHM = "SHA-256"
+        const val PERFORMANCE_LOG_CHUNK_PAYLOAD_CHARACTERS = 2_000
+        const val PERFORMANCE_LOG_CHUNK_PREFIX = "CHESSBOARD_DRAG_PERF_CHUNK "
+        const val PERFORMANCE_LOG_RECORD_ID_LENGTH = 16
         const val PERFORMANCE_LOG_TAG = "ChessboardDragPerf"
+        const val PERFORMANCE_LOG_TRANSPORT_VERSION = 1
         const val POLL_INTERVAL_MS = 50L
         const val POSITION_REVISION_DESCRIPTION = "Position revision: 7"
         const val WARM_UP_DURATION_MS = 1_000L

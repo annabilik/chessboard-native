@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
@@ -69,6 +70,21 @@ function validPerformanceSummary() {
       worstVsyncGapMs: 33.33,
     })),
   };
+}
+
+function chunkedPerformanceLog(summary, chunkSize = 256) {
+  const payload = Buffer.from(JSON.stringify(summary), 'utf8');
+  const checksum = createHash('sha256').update(payload).digest('hex');
+  const recordId = checksum.slice(0, 16);
+  const encoded = payload.toString('base64');
+  const chunks = [];
+  for (let offset = 0; offset < encoded.length; offset += chunkSize) {
+    chunks.push(encoded.slice(offset, offset + chunkSize));
+  }
+  return chunks.map(
+    (data, index) =>
+      `08-27 I ChessboardDragPerf: CHESSBOARD_DRAG_PERF_CHUNK v=1 id=${recordId} sha256=${checksum} part=${String(index + 1)}/${String(chunks.length)} bytes=${String(payload.length)} data=${data}`,
+  );
 }
 
 test('attributes physical evidence to both the commit and normalized tracked diff', () => {
@@ -174,6 +190,82 @@ test('parses one complete Android drag performance record', () => {
   const logcat = `08-27 I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(expected)}\n`;
 
   assert.deepEqual(parseAndroidDragPerformance(logcat), expected);
+});
+
+test('reassembles one complete checksummed Android drag performance record', () => {
+  const expected = validPerformanceSummary();
+  const chunks = chunkedPerformanceLog(expected);
+
+  assert.ok(chunks.length > 1);
+  assert.deepEqual(parseAndroidDragPerformance(chunks.join('\n')), expected);
+});
+
+test('fails closed for truncated, missing, duplicate, or out-of-order performance chunks', () => {
+  const chunks = chunkedPerformanceLog(validPerformanceSummary());
+  const truncated = [...chunks];
+  truncated[truncated.length - 1] = truncated.at(-1).slice(0, -1);
+
+  assert.throws(
+    () => parseAndroidDragPerformance(truncated.join('\n')),
+    /Base64|byte length|checksum/u,
+  );
+  assert.throws(
+    () => parseAndroidDragPerformance(chunks.slice(0, -1).join('\n')),
+    /chunk count is incomplete or duplicated/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        [...chunks.slice(0, 1), chunks[0], ...chunks.slice(1)].join('\n'),
+      ),
+    /chunk count is incomplete or duplicated/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        [chunks[1], chunks[0], ...chunks.slice(2)].join('\n'),
+      ),
+    /chunks are out of order/u,
+  );
+});
+
+test('fails closed for inconsistent performance chunk identity, metadata, or checksum', () => {
+  const chunks = chunkedPerformanceLog(validPerformanceSummary());
+  const inconsistentId = [...chunks];
+  inconsistentId[1] = inconsistentId[1].replace(
+    / id=[a-f0-9]{16} /u,
+    ' id=0000000000000000 ',
+  );
+  const inconsistentCount = [...chunks];
+  inconsistentCount[1] = inconsistentCount[1].replace(
+    / part=(\d+)\/(\d+) /u,
+    (_match, part, count) => ` part=${part}/${String(Number(count) + 1)} `,
+  );
+  const badChecksum = [...chunks];
+  badChecksum[0] = badChecksum[0].replace(
+    / data=([A-Za-z0-9+/])/u,
+    (_match, character) => ` data=${character === 'A' ? 'B' : 'A'}`,
+  );
+
+  assert.throws(
+    () => parseAndroidDragPerformance(inconsistentId.join('\n')),
+    /same logical record/u,
+  );
+  assert.throws(
+    () => parseAndroidDragPerformance(inconsistentCount.join('\n')),
+    /same logical record/u,
+  );
+  assert.throws(
+    () => parseAndroidDragPerformance(badChecksum.join('\n')),
+    /checksum mismatch/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `${chunks.join('\n')}\nI ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(validPerformanceSummary())}`,
+      ),
+    /both direct and chunked records/u,
+  );
 });
 
 test('fails closed for missing, duplicate, malformed, or invalid performance records', () => {

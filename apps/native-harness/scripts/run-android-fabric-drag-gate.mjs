@@ -38,6 +38,10 @@ export const androidDragPerformanceTest =
   'com.vibechess.chessboardnativeharness.ChessboardDragPerformanceTest#sustainedDragMeetsReleaseFrameBudget';
 
 const dragPerformanceLogPrefix = 'CHESSBOARD_DRAG_PERF ';
+const dragPerformanceChunkLogPrefix = 'CHESSBOARD_DRAG_PERF_CHUNK ';
+const dragPerformanceChunkEnvelopePattern =
+  /^v=(\d+) id=([a-f0-9]{16}) sha256=([a-f0-9]{64}) part=(\d+)\/(\d+) bytes=(\d+) data=([A-Za-z0-9+/]+={0,2})$/u;
+const dragPerformanceLogTransportVersion = 1;
 const dragPerformanceThresholds = Object.freeze({
   expectedFrameDurationToleranceMs: 0.01,
   jankHeuristicMultiplier: 2,
@@ -274,25 +278,150 @@ function requireBoolean(value, label) {
   return value;
 }
 
-export function parseAndroidDragPerformance(logcat) {
-  const payloads = logcat
-    .split(/\r?\n/u)
-    .map((line) => {
-      const markerIndex = line.indexOf(dragPerformanceLogPrefix);
-      return markerIndex < 0
-        ? null
-        : line.slice(markerIndex + dragPerformanceLogPrefix.length).trim();
-    })
-    .filter((payload) => payload !== null);
-  if (payloads.length !== 1) {
+function parsePositiveSafeInteger(value, label) {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     throw new Error(
-      `Expected exactly one ${dragPerformanceLogPrefix.trim()} record; found ${String(payloads.length)}.`,
+      `Android drag performance chunk ${label} must be a positive safe integer.`,
+    );
+  }
+  return parsed;
+}
+
+function reassembleAndroidDragPerformanceChunks(chunkPayloads) {
+  const chunks = chunkPayloads.map((payload, index) => {
+    const match = dragPerformanceChunkEnvelopePattern.exec(payload);
+    if (match === null) {
+      throw new Error(
+        `Android drag performance chunk ${String(index + 1)} has a malformed envelope.`,
+      );
+    }
+    const [
+      ,
+      versionText,
+      recordId,
+      checksum,
+      partText,
+      countText,
+      bytesText,
+      data,
+    ] = match;
+    return {
+      byteLength: parsePositiveSafeInteger(bytesText, 'byte length'),
+      checksum,
+      count: parsePositiveSafeInteger(countText, 'count'),
+      data,
+      part: parsePositiveSafeInteger(partText, 'part'),
+      recordId,
+      version: parsePositiveSafeInteger(versionText, 'version'),
+    };
+  });
+  const first = chunks[0];
+  if (first.version !== dragPerformanceLogTransportVersion) {
+    throw new Error(
+      `Android drag performance chunk transport version must equal ${String(dragPerformanceLogTransportVersion)}.`,
+    );
+  }
+  if (first.recordId !== first.checksum.slice(0, first.recordId.length)) {
+    throw new Error(
+      'Android drag performance chunk record id is inconsistent with its checksum.',
+    );
+  }
+  if (chunks.length !== first.count) {
+    throw new Error(
+      `Android drag performance chunk count is incomplete or duplicated; expected ${String(first.count)}, found ${String(chunks.length)}.`,
     );
   }
 
+  for (const [index, chunk] of chunks.entries()) {
+    if (
+      chunk.version !== first.version ||
+      chunk.recordId !== first.recordId ||
+      chunk.checksum !== first.checksum ||
+      chunk.count !== first.count ||
+      chunk.byteLength !== first.byteLength
+    ) {
+      throw new Error(
+        `Android drag performance chunk ${String(index + 1)} does not belong to the same logical record.`,
+      );
+    }
+    if (chunk.part !== index + 1) {
+      throw new Error(
+        `Android drag performance chunks are out of order at chunk ${String(index + 1)}; found part ${String(chunk.part)}.`,
+      );
+    }
+  }
+
+  const encodedPayload = chunks.map((chunk) => chunk.data).join('');
+  const decodedPayload = Buffer.from(encodedPayload, 'base64');
+  if (decodedPayload.toString('base64') !== encodedPayload) {
+    throw new Error(
+      'Android drag performance chunk payload is not canonical Base64.',
+    );
+  }
+  if (decodedPayload.length !== first.byteLength) {
+    throw new Error(
+      `Android drag performance chunk byte length mismatch; expected ${String(first.byteLength)}, found ${String(decodedPayload.length)}.`,
+    );
+  }
+  const actualChecksum = createHash('sha256')
+    .update(decodedPayload)
+    .digest('hex');
+  if (actualChecksum !== first.checksum) {
+    throw new Error('Android drag performance chunk checksum mismatch.');
+  }
+  const payload = decodedPayload.toString('utf8');
+  if (!Buffer.from(payload, 'utf8').equals(decodedPayload)) {
+    throw new Error(
+      'Android drag performance chunk payload is not valid UTF-8.',
+    );
+  }
+  return payload;
+}
+
+function extractAndroidDragPerformancePayload(logcat) {
+  const directPayloads = [];
+  const chunkPayloads = [];
+  for (const line of logcat.split(/\r?\n/u)) {
+    const chunkMarkerIndex = line.indexOf(dragPerformanceChunkLogPrefix);
+    if (chunkMarkerIndex >= 0) {
+      chunkPayloads.push(
+        line
+          .slice(chunkMarkerIndex + dragPerformanceChunkLogPrefix.length)
+          .trim(),
+      );
+      continue;
+    }
+    const markerIndex = line.indexOf(dragPerformanceLogPrefix);
+    if (markerIndex >= 0) {
+      directPayloads.push(
+        line.slice(markerIndex + dragPerformanceLogPrefix.length).trim(),
+      );
+    }
+  }
+
+  if (chunkPayloads.length > 0) {
+    if (directPayloads.length > 0) {
+      throw new Error(
+        'Expected exactly one CHESSBOARD_DRAG_PERF logical record; found both direct and chunked records.',
+      );
+    }
+    return reassembleAndroidDragPerformanceChunks(chunkPayloads);
+  }
+  if (directPayloads.length !== 1) {
+    throw new Error(
+      `Expected exactly one ${dragPerformanceLogPrefix.trim()} record; found ${String(directPayloads.length)}.`,
+    );
+  }
+  return directPayloads[0];
+}
+
+export function parseAndroidDragPerformance(logcat) {
+  const payload = extractAndroidDragPerformancePayload(logcat);
+
   let summary;
   try {
-    summary = JSON.parse(payloads[0]);
+    summary = JSON.parse(payload);
   } catch (error) {
     throw new Error(
       `Android drag performance record is malformed JSON: ${error instanceof Error ? error.message : String(error)}`,
