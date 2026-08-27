@@ -6,6 +6,7 @@
     "android": "react-native run-android",
     "android:accessibility": "cd android && ./gradlew :app:connectedReleaseAndroidTest --no-daemon",
     "android:accessibility:managed": "cd android && ./gradlew :app:accessibilityApi35ReleaseAndroidTest --no-daemon",
+    "android:drag:gate": "node scripts/run-android-fabric-drag-gate.mjs",
     "android:release": "cd android && ./gradlew :app:assembleRelease --no-daemon",
     "ios": "react-native run-ios",
     "ios:accessibility": "node scripts/run-ios-accessibility-audit.mjs",

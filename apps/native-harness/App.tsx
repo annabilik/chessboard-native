@@ -6,6 +6,7 @@ import {
   type AnnotationOperation,
   type AnnotationTool,
   type ControlledAnnotations,
+  type ControlledPosition,
   type OnAnnotationOperation,
   type OnMoveRequest,
   type SquareId,
@@ -20,6 +21,8 @@ const AUDIT_BOARD_LABEL = 'Accessibility audit board, white orientation';
 const AUDIT_BOARD_HINT =
   'Swipe up or down through squares, or use directional accessibility actions.';
 const INTERACTION_BOARD_LABEL = 'Interaction test board, white orientation';
+const ACCEPTED_INTERACTION_BOARD_LABEL =
+  'Accepted interaction test board, white orientation';
 const ANNOTATION_BOARD_LABEL = 'Annotation test board, white orientation';
 const INTERACTION_POSITION = Object.freeze({
   revision: 7,
@@ -43,6 +46,7 @@ interface AppProps {
     | 'annotation-square'
     | 'compatibility'
     | 'interaction'
+    | 'interaction-accepted'
     | 'interaction-lifecycle';
 }
 
@@ -396,6 +400,157 @@ function InteractionFixture({
   );
 }
 
+function AcceptedInteractionFixture() {
+  const [position, setPosition] =
+    useState<ControlledPosition>(INTERACTION_POSITION);
+  const positionRef = useRef<ControlledPosition>(INTERACTION_POSITION);
+  const pieceSquareRef = useRef<SquareId>('d4');
+  const [abortCount, setAbortCount] = useState(0);
+  const [callbackCount, setCallbackCount] = useState(0);
+  const [commitCount, setCommitCount] = useState(0);
+  const [decision, setDecision] = useState<'accepted' | 'none' | 'rejected'>(
+    'none',
+  );
+  const [lastBaseRevision, setLastBaseRevision] = useState<number | null>(null);
+  const [lastInput, setLastInput] = useState('none');
+  const [lastIntentId, setLastIntentId] = useState<string | null>(null);
+  const [lastSource, setLastSource] = useState('none');
+  const [lastTarget, setLastTarget] = useState<SquareId | null>(null);
+  const [pieceSquare, setPieceSquare] = useState<SquareId>('d4');
+  const acceptAndCommitMove = useCallback<OnMoveRequest>((intent, context) => {
+    setCallbackCount((count) => count + 1);
+    setLastBaseRevision(intent.basePositionRevision);
+    setLastInput(intent.input);
+    setLastSource(
+      intent.source.kind === 'board'
+        ? `board:${intent.source.square}`
+        : `spare:${intent.source.spareId}`,
+    );
+    setLastTarget(intent.targetSquare);
+
+    const current = positionRef.current;
+    const targetSquare = intent.targetSquare;
+    if (
+      context.signal.aborted ||
+      intent.source.kind !== 'board' ||
+      intent.source.square !== pieceSquareRef.current ||
+      targetSquare === null ||
+      intent.basePositionRevision !== current.revision
+    ) {
+      if (context.signal.aborted) {
+        setAbortCount((count) => count + 1);
+      }
+      setDecision('rejected');
+      return {
+        reason:
+          'Accepted interaction fixture received a stale or invalid intent.',
+        status: 'rejected',
+      };
+    }
+
+    const nextPosition = Object.freeze({
+      committedIntentId: intent.intentId,
+      revision: current.revision + 1,
+      value: Object.freeze({
+        [targetSquare]: Object.freeze({ ...intent.piece }),
+      }),
+    }) satisfies ControlledPosition;
+    positionRef.current = nextPosition;
+    pieceSquareRef.current = targetSquare;
+    setPosition(nextPosition);
+    setPieceSquare(targetSquare);
+    setCommitCount((count) => count + 1);
+    setLastIntentId(intent.intentId);
+    setDecision('accepted');
+    return { status: 'accepted' };
+  }, []);
+  const commitCorrelation =
+    lastIntentId === null
+      ? 'none'
+      : position.committedIntentId === lastIntentId
+        ? 'matched'
+        : 'mismatched';
+
+  return (
+    <View style={styles.interactionContent}>
+      <View style={styles.interactionStatus}>
+        <Text style={styles.title}>Native accepted-drag fixture</Text>
+        <AuditStatus
+          label="Callback count"
+          testID="interaction-accepted:callback-count"
+          value={String(callbackCount)}
+        />
+        <AuditStatus
+          label="Commit count"
+          testID="interaction-accepted:commit-count"
+          value={String(commitCount)}
+        />
+        <AuditStatus
+          label="Abort count"
+          testID="interaction-accepted:abort-count"
+          value={String(abortCount)}
+        />
+        <AuditStatus
+          label="Last target"
+          testID="interaction-accepted:last-target"
+          value={lastTarget ?? 'none'}
+        />
+        <AuditStatus
+          label="Last source"
+          testID="interaction-accepted:last-source"
+          value={lastSource}
+        />
+        <AuditStatus
+          label="Last input"
+          testID="interaction-accepted:last-input"
+          value={lastInput}
+        />
+        <AuditStatus
+          label="Last base revision"
+          testID="interaction-accepted:last-base-revision"
+          value={lastBaseRevision === null ? 'none' : String(lastBaseRevision)}
+        />
+        <AuditStatus
+          label="Position revision"
+          testID="interaction-accepted:position-revision"
+          value={String(position.revision)}
+        />
+        <AuditStatus
+          label="Piece square"
+          testID="interaction-accepted:piece-square"
+          value={pieceSquare}
+        />
+        <AuditStatus
+          label="Commit correlation"
+          testID="interaction-accepted:commit-correlation"
+          value={commitCorrelation}
+        />
+        <AuditStatus
+          label="Decision"
+          testID="interaction-accepted:decision"
+          value={decision}
+        />
+      </View>
+      <View style={styles.acceptedInteractionBoard}>
+        <ChessboardProvider>
+          <View style={styles.board} testID="interaction-accepted:board-host">
+            <Chessboard
+              accessibility={{ boardLabel: ACCEPTED_INTERACTION_BOARD_LABEL }}
+              boardId="native-interaction-accepted"
+              interactionPermissions={{ accessibility: true, drag: true }}
+              onMoveRequest={acceptAndCommitMove}
+              pieceRenderers={defaultPieceRenderers}
+              position={position}
+              reduceMotion="never"
+              transitionDurationMs={300}
+            />
+          </View>
+        </ChessboardProvider>
+      </View>
+    </View>
+  );
+}
+
 function CompatibilityFixture() {
   return (
     <View style={styles.auditContent}>
@@ -437,6 +592,8 @@ export default function App({ fixture = 'accessibility' }: AppProps) {
         <AnnotationFixture
           tool={fixture === 'annotation-arrow' ? 'arrow' : 'square'}
         />
+      ) : fixture === 'interaction-accepted' ? (
+        <AcceptedInteractionFixture />
       ) : fixture === 'interaction' || fixture === 'interaction-lifecycle' ? (
         <InteractionFixture
           pendingUntilAbort={fixture === 'interaction-lifecycle'}
@@ -464,6 +621,12 @@ const styles = StyleSheet.create({
     gap: 2,
     marginTop: 20,
     maxWidth: 480,
+  },
+  acceptedInteractionBoard: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
   },
   title: {
     color: '#282520',
