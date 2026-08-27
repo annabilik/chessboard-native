@@ -25,8 +25,10 @@ import type {
 } from '../../src/public-types';
 import {
   DRAG_OVERLAY_LIFT_SCALE,
+  DRAG_OVERLAY_OFFSCREEN_POSITION,
   DragOverlay,
   resolveDragOverlayAnimatedStyle,
+  resolveDragOverlayStaticTransform,
 } from '../../src/render/drag-overlay';
 import {
   InteractionPieceVisual,
@@ -514,6 +516,60 @@ describe('interaction presentation foundation', () => {
     expect(values.pointerWindowX.value).toBe(220);
     expect(values.pointerWindowY.value).toBe(180);
     expect(values.targetSquare.value).toBe('e4');
+  });
+
+  it('uses commit-safe layout coordinates for the Android overlay transport', () => {
+    const values = testPresentationSharedValues();
+
+    expect(
+      resolveDragOverlayAnimatedStyle(
+        values,
+        40,
+        false,
+        20,
+        30,
+        1,
+        [{ scale: 1.35 }],
+        Object.freeze({ height: 100, kind: 'gesture', width: 100 }),
+        true,
+      ),
+    ).toEqual({ left: 160, top: 130 });
+    expect(
+      resolveDragOverlayAnimatedStyle(
+        values,
+        40,
+        false,
+        20,
+        30,
+        0,
+        undefined,
+        null,
+        true,
+      ),
+    ).toEqual({
+      left: DRAG_OVERLAY_OFFSCREEN_POSITION,
+      top: DRAG_OVERLAY_OFFSCREEN_POSITION,
+    });
+    expect(
+      resolveDragOverlayStaticTransform(undefined, false, false, true),
+    ).toEqual([{ scale: DRAG_OVERLAY_LIFT_SCALE }]);
+    expect(
+      resolveDragOverlayStaticTransform(
+        [{ scale: 1.35 }, { rotate: '8deg' }],
+        false,
+        false,
+        true,
+      ),
+    ).toEqual([{ scale: 1.35 }, { rotate: '8deg' }]);
+    expect(
+      resolveDragOverlayStaticTransform([{ scale: 1.35 }], true, false, true),
+    ).toBeUndefined();
+    expect(
+      resolveDragOverlayStaticTransform([{ scale: 1.35 }], false, true, true),
+    ).toBeUndefined();
+    expect(
+      resolveDragOverlayStaticTransform([{ scale: 1.35 }], false, false, false),
+    ).toBeUndefined();
   });
 
   it.each([

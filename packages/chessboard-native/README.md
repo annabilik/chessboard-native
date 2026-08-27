@@ -360,8 +360,11 @@ discovers or programmatically scrolls an arbitrary ancestor; upstream
 `allowAutoScroll` behavior is intentionally not part of the native 1.0
 contract.
 
-Continuous pan coordinates and overlay transforms remain on the UI thread.
-Only activation, release, cancellation, canonical hover-square changes, and
+Continuous pan coordinates and overlay positioning remain on the UI thread.
+On iOS the overlay uses animated translation and opacity. On Android it uses
+animated absolute `left`/`top` through Fabric's layout path, with the lift or
+consumer transform applied statically to the outer host. Only activation,
+release, cancellation, canonical hover-square changes, and
 recognized tap boundaries cross to JavaScript. `onPieceDragStart` therefore
 fires once, never per frame. Deterministic component instrumentation verifies
 bounded React commits and custom-renderer calls. Packed-package Espresso and
@@ -450,9 +453,12 @@ Static piece paint resolves built-in `piece`, `theme.piece`, then
 `styles.piece`. The active provider drag overlay adds built-in,
 `theme.draggingPiece`, and `styles.draggingPiece` paint after that complete
 chain. Its default 1.2 scale is composed after the pointer translations on the
-UI thread; reduced motion suppresses the lift transform. The active source
-ghost similarly adds the `draggingPieceGhost` chain, whose default opacity is
-0.5. The named target board's resolved drag and ghost slots apply to both
+UI thread on iOS. On Android pointer position uses animated absolute
+`left`/`top`, while the default lift or custom transform is static on the
+absolute outer host. Reduced motion suppresses the lift or consumer transform
+on both platforms. The active source ghost similarly adds the
+`draggingPieceGhost` chain, whose default opacity is 0.5. The named target
+board's resolved drag and ghost slots apply to both
 board-origin and spare-origin drags. `SparePiece.style` remains its resting base
 paint; once its provider lease is active, the target board owns the overlay and
 ghost presentation.

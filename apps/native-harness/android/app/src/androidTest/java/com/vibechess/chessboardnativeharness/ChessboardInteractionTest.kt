@@ -24,7 +24,6 @@ import androidx.test.filters.LargeTest
 import com.facebook.react.R
 import org.hamcrest.Description
 import org.hamcrest.Matcher
-import org.hamcrest.Matchers.equalTo
 import org.hamcrest.TypeSafeMatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -138,12 +137,7 @@ class ChessboardInteractionTest {
             lastTarget = "none",
         )
         onView(boardMatcher()).perform(beginDragBetweenSquares(file = 3, fromRank = 4, toRank = 5))
-        onView(reactTestIdMatcher(DRAG_OVERLAY_TEST_ID)).check { view, error ->
-            if (error != null) {
-                throw error
-            }
-            assertTrue("the fixture must enter an active native drag before backgrounding", view.isShown)
-        }
+        onView(isRoot()).perform(waitForReactTestId(DRAG_OVERLAY_TEST_ID))
 
         activityRule.scenario.moveToState(Lifecycle.State.CREATED)
         activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
@@ -153,6 +147,10 @@ class ChessboardInteractionTest {
             decision = "none",
             lastSource = "none",
             lastTarget = "none",
+        )
+        onView(isRoot()).perform(waitForReactTestIdToDisappear(DRAG_OVERLAY_TEST_ID))
+        onView(boardMatcher()).perform(
+            cancelLingeringInjectedTouchStream(file = 3, rank = 5),
         )
         onView(boardMatcher()).perform(swipeBetweenSquares(file = 3, fromRank = 4, toRank = 5))
         awaitInteractionState(
@@ -299,6 +297,50 @@ class ChessboardInteractionTest {
         }
     }
 
+    private fun waitForReactTestId(testId: String): ViewAction = object : ViewAction {
+        override fun getConstraints(): Matcher<View> = isRoot()
+
+        override fun getDescription(): String = "wait for React test id $testId"
+
+        override fun perform(uiController: UiController, root: View) {
+            val deadline = SystemClock.uptimeMillis() + INTERACTION_TIMEOUT_MS
+            do {
+                if (
+                    descendantViews(root).any { view ->
+                        view.getTag(R.id.react_test_id) == testId && view.isShown
+                    }
+                ) {
+                    return
+                }
+                uiController.loopMainThreadForAtLeast(POLL_INTERVAL_MS)
+            } while (SystemClock.uptimeMillis() < deadline)
+
+            throw AssertionError("Timed out waiting for visible React test id $testId")
+        }
+    }
+
+    private fun waitForReactTestIdToDisappear(testId: String): ViewAction = object : ViewAction {
+        override fun getConstraints(): Matcher<View> = isRoot()
+
+        override fun getDescription(): String = "wait for React test id $testId to disappear"
+
+        override fun perform(uiController: UiController, root: View) {
+            val deadline = SystemClock.uptimeMillis() + INTERACTION_TIMEOUT_MS
+            do {
+                if (
+                    descendantViews(root).none { view ->
+                        view.getTag(R.id.react_test_id) == testId && view.isShown
+                    }
+                ) {
+                    return
+                }
+                uiController.loopMainThreadForAtLeast(POLL_INTERVAL_MS)
+            } while (SystemClock.uptimeMillis() < deadline)
+
+            throw AssertionError("Timed out waiting for React test id $testId to disappear")
+        }
+    }
+
     private fun swipeBetweenSquares(
         file: Int,
         fromRank: Int,
@@ -375,6 +417,39 @@ class ChessboardInteractionTest {
         }
     }
 
+    private fun cancelLingeringInjectedTouchStream(
+        file: Int,
+        rank: Int,
+    ): ViewAction = object : ViewAction {
+        override fun getConstraints(): Matcher<View> = isDisplayed()
+
+        override fun getDescription(): String =
+            "close the harness-owned native touch stream at file $file rank $rank"
+
+        override fun perform(uiController: UiController, view: View) {
+            // Activity lifecycle cancellation clears the package gesture, but
+            // Android's synthetic DeviceId(-1) stream remains down until the
+            // instrumentation owner closes it. Its acknowledgement can be
+            // false after the original target surface pauses; the subsequent
+            // full swipe and semantic callback assertions prove recovery.
+            val coordinates = squareCenter(file, rank).calculateCoordinates(view)
+            val cancelTime = SystemClock.uptimeMillis()
+            val cancel =
+                touchEvent(
+                    cancelTime,
+                    cancelTime,
+                    MotionEvent.ACTION_CANCEL,
+                    coordinates,
+                )
+            try {
+                uiController.injectMotionEvent(cancel)
+            } finally {
+                cancel.recycle()
+            }
+            uiController.loopMainThreadForAtLeast(INPUT_CANCEL_SETTLE_MS)
+        }
+    }
+
     private fun touchEvent(
         downTime: Long,
         eventTime: Long,
@@ -414,12 +489,6 @@ class ChessboardInteractionTest {
         override fun matchesSafely(view: View): Boolean =
             view.contentDescription?.toString()?.startsWith(BOARD_LABEL) == true
     }
-
-    private fun reactTestIdMatcher(testId: String): Matcher<View> =
-        androidx.test.espresso.matcher.ViewMatchers.withTagKey(
-            R.id.react_test_id,
-            equalTo(testId),
-        )
 
     private fun spareMatcher(): Matcher<View> = object : TypeSafeMatcher<View>() {
         override fun describeTo(description: Description) {
@@ -467,6 +536,7 @@ class ChessboardInteractionTest {
         const val POSITION_REVISION_DESCRIPTION = "Position revision: 7"
         const val SPARE_LABEL = "Clipped white queen spare"
         const val INTERACTION_TIMEOUT_MS = 30_000L
+        const val INPUT_CANCEL_SETTLE_MS = 50L
         const val POLL_INTERVAL_MS = 50L
         const val SETTLE_INTERVAL_MS = 500L
         const val DRAG_START_SETTLE_MS = 500L

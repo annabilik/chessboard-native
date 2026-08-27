@@ -32,6 +32,7 @@ import { DEFAULT_DRAG_ACTIVATION_DISTANCE } from './internal/gesture-options';
 import type { DragOverlayBounds } from './internal/drag-overlay-bounds';
 import { useOptionalChessboardProvider } from './internal/provider-context';
 import type {
+  ProviderDragCancellationReason,
   ProviderDragOverlayDescriptor,
   ProviderDragOwner,
 } from './internal/provider-drag-coordinator';
@@ -369,7 +370,11 @@ export function SparePiece({
     `Activate to select this spare, then tap board ${targetBoardId} or use its actions menu to place it; you can also drag it to that board.`;
 
   const finishDrag = useCallback(
-    (drag: Readonly<ActiveSpareDrag>, releaseLease: boolean): void => {
+    (
+      drag: Readonly<ActiveSpareDrag>,
+      releaseLease: boolean,
+      resetPresentation = true,
+    ): void => {
       if (activeDrag.current !== drag) {
         return;
       }
@@ -379,7 +384,9 @@ export function SparePiece({
         provider.runtime.drag.release(owner.current, drag.gestureToken);
       }
       resetHoverSharedValues(hover);
-      resetInteractionPresentationSharedValues(presentation);
+      if (resetPresentation) {
+        resetInteractionPresentationSharedValues(presentation);
+      }
     },
     [hover, presentation, provider.runtime],
   );
@@ -417,14 +424,14 @@ export function SparePiece({
   );
 
   const handleProviderCancellation = useCallback(
-    (gestureToken: number): void => {
+    (gestureToken: number, reason: ProviderDragCancellationReason): void => {
       const drag = activeDrag.current;
       if (drag?.gestureToken !== gestureToken) {
         return;
       }
       const wasAcceptingSignals = acceptingSignalGeneration.current !== null;
       acceptingSignalGeneration.current = null;
-      finishDrag(drag, false);
+      finishDrag(drag, false, reason !== 'unmount');
       if (wasAcceptingSignals) {
         setProviderResetRevision((revision) => {
           if (revision === Number.MAX_SAFE_INTEGER) {
@@ -495,8 +502,8 @@ export function SparePiece({
             boardId: targetBoardId,
             bounds: allowDragOffBoard ? null : dragOverlayBounds,
             gestureToken: signal.gestureToken,
-            onCancel: () => {
-              handleProviderCancellation(signal.gestureToken);
+            onCancel: (reason) => {
+              handleProviderCancellation(signal.gestureToken, reason);
             },
             owner: owner.current,
             piece,
@@ -651,7 +658,9 @@ export function SparePiece({
       }
       const drag = activeDrag.current;
       if (drag !== null) {
-        finishDrag(drag, true);
+        // The presentation values become unreachable with this source. Do not
+        // queue UI-thread writes while Fabric removes their animated overlay.
+        finishDrag(drag, true, false);
       }
     };
   }, [finishDrag, signalGeneration]);

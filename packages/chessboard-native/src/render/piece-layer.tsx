@@ -380,6 +380,17 @@ interface BoardPieceHostProps {
   readonly transition: Readonly<PieceTransitionVisual> | null;
 }
 
+function boardPieceHostLayoutStyle(
+  layout: Readonly<BoardPieceLayout>,
+): Readonly<ViewStyle> {
+  return {
+    height: layout.rect.height,
+    left: layout.rect.left,
+    top: layout.rect.top,
+    width: layout.rect.width,
+  };
+}
+
 function BoardPieceHost({
   boardId,
   draggingPieceGhostStyle,
@@ -429,13 +440,10 @@ function BoardPieceHost({
       style={[
         resolvedStyle,
         PIECE_HOST_STRUCTURAL_RESET,
-        {
-          height: layout.rect.height,
-          left: layout.rect.left,
-          top: layout.rect.top,
-          width: layout.rect.width,
-        },
-        animatedStyle,
+        boardPieceHostLayoutStyle(layout),
+        transition === null || progress === null
+          ? { opacity: baseOpacity }
+          : animatedStyle,
       ]}
     >
       <Renderer {...rendererProps} />

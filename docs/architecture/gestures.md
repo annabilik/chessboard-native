@@ -77,6 +77,29 @@ wrapping or reflowing provider children. The provider-level sibling escapes a
 clipping palette child. It is not a native window portal, so an ancestor that
 clips the entire provider scope can still crop it.
 
+Terminal release clears the semantic lease immediately. The same native
+overlay host then remains through one full quiescent frame with its animated
+style detached, static opacity zero, no renderer child, and no pointer or
+accessibility surface. The first generation-guarded frame lets Reanimated's
+native update registry drain; a second frame removes the transient host. A
+replacement gesture cancels both stages. This two-frame native-drain barrier
+retires the Fabric view descriptor and queued native props before host removal
+without making the provider a permanent layout or semantic owner. It governs
+ordinary retirement while the provider remains mounted; an ancestor deleting
+the entire provider cannot wait for a descendant retirement frame, so unmount
+cleanup does not publish presentation shared-value writes. On Android, any
+residual native pan/finalize frame can update only `left`/`top` through the
+shadow-tree commit path, never synchronous transform/opacity props on a removed
+host.
+
+The active overlay stays on the UI runtime on both platforms, but its native
+transport is platform-specific at the pinned React Native/Reanimated boundary.
+iOS animates pointer translation, opacity, and the lift or consumer transform.
+Android animates absolute `left`/`top` through Fabric's layout commit path and
+applies the lift or consumer transform statically; an inactive overlay stays
+offscreen until its measured provider origin is ready. Reduced motion omits the
+lift or consumer transform on both platforms.
+
 `geometryRevision`, target layout, dimensions, orientation, target unmount, a
 second valid gesture, and a second-finger cancel invalidate their implemented
 correlation boundaries. Callback and permission changes are rechecked before a
@@ -319,13 +342,14 @@ source ghost stays board-local. `SparePiece` uses its own one-pointer pan
 recognizer, crosses to JS for activation, canonical hover-square boundaries,
 release, and cancellation, and leaves the shared presentation active through
 fresh drop verification. Continuous pointer frames remain on the UI thread.
-Replacing or cancelling the active epoch removes the prior overlay without
-retaining a position snapshot. Pending decision and commit phases are reducer
-presentation only. Public drag-overlay and source-ghost styles now resolve from
-the named target board; pressed and pending remain renderer state rather than
-separate style slots. Controlled destination, selected, and disabled square
-styles remain derived directly from the current selection prop, while current
-hover supplies the visual-only drop-target slot.
+Replacing or cancelling the active epoch revokes the prior overlay lease
+without retaining a position snapshot; its nonsemantic native shell follows
+the two-frame native-drain rule above. Pending decision and commit
+phases are reducer presentation only. Public drag-overlay and source-ghost
+styles now resolve from the named target board; pressed and pending remain
+renderer state rather than separate style slots. Controlled destination,
+selected, and disabled square styles remain derived directly from the current
+selection prop, while current hover supplies the visual-only drop-target slot.
 
 The public `ChessboardActions.cancelMove()` boundary routes through the same
 board-scoped cancellation paths. It revokes an active provider lease, including
@@ -342,7 +366,8 @@ invalidation, and provider-overlay host structure. The packed Android and iOS
 harnesses exercise long board drags, parent scrolling, lifecycle cancellation,
 and post-cancellation reuse. The example gallery supplies the manual clipped
 palette and geometry-invalidation lab. Per-frame pointer movement changes shared
-values and animated transforms, not React state or consumer callbacks.
+values and UI-runtime presentation props, not React state or consumer
+callbacks.
 
 ## Consequences
 

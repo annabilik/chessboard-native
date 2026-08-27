@@ -433,12 +433,11 @@ function createBoardGestures(options: {
       'worklet';
       const sourceSquare = panSourceSquare.value;
       const gestureToken = panGestureToken.value;
-      if (
-        panActive.value === 1 &&
-        sourceSquare !== null &&
-        gestureToken !== null
-      ) {
+      const wasActive = panActive.value === 1;
+      if (wasActive) {
         panActive.value = 0;
+      }
+      if (wasActive && sourceSquare !== null && gestureToken !== null) {
         scheduleOnRN(onSignal, {
           allowDragOffBoard: panAllowDragOffBoard.value,
           allowDragOffBoardGeneration: panAllowDragOffBoardGeneration.value,
@@ -454,7 +453,9 @@ function createBoardGestures(options: {
       panGestureToken.value = null;
       panSourceSquare.value = null;
       panCancelReason.value = 0;
-      resetInteractionPresentationSharedValues(presentation);
+      if (wasActive) {
+        resetInteractionPresentationSharedValues(presentation);
+      }
     });
 
   const tap = Gesture.Tap()
@@ -1167,7 +1168,9 @@ export function BoardGestureLayer({
       twoFingerRevision.value = null;
       twoFingerSourceSquare.value = null;
       twoFingerTargetSquare.value = null;
-      resetInteractionPresentationSharedValues(presentation);
+      // Presentation shared values are transient and become unreachable with
+      // this gesture layer. Avoid scheduling UI writes while Fabric removes
+      // the animated consumers in the same teardown commit.
     };
   }, [
     annotationEnabled,

@@ -1,6 +1,6 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { StrictMode, Suspense, useState, type ReactElement } from 'react';
-import { View } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 import type { TestInstance } from 'test-renderer';
 
@@ -18,6 +18,7 @@ import {
   useChessboardProvider,
   type ChessboardProviderRuntime,
 } from '../../src/internal/provider-context';
+import type { InteractionPresentationSharedValues } from '../../src/internal/interaction-presentation';
 import { getBoardGestureTestIds } from '../../src/render/board-gesture-layer';
 
 type ProviderRenderResult = Awaited<ReturnType<typeof render>>;
@@ -30,11 +31,31 @@ const NEVER = new Promise<never>(() => undefined);
 
 interface PanCallbacks {
   readonly onBegin?: (event: Readonly<Record<string, number>>) => void;
+  readonly onEnd?: (
+    event: Readonly<Record<string, number>>,
+    success: boolean,
+  ) => void;
   readonly onFinalize?: (
     event: Readonly<Record<string, number>>,
     success: boolean,
   ) => void;
   readonly onStart?: (event: Readonly<Record<string, number>>) => void;
+  readonly onUpdate?: (event: Readonly<Record<string, number>>) => void;
+}
+
+function presentationValues(
+  presentation: Readonly<InteractionPresentationSharedValues>,
+) {
+  return {
+    epoch: presentation.epoch.value,
+    phase: presentation.phase.value,
+    pointerWindowX: presentation.pointerWindowX.value,
+    pointerWindowY: presentation.pointerWindowY.value,
+    pointerX: presentation.pointerX.value,
+    pointerY: presentation.pointerY.value,
+    sourceSquare: presentation.sourceSquare.value,
+    targetSquare: presentation.targetSquare.value,
+  };
 }
 
 function boardControls(result: ProviderRenderResult): TestInstance[] {
@@ -124,6 +145,22 @@ async function beginDrag(boardId: string): Promise<Readonly<PanCallbacks>> {
   return callbacks;
 }
 
+async function flushAnimationFrame(): Promise<void> {
+  await act(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
+      }),
+  );
+}
+
+async function flushRetirementFrames(): Promise<void> {
+  await flushAnimationFrame();
+  await flushAnimationFrame();
+}
+
 function providerPiece(props: PieceRendererProps): ReactElement {
   return (
     <View
@@ -137,6 +174,10 @@ const PIECE_RENDERERS = Object.freeze({
 }) satisfies PieceRenderers;
 
 describe('ChessboardProvider', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('[PARITY-EXPORT-CHESSBOARD-PROVIDER] exports a layout-neutral provider with no native or accessibility node', async () => {
     const result = await render(
       <ChessboardProvider>
@@ -313,6 +354,99 @@ describe('ChessboardProvider', () => {
         { absoluteX: 35, absoluteY: 25, x: 35, y: 25 },
         false,
       );
+    });
+    await flushRetirementFrames();
+  });
+
+  it('keeps retained board-drag signals semantically inert after a keyed provider unmount', async () => {
+    const boardId = 'provider-unmount-active-drag';
+    const runtime: RuntimeCapture = { current: null };
+    const onMoveRequest = jest.fn(() => ({ status: 'rejected' as const }));
+    const formatMoveOutcome = jest.fn(() => null);
+    const position = Object.freeze({
+      revision: 7,
+      value: Object.freeze({
+        a2: Object.freeze({ id: 'stable-token', pieceType: 'token' }),
+      }),
+    });
+    const renderGeneration = (generation: number): ReactElement => (
+      <ChessboardProvider key={generation}>
+        <RuntimeProbe capture={(value) => (runtime.current = value)} />
+        <ChessboardRuntime
+          accessibility={{
+            boardLabel: 'provider unmount board',
+            formatMoveOutcome,
+          }}
+          boardId={boardId}
+          development={false}
+          dimensions={{ columns: 2, rows: 2 }}
+          onMoveRequest={onMoveRequest}
+          pieceRenderers={PIECE_RENDERERS}
+          position={position}
+        />
+      </ChessboardProvider>
+    );
+    const result = await render(renderGeneration(0));
+    await measure(boardByLabel(result, 'provider unmount board'));
+
+    const retainedCallbacks = await beginDrag(boardId);
+    const retiredRuntime = capturedRuntime(runtime);
+    const descriptor = retiredRuntime.drag.getSnapshot().active;
+    if (descriptor === null) {
+      throw new Error('Expected an active provider overlay descriptor.');
+    }
+    const valuesBeforeUnmount = presentationValues(descriptor.presentation);
+    expect(valuesBeforeUnmount).toEqual({
+      epoch: 0,
+      phase: 2,
+      pointerWindowX: 35,
+      pointerWindowY: 25,
+      pointerX: 35,
+      pointerY: 25,
+      sourceSquare: 'a2',
+      targetSquare: 'a2',
+    });
+    expect(retiredRuntime.registry.getBoardSnapshot(boardId)).not.toBeNull();
+
+    await result.rerender(renderGeneration(1));
+    const replacementRuntime = capturedRuntime(runtime);
+    expect(replacementRuntime).not.toBe(retiredRuntime);
+    await waitFor(() => {
+      expect(retiredRuntime.drag.getSnapshot().active).toBeNull();
+      expect(retiredRuntime.registry.getBoardSnapshot(boardId)).toBeNull();
+    });
+    expect(replacementRuntime.drag.getSnapshot().active).toBeNull();
+    expect(presentationValues(descriptor.presentation)).toEqual(
+      valuesBeforeUnmount,
+    );
+
+    // A terminal already queued by the removed gesture tree must be inert. The
+    // cleanup set panActive to zero before these retained worklet callbacks run.
+    await act(() => {
+      const staleEvent = {
+        absoluteX: 135,
+        absoluteY: 135,
+        x: 135,
+        y: 135,
+      };
+      retainedCallbacks.onUpdate?.(staleEvent);
+      retainedCallbacks.onEnd?.(staleEvent, true);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(retiredRuntime.drag.getSnapshot().active).toBeNull();
+    expect(replacementRuntime.drag.getSnapshot().active).toBeNull();
+    expect(presentationValues(descriptor.presentation)).toEqual(
+      valuesBeforeUnmount,
+    );
+    expect(onMoveRequest).not.toHaveBeenCalled();
+    expect(formatMoveOutcome).not.toHaveBeenCalled();
+    expect(position).toEqual({
+      revision: 7,
+      value: { a2: { id: 'stable-token', pieceType: 'token' } },
     });
   });
 
@@ -793,7 +927,8 @@ describe('ChessboardProvider', () => {
     );
     expect(overlayHost).toHaveProp('pointerEvents', 'none');
     expect(hasAncestor(rightOverlay, overlayHost)).toBe(true);
-    for (const board of boardControls(result)) {
+    const controls = boardControls(result);
+    for (const board of controls) {
       expect(hasAncestor(overlayHost, board)).toBe(false);
       expect(hasAncestor(rightOverlay, board)).toBe(false);
     }
@@ -804,7 +939,27 @@ describe('ChessboardProvider', () => {
       'no-hide-descendants',
     );
     expect(rightOverlay).toHaveProp('pointerEvents', 'none');
-    expect(boardControls(result)).toHaveLength(2);
+    expect(controls).toHaveLength(2);
+
+    const activeOverlayStyles: unknown = rightOverlay.props['style'];
+    if (!Array.isArray(activeOverlayStyles)) {
+      throw new Error('Expected the active provider overlay style chain.');
+    }
+    const attachedAnimatedStyle: unknown = activeOverlayStyles.at(-1);
+
+    jest.useFakeTimers();
+    jest
+      .spyOn(globalThis, 'requestAnimationFrame')
+      .mockImplementation((callback) =>
+        setTimeout(() => {
+          callback(Date.now());
+        }, 16),
+      );
+    const cancelAnimationFrameSpy = jest
+      .spyOn(globalThis, 'cancelAnimationFrame')
+      // Exercise the owner + gesture-token guard even when native cancellation
+      // loses a race with an already queued retirement frame.
+      .mockImplementation(() => undefined);
 
     await act(() => {
       rightCallbacks.onFinalize?.(
@@ -812,8 +967,191 @@ describe('ChessboardProvider', () => {
         false,
       );
     });
+    await act(() => {
+      jest.advanceTimersByTime(0);
+    });
     expect(
       result.queryAllByTestId(/:provider-drag-overlay$/, {
+        includeHiddenElements: true,
+      }),
+    ).toEqual([]);
+    const retiringRightOverlay = result.getByTestId(
+      'chessboard-native:right:provider-drag-retiring-overlay',
+      { includeHiddenElements: true },
+    );
+    expect(retiringRightOverlay).toBe(rightOverlay);
+    expect(retiringRightOverlay).toHaveProp(
+      'accessibilityElementsHidden',
+      true,
+    );
+    expect(retiringRightOverlay).toHaveProp('accessible', false);
+    expect(retiringRightOverlay).toHaveProp(
+      'importantForAccessibility',
+      'no-hide-descendants',
+    );
+    expect(retiringRightOverlay).toHaveProp('pointerEvents', 'none');
+    expect(retiringRightOverlay.props['style']).not.toContain(
+      attachedAnimatedStyle,
+    );
+    expect(
+      StyleSheet.flatten<ViewStyle>(
+        retiringRightOverlay.props['style'] as StyleProp<ViewStyle>,
+      ),
+    ).toEqual(expect.objectContaining({ opacity: 0 }));
+    expect(retiringRightOverlay.children).toEqual([]);
+    expect(
+      result.queryAllByTestId('chessboard-native:provider-drag-host', {
+        includeHiddenElements: true,
+      }),
+    ).toHaveLength(1);
+
+    // Replace before RAF 1. Even if cancellation loses its native race, the
+    // stale first callback must not remove the replacement or enqueue a
+    // destructive second callback.
+    const replacementBeforeFirstCallbacks = await beginDrag('right');
+    await act(() => {
+      jest.advanceTimersByTime(0);
+    });
+    expect(cancelAnimationFrameSpy).toHaveBeenCalledTimes(1);
+    expect(
+      result.queryAllByTestId(
+        'chessboard-native:right:provider-drag-retiring-overlay',
+        { includeHiddenElements: true },
+      ),
+    ).toEqual([]);
+    expect(
+      result.getByTestId('chessboard-native:right:provider-drag-overlay', {
+        includeHiddenElements: true,
+      }),
+    ).toBe(rightOverlay);
+
+    await act(() => {
+      jest.advanceTimersByTime(17);
+    });
+    expect(
+      result.getByTestId('chessboard-native:right:provider-drag-overlay', {
+        includeHiddenElements: true,
+      }),
+    ).toBe(rightOverlay);
+    await act(() => {
+      jest.advanceTimersByTime(17);
+    });
+    expect(
+      result.getByTestId('chessboard-native:right:provider-drag-overlay', {
+        includeHiddenElements: true,
+      }),
+    ).toBe(rightOverlay);
+    expect(
+      result.queryAllByTestId('chessboard-native:provider-drag-host', {
+        includeHiddenElements: true,
+      }),
+    ).toHaveLength(1);
+
+    await act(() => {
+      replacementBeforeFirstCallbacks.onFinalize?.(
+        { absoluteX: 35, absoluteY: 25, x: 35, y: 25 },
+        false,
+      );
+    });
+    await act(() => {
+      jest.advanceTimersByTime(0);
+    });
+    expect(
+      result.getByTestId(
+        'chessboard-native:right:provider-drag-retiring-overlay',
+        { includeHiddenElements: true },
+      ),
+    ).toBe(rightOverlay);
+
+    // RAF 1 is only the quiescent presentation barrier. Replace before RAF 2
+    // and prove its stale callback cannot delete the new gesture token.
+    await act(() => {
+      jest.advanceTimersByTime(17);
+    });
+    expect(
+      result.getByTestId(
+        'chessboard-native:right:provider-drag-retiring-overlay',
+        { includeHiddenElements: true },
+      ),
+    ).toBe(rightOverlay);
+    expect(
+      result.queryAllByTestId('chessboard-native:provider-drag-host', {
+        includeHiddenElements: true,
+      }),
+    ).toHaveLength(1);
+
+    const replacementBeforeSecondCallbacks = await beginDrag('right');
+    await act(() => {
+      jest.advanceTimersByTime(0);
+    });
+    expect(cancelAnimationFrameSpy).toHaveBeenCalledTimes(2);
+    expect(
+      result.queryAllByTestId(
+        'chessboard-native:right:provider-drag-retiring-overlay',
+        { includeHiddenElements: true },
+      ),
+    ).toEqual([]);
+    expect(
+      result.getByTestId('chessboard-native:right:provider-drag-overlay', {
+        includeHiddenElements: true,
+      }),
+    ).toBe(rightOverlay);
+
+    await act(() => {
+      jest.advanceTimersByTime(17);
+    });
+    expect(
+      result.getByTestId('chessboard-native:right:provider-drag-overlay', {
+        includeHiddenElements: true,
+      }),
+    ).toBe(rightOverlay);
+    expect(
+      result.queryAllByTestId('chessboard-native:provider-drag-host', {
+        includeHiddenElements: true,
+      }),
+    ).toHaveLength(1);
+
+    await act(() => {
+      replacementBeforeSecondCallbacks.onFinalize?.(
+        { absoluteX: 35, absoluteY: 25, x: 35, y: 25 },
+        false,
+      );
+    });
+    await act(() => {
+      jest.advanceTimersByTime(0);
+    });
+    expect(
+      result.getByTestId(
+        'chessboard-native:right:provider-drag-retiring-overlay',
+        { includeHiddenElements: true },
+      ),
+    ).toBe(rightOverlay);
+
+    await act(() => {
+      jest.advanceTimersByTime(17);
+    });
+    expect(
+      result.getByTestId(
+        'chessboard-native:right:provider-drag-retiring-overlay',
+        { includeHiddenElements: true },
+      ),
+    ).toBe(rightOverlay);
+    expect(
+      result.queryAllByTestId('chessboard-native:provider-drag-host', {
+        includeHiddenElements: true,
+      }),
+    ).toHaveLength(1);
+
+    await act(() => {
+      jest.advanceTimersByTime(17);
+    });
+    expect(
+      result.queryAllByTestId(/:provider-drag-(?:retiring-)?overlay$/, {
+        includeHiddenElements: true,
+      }),
+    ).toEqual([]);
+    expect(
+      result.queryAllByTestId('chessboard-native:provider-drag-host', {
         includeHiddenElements: true,
       }),
     ).toEqual([]);
@@ -847,6 +1185,7 @@ describe('ChessboardProvider', () => {
     ).toHaveLength(1);
 
     await measure(board, 200, 200);
+    await flushRetirementFrames();
 
     expect(
       result.queryAllByTestId(

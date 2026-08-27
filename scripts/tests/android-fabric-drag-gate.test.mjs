@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
@@ -6,12 +7,221 @@ import { fileURLToPath } from 'node:url';
 
 import {
   adbArguments,
+  androidDragPerformanceTest,
+  androidProviderUnmountDragTest,
+  androidTransitionProviderUnmountDragTest,
+  buildSourceEvidence,
   buildGradleArguments,
+  classifyAndroidDeviceKind,
   defaultAndroidAcceptedDragTest,
+  didAndroidFabricGatePass,
+  didSourceEvidenceChange,
+  parseAndroidDragPerformance,
   parseAdbDevices,
+  resolveAndroidInstrumentationTest,
+  requirePhysicalAndroidDevice,
   scanAndroidFabricFailures,
   selectAndroidDevice,
 } from '../../apps/native-harness/scripts/run-android-fabric-drag-gate.mjs';
+
+function validPerformanceSummary() {
+  return {
+    schemaVersion: 1,
+    displayRefreshHz: 60,
+    runs: Array.from({ length: 5 }, (_, index) => ({
+      droppedReports: 0,
+      frameCount: 240,
+      inputSpanMs: 4_000,
+      invalidMetrics: 0,
+      jankPercent: 2.5,
+      p95Ms: 16.5,
+      p99Ms: 25,
+      run: index + 1,
+      successfulMoves: 240,
+      worstFrameMs: 33,
+    })),
+  };
+}
+
+test('attributes physical evidence to both the commit and normalized tracked diff', () => {
+  const clean = buildSourceEvidence({
+    commit: 'abc123',
+    status: '',
+    trackedDiff: Buffer.alloc(0),
+  });
+  const dirty = buildSourceEvidence({
+    commit: 'abc123',
+    status: ' M packages/chessboard-native/src/render/drag-overlay.tsx\n',
+    trackedDiff: Buffer.from('diff --git a/file b/file\n+changed\n'),
+    untrackedFiles: [
+      { contents: Buffer.from('fixture A'), path: 'untracked-fixture.ts' },
+    ],
+  });
+
+  assert.equal(clean.commit, 'abc123');
+  assert.equal(clean.dirty, false);
+  assert.equal(clean.status, '');
+  assert.equal(clean.untrackedFileCount, 0);
+  assert.equal(dirty.commit, 'abc123');
+  assert.equal(dirty.dirty, true);
+  assert.equal(
+    dirty.status,
+    'M packages/chessboard-native/src/render/drag-overlay.tsx',
+  );
+  assert.match(dirty.trackedDiffSha256, /^[a-f0-9]{64}$/u);
+  assert.equal(dirty.untrackedFileCount, 1);
+  assert.match(dirty.untrackedFilesSha256, /^[a-f0-9]{64}$/u);
+  assert.match(dirty.worktreeSha256, /^[a-f0-9]{64}$/u);
+  assert.notEqual(dirty.trackedDiffSha256, clean.trackedDiffSha256);
+  assert.notEqual(dirty.worktreeSha256, clean.worktreeSha256);
+  assert.equal(didSourceEvidenceChange(clean, clean), false);
+  assert.equal(didSourceEvidenceChange(clean, dirty), true);
+  assert.notEqual(
+    dirty.worktreeSha256,
+    buildSourceEvidence({
+      ...dirty,
+      trackedDiff: Buffer.from('diff --git a/file b/file\n+changed\n'),
+      untrackedFiles: [
+        { contents: Buffer.from('fixture B'), path: 'untracked-fixture.ts' },
+      ],
+    }).worktreeSha256,
+  );
+});
+
+test('fails closed when logcat exits before instrumentation completes', () => {
+  const base = {
+    findings: [],
+    gradleError: null,
+    gradleExitCode: 0,
+    logcatPrematureExit: null,
+  };
+
+  assert.equal(didAndroidFabricGatePass(base), true);
+  assert.equal(
+    didAndroidFabricGatePass({
+      ...base,
+      logcatPrematureExit: { exitCode: 1, signalCode: null },
+    }),
+    false,
+  );
+  assert.equal(
+    didAndroidFabricGatePass({
+      ...base,
+      sourceChangedDuringRun: true,
+    }),
+    false,
+  );
+  assert.equal(
+    didAndroidFabricGatePass({
+      ...base,
+      performanceError: 'missing performance evidence',
+    }),
+    false,
+  );
+});
+
+test('requires a proven physical target unless emulator diagnostics are explicit', () => {
+  assert.equal(classifyAndroidDeviceKind(''), 'physical');
+  assert.equal(classifyAndroidDeviceKind('0'), 'physical');
+  assert.equal(classifyAndroidDeviceKind('1'), 'emulator');
+  assert.equal(classifyAndroidDeviceKind('unexpected'), 'unknown');
+  assert.doesNotThrow(() => requirePhysicalAndroidDevice('physical'));
+  assert.doesNotThrow(() =>
+    requirePhysicalAndroidDevice('emulator', {
+      ANDROID_FABRIC_ALLOW_EMULATOR: '1',
+    }),
+  );
+  assert.throws(
+    () => requirePhysicalAndroidDevice('emulator'),
+    /require a physical device/u,
+  );
+  assert.throws(
+    () => requirePhysicalAndroidDevice('unknown'),
+    /Unable to prove/u,
+  );
+});
+
+test('parses one complete Android drag performance record', () => {
+  const expected = validPerformanceSummary();
+  const logcat = `08-27 I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(expected)}\n`;
+
+  assert.deepEqual(parseAndroidDragPerformance(logcat), expected);
+});
+
+test('fails closed for missing, duplicate, malformed, or over-budget performance records', () => {
+  const valid = validPerformanceSummary();
+  const record = `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(valid)}`;
+
+  assert.throws(
+    () => parseAndroidDragPerformance('I TestRunner: finished'),
+    /Expected exactly one CHESSBOARD_DRAG_PERF record; found 0/u,
+  );
+  assert.throws(
+    () => parseAndroidDragPerformance(`${record}\n${record}`),
+    /Expected exactly one CHESSBOARD_DRAG_PERF record; found 2/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        'I ChessboardDragPerf: CHESSBOARD_DRAG_PERF {broken',
+      ),
+    /malformed JSON/u,
+  );
+
+  const overBudget = validPerformanceSummary();
+  overBudget.runs[2].p95Ms = 17.1;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(overBudget)}`,
+      ),
+    /run 3 exceeded p95 budget/u,
+  );
+
+  const invalidMetrics = validPerformanceSummary();
+  invalidMetrics.runs[0].invalidMetrics = 1;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(invalidMetrics)}`,
+      ),
+    /run 1 contained invalid frame metrics/u,
+  );
+
+  const noValidFrames = validPerformanceSummary();
+  noValidFrames.runs[0].invalidMetrics = 240;
+  noValidFrames.runs[0].frameCount = 0;
+  noValidFrames.runs[0].p95Ms = 0;
+  noValidFrames.runs[0].p99Ms = 0;
+  noValidFrames.runs[0].worstFrameMs = 0;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(noValidFrames)}`,
+      ),
+    /run 1 collected too few frames/u,
+  );
+
+  const inconsistentPercentiles = validPerformanceSummary();
+  inconsistentPercentiles.runs[1].p95Ms = 26;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(inconsistentPercentiles)}`,
+      ),
+    /run 2 has inconsistent frame percentiles/u,
+  );
+
+  const fractionalFrameCount = validPerformanceSummary();
+  fractionalFrameCount.runs[4].frameCount = 239.5;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(fractionalFrameCount)}`,
+      ),
+    /run 5 frameCount must be a non-negative integer/u,
+  );
+});
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -54,6 +264,31 @@ test('accepts unrelated React Native and gesture logcat output', () => {
       ].join('\n'),
     ),
     [],
+  );
+});
+
+test('does not treat a camel-cased lifecycle test name as a removed Fabric host', () => {
+  const lifecycleTest =
+    'unmountingProviderDuringActiveDragDoesNotUpdateRemovedFabricHosts(com.vibechess.chessboardnativeharness.ChessboardProviderUnmountDragTest)';
+
+  assert.deepEqual(
+    scanAndroidFabricFailures(
+      [
+        `08-27 17:37:47.674 21924 21939 I TestRunner: started: ${lifecycleTest}`,
+        `08-27 17:37:56.265 21924 21939 I TestRunner: finished: ${lifecycleTest}`,
+      ].join('\n'),
+    ),
+    [],
+  );
+
+  assert.deepEqual(
+    scanAndroidFabricFailures(
+      [
+        'E ReactNative: Fabric transaction tried to update a removed host tag 703',
+        'E ReactNative: native host was unmounted before the Fabric transaction completed',
+      ].join('\n'),
+    ).map((finding) => finding.signature),
+    ['fabric-host-missing-or-removed', 'fabric-host-missing-or-removed'],
   );
 });
 
@@ -116,6 +351,59 @@ test('targets the release interaction class and scopes adb to the selected devic
   );
 });
 
+test('keeps accepted drag as the default and allows the provider-unmount lifecycle target', () => {
+  assert.equal(
+    resolveAndroidInstrumentationTest({}),
+    defaultAndroidAcceptedDragTest,
+  );
+  assert.equal(
+    resolveAndroidInstrumentationTest({ ANDROID_TEST_CLASS: '   ' }),
+    defaultAndroidAcceptedDragTest,
+  );
+  assert.equal(
+    resolveAndroidInstrumentationTest({
+      ANDROID_TEST_CLASS: ` ${androidProviderUnmountDragTest} `,
+    }),
+    androidProviderUnmountDragTest,
+  );
+  assert.deepEqual(buildGradleArguments(androidProviderUnmountDragTest), [
+    ':app:connectedReleaseAndroidTest',
+    '--no-daemon',
+    `-Pandroid.testInstrumentationRunnerArguments.class=${androidProviderUnmountDragTest}`,
+  ]);
+});
+
+test('allows the transition/provider overlap lifecycle target', () => {
+  assert.equal(
+    resolveAndroidInstrumentationTest({
+      ANDROID_TEST_CLASS: ` ${androidTransitionProviderUnmountDragTest} `,
+    }),
+    androidTransitionProviderUnmountDragTest,
+  );
+  assert.deepEqual(
+    buildGradleArguments(androidTransitionProviderUnmountDragTest),
+    [
+      ':app:connectedReleaseAndroidTest',
+      '--no-daemon',
+      `-Pandroid.testInstrumentationRunnerArguments.class=${androidTransitionProviderUnmountDragTest}`,
+    ],
+  );
+});
+
+test('allows the sustained drag performance target', () => {
+  assert.equal(
+    resolveAndroidInstrumentationTest({
+      ANDROID_TEST_CLASS: ` ${androidDragPerformanceTest} `,
+    }),
+    androidDragPerformanceTest,
+  );
+  assert.deepEqual(buildGradleArguments(androidDragPerformanceTest), [
+    ':app:connectedReleaseAndroidTest',
+    '--no-daemon',
+    `-Pandroid.testInstrumentationRunnerArguments.class=${androidDragPerformanceTest}`,
+  ]);
+});
+
 test('publishes root and harness commands for the physical drag gate', async () => {
   const [rootPackage, harnessPackage] = await Promise.all([
     readFile(path.join(repositoryRoot, 'package.json'), 'utf8').then(
@@ -132,7 +420,57 @@ test('publishes root and harness commands for the physical drag gate', async () 
     'pnpm --filter @vibechess/chessboard-native-harness android:drag:gate',
   );
   assert.equal(
+    rootPackage.scripts['native:android:drag:lifecycle:gate'],
+    'pnpm --filter @vibechess/chessboard-native-harness android:drag:lifecycle:gate',
+  );
+  assert.equal(
     harnessPackage.scripts['android:drag:gate'],
     'node scripts/run-android-fabric-drag-gate.mjs',
+  );
+  assert.equal(
+    harnessPackage.scripts['android:drag:lifecycle:gate'],
+    `ANDROID_TEST_CLASS=${androidProviderUnmountDragTest} ANDROID_FABRIC_DRAG_EVIDENCE_DIR=android/app/build/reports/fabric-drag-provider-unmount-gate node scripts/run-android-fabric-drag-gate.mjs`,
+  );
+});
+
+test('publishes a separate transition/provider overlap gate and evidence directory', async () => {
+  const [rootPackage, harnessPackage] = await Promise.all([
+    readFile(path.join(repositoryRoot, 'package.json'), 'utf8').then(
+      JSON.parse,
+    ),
+    readFile(
+      path.join(repositoryRoot, 'apps/native-harness/package.json'),
+      'utf8',
+    ).then(JSON.parse),
+  ]);
+
+  assert.equal(
+    rootPackage.scripts['native:android:drag:transition-lifecycle:gate'],
+    'pnpm --filter @vibechess/chessboard-native-harness android:drag:transition-lifecycle:gate',
+  );
+  assert.equal(
+    harnessPackage.scripts['android:drag:transition-lifecycle:gate'],
+    `ANDROID_TEST_CLASS=${androidTransitionProviderUnmountDragTest} ANDROID_FABRIC_DRAG_EVIDENCE_DIR=android/app/build/reports/fabric-drag-transition-provider-unmount-gate node scripts/run-android-fabric-drag-gate.mjs`,
+  );
+});
+
+test('publishes a separate sustained drag performance gate and evidence directory', async () => {
+  const [rootPackage, harnessPackage] = await Promise.all([
+    readFile(path.join(repositoryRoot, 'package.json'), 'utf8').then(
+      JSON.parse,
+    ),
+    readFile(
+      path.join(repositoryRoot, 'apps/native-harness/package.json'),
+      'utf8',
+    ).then(JSON.parse),
+  ]);
+
+  assert.equal(
+    rootPackage.scripts['native:android:drag:performance:gate'],
+    'pnpm --filter @vibechess/chessboard-native-harness android:drag:performance:gate',
+  );
+  assert.equal(
+    harnessPackage.scripts['android:drag:performance:gate'],
+    `ANDROID_TEST_CLASS=${androidDragPerformanceTest} ANDROID_FABRIC_DRAG_EVIDENCE_DIR=android/app/build/reports/fabric-drag-performance-gate node scripts/run-android-fabric-drag-gate.mjs`,
   );
 });

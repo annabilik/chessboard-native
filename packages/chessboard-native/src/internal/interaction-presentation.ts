@@ -148,7 +148,7 @@ export function useInteractionPresentationSharedValues(): Readonly<InteractionPr
   );
 }
 
-/** Clear every transient value after idle, invalidation, or unmount. */
+/** Clear every transient value after a mounted idle or invalidation path. */
 export function resetInteractionPresentationSharedValues(
   values: Readonly<InteractionPresentationSharedValues>,
 ): void {

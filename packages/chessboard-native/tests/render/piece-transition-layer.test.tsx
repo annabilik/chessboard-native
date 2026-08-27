@@ -1,4 +1,5 @@
 import { render } from '@testing-library/react-native';
+import { useState, type ReactElement } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import type { TestInstance } from 'test-renderer';
@@ -80,12 +81,15 @@ function transition(
   });
 }
 
-function currentPosition(value: PositionObject): Readonly<{
+function currentPosition(
+  value: PositionObject,
+  revision = 2,
+): Readonly<{
   revision: number;
   tier: 'envelope';
   value: PositionObject;
 }> {
-  return Object.freeze({ revision: 2, tier: 'envelope', value });
+  return Object.freeze({ revision, tier: 'envelope', value });
 }
 
 function rootOf(result: Awaited<ReturnType<typeof render>>): TestInstance {
@@ -115,6 +119,57 @@ function propsOf(node: TestInstance): Readonly<Record<string, unknown>> {
     throw new Error('Expected test-renderer props.');
   }
   return props;
+}
+
+interface ReanimatedStyleDescriptor {
+  readonly viewDescriptors: Readonly<{
+    readonly shareableViewDescriptors: Readonly<{
+      readonly value: readonly unknown[];
+    }>;
+  }>;
+}
+
+function findReanimatedStyleDescriptor(
+  style: unknown,
+): ReanimatedStyleDescriptor | null {
+  if (Array.isArray(style)) {
+    for (const entry of style) {
+      const descriptor = findReanimatedStyleDescriptor(entry);
+      if (descriptor !== null) {
+        return descriptor;
+      }
+    }
+    return null;
+  }
+  if (!isRecord(style)) {
+    return null;
+  }
+  const viewDescriptors = style['viewDescriptors'];
+  if (!isRecord(viewDescriptors)) {
+    return null;
+  }
+  const shareableViewDescriptors = viewDescriptors['shareableViewDescriptors'];
+  return isRecord(shareableViewDescriptors) &&
+    Array.isArray(shareableViewDescriptors['value'])
+    ? (style as unknown as ReanimatedStyleDescriptor)
+    : null;
+}
+
+function attachedStyleDescriptor(
+  host: TestInstance,
+): ReanimatedStyleDescriptor | null {
+  let fiber = host.unstable_fiber;
+  while (fiber !== null) {
+    const props: unknown = fiber.memoizedProps;
+    if (isRecord(props)) {
+      const descriptor = findReanimatedStyleDescriptor(props['style']);
+      if (descriptor !== null) {
+        return descriptor;
+      }
+    }
+    fiber = fiber.return;
+  }
+  return null;
 }
 
 function animatedStyle(node: TestInstance): Readonly<ViewStyle> {
@@ -383,6 +438,113 @@ describe('mounted piece transition projection', () => {
       { translateX: -50 },
       { translateY: 0 },
     ]);
+  });
+
+  it('preserves a stateful canonical renderer and native host while entering and settling a controlled transition', async () => {
+    let mounts = 0;
+    function StatefulProbe(props: PieceRendererProps): ReactElement {
+      const [mount] = useState(() => {
+        mounts += 1;
+        return mounts;
+      });
+      return (
+        <View
+          testID={`stateful:${String(mount)}:${props.square ?? 'spare'}:${props.state.isTransitioning ? 'transition' : 'static'}`}
+        />
+      );
+    }
+    const layout = createBoardSurfaceLayout(
+      { height: 100, width: 200 },
+      { columns: 2, rows: 1 },
+      'white',
+    );
+    const movePlan = plan({
+      moves: Object.freeze([
+        Object.freeze({
+          after: Object.freeze({ id: 'runner', pieceType: 'stateful' }),
+          before: Object.freeze({ id: 'runner', pieceType: 'stateful' }),
+          from: 'a1',
+          kind: 'move' as const,
+          matchedBy: 'piece-id' as const,
+          to: 'b1',
+        }),
+      ]),
+    });
+    const renderers = Object.freeze({ stateful: StatefulProbe });
+    const result = await render(
+      <PieceLayer
+        boardId="stateful-transition"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
+        layout={layout}
+        pieceRenderers={renderers}
+        position={currentPosition(
+          { a1: Object.freeze({ id: 'runner', pieceType: 'stateful' }) },
+          1,
+        )}
+        style={EMPTY_STYLE}
+      />,
+    );
+    const initialArtwork = requiredNode(rootOf(result), 'stateful:1:a1:static');
+    const initialHost = initialArtwork.parent;
+    if (initialHost === null) {
+      throw new Error('Expected the initial canonical piece host.');
+    }
+    expect(attachedStyleDescriptor(initialHost)).toBeNull();
+
+    await result.rerender(
+      <PieceLayer
+        boardId="stateful-transition"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
+        layout={layout}
+        pieceRenderers={renderers}
+        position={currentPosition({
+          b1: Object.freeze({ id: 'runner', pieceType: 'stateful' }),
+        })}
+        style={EMPTY_STYLE}
+        transition={transition(movePlan, layout, testSharedValue(0.5))}
+      />,
+    );
+    const transitioningArtwork = requiredNode(
+      rootOf(result),
+      'stateful:1:b1:transition',
+    );
+    const transitioningHost = transitioningArtwork.parent;
+    if (transitioningHost === null) {
+      throw new Error('Expected the transitioning canonical piece host.');
+    }
+    expect(transitioningHost).toBe(initialHost);
+    const activeDescriptor = attachedStyleDescriptor(transitioningHost);
+    if (activeDescriptor === null) {
+      throw new Error('Expected one active Reanimated style descriptor.');
+    }
+    expect(
+      activeDescriptor.viewDescriptors.shareableViewDescriptors.value,
+    ).toHaveLength(1);
+    expect(mounts).toBe(1);
+
+    await result.rerender(
+      <PieceLayer
+        boardId="stateful-transition"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
+        layout={layout}
+        pieceRenderers={renderers}
+        position={currentPosition({
+          b1: Object.freeze({ id: 'runner', pieceType: 'stateful' }),
+        })}
+        style={EMPTY_STYLE}
+      />,
+    );
+    const settledArtwork = requiredNode(rootOf(result), 'stateful:1:b1:static');
+    const settledHost = settledArtwork.parent;
+    if (settledHost === null) {
+      throw new Error('Expected the settled canonical piece host.');
+    }
+    expect(settledHost).toBe(initialHost);
+    expect(mounts).toBe(1);
+    expect(attachedStyleDescriptor(settledHost)).toBeNull();
+    expect(
+      activeDescriptor.viewDescriptors.shareableViewDescriptors.value,
+    ).toEqual([]);
   });
 
   it('renders a capture exit below its moving current actor and fades both generic enter/exit paths', async () => {

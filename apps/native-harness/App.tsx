@@ -13,9 +13,11 @@ import {
 } from '@vibechess/chessboard-native';
 import { defaultPieceRenderers } from '@vibechess/chessboard-native/pieces';
 import { Chessboard as ReactChessboardCompat } from '@vibechess/chessboard-native/react-chessboard-compat';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+import { TransitionProviderUnmountFixture } from './TransitionProviderUnmountFixture';
 
 const AUDIT_BOARD_LABEL = 'Accessibility audit board, white orientation';
 const AUDIT_BOARD_HINT =
@@ -23,6 +25,8 @@ const AUDIT_BOARD_HINT =
 const INTERACTION_BOARD_LABEL = 'Interaction test board, white orientation';
 const ACCEPTED_INTERACTION_BOARD_LABEL =
   'Accepted interaction test board, white orientation';
+const PROVIDER_UNMOUNT_INTERACTION_BOARD_LABEL =
+  'Provider unmount interaction test board, white orientation';
 const ANNOTATION_BOARD_LABEL = 'Annotation test board, white orientation';
 const INTERACTION_POSITION = Object.freeze({
   revision: 7,
@@ -47,7 +51,9 @@ interface AppProps {
     | 'compatibility'
     | 'interaction'
     | 'interaction-accepted'
-    | 'interaction-lifecycle';
+    | 'interaction-lifecycle'
+    | 'interaction-provider-unmount'
+    | 'interaction-transition-provider-unmount';
 }
 
 const EMPTY_ANNOTATIONS = Object.freeze({
@@ -551,6 +557,118 @@ function AcceptedInteractionFixture() {
   );
 }
 
+function ProviderUnmountInteractionFixture() {
+  const [abortCount, setAbortCount] = useState(0);
+  const [callbackCount, setCallbackCount] = useState(0);
+  const [dragStartCount, setDragStartCount] = useState(0);
+  const [providerGeneration, setProviderGeneration] = useState(0);
+  const remountFrameRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (remountFrameRef.current !== null) {
+        cancelAnimationFrame(remountFrameRef.current);
+      }
+    },
+    [],
+  );
+
+  const remountProviderAfterDragStart = useCallback(() => {
+    setDragStartCount((count) => count + 1);
+    if (remountFrameRef.current !== null) {
+      return;
+    }
+    remountFrameRef.current = requestAnimationFrame(() => {
+      remountFrameRef.current = null;
+      setProviderGeneration((generation) => generation + 1);
+    });
+  }, []);
+  const rejectUnexpectedMove = useCallback<OnMoveRequest>(
+    (_intent, context) => {
+      setCallbackCount((count) => count + 1);
+      if (context.signal.aborted) {
+        setAbortCount((count) => count + 1);
+      }
+      return {
+        reason:
+          'Provider-unmount fixture must replace the active drag before release.',
+        status: 'rejected',
+      };
+    },
+    [],
+  );
+
+  return (
+    <View style={styles.interactionContent}>
+      <View style={styles.interactionStatus}>
+        <Text style={styles.title}>Native provider-unmount fixture</Text>
+        <AuditStatus
+          label="Drag start count"
+          testID="interaction-provider-unmount:drag-start-count"
+          value={String(dragStartCount)}
+        />
+        <AuditStatus
+          label="Remount count"
+          testID="interaction-provider-unmount:remount-count"
+          value={String(providerGeneration)}
+        />
+        <AuditStatus
+          label="Provider generation"
+          testID="interaction-provider-unmount:provider-generation"
+          value={String(providerGeneration)}
+        />
+        <AuditStatus
+          label="Callback count"
+          testID="interaction-provider-unmount:callback-count"
+          value={String(callbackCount)}
+        />
+        <AuditStatus
+          label="Commit count"
+          testID="interaction-provider-unmount:commit-count"
+          value="0"
+        />
+        <AuditStatus
+          label="Abort count"
+          testID="interaction-provider-unmount:abort-count"
+          value={String(abortCount)}
+        />
+        <AuditStatus
+          label="Position revision"
+          testID="interaction-provider-unmount:position-revision"
+          value={String(INTERACTION_POSITION.revision)}
+        />
+        <AuditStatus
+          label="Piece square"
+          testID="interaction-provider-unmount:piece-square"
+          value="d4"
+        />
+      </View>
+      <View style={styles.acceptedInteractionBoard}>
+        <ChessboardProvider key={providerGeneration}>
+          <View
+            style={styles.board}
+            testID="interaction-provider-unmount:board-host"
+          >
+            <Chessboard
+              accessibility={{
+                boardLabel: PROVIDER_UNMOUNT_INTERACTION_BOARD_LABEL,
+              }}
+              boardId="native-interaction-provider-unmount"
+              interactionPermissions={{ accessibility: true, drag: true }}
+              onMoveRequest={rejectUnexpectedMove}
+              onPieceDragStart={remountProviderAfterDragStart}
+              pieceRenderers={defaultPieceRenderers}
+              position={INTERACTION_POSITION}
+              reduceMotion="never"
+              transitionDurationMs={300}
+            />
+          </View>
+        </ChessboardProvider>
+      </View>
+    </View>
+  );
+}
+
 function CompatibilityFixture() {
   return (
     <View style={styles.auditContent}>
@@ -594,6 +712,10 @@ export default function App({ fixture = 'accessibility' }: AppProps) {
         />
       ) : fixture === 'interaction-accepted' ? (
         <AcceptedInteractionFixture />
+      ) : fixture === 'interaction-provider-unmount' ? (
+        <ProviderUnmountInteractionFixture />
+      ) : fixture === 'interaction-transition-provider-unmount' ? (
+        <TransitionProviderUnmountFixture />
       ) : fixture === 'interaction' || fixture === 'interaction-lifecycle' ? (
         <InteractionFixture
           pendingUntilAbort={fixture === 'interaction-lifecycle'}

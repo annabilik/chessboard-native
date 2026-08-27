@@ -6,7 +6,7 @@ import {
   useState,
   type ReactElement,
 } from 'react';
-import { View } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { State } from 'react-native-gesture-handler';
 import {
   fireGestureHandler,
@@ -56,6 +56,22 @@ async function accessibilityAction(
   });
 }
 
+async function flushAnimationFrame(): Promise<void> {
+  await act(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
+      }),
+  );
+}
+
+async function flushRetirementFrames(): Promise<void> {
+  await flushAnimationFrame();
+  await flushAnimationFrame();
+}
+
 async function drag(
   boardId: string,
   target: Readonly<{ x: number; y: number }>,
@@ -77,6 +93,7 @@ async function dragFrom(
       { state: State.END, ...target },
     ]);
   });
+  await flushRetirementFrames();
 }
 
 async function flushDecisions(): Promise<void> {
@@ -114,6 +131,10 @@ function visualKind(props: PieceRendererProps): string {
 
 interface PanCallbacks {
   readonly onBegin?: (event: Readonly<Record<string, unknown>>) => void;
+  readonly onEnd?: (
+    event: Readonly<Record<string, unknown>>,
+    success: boolean,
+  ) => void;
   readonly onFinalize?: (
     event: Readonly<Record<string, unknown>>,
     success: boolean,
@@ -141,6 +162,13 @@ function nodesByTestId(root: TestInstance, testID: string): TestInstance[] {
   return root.queryAll((node) => node.props['testID'] === testID);
 }
 
+function hiddenNodesByTestId(
+  result: Awaited<ReturnType<typeof render>>,
+  testID: string,
+): TestInstance[] {
+  return result.queryAllByTestId(testID, { includeHiddenElements: true });
+}
+
 function animatedStyle(node: TestInstance): Readonly<Record<string, unknown>> {
   const animated: unknown = node.props['jestAnimatedStyle'];
   if (typeof animated !== 'object' || animated === null) {
@@ -151,6 +179,12 @@ function animatedStyle(node: TestInstance): Readonly<Record<string, unknown>> {
     throw new Error('Expected a Reanimated Jest style value.');
   }
   return value as Readonly<Record<string, unknown>>;
+}
+
+function nativeStyle(node: TestInstance): Readonly<ViewStyle> {
+  return StyleSheet.flatten<ViewStyle>(
+    node.props['style'] as StyleProp<ViewStyle>,
+  );
 }
 
 function expectOneVisual(
@@ -366,18 +400,31 @@ describe('public controlled move requests', () => {
 
   it('[PARITY-BEHAVIOR-B11] never mutates position optimistically and hands a matching controlled commit off at the pending target', async () => {
     const boardId = 'controlled-commit';
+    const activeProviderOverlayTestId = `chessboard-native:${boardId}:provider-drag-overlay`;
+    const retiringProviderOverlayTestId = `chessboard-native:${boardId}:provider-drag-retiring-overlay`;
     const value: PositionObject = Object.freeze({
       a2: Object.freeze({ id: 'controlled', pieceType: 'token' }),
     });
     const position = Object.freeze({ revision: 20, value });
+    const outcomes: MoveOutcomeAccessibilityContext[] = [];
+    const accessibility = Object.freeze({
+      formatMoveOutcome: (context: MoveOutcomeAccessibilityContext): null => {
+        outcomes.push(context);
+        return null;
+      },
+    });
     let acceptedIntent: MoveIntent | undefined;
-    const onMoveRequest: OnMoveRequest = (intent, { signal }) => {
+    const onMoveRequest = jest.fn<
+      ReturnType<OnMoveRequest>,
+      Parameters<OnMoveRequest>
+    >((intent, { signal }) => {
       expect(signal.aborted).toBe(false);
       acceptedIntent = intent;
       return { status: 'accepted' };
-    };
+    });
     const result = await render(
       <ChessboardRuntime
+        accessibility={accessibility}
         boardId={boardId}
         development={false}
         dimensions={{ columns: 2, rows: 2 }}
@@ -389,11 +436,91 @@ describe('public controlled move requests', () => {
         transitionDurationMs={1_000}
       />,
     );
-    await measure(rootOf(result));
-    expectOneVisual(rootOf(result), 'static', 'a2');
+    const board = rootOf(result);
+    await measure(board);
+    expectOneVisual(board, 'static', 'a2');
 
-    await drag(boardId, BOTTOM_RIGHT);
+    const initialPan = getByGestureTestId(getBoardGestureTestIds(boardId).pan);
+    const initialHandlerTag = (
+      initialPan as unknown as Readonly<{ handlerTag: number }>
+    ).handlerTag;
+    const initialCallbacks = panCallbacks(initialPan);
+    await act(() => {
+      initialCallbacks.onBegin?.({
+        absoluteX: START.x,
+        absoluteY: START.y,
+        handlerTag: initialHandlerTag,
+        ...START,
+      });
+      initialCallbacks.onStart?.({
+        absoluteX: BOTTOM_RIGHT.x,
+        absoluteY: BOTTOM_RIGHT.y,
+        handlerTag: initialHandlerTag,
+        ...BOTTOM_RIGHT,
+      });
+    });
     await flushDecisions();
+    const initialActiveOverlays = hiddenNodesByTestId(
+      result,
+      activeProviderOverlayTestId,
+    );
+    expect(initialActiveOverlays).toHaveLength(1);
+    const initialActiveOverlay = initialActiveOverlays[0];
+    if (initialActiveOverlay === undefined) {
+      throw new Error('Expected one active provider overlay.');
+    }
+    const activeOverlayStyles: unknown = initialActiveOverlay.props['style'];
+    if (!Array.isArray(activeOverlayStyles)) {
+      throw new Error('Expected the active provider overlay style chain.');
+    }
+    const attachedAnimatedStyle: unknown = activeOverlayStyles.at(-1);
+    const retirementFrames: ((timestamp: number) => void)[] = [];
+    const retirementFrameSpy = jest
+      .spyOn(globalThis, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        retirementFrames.push(callback);
+        return retirementFrames.length;
+      });
+    await act(() => {
+      const terminalEvent = {
+        absoluteX: BOTTOM_RIGHT.x,
+        absoluteY: BOTTOM_RIGHT.y,
+        handlerTag: initialHandlerTag,
+        ...BOTTOM_RIGHT,
+      };
+      initialCallbacks.onEnd?.(terminalEvent, true);
+      initialCallbacks.onFinalize?.(terminalEvent, true);
+    });
+    await flushDecisions();
+    const releasedOverlays = hiddenNodesByTestId(
+      result,
+      retiringProviderOverlayTestId,
+    );
+    expect(releasedOverlays).toHaveLength(1);
+    const releasedOverlay = releasedOverlays[0];
+    if (releasedOverlay === undefined) {
+      throw new Error('Expected one retiring provider overlay.');
+    }
+    expect(releasedOverlay).toBe(initialActiveOverlay);
+    expect(releasedOverlay).toHaveProp('accessibilityElementsHidden', true);
+    expect(releasedOverlay).toHaveProp('accessible', false);
+    expect(releasedOverlay).toHaveProp(
+      'importantForAccessibility',
+      'no-hide-descendants',
+    );
+    expect(releasedOverlay).toHaveProp('pointerEvents', 'none');
+    expect(releasedOverlay.props['style']).not.toContain(attachedAnimatedStyle);
+    expect(nativeStyle(releasedOverlay)).toEqual(
+      expect.objectContaining({ opacity: 0 }),
+    );
+    expect(hiddenNodesByTestId(result, activeProviderOverlayTestId)).toEqual(
+      [],
+    );
+    expect(nodesByTestId(releasedOverlay, 'move-piece:drag:a2:token')).toEqual(
+      [],
+    );
+
+    expect(onMoveRequest).toHaveBeenCalledTimes(1);
     const intent = acceptedIntent;
     if (intent === undefined) {
       throw new Error('Expected the drag to invoke onMoveRequest.');
@@ -403,13 +530,16 @@ describe('public controlled move requests', () => {
       a2: { id: 'controlled', pieceType: 'token' },
     });
     expect(position.value).toBe(value);
-    expectOneVisual(rootOf(result), 'pending-source', 'a2');
-    expectOneVisual(rootOf(result), 'pending-target', 'b1');
-    expectNoVisual(rootOf(result), 'static', 'b1');
+    expectOneVisual(board, 'pending-source', 'a2');
+    expectOneVisual(board, 'pending-target', 'b1');
+    expectNoVisual(board, 'static', 'b1');
 
+    expect(retirementFrames).toHaveLength(1);
+    retirementFrameSpy.mockRestore();
     jest.useFakeTimers();
     await result.rerender(
       <ChessboardRuntime
+        accessibility={accessibility}
         boardId={boardId}
         development={false}
         dimensions={{ columns: 2, rows: 2 }}
@@ -426,15 +556,24 @@ describe('public controlled move requests', () => {
       />,
     );
 
-    expectNoVisual(rootOf(result), 'pending-source', 'a2');
-    expectOneVisual(rootOf(result), 'pending-target', 'b1');
-    expectOneVisual(rootOf(result), 'static', 'b1');
-    const canonical = nodesByTestId(
-      rootOf(result),
-      'move-piece:static:b1:token',
-    )[0];
+    expect(onMoveRequest).toHaveBeenCalledTimes(1);
+    expect(outcomes).toHaveLength(1);
+    const committedOutcome = outcomes[0];
+    if (committedOutcome === undefined) {
+      throw new Error('Expected one correlated committed outcome.');
+    }
+    expect(committedOutcome.intent.intentId).toBe(intent.intentId);
+    expect(committedOutcome.outcome).toBe('committed');
+    expect(
+      hiddenNodesByTestId(result, retiringProviderOverlayTestId),
+    ).toHaveLength(1);
+
+    expectNoVisual(board, 'pending-source', 'a2');
+    expectOneVisual(board, 'pending-target', 'b1');
+    expectOneVisual(board, 'static', 'b1');
+    const canonical = nodesByTestId(board, 'move-piece:static:b1:token')[0];
     const pending = nodesByTestId(
-      rootOf(result),
+      board,
       'move-piece:pending-target:b1:token',
     )[0];
     if (
@@ -454,17 +593,48 @@ describe('public controlled move requests', () => {
     expect(pending.parent.parent).toHaveProp('pointerEvents', 'none');
 
     await act(() => {
-      // The Reanimated Jest mock publishes the newly mounted canonical
-      // worklet on its first clock tick; the pure presentation tests cover
-      // the exact zero-time endpoint.
-      jest.advanceTimersByTime(1);
+      // The first frame is a mount/presentation barrier. The detached provider
+      // host must survive it so Fabric can consume the quiescent commit before
+      // a later frame removes the native view.
+      const firstFrame = retirementFrames.shift();
+      if (firstFrame === undefined) {
+        throw new Error('Expected the first provider retirement frame.');
+      }
+      firstFrame(16);
     });
+    await flushDecisions();
+    expect(hiddenNodesByTestId(result, activeProviderOverlayTestId)).toEqual(
+      [],
+    );
+    const firstFrameRetiringOverlays = hiddenNodesByTestId(
+      result,
+      retiringProviderOverlayTestId,
+    );
+    expect(firstFrameRetiringOverlays).toHaveLength(1);
+    expect(firstFrameRetiringOverlays[0]).toBe(releasedOverlay);
+    expect(
+      hiddenNodesByTestId(result, 'chessboard-native:provider-drag-host'),
+    ).toHaveLength(1);
+
+    await act(() => {
+      jest.advanceTimersByTime(17);
+    });
+    await flushDecisions();
+    expect(hiddenNodesByTestId(result, activeProviderOverlayTestId)).toEqual(
+      [],
+    );
+    expect(hiddenNodesByTestId(result, retiringProviderOverlayTestId)).toEqual(
+      [],
+    );
+    expect(
+      hiddenNodesByTestId(result, 'chessboard-native:provider-drag-host'),
+    ).toEqual([]);
     const startedCanonical = nodesByTestId(
-      rootOf(result),
+      board,
       'move-piece:static:b1:token',
     )[0];
     const startedPending = nodesByTestId(
-      rootOf(result),
+      board,
       'move-piece:pending-target:b1:token',
     )[0];
     if (
@@ -477,20 +647,20 @@ describe('public controlled move requests', () => {
     }
     expect(
       Number(animatedStyle(startedCanonical.parent)['opacity']),
-    ).toBeLessThan(0.01);
+    ).toBeLessThan(0.05);
     expect(
       Number(animatedStyle(startedPending.parent.parent)['opacity']),
-    ).toBeGreaterThan(0.99);
+    ).toBeGreaterThan(0.95);
 
     await act(() => {
-      jest.advanceTimersByTime(499);
+      jest.advanceTimersByTime(483);
     });
     const midpointCanonical = nodesByTestId(
-      rootOf(result),
+      board,
       'move-piece:static:b1:token',
     )[0];
     const midpointPending = nodesByTestId(
-      rootOf(result),
+      board,
       'move-piece:pending-target:b1:token',
     )[0];
     if (
@@ -506,12 +676,16 @@ describe('public controlled move requests', () => {
       0.5,
     );
 
-    await act(() => {
-      jest.advanceTimersByTime(500);
+    await act(async () => {
+      // Cross the 1,000 ms deadline by a full mock animation frame. At the
+      // exact boundary Reanimated may publish the final value before its
+      // scheduleOnRN completion has cleared the mounted transition.
+      await jest.advanceTimersByTimeAsync(517);
     });
-    expectNoVisual(rootOf(result), 'pending-target', 'b1');
+    await flushDecisions();
+    expectNoVisual(board, 'pending-target', 'b1');
     const settledCanonical = nodesByTestId(
-      rootOf(result),
+      board,
       'move-piece:static:b1:token',
     )[0];
     if (
@@ -520,9 +694,11 @@ describe('public controlled move requests', () => {
     ) {
       throw new Error('Expected the settled canonical actor.');
     }
-    const settledStyle = animatedStyle(settledCanonical.parent);
-    expect(settledStyle['opacity']).toBe(1);
-    expect(settledStyle['transform']).toBeUndefined();
+    const settledStyle = nativeStyle(settledCanonical.parent);
+    expect(settledStyle.opacity).toBe(1);
+    expect(settledStyle.transform).toBeUndefined();
+    expect(onMoveRequest).toHaveBeenCalledTimes(1);
+    expect(outcomes).toHaveLength(1);
   });
 
   it('cancels pending work when a second drag starts and renders one active source ghost plus overlay', async () => {
@@ -546,12 +722,13 @@ describe('public controlled move requests', () => {
         }}
       />,
     );
-    await measure(rootOf(result));
+    const board = rootOf(result);
+    await measure(board);
     await drag(boardId, BOTTOM_RIGHT);
     expect(onMoveRequest).toHaveBeenCalledTimes(1);
     expect(decisionSignal?.aborted).toBe(false);
-    expectOneVisual(rootOf(result), 'pending-source', 'a2');
-    expectOneVisual(rootOf(result), 'pending-target', 'b1');
+    expectOneVisual(board, 'pending-source', 'a2');
+    expectOneVisual(board, 'pending-target', 'b1');
 
     const pan = getByGestureTestId(getBoardGestureTestIds(boardId).pan);
     const handlerTag = (pan as unknown as Readonly<{ handlerTag: number }>)
@@ -563,21 +740,22 @@ describe('public controlled move requests', () => {
     });
 
     expect(decisionSignal?.aborted).toBe(true);
-    expectNoVisual(rootOf(result), 'pending-target', 'b1');
-    expectOneVisual(rootOf(result), 'source-ghost', 'a2');
+    expectNoVisual(board, 'pending-target', 'b1');
+    expectOneVisual(board, 'source-ghost', 'a2');
     expect(
       result.queryAllByTestId('move-piece:drag:a2:token', {
         includeHiddenElements: true,
       }),
     ).toHaveLength(1);
-    expectNoVisual(rootOf(result), 'static', 'a2');
+    expectNoVisual(board, 'static', 'a2');
 
     await act(() => {
       callbacks.onFinalize?.({ handlerTag, x: 35, y: 25 }, false);
     });
+    await flushRetirementFrames();
     expect(onMoveRequest).toHaveBeenCalledTimes(1);
-    expectOneVisual(rootOf(result), 'static', 'a2');
-    expectNoVisual(rootOf(result), 'source-ghost', 'a2');
+    expectOneVisual(board, 'static', 'a2');
+    expectNoVisual(board, 'source-ghost', 'a2');
     expect(
       result.queryAllByTestId('move-piece:drag:a2:token', {
         includeHiddenElements: true,
@@ -621,6 +799,7 @@ describe('public controlled move requests', () => {
       callbacks.onStart?.({ handlerTag, x: 35, y: 25 });
       callbacks.onFinalize?.({ handlerTag, x: 35, y: 25 }, false);
     });
+    await flushRetirementFrames();
 
     expect(rootOf(result).props['accessibilityValue']).toEqual(
       expect.objectContaining({ text: 'a2, token piece' }),
