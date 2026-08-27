@@ -1556,7 +1556,9 @@ class ChessboardDragPerformanceTest {
         const val INPUT_PRECONDITION_SETTLE_MS = 50L
         const val INTERACTION_TIMEOUT_MS = 30_000L
         const val JANK_HEURISTIC_MULTIPLIER = 2.0
-        const val MAXIMUM_ACTIVATION_LATENCY_MS = 50.0
+        // Cold pickup mounts arbitrary consumer artwork. Bound it to the rounded
+        // five-interval 60 Hz budget while already-mounted moves stay at 50 ms.
+        const val MAXIMUM_ACTIVATION_LATENCY_MS = 83.34
         const val MAXIMUM_FINAL_MOVE_LATENCY_MS = 50.0
         const val MAXIMUM_INPUT_SPAN_MS = 4_100L
         const val MAXIMUM_MEASURED_FRAMES = 270

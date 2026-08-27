@@ -372,6 +372,13 @@ XCUITest scenarios separately verify parent scrolling, board-drag capture,
 exactly-once consumer callbacks, unchanged controlled revisions, and lifecycle
 cancellation.
 
+The Android Release performance gate pins the low-end reference device to
+60 Hz. A cold per-gesture pickup, which must mount arbitrary consumer artwork,
+must paint within the rounded five-interval budget (`<83.34 ms`). Once the
+overlay exists, terminal pointer response, every rendered frame, and sustained
+frame gaps retain the stricter `50 ms` ceiling. The gate also requires at least
+95% intended-vsync delivery and zero Fabric/Reanimated lifecycle findings.
+
 Leaving the interactive AppState cancels the provider's active drag, pending
 drop verification, transient spare selection, and board interaction work.
 Layout, dimensions, orientation, position, permissions, provider

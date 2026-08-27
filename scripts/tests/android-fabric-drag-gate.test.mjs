@@ -203,21 +203,24 @@ test('reassembles one complete checksummed Android drag performance record', () 
 
 test('retains valid threshold-failed summaries but not corrupt transport payloads', () => {
   const thresholdFailed = validPerformanceSummary();
-  thresholdFailed.runs[0].activationLatencyMs = 50;
+  thresholdFailed.runs[0].activationLatencyMs = 83.34;
   const failedEvidence = buildAndroidDragPerformanceEvidence(
     chunkedPerformanceLog(thresholdFailed).join('\n'),
   );
   assert.deepEqual(failedEvidence.summary, thresholdFailed);
-  assert.match(failedEvidence.error, /activation latency at or above 50 ms/u);
+  assert.match(
+    failedEvidence.error,
+    /activation latency at or above 83\.34 ms/u,
+  );
   assert.deepEqual(failedEvidence.violations, [
     {
       code: 'activation-latency',
       message:
-        'Android drag performance run 1 had activation latency at or above 50 ms.',
+        'Android drag performance run 1 had activation latency at or above 83.34 ms.',
       metric: 'activationLatencyMs',
-      observed: 50,
+      observed: 83.34,
       run: 1,
-      threshold: 50,
+      threshold: 83.34,
     },
   ]);
 
@@ -579,27 +582,31 @@ test('caps unique frame cadence and measurement duration at their inclusive maxi
   );
 });
 
-test('enforces each v4 latency and frame ceiling independently below 50 ms', () => {
+test('enforces the five-frame pickup and tighter active-movement ceilings independently', () => {
   const ceilings = [
     {
+      boundary: 83.34,
       code: 'activation-latency',
       metric: 'activationLatencyMs',
       message:
-        'Android drag performance run 3 had activation latency at or above 50 ms.',
+        'Android drag performance run 3 had activation latency at or above 83.34 ms.',
     },
     {
+      boundary: 50,
       code: 'final-move-latency',
       metric: 'finalMoveLatencyMs',
       message:
         'Android drag performance run 3 had final-move latency at or above 50 ms.',
     },
     {
+      boundary: 50,
       code: 'sustained-vsync-gap',
       metric: 'worstSustainedVsyncGapMs',
       message:
         'Android drag performance run 3 contained a sustained vsync gap at or above 50 ms.',
     },
     {
+      boundary: 50,
       code: 'total-frame-duration',
       metric: 'worstTotalDurationMs',
       message:
@@ -609,7 +616,7 @@ test('enforces each v4 latency and frame ceiling independently below 50 ms', () 
 
   for (const ceiling of ceilings) {
     const below = validPerformanceSummary();
-    below.runs[2][ceiling.metric] = 49.999;
+    below.runs[2][ceiling.metric] = ceiling.boundary - 0.001;
     assert.deepEqual(
       parseAndroidDragPerformance(
         `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(below)}`,
@@ -618,7 +625,7 @@ test('enforces each v4 latency and frame ceiling independently below 50 ms', () 
     );
 
     const atBoundary = validPerformanceSummary();
-    atBoundary.runs[2][ceiling.metric] = 50;
+    atBoundary.runs[2][ceiling.metric] = ceiling.boundary;
     const logcat = `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(atBoundary)}`;
     const evaluation = evaluateAndroidDragPerformance(logcat);
     assert.deepEqual(evaluation.summary, atBoundary);
@@ -627,9 +634,9 @@ test('enforces each v4 latency and frame ceiling independently below 50 ms', () 
         code: ceiling.code,
         message: ceiling.message,
         metric: ceiling.metric,
-        observed: 50,
+        observed: ceiling.boundary,
         run: 3,
-        threshold: 50,
+        threshold: ceiling.boundary,
       },
     ]);
     assert.throws(

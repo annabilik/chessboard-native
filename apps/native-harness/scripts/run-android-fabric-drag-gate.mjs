@@ -50,7 +50,9 @@ const dragPerformanceThresholds = Object.freeze({
   maximumMeasurementSpanMs: 4_100,
   maximumPlausibleDeadlinePeriods: 4,
   maximumRefreshRateHz: 60.5,
-  maximumActivationLatencyMs: 50,
+  // Rounded five-interval 60 Hz budget. Cold pickup includes mounting an
+  // arbitrary consumer renderer; already-mounted movement stays at 50 ms.
+  maximumActivationLatencyMs: 83.34,
   maximumFinalMoveLatencyMs: 50,
   maximumTotalDurationMs: 50,
   maximumSustainedVsyncGapMs: 50,
@@ -816,7 +818,7 @@ export function evaluateAndroidDragPerformance(logcat) {
       violations.push(
         performanceViolation({
           code: 'activation-latency',
-          message: `Android drag performance run ${String(index + 1)} had activation latency at or above 50 ms.`,
+          message: `Android drag performance run ${String(index + 1)} had activation latency at or above ${String(dragPerformanceThresholds.maximumActivationLatencyMs)} ms.`,
           metric: 'activationLatencyMs',
           observed: activationLatencyMs,
           run: runNumber,

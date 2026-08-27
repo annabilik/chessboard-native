@@ -369,6 +369,16 @@ palette and geometry-invalidation lab. Per-frame pointer movement changes shared
 values and UI-runtime presentation props, not React state or consumer
 callbacks.
 
+The Android Release performance harness pins the reference Galaxy to 60 Hz and
+separates cold overlay pickup from already-mounted movement. Cold pickup mounts
+arbitrary consumer-rendered artwork and must paint within the rounded
+five-interval budget (`<83.34 ms`). Terminal pointer response, rendered-frame duration,
+and sustained vsync gaps remain `<50 ms`; intended-vsync delivery must remain
+at least 95%, with zero Fabric/Reanimated lifecycle findings. This preserves
+the provider's transient-host and custom-renderer lifecycle contracts instead
+of hiding persistent duplicate artwork solely to prepay a synthetic fast
+flick.
+
 ## Consequences
 
 Provider coordination enables external sources without sharing game state.
