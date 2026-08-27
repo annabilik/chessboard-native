@@ -230,6 +230,13 @@ class ChessboardDragPerformanceTest {
             val upper = squareCenterOnView(view, file = 3, rank = 5)
             val lower = squareCenterOnView(view, file = 3, rank = 3)
             val terminal = squareCenterOnView(view, file = 6, rank = 2)
+            val terminalApproachOffsetPx =
+                drawProbeCenterTolerancePx(view) * TERMINAL_APPROACH_TOLERANCE_MULTIPLIER
+            val terminalApproach =
+                floatArrayOf(
+                    terminal[0] - terminalApproachOffsetPx,
+                    terminal[1] - terminalApproachOffsetPx,
+                )
             check((drawProbe === null) == (runIndex === null)) {
                 "draw probe and run index must be provided together"
             }
@@ -286,7 +293,16 @@ class ChessboardDragPerformanceTest {
                     }
                 }
                 val eventTime = SystemClock.uptimeMillis()
-                val coordinates = zigzagCoordinate(upper, lower, moveIndex)
+                val coordinates =
+                    if (drawProbe !== null && moveIndex == moveCount - 1) {
+                        // End the sustained phase beside the terminal probe.
+                        // A one-frame teleport from d5 to g2 makes Android's
+                        // input resampler project the synthetic pointer beyond
+                        // g2; a physical finger supplies this settling sample.
+                        terminalApproach
+                    } else {
+                        zigzagCoordinate(upper, lower, moveIndex)
+                    }
                 if (moveIndex == 0 && drawProbe !== null) {
                     drawProbe.arm(
                         runIndex = checkNotNull(runIndex),
@@ -339,6 +355,11 @@ class ChessboardDragPerformanceTest {
             var cancelCoordinates = zigzagCoordinate(upper, lower, moveCount - 1)
             if (drawProbe !== null) {
                 val measuredRunIndex = checkNotNull(runIndex)
+                val terminalTargetTime = lastMoveAt + TERMINAL_FOLLOW_UP_DELAY_MS
+                val terminalWaitMs = terminalTargetTime - SystemClock.uptimeMillis()
+                if (terminalWaitMs > 0) {
+                    uiController.loopMainThreadForAtLeast(terminalWaitMs)
+                }
                 val terminalEventTime = SystemClock.uptimeMillis()
                 drawProbe.arm(
                     runIndex = measuredRunIndex,
@@ -981,11 +1002,7 @@ class ChessboardDragPerformanceTest {
     ) : Choreographer.FrameCallback,
         ViewTreeObserver.OnDrawListener {
         private val lock = Any()
-        private val centerTolerancePx =
-            max(
-                MINIMUM_DRAW_PROBE_CENTER_TOLERANCE_PX,
-                DRAW_PROBE_CENTER_TOLERANCE_DP * root.resources.displayMetrics.density,
-            )
+        private val centerTolerancePx = drawProbeCenterTolerancePx(root)
         private var activeRun: Int? = null
         private var armed: ArmedDrawProbe? = null
         private var activation: DrawProbeDatum? = null
@@ -1438,6 +1455,12 @@ class ChessboardDragPerformanceTest {
         }
     }
 
+    private fun drawProbeCenterTolerancePx(view: View): Float =
+        max(
+            MINIMUM_DRAW_PROBE_CENTER_TOLERANCE_PX,
+            DRAW_PROBE_CENTER_TOLERANCE_DP * view.resources.displayMetrics.density,
+        )
+
     private companion object {
         const val BOARD_DIMENSION = 8
         const val BOARD_LABEL = "Interaction test board, white orientation"
@@ -1485,6 +1508,8 @@ class ChessboardDragPerformanceTest {
         const val PERFORMANCE_LOG_TRANSPORT_VERSION = 1
         const val POLL_INTERVAL_MS = 50L
         const val POSITION_REVISION_DESCRIPTION = "Position revision: 7"
+        const val TERMINAL_APPROACH_TOLERANCE_MULTIPLIER = 1.5f
+        const val TERMINAL_FOLLOW_UP_DELAY_MS = 17L
         const val TERMINAL_PROBE_MOVE_COUNT = 1
         const val WARM_UP_DURATION_MS = 1_000L
         const val WARM_UP_MOVE_COUNT = 60
