@@ -39,16 +39,21 @@ export const androidDragPerformanceTest =
 
 const dragPerformanceLogPrefix = 'CHESSBOARD_DRAG_PERF ';
 const dragPerformanceThresholds = Object.freeze({
+  expectedFrameDurationToleranceMs: 0.01,
+  jankHeuristicMultiplier: 2,
   maximumFrameCount: 270,
-  maximumFrameMs: 50,
   maximumInputSpanMs: 4_100,
-  maximumMeasurementSpanMs: 4_300,
+  maximumMeasurementSpanMs: 4_100,
+  maximumPlausibleDeadlinePeriods: 4,
   maximumRefreshRateHz: 60.5,
+  maximumCoverageGapMs: 50,
+  maximumTotalDurationMs: 50,
   measuredMoveCount: 240,
   measuredRunCount: 5,
+  minimumDeliveryPercent: 95,
   minimumFrameCount: 228,
   minimumInputSpanMs: 3_950,
-  minimumMeasurementSpanMs: 4_100,
+  minimumMeasurementSpanMs: 3_950,
   minimumRefreshRateHz: 59.5,
 });
 
@@ -262,6 +267,13 @@ function requireNonNegativeNumber(value, label) {
   return number;
 }
 
+function requireBoolean(value, label) {
+  if (typeof value !== 'boolean') {
+    throw new Error(`Android drag performance ${label} must be a boolean.`);
+  }
+  return value;
+}
+
 export function parseAndroidDragPerformance(logcat) {
   const payloads = logcat
     .split(/\r?\n/u)
@@ -294,8 +306,8 @@ export function parseAndroidDragPerformance(logcat) {
   ) {
     throw new Error('Android drag performance record must be an object.');
   }
-  if (summary.schemaVersion !== 2) {
-    throw new Error('Android drag performance schemaVersion must equal 2.');
+  if (summary.schemaVersion !== 3) {
+    throw new Error('Android drag performance schemaVersion must equal 3.');
   }
   const refreshRate = requireFiniteNumber(
     summary.displayRefreshHz,
@@ -307,6 +319,31 @@ export function parseAndroidDragPerformance(logcat) {
   ) {
     throw new Error(
       `Android drag performance display refresh ${String(refreshRate)} Hz is outside 59.5–60.5 Hz.`,
+    );
+  }
+  const expectedFrameDurationMs = requireNonNegativeNumber(
+    summary.expectedFrameDurationMs,
+    'expectedFrameDurationMs',
+  );
+  const derivedFrameDurationMs = 1_000 / refreshRate;
+  if (
+    Math.abs(expectedFrameDurationMs - derivedFrameDurationMs) >
+    dragPerformanceThresholds.expectedFrameDurationToleranceMs
+  ) {
+    throw new Error(
+      'Android drag performance expectedFrameDurationMs is inconsistent with displayRefreshHz.',
+    );
+  }
+  const jankHeuristicMultiplier = requireNonNegativeNumber(
+    summary.jankHeuristicMultiplier,
+    'jankHeuristicMultiplier',
+  );
+  if (
+    jankHeuristicMultiplier !==
+    dragPerformanceThresholds.jankHeuristicMultiplier
+  ) {
+    throw new Error(
+      'Android drag performance jankHeuristicMultiplier must equal 2.',
     );
   }
   if (!Array.isArray(summary.runs)) {
@@ -352,6 +389,10 @@ export function parseAndroidDragPerformance(logcat) {
       run.duplicateMetrics,
       `run ${String(index + 1)} duplicateMetrics`,
     );
+    const duplicatePayloadMismatchCount = requireNonNegativeInteger(
+      run.duplicatePayloadMismatchCount,
+      `run ${String(index + 1)} duplicatePayloadMismatchCount`,
+    );
     const outOfWindowMetrics = requireNonNegativeInteger(
       run.outOfWindowMetrics,
       `run ${String(index + 1)} outOfWindowMetrics`,
@@ -360,33 +401,101 @@ export function parseAndroidDragPerformance(logcat) {
       run.frameCount,
       `run ${String(index + 1)} frameCount`,
     );
-    const p95Ms = requireNonNegativeNumber(
-      run.p95Ms,
-      `run ${String(index + 1)} p95Ms`,
+    const intendedVsyncSpanMs = requireNonNegativeNumber(
+      run.intendedVsyncSpanMs,
+      `run ${String(index + 1)} intendedVsyncSpanMs`,
     );
-    const p99Ms = requireNonNegativeNumber(
-      run.p99Ms,
-      `run ${String(index + 1)} p99Ms`,
+    const leadingCoverageGapMs = requireNonNegativeNumber(
+      run.leadingCoverageGapMs,
+      `run ${String(index + 1)} leadingCoverageGapMs`,
     );
-    const jankPercent = requireNonNegativeNumber(
-      run.jankPercent,
-      `run ${String(index + 1)} jankPercent`,
+    const trailingCoverageGapMs = requireNonNegativeNumber(
+      run.trailingCoverageGapMs,
+      `run ${String(index + 1)} trailingCoverageGapMs`,
     );
-    const worstFrameMs = requireNonNegativeNumber(
-      run.worstFrameMs,
-      `run ${String(index + 1)} worstFrameMs`,
+    const worstCoverageGapMs = requireNonNegativeNumber(
+      run.worstCoverageGapMs,
+      `run ${String(index + 1)} worstCoverageGapMs`,
     );
-    const p95OverrunMs = requireFiniteNumber(
-      run.p95OverrunMs,
-      `run ${String(index + 1)} p95OverrunMs`,
+    const expectedVsyncSlots = requireNonNegativeInteger(
+      run.expectedVsyncSlots,
+      `run ${String(index + 1)} expectedVsyncSlots`,
     );
-    const p99OverrunMs = requireFiniteNumber(
-      run.p99OverrunMs,
-      `run ${String(index + 1)} p99OverrunMs`,
+    const missedVsyncSlots = requireNonNegativeInteger(
+      run.missedVsyncSlots,
+      `run ${String(index + 1)} missedVsyncSlots`,
     );
-    const worstOverrunMs = requireFiniteNumber(
-      run.worstOverrunMs,
-      `run ${String(index + 1)} worstOverrunMs`,
+    const deliveryPercent = requireNonNegativeNumber(
+      run.deliveryPercent,
+      `run ${String(index + 1)} deliveryPercent`,
+    );
+    const p95VsyncGapMs = requireNonNegativeNumber(
+      run.p95VsyncGapMs,
+      `run ${String(index + 1)} p95VsyncGapMs`,
+    );
+    const p99VsyncGapMs = requireNonNegativeNumber(
+      run.p99VsyncGapMs,
+      `run ${String(index + 1)} p99VsyncGapMs`,
+    );
+    const worstVsyncGapMs = requireNonNegativeNumber(
+      run.worstVsyncGapMs,
+      `run ${String(index + 1)} worstVsyncGapMs`,
+    );
+    const p95UiDurationMs = requireNonNegativeNumber(
+      run.p95UiDurationMs,
+      `run ${String(index + 1)} p95UiDurationMs`,
+    );
+    const p99UiDurationMs = requireNonNegativeNumber(
+      run.p99UiDurationMs,
+      `run ${String(index + 1)} p99UiDurationMs`,
+    );
+    const worstUiDurationMs = requireNonNegativeNumber(
+      run.worstUiDurationMs,
+      `run ${String(index + 1)} worstUiDurationMs`,
+    );
+    const heuristicJankCount = requireNonNegativeInteger(
+      run.heuristicJankCount,
+      `run ${String(index + 1)} heuristicJankCount`,
+    );
+    const heuristicJankPercent = requireNonNegativeNumber(
+      run.heuristicJankPercent,
+      `run ${String(index + 1)} heuristicJankPercent`,
+    );
+    const p95TotalDurationMs = requireNonNegativeNumber(
+      run.p95TotalDurationMs,
+      `run ${String(index + 1)} p95TotalDurationMs`,
+    );
+    const p99TotalDurationMs = requireNonNegativeNumber(
+      run.p99TotalDurationMs,
+      `run ${String(index + 1)} p99TotalDurationMs`,
+    );
+    const worstTotalDurationMs = requireNonNegativeNumber(
+      run.worstTotalDurationMs,
+      `run ${String(index + 1)} worstTotalDurationMs`,
+    );
+    const deadlinePlausible = requireBoolean(
+      run.deadlinePlausible,
+      `run ${String(index + 1)} deadlinePlausible`,
+    );
+    const implausibleDeadlineCount = requireNonNegativeInteger(
+      run.implausibleDeadlineCount,
+      `run ${String(index + 1)} implausibleDeadlineCount`,
+    );
+    const minimumDeadlineMs = requireFiniteNumber(
+      run.minimumDeadlineMs,
+      `run ${String(index + 1)} minimumDeadlineMs`,
+    );
+    const p50DeadlineMs = requireFiniteNumber(
+      run.p50DeadlineMs,
+      `run ${String(index + 1)} p50DeadlineMs`,
+    );
+    const p95DeadlineMs = requireFiniteNumber(
+      run.p95DeadlineMs,
+      `run ${String(index + 1)} p95DeadlineMs`,
+    );
+    const maximumDeadlineMs = requireFiniteNumber(
+      run.maximumDeadlineMs,
+      `run ${String(index + 1)} maximumDeadlineMs`,
     );
     const droppedReports = requireNonNegativeInteger(
       run.droppedReports,
@@ -419,6 +528,23 @@ export function parseAndroidDragPerformance(logcat) {
       );
     }
     if (
+      intendedVsyncSpanMs <= 0 ||
+      intendedVsyncSpanMs > measurementSpanMs + 1
+    ) {
+      throw new Error(
+        `Android drag performance run ${String(index + 1)} intended-vsync span is inconsistent with its measurement window.`,
+      );
+    }
+    if (
+      leadingCoverageGapMs > measurementSpanMs + 1 ||
+      trailingCoverageGapMs > measurementSpanMs + 1 ||
+      worstCoverageGapMs > measurementSpanMs + 1
+    ) {
+      throw new Error(
+        `Android drag performance run ${String(index + 1)} has a coverage gap outside its measurement window.`,
+      );
+    }
+    if (
       frameCount < dragPerformanceThresholds.minimumFrameCount ||
       frameCount > dragPerformanceThresholds.maximumFrameCount
     ) {
@@ -434,29 +560,130 @@ export function parseAndroidDragPerformance(logcat) {
         `Android drag performance run ${String(index + 1)} has inconsistent callback accounting.`,
       );
     }
-    if (!(p95Ms <= p99Ms && p99Ms <= worstFrameMs)) {
+    if (duplicatePayloadMismatchCount > duplicateMetrics) {
       throw new Error(
-        `Android drag performance run ${String(index + 1)} has inconsistent frame percentiles.`,
+        `Android drag performance run ${String(index + 1)} has more duplicate payload mismatches than duplicates.`,
       );
     }
-    if (!(p95OverrunMs <= p99OverrunMs && p99OverrunMs <= worstOverrunMs)) {
+    if (expectedVsyncSlots !== frameCount + missedVsyncSlots) {
       throw new Error(
-        `Android drag performance run ${String(index + 1)} has inconsistent frame overruns.`,
+        `Android drag performance run ${String(index + 1)} has inconsistent vsync slot accounting.`,
       );
     }
-    if (p95OverrunMs >= 0 || p99OverrunMs >= 0 || worstOverrunMs >= 0) {
+    const nominalWindowSlots = Math.max(
+      1,
+      Math.round(measurementSpanMs / expectedFrameDurationMs),
+    );
+    if (
+      expectedVsyncSlots < frameCount ||
+      expectedVsyncSlots < nominalWindowSlots
+    ) {
       throw new Error(
-        `Android drag performance run ${String(index + 1)} reached or exceeded a frame deadline.`,
+        `Android drag performance run ${String(index + 1)} does not cover its complete measurement window.`,
       );
     }
-    if (jankPercent !== 0) {
+    const derivedDeliveryPercent = (frameCount * 100) / expectedVsyncSlots;
+    if (Math.abs(deliveryPercent - derivedDeliveryPercent) > 0.001) {
       throw new Error(
-        `Android drag performance run ${String(index + 1)} reported non-zero jank.`,
+        `Android drag performance run ${String(index + 1)} has an inconsistent delivery percentage.`,
       );
     }
-    if (worstFrameMs >= dragPerformanceThresholds.maximumFrameMs) {
+    if (deliveryPercent < dragPerformanceThresholds.minimumDeliveryPercent) {
       throw new Error(
-        `Android drag performance run ${String(index + 1)} contained a 50 ms frame.`,
+        `Android drag performance run ${String(index + 1)} delivered less than 95% of expected vsync slots.`,
+      );
+    }
+    if (!(p95VsyncGapMs <= p99VsyncGapMs && p99VsyncGapMs <= worstVsyncGapMs)) {
+      throw new Error(
+        `Android drag performance run ${String(index + 1)} has inconsistent vsync gap percentiles.`,
+      );
+    }
+    const derivedWorstCoverageGapMs = Math.max(
+      leadingCoverageGapMs,
+      trailingCoverageGapMs,
+      worstVsyncGapMs,
+    );
+    if (Math.abs(worstCoverageGapMs - derivedWorstCoverageGapMs) > 0.001) {
+      throw new Error(
+        `Android drag performance run ${String(index + 1)} has an inconsistent worst coverage gap.`,
+      );
+    }
+    if (
+      Math.abs(
+        leadingCoverageGapMs +
+          intendedVsyncSpanMs +
+          trailingCoverageGapMs -
+          measurementSpanMs,
+      ) > 1.1
+    ) {
+      throw new Error(
+        `Android drag performance run ${String(index + 1)} has inconsistent boundary coverage.`,
+      );
+    }
+    if (worstCoverageGapMs >= dragPerformanceThresholds.maximumCoverageGapMs) {
+      throw new Error(
+        `Android drag performance run ${String(index + 1)} contained a 50 ms measurement-coverage gap.`,
+      );
+    }
+    if (!(
+      p95UiDurationMs <= p99UiDurationMs && p99UiDurationMs <= worstUiDurationMs
+    )) {
+      throw new Error(
+        `Android drag performance run ${String(index + 1)} has inconsistent UI-duration percentiles.`,
+      );
+    }
+    if (heuristicJankCount !== 0 || heuristicJankPercent !== 0) {
+      throw new Error(
+        `Android drag performance run ${String(index + 1)} reported heuristic UI jank.`,
+      );
+    }
+    if (worstUiDurationMs > expectedFrameDurationMs * jankHeuristicMultiplier) {
+      throw new Error(
+        `Android drag performance run ${String(index + 1)} has UI duration inconsistent with zero heuristic jank.`,
+      );
+    }
+    if (!(
+      p95TotalDurationMs <= p99TotalDurationMs &&
+      p99TotalDurationMs <= worstTotalDurationMs
+    )) {
+      throw new Error(
+        `Android drag performance run ${String(index + 1)} has inconsistent total-duration percentiles.`,
+      );
+    }
+    if (
+      worstTotalDurationMs >= dragPerformanceThresholds.maximumTotalDurationMs
+    ) {
+      throw new Error(
+        `Android drag performance run ${String(index + 1)} contained a 50 ms total-duration frame.`,
+      );
+    }
+    if (implausibleDeadlineCount > frameCount) {
+      throw new Error(
+        `Android drag performance run ${String(index + 1)} has too many implausible deadline metrics.`,
+      );
+    }
+    if (deadlinePlausible !== (implausibleDeadlineCount === 0)) {
+      throw new Error(
+        `Android drag performance run ${String(index + 1)} has inconsistent deadline plausibility diagnostics.`,
+      );
+    }
+    if (!(
+      minimumDeadlineMs <= p50DeadlineMs &&
+      p50DeadlineMs <= p95DeadlineMs &&
+      p95DeadlineMs <= maximumDeadlineMs
+    )) {
+      throw new Error(
+        `Android drag performance run ${String(index + 1)} has inconsistent deadline diagnostics.`,
+      );
+    }
+    const deadlineExtremaArePlausible =
+      minimumDeadlineMs > 0 &&
+      maximumDeadlineMs <=
+        expectedFrameDurationMs *
+          dragPerformanceThresholds.maximumPlausibleDeadlinePeriods;
+    if (deadlinePlausible !== deadlineExtremaArePlausible) {
+      throw new Error(
+        `Android drag performance run ${String(index + 1)} has deadline extrema inconsistent with its plausibility diagnostic.`,
       );
     }
     if (droppedReports !== 0) {
@@ -467,6 +694,11 @@ export function parseAndroidDragPerformance(logcat) {
     if (invalidMetrics !== 0) {
       throw new Error(
         `Android drag performance run ${String(index + 1)} contained invalid frame metrics.`,
+      );
+    }
+    if (duplicatePayloadMismatchCount !== 0) {
+      throw new Error(
+        `Android drag performance run ${String(index + 1)} contained mismatched duplicate payloads.`,
       );
     }
   }

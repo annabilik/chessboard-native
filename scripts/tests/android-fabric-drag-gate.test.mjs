@@ -25,27 +25,48 @@ import {
 } from '../../apps/native-harness/scripts/run-android-fabric-drag-gate.mjs';
 
 function validPerformanceSummary() {
+  const displayRefreshHz = 60;
   return {
-    schemaVersion: 2,
-    displayRefreshHz: 60,
+    schemaVersion: 3,
+    displayRefreshHz,
+    expectedFrameDurationMs: 1_000 / displayRefreshHz,
+    jankHeuristicMultiplier: 2,
     runs: Array.from({ length: 5 }, (_, index) => ({
-      callbackCount: 240,
+      callbackCount: 480,
+      deadlinePlausible: false,
+      deliveryPercent: 100,
       droppedReports: 0,
-      duplicateMetrics: 0,
+      duplicateMetrics: 240,
+      duplicatePayloadMismatchCount: 0,
+      expectedVsyncSlots: 240,
       frameCount: 240,
+      heuristicJankCount: 0,
+      heuristicJankPercent: 0,
+      implausibleDeadlineCount: 240,
       inputSpanMs: 4_000,
+      intendedVsyncSpanMs: 3_983.33,
       invalidMetrics: 0,
-      jankPercent: 0,
-      measurementSpanMs: 4_200,
+      leadingCoverageGapMs: 8,
+      maximumDeadlineMs: 1_000,
+      measurementSpanMs: 4_000,
+      minimumDeadlineMs: 700,
+      missedVsyncSlots: 0,
       outOfWindowMetrics: 0,
-      p95Ms: 19.5,
-      p95OverrunMs: -4,
-      p99Ms: 35,
-      p99OverrunMs: -2,
+      p50DeadlineMs: 800,
+      p95DeadlineMs: 900,
+      p95TotalDurationMs: 19.5,
+      p95UiDurationMs: 15,
+      p95VsyncGapMs: 16.67,
+      p99TotalDurationMs: 35,
+      p99UiDurationMs: 20,
+      p99VsyncGapMs: 33.33,
       run: index + 1,
       successfulMoves: 240,
-      worstFrameMs: 49.5,
-      worstOverrunMs: -0.25,
+      trailingCoverageGapMs: 8.67,
+      worstCoverageGapMs: 33.33,
+      worstTotalDurationMs: 49.5,
+      worstUiDurationMs: 30,
+      worstVsyncGapMs: 33.33,
     })),
   };
 }
@@ -175,9 +196,39 @@ test('fails closed for missing, duplicate, malformed, or invalid performance rec
     /malformed JSON/u,
   );
 
+  const oldSchema = validPerformanceSummary();
+  oldSchema.schemaVersion = 2;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(oldSchema)}`,
+      ),
+    /schemaVersion must equal 3/u,
+  );
+
+  const wrongFrameDuration = validPerformanceSummary();
+  wrongFrameDuration.expectedFrameDurationMs = 17;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(wrongFrameDuration)}`,
+      ),
+    /expectedFrameDurationMs is inconsistent/u,
+  );
+
+  const wrongJankMultiplier = validPerformanceSummary();
+  wrongJankMultiplier.jankHeuristicMultiplier = 1;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(wrongJankMultiplier)}`,
+      ),
+    /jankHeuristicMultiplier must equal 2/u,
+  );
+
   const invalidMetrics = validPerformanceSummary();
   invalidMetrics.runs[0].invalidMetrics = 1;
-  invalidMetrics.runs[0].callbackCount = 241;
+  invalidMetrics.runs[0].callbackCount = 481;
   assert.throws(
     () =>
       parseAndroidDragPerformance(
@@ -188,27 +239,14 @@ test('fails closed for missing, duplicate, malformed, or invalid performance rec
 
   const noValidFrames = validPerformanceSummary();
   noValidFrames.runs[0].invalidMetrics = 240;
-  noValidFrames.runs[0].callbackCount = 240;
+  noValidFrames.runs[0].callbackCount = 480;
   noValidFrames.runs[0].frameCount = 0;
-  noValidFrames.runs[0].p95Ms = 0;
-  noValidFrames.runs[0].p99Ms = 0;
-  noValidFrames.runs[0].worstFrameMs = 0;
   assert.throws(
     () =>
       parseAndroidDragPerformance(
         `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(noValidFrames)}`,
       ),
     /run 1 collected a frame count outside the cadence range/u,
-  );
-
-  const inconsistentPercentiles = validPerformanceSummary();
-  inconsistentPercentiles.runs[1].p95Ms = 36;
-  assert.throws(
-    () =>
-      parseAndroidDragPerformance(
-        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(inconsistentPercentiles)}`,
-      ),
-    /run 2 has inconsistent frame percentiles/u,
   );
 
   const fractionalFrameCount = validPerformanceSummary();
@@ -221,22 +259,21 @@ test('fails closed for missing, duplicate, malformed, or invalid performance rec
     /run 5 frameCount must be a non-negative integer/u,
   );
 
-  const nonFiniteOverrun = validPerformanceSummary();
-  nonFiniteOverrun.runs[3].p95OverrunMs = null;
+  const nonFiniteTotal = validPerformanceSummary();
+  nonFiniteTotal.runs[3].p95TotalDurationMs = null;
   assert.throws(
     () =>
       parseAndroidDragPerformance(
-        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(nonFiniteOverrun)}`,
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(nonFiniteTotal)}`,
       ),
-    /run 4 p95OverrunMs must be a finite number/u,
+    /run 4 p95TotalDurationMs must be a finite number/u,
   );
 });
 
-test('accounts for duplicate and out-of-window callbacks without counting them as frames', () => {
+test('accounts for duplicate and out-of-window callbacks and rejects mismatched duplicate payloads', () => {
   const withFilteredCallbacks = validPerformanceSummary();
-  withFilteredCallbacks.runs[0].duplicateMetrics = 2;
   withFilteredCallbacks.runs[0].outOfWindowMetrics = 3;
-  withFilteredCallbacks.runs[0].callbackCount = 245;
+  withFilteredCallbacks.runs[0].callbackCount = 483;
 
   assert.deepEqual(
     parseAndroidDragPerformance(
@@ -245,13 +282,33 @@ test('accounts for duplicate and out-of-window callbacks without counting them a
     withFilteredCallbacks,
   );
 
-  withFilteredCallbacks.runs[0].callbackCount = 244;
+  withFilteredCallbacks.runs[0].callbackCount = 482;
   assert.throws(
     () =>
       parseAndroidDragPerformance(
         `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(withFilteredCallbacks)}`,
       ),
     /run 1 has inconsistent callback accounting/u,
+  );
+
+  const mismatchedDuplicate = validPerformanceSummary();
+  mismatchedDuplicate.runs[0].duplicatePayloadMismatchCount = 1;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(mismatchedDuplicate)}`,
+      ),
+    /run 1 contained mismatched duplicate payloads/u,
+  );
+
+  const impossibleMismatchCount = validPerformanceSummary();
+  impossibleMismatchCount.runs[0].duplicatePayloadMismatchCount = 241;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(impossibleMismatchCount)}`,
+      ),
+    /more duplicate payload mismatches than duplicates/u,
   );
 
   const fractionalDuplicate = validPerformanceSummary();
@@ -275,41 +332,137 @@ test('accounts for duplicate and out-of-window callbacks without counting them a
   );
 });
 
-test('requires signed overrun ordering and strictly negative deadline margins', () => {
-  const inconsistentOverruns = validPerformanceSummary();
-  inconsistentOverruns.runs[1].p95OverrunMs = -1;
-  inconsistentOverruns.runs[1].p99OverrunMs = -2;
-  assert.throws(
-    () =>
-      parseAndroidDragPerformance(
-        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(inconsistentOverruns)}`,
-      ),
-    /run 2 has inconsistent frame overruns/u,
-  );
-
-  const deadlineBoundary = validPerformanceSummary();
-  deadlineBoundary.runs[2].worstOverrunMs = 0;
-  assert.throws(
-    () =>
-      parseAndroidDragPerformance(
-        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(deadlineBoundary)}`,
-      ),
-    /run 3 reached or exceeded a frame deadline/u,
-  );
-
-  const justWithinDeadline = validPerformanceSummary();
-  justWithinDeadline.runs[2].worstOverrunMs = -Number.EPSILON;
+test('requires internally consistent intended-vsync cadence and at least 95% delivery', () => {
+  const exactDeliveryBoundary = validPerformanceSummary();
+  exactDeliveryBoundary.runs[0].callbackCount = 468;
+  exactDeliveryBoundary.runs[0].deliveryPercent = 95;
+  exactDeliveryBoundary.runs[0].expectedVsyncSlots = 240;
+  exactDeliveryBoundary.runs[0].frameCount = 228;
+  exactDeliveryBoundary.runs[0].implausibleDeadlineCount = 228;
+  exactDeliveryBoundary.runs[0].missedVsyncSlots = 12;
   assert.doesNotThrow(() =>
     parseAndroidDragPerformance(
-      `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(justWithinDeadline)}`,
+      `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(exactDeliveryBoundary)}`,
     ),
+  );
+
+  const inconsistentSlots = validPerformanceSummary();
+  inconsistentSlots.runs[1].missedVsyncSlots = 9;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(inconsistentSlots)}`,
+      ),
+    /run 2 has inconsistent vsync slot accounting/u,
+  );
+
+  const inconsistentDelivery = validPerformanceSummary();
+  inconsistentDelivery.runs[2].deliveryPercent = 95.9;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(inconsistentDelivery)}`,
+      ),
+    /run 3 has an inconsistent delivery percentage/u,
+  );
+
+  const underDeliveryBudget = validPerformanceSummary();
+  underDeliveryBudget.runs[2].callbackCount = 468;
+  underDeliveryBudget.runs[2].expectedVsyncSlots = 241;
+  underDeliveryBudget.runs[2].frameCount = 228;
+  underDeliveryBudget.runs[2].implausibleDeadlineCount = 228;
+  underDeliveryBudget.runs[2].missedVsyncSlots = 13;
+  underDeliveryBudget.runs[2].deliveryPercent = (228 * 100) / 241;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(underDeliveryBudget)}`,
+      ),
+    /run 3 delivered less than 95%/u,
+  );
+
+  const inconsistentGaps = validPerformanceSummary();
+  inconsistentGaps.runs[3].p95VsyncGapMs = 34;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(inconsistentGaps)}`,
+      ),
+    /run 4 has inconsistent vsync gap percentiles/u,
+  );
+
+  const gapBoundary = validPerformanceSummary();
+  gapBoundary.runs[4].leadingCoverageGapMs = 49.999;
+  gapBoundary.runs[4].intendedVsyncSpanMs = 3_941.331;
+  gapBoundary.runs[4].worstCoverageGapMs = 49.999;
+  assert.doesNotThrow(() =>
+    parseAndroidDragPerformance(
+      `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(gapBoundary)}`,
+    ),
+  );
+
+  gapBoundary.runs[4].leadingCoverageGapMs = 50;
+  gapBoundary.runs[4].intendedVsyncSpanMs = 3_941.33;
+  gapBoundary.runs[4].worstCoverageGapMs = 50;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(gapBoundary)}`,
+      ),
+    /run 5 contained a 50 ms measurement-coverage gap/u,
+  );
+
+  const inconsistentWorstCoverage = validPerformanceSummary();
+  inconsistentWorstCoverage.runs[0].worstCoverageGapMs = 40;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(inconsistentWorstCoverage)}`,
+      ),
+    /run 1 has an inconsistent worst coverage gap/u,
+  );
+
+  const outOfWindowBoundary = validPerformanceSummary();
+  outOfWindowBoundary.runs[0].leadingCoverageGapMs = 4_001.01;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(outOfWindowBoundary)}`,
+      ),
+    /run 1 has a coverage gap outside its measurement window/u,
+  );
+
+  const hiddenTrailingFreeze = validPerformanceSummary();
+  Object.assign(hiddenTrailingFreeze.runs[0], {
+    callbackCount: 468,
+    deliveryPercent: 95,
+    expectedVsyncSlots: 240,
+    frameCount: 228,
+    implausibleDeadlineCount: 228,
+    intendedVsyncSpanMs: 3_783.33,
+    leadingCoverageGapMs: 0,
+    missedVsyncSlots: 12,
+    p95VsyncGapMs: 16.67,
+    p99VsyncGapMs: 16.67,
+    trailingCoverageGapMs: 216.67,
+    worstCoverageGapMs: 216.67,
+    worstVsyncGapMs: 16.67,
+  });
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(hiddenTrailingFreeze)}`,
+      ),
+    /run 1 contained a 50 ms measurement-coverage gap/u,
   );
 });
 
-test('caps unique frame cadence at 270 reports per measured run', () => {
+test('caps unique frame cadence and measurement duration at their inclusive maxima', () => {
   const cadenceMaximum = validPerformanceSummary();
   cadenceMaximum.runs[4].frameCount = 270;
-  cadenceMaximum.runs[4].callbackCount = 270;
+  cadenceMaximum.runs[4].callbackCount = 510;
+  cadenceMaximum.runs[4].expectedVsyncSlots = 270;
+  cadenceMaximum.runs[4].deliveryPercent = 100;
   assert.doesNotThrow(() =>
     parseAndroidDragPerformance(
       `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(cadenceMaximum)}`,
@@ -317,7 +470,9 @@ test('caps unique frame cadence at 270 reports per measured run', () => {
   );
 
   cadenceMaximum.runs[4].frameCount = 271;
-  cadenceMaximum.runs[4].callbackCount = 271;
+  cadenceMaximum.runs[4].callbackCount = 511;
+  cadenceMaximum.runs[4].expectedVsyncSlots = 271;
+  cadenceMaximum.runs[4].deliveryPercent = 100;
   assert.throws(
     () =>
       parseAndroidDragPerformance(
@@ -327,20 +482,145 @@ test('caps unique frame cadence at 270 reports per measured run', () => {
   );
 
   const measurementMaximum = validPerformanceSummary();
-  measurementMaximum.runs[4].measurementSpanMs = 4_300;
+  measurementMaximum.runs[4].deliveryPercent = (240 * 100) / 246;
+  measurementMaximum.runs[4].expectedVsyncSlots = 246;
+  measurementMaximum.runs[4].intendedVsyncSpanMs = 4_066.66;
+  measurementMaximum.runs[4].leadingCoverageGapMs = 16.67;
+  measurementMaximum.runs[4].measurementSpanMs = 4_100;
+  measurementMaximum.runs[4].missedVsyncSlots = 6;
+  measurementMaximum.runs[4].trailingCoverageGapMs = 16.67;
   assert.doesNotThrow(() =>
     parseAndroidDragPerformance(
       `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(measurementMaximum)}`,
     ),
   );
 
-  measurementMaximum.runs[4].measurementSpanMs = 4_301;
+  measurementMaximum.runs[4].measurementSpanMs = 4_101;
   assert.throws(
     () =>
       parseAndroidDragPerformance(
         `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(measurementMaximum)}`,
       ),
     /run 5 measurement span is out of range/u,
+  );
+});
+
+test('uses the AndroidX API-24 UI-duration heuristic at twice the refresh period', () => {
+  const inconsistentUiPercentiles = validPerformanceSummary();
+  inconsistentUiPercentiles.runs[0].p95UiDurationMs = 21;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(inconsistentUiPercentiles)}`,
+      ),
+    /run 1 has inconsistent UI-duration percentiles/u,
+  );
+
+  const reportedJank = validPerformanceSummary();
+  reportedJank.runs[1].heuristicJankCount = 1;
+  reportedJank.runs[1].heuristicJankPercent = 100 / 240;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(reportedJank)}`,
+      ),
+    /run 2 reported heuristic UI jank/u,
+  );
+
+  const hiddenJank = validPerformanceSummary();
+  hiddenJank.runs[2].worstUiDurationMs = 34;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(hiddenJank)}`,
+      ),
+    /run 3 has UI duration inconsistent with zero heuristic jank/u,
+  );
+});
+
+test('keeps raw TOTAL percentiles diagnostic while enforcing only a sub-50ms worst frame', () => {
+  const inconsistentTotals = validPerformanceSummary();
+  inconsistentTotals.runs[0].p95TotalDurationMs = 36;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(inconsistentTotals)}`,
+      ),
+    /run 1 has inconsistent total-duration percentiles/u,
+  );
+
+  const boundary = validPerformanceSummary();
+  boundary.runs[1].worstTotalDurationMs = 50;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(boundary)}`,
+      ),
+    /run 2 contained a 50 ms total-duration frame/u,
+  );
+});
+
+test('validates deadline diagnostics without using deadline plausibility as a gate', () => {
+  const corruptButDiagnosticOnly = validPerformanceSummary();
+  assert.doesNotThrow(() =>
+    parseAndroidDragPerformance(
+      `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(corruptButDiagnosticOnly)}`,
+    ),
+  );
+
+  const plausible = validPerformanceSummary();
+  Object.assign(plausible.runs[0], {
+    deadlinePlausible: true,
+    implausibleDeadlineCount: 0,
+    maximumDeadlineMs: 16.67,
+    minimumDeadlineMs: 16.66,
+    p50DeadlineMs: 16.67,
+    p95DeadlineMs: 16.67,
+  });
+  assert.doesNotThrow(() =>
+    parseAndroidDragPerformance(
+      `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(plausible)}`,
+    ),
+  );
+
+  plausible.runs[0].deadlinePlausible = false;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(plausible)}`,
+      ),
+    /run 1 has inconsistent deadline plausibility diagnostics/u,
+  );
+
+  const falsePlausibility = validPerformanceSummary();
+  falsePlausibility.runs[0].deadlinePlausible = true;
+  falsePlausibility.runs[0].implausibleDeadlineCount = 0;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(falsePlausibility)}`,
+      ),
+    /deadline extrema inconsistent with its plausibility diagnostic/u,
+  );
+
+  const inconsistentDeadlineOrder = validPerformanceSummary();
+  inconsistentDeadlineOrder.runs[1].p50DeadlineMs = 1_001;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(inconsistentDeadlineOrder)}`,
+      ),
+    /run 2 has inconsistent deadline diagnostics/u,
+  );
+
+  const nonFiniteDeadline = validPerformanceSummary();
+  nonFiniteDeadline.runs[2].minimumDeadlineMs = null;
+  assert.throws(
+    () =>
+      parseAndroidDragPerformance(
+        `I ChessboardDragPerf: CHESSBOARD_DRAG_PERF ${JSON.stringify(nonFiniteDeadline)}`,
+      ),
+    /run 3 minimumDeadlineMs must be a finite number/u,
   );
 });
 
