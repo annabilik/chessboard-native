@@ -1,11 +1,13 @@
 package com.vibechess.chessboardnativeharness
 
+import android.app.UiAutomation
 import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Base64
 import android.util.Log
@@ -25,11 +27,11 @@ import androidx.test.espresso.action.CoordinatesProvider
 import androidx.test.espresso.action.GeneralSwipeAction
 import androidx.test.espresso.action.Press
 import androidx.test.espresso.action.Swipe
-import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.isRoot
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
+import androidx.test.platform.app.InstrumentationRegistry
 import com.facebook.react.R
 import org.hamcrest.Description
 import org.hamcrest.Matcher
@@ -79,25 +81,30 @@ class ChessboardDragPerformanceTest {
         val metricsThread = HandlerThread("chessboard-drag-frame-metrics").apply { start() }
         val metricsHandler = Handler(metricsThread.looper)
         val collector = FrameMetricsCollector()
+        val uiAutomation = InstrumentationRegistry.getInstrumentation().uiAutomation
         lateinit var overlayDrawProbe: OverlayDrawProbe
         activityRule.scenario.onActivity { activity ->
             activity.window.addOnFrameMetricsAvailableListener(
                 collector,
                 metricsHandler,
             )
-            overlayDrawProbe = OverlayDrawProbe(activity.window.decorView).also { it.attach() }
+            overlayDrawProbe =
+                OverlayDrawProbe(
+                    root = activity.window.decorView,
+                    choreographer = Choreographer.getInstance(),
+                ).also { it.attach() }
         }
 
         val summaries = mutableListOf<PerformanceRunSummary>()
         try {
             // Prime RNGH, Reanimated, SVG, and the provider overlay before any
             // frame is counted.
-            onView(boardMatcher()).perform(
-                sustainedDrag(
-                    clearLingeringInput = true,
-                    durationMs = WARM_UP_DURATION_MS,
-                    moveCount = WARM_UP_MOVE_COUNT,
-                ),
+            sustainedDrag(
+                geometry = captureDragGeometry(),
+                uiAutomation = uiAutomation,
+                clearLingeringInput = true,
+                durationMs = WARM_UP_DURATION_MS,
+                moveCount = WARM_UP_MOVE_COUNT,
             )
             awaitInteractionState(
                 callbackCount = 0,
@@ -108,21 +115,22 @@ class ChessboardDragPerformanceTest {
             onView(isRoot()).perform(waitForReactTestIdToDisappear(DRAG_OVERLAY_TEST_ID))
 
             repeat(MEASURED_RUN_COUNT) { runIndex ->
+                val geometry = captureDragGeometry()
                 drainMetricsHandler(metricsHandler)
                 overlayDrawProbe.beginRun(runIndex)
                 collector.beginRun(runIndex)
                 var frameSample: FrameSample? = null
-                onView(boardMatcher()).perform(
-                    sustainedDrag(
-                        durationMs = MEASURED_RUN_DURATION_MS,
-                        moveCount = MEASURED_MOVE_COUNT,
-                        drawProbe = overlayDrawProbe,
-                        runIndex = runIndex,
-                        beforeCancel = { probeSample ->
-                            drainMetricsHandler(metricsHandler)
-                            frameSample = collector.finishRun(runIndex, probeSample)
-                        },
-                    ),
+                sustainedDrag(
+                    geometry = geometry,
+                    uiAutomation = uiAutomation,
+                    durationMs = MEASURED_RUN_DURATION_MS,
+                    moveCount = MEASURED_MOVE_COUNT,
+                    drawProbe = overlayDrawProbe,
+                    runIndex = runIndex,
+                    beforeCancel = { probeSample ->
+                        drainMetricsHandler(metricsHandler)
+                        frameSample = collector.finishRun(runIndex, probeSample)
+                    },
                 )
                 onView(isRoot()).perform(waitForReactTestIdToDisappear(DRAG_OVERLAY_TEST_ID))
                 awaitInteractionState(
@@ -212,55 +220,80 @@ class ChessboardDragPerformanceTest {
         return refreshRate
     }
 
+    private fun captureDragGeometry(): DragGeometry {
+        var captured: DragGeometry? = null
+        activityRule.scenario.onActivity { activity ->
+            val board =
+                boardViews(activity.window.decorView).singleOrNull()
+                    ?: throw AssertionError("performance gate requires exactly one interaction board")
+            check(board.width > 0 && board.height > 0) {
+                "performance gate board must have non-zero geometry"
+            }
+            captured =
+                DragGeometry(
+                    source = squareCenterOnView(board, file = 3, rank = 4),
+                    upper = squareCenterOnView(board, file = 3, rank = 5),
+                    lower = squareCenterOnView(board, file = 3, rank = 3),
+                    terminal = squareCenterOnView(board, file = 6, rank = 2),
+                    drawProbeCenterTolerancePx = drawProbeCenterTolerancePx(board),
+                )
+        }
+        return checkNotNull(captured) { "performance gate did not capture board geometry" }
+    }
+
     private fun sustainedDrag(
+        geometry: DragGeometry,
+        uiAutomation: UiAutomation,
         durationMs: Long,
         moveCount: Int,
         clearLingeringInput: Boolean = false,
         drawProbe: OverlayDrawProbe? = null,
         runIndex: Int? = null,
         beforeCancel: ((DrawProbeSample) -> Unit)? = null,
-    ): ViewAction = object : ViewAction {
-        override fun getConstraints(): Matcher<View> = isDisplayed()
+    ) {
+        check(Looper.myLooper() != Looper.getMainLooper()) {
+            "performance drag injection must run off the application main thread"
+        }
+        check((drawProbe === null) == (runIndex === null)) {
+            "draw probe and run index must be provided together"
+        }
+        check(drawProbe === null || beforeCancel !== null) {
+            "a measured drag requires its frame-sample callback"
+        }
+        val source = geometry.source
+        val upper = geometry.upper
+        val lower = geometry.lower
+        val terminal = geometry.terminal
+        val terminalApproachOffsetPx =
+            geometry.drawProbeCenterTolerancePx * TERMINAL_APPROACH_TOLERANCE_MULTIPLIER
+        val terminalApproach =
+            floatArrayOf(
+                terminal[0] - terminalApproachOffsetPx,
+                terminal[1] - terminalApproachOffsetPx,
+            )
 
-        override fun getDescription(): String =
-            "sustain a native board drag for $durationMs ms with $moveCount moves"
+        // Clear contamination from a previously interrupted test once,
+        // before warm-up. Every drag below asserts its terminal CANCEL, so
+        // repeating an orphan CANCEL before measured runs only makes
+        // InputDispatcher emit expensive diagnostics.
+        if (clearLingeringInput) {
+            cancelLingeringInjectedTouchStream(uiAutomation, source)
+        }
 
-        override fun perform(uiController: UiController, view: View) {
-            val source = squareCenterOnView(view, file = 3, rank = 4)
-            val upper = squareCenterOnView(view, file = 3, rank = 5)
-            val lower = squareCenterOnView(view, file = 3, rank = 3)
-            val terminal = squareCenterOnView(view, file = 6, rank = 2)
-            val terminalApproachOffsetPx =
-                drawProbeCenterTolerancePx(view) * TERMINAL_APPROACH_TOLERANCE_MULTIPLIER
-            val terminalApproach =
-                floatArrayOf(
-                    terminal[0] - terminalApproachOffsetPx,
-                    terminal[1] - terminalApproachOffsetPx,
-                )
-            check((drawProbe === null) == (runIndex === null)) {
-                "draw probe and run index must be provided together"
-            }
-            check(drawProbe === null || beforeCancel !== null) {
-                "a measured drag requires its frame-sample callback"
-            }
-            // Clear contamination from a previously interrupted test once,
-            // before warm-up. Every drag below asserts its terminal CANCEL,
-            // so repeating a best-effort orphan CANCEL before measured runs
-            // only makes InputDispatcher emit expensive diagnostics.
-            if (clearLingeringInput) {
-                cancelLingeringInjectedTouchStream(uiController, source)
-            }
-
-            val downTime = SystemClock.uptimeMillis()
-            val down = touchEvent(downTime, downTime, MotionEvent.ACTION_DOWN, source)
-            try {
-                assertTrue(
-                    "performance drag ACTION_DOWN injection must succeed",
-                    uiController.injectMotionEvent(down),
-                )
-            } finally {
-                down.recycle()
-            }
+        val downTime = SystemClock.uptimeMillis()
+        var lastCoordinates = source
+        var touchStreamMayBeActive = true
+        try {
+            assertTrue(
+                "performance drag ACTION_DOWN injection must succeed",
+                injectTouchEvent(
+                    uiAutomation = uiAutomation,
+                    downTime = downTime,
+                    eventTime = downTime,
+                    action = MotionEvent.ACTION_DOWN,
+                    coordinates = source,
+                ),
+            )
 
             var firstMoveAt = -1L
             var lastMoveAt = -1L
@@ -289,16 +322,20 @@ class ChessboardDragPerformanceTest {
                 if (moveIndex > 0 || drawProbe === null) {
                     val waitMs = targetTime - SystemClock.uptimeMillis()
                     if (waitMs > 0) {
-                        uiController.loopMainThreadForAtLeast(waitMs)
+                        SystemClock.sleep(waitMs)
                     }
                 }
                 val eventTime = SystemClock.uptimeMillis()
                 val coordinates =
-                    if (drawProbe !== null && moveIndex == moveCount - 1) {
+                    if (
+                        drawProbe !== null &&
+                        moveIndex >= moveCount - TERMINAL_APPROACH_MOVE_COUNT
+                    ) {
                         // End the sustained phase beside the terminal probe.
                         // A one-frame teleport from d5 to g2 makes Android's
                         // input resampler project the synthetic pointer beyond
-                        // g2; a physical finger supplies this settling sample.
+                        // g2. Two identical settling samples zero that incoming
+                        // velocity before the separately measured final MOVE.
                         terminalApproach
                     } else {
                         zigzagCoordinate(upper, lower, moveIndex)
@@ -317,21 +354,17 @@ class ChessboardDragPerformanceTest {
                         expectedCenter = coordinates,
                     )
                 }
-                val move =
-                    touchEvent(
-                        downTime,
-                        eventTime,
-                        MotionEvent.ACTION_MOVE,
-                        coordinates,
-                    )
-                try {
-                    assertTrue(
-                        "performance drag ACTION_MOVE $moveIndex injection must succeed",
-                        uiController.injectMotionEvent(move),
-                    )
-                } finally {
-                    move.recycle()
-                }
+                assertTrue(
+                    "performance drag ACTION_MOVE $moveIndex injection must succeed",
+                    injectTouchEvent(
+                        uiAutomation = uiAutomation,
+                        downTime = downTime,
+                        eventTime = eventTime,
+                        action = MotionEvent.ACTION_MOVE,
+                        coordinates = coordinates,
+                    ),
+                )
+                lastCoordinates = coordinates
                 if (moveIndex == 0) {
                     firstMoveAt = eventTime
                 }
@@ -342,7 +375,6 @@ class ChessboardDragPerformanceTest {
                     // follow-up sample before waiting for the painted result;
                     // latency remains anchored to the first activating MOVE.
                     awaitDrawProbeMatch(
-                        uiController = uiController,
                         drawProbe = drawProbe,
                         runIndex = checkNotNull(runIndex),
                         kind = DrawProbeKind.ACTIVATION,
@@ -358,7 +390,7 @@ class ChessboardDragPerformanceTest {
                 val terminalTargetTime = lastMoveAt + TERMINAL_FOLLOW_UP_DELAY_MS
                 val terminalWaitMs = terminalTargetTime - SystemClock.uptimeMillis()
                 if (terminalWaitMs > 0) {
-                    uiController.loopMainThreadForAtLeast(terminalWaitMs)
+                    SystemClock.sleep(terminalWaitMs)
                 }
                 val terminalEventTime = SystemClock.uptimeMillis()
                 drawProbe.arm(
@@ -367,23 +399,18 @@ class ChessboardDragPerformanceTest {
                     eventTimeNs = terminalEventTime * NANOSECONDS_PER_MILLISECOND_LONG,
                     expectedCenter = terminal,
                 )
-                val terminalMove =
-                    touchEvent(
-                        downTime,
-                        terminalEventTime,
-                        MotionEvent.ACTION_MOVE,
-                        terminal,
-                    )
-                try {
-                    assertTrue(
-                        "performance drag terminal ACTION_MOVE injection must succeed",
-                        uiController.injectMotionEvent(terminalMove),
-                    )
-                } finally {
-                    terminalMove.recycle()
-                }
+                assertTrue(
+                    "performance drag terminal ACTION_MOVE injection must succeed",
+                    injectTouchEvent(
+                        uiAutomation = uiAutomation,
+                        downTime = downTime,
+                        eventTime = terminalEventTime,
+                        action = MotionEvent.ACTION_MOVE,
+                        coordinates = terminal,
+                    ),
+                )
+                lastCoordinates = terminal
                 awaitDrawProbeMatch(
-                    uiController = uiController,
                     drawProbe = drawProbe,
                     runIndex = measuredRunIndex,
                     kind = DrawProbeKind.TERMINAL,
@@ -393,7 +420,7 @@ class ChessboardDragPerformanceTest {
 
                 // Keep the pointer held while the exact terminal draw's frame
                 // metrics cross the asynchronous listener before CANCEL.
-                uiController.loopMainThreadForAtLeast(FRAME_METRICS_DRAIN_MS)
+                SystemClock.sleep(FRAME_METRICS_DRAIN_MS)
                 beforeCancel?.invoke(drawProbe.finishRun(measuredRunIndex))
             }
             assertTrue(
@@ -402,27 +429,33 @@ class ChessboardDragPerformanceTest {
             )
 
             val cancelTime = SystemClock.uptimeMillis()
-            val cancel =
-                touchEvent(
-                    downTime,
-                    cancelTime,
-                    MotionEvent.ACTION_CANCEL,
-                    cancelCoordinates,
+            assertTrue(
+                "performance drag ACTION_CANCEL injection must succeed",
+                injectTouchEvent(
+                    uiAutomation = uiAutomation,
+                    downTime = downTime,
+                    eventTime = cancelTime,
+                    action = MotionEvent.ACTION_CANCEL,
+                    coordinates = cancelCoordinates,
+                ),
+            )
+            touchStreamMayBeActive = false
+            SystemClock.sleep(OVERLAY_RETIRE_SETTLE_MS)
+        } finally {
+            if (touchStreamMayBeActive) {
+                // A failed exact probe must not leave DeviceId(-1)'s injected
+                // pointer stream active and poison the final Espresso swipe.
+                bestEffortCancelInjectedTouchStream(
+                    uiAutomation = uiAutomation,
+                    downTime = downTime,
+                    coordinates = lastCoordinates,
                 )
-            try {
-                assertTrue(
-                    "performance drag ACTION_CANCEL injection must succeed",
-                    uiController.injectMotionEvent(cancel),
-                )
-            } finally {
-                cancel.recycle()
+                SystemClock.sleep(OVERLAY_RETIRE_SETTLE_MS)
             }
-            uiController.loopMainThreadForAtLeast(OVERLAY_RETIRE_SETTLE_MS)
         }
     }
 
     private fun awaitDrawProbeMatch(
-        uiController: UiController,
         drawProbe: OverlayDrawProbe,
         runIndex: Int,
         kind: DrawProbeKind,
@@ -433,7 +466,7 @@ class ChessboardDragPerformanceTest {
             if (drawProbe.hasMatched(runIndex, kind)) {
                 return
             }
-            uiController.loopMainThreadForAtLeast(DRAW_PROBE_POLL_INTERVAL_MS)
+            SystemClock.sleep(DRAW_PROBE_POLL_INTERVAL_MS)
         } while (SystemClock.uptimeMillis() < deadline)
         drawProbe.throwIfFailed(runIndex)
         throw AssertionError(
@@ -728,23 +761,54 @@ class ChessboardDragPerformanceTest {
     }
 
     private fun cancelLingeringInjectedTouchStream(
-        uiController: UiController,
+        uiAutomation: UiAutomation,
         coordinates: FloatArray,
     ) {
         val cancelTime = SystemClock.uptimeMillis()
-        val cancel =
-            touchEvent(
-                cancelTime,
-                cancelTime,
-                MotionEvent.ACTION_CANCEL,
-                coordinates,
-            )
+        bestEffortCancelInjectedTouchStream(
+            uiAutomation = uiAutomation,
+            downTime = cancelTime,
+            coordinates = coordinates,
+        )
+        SystemClock.sleep(INPUT_PRECONDITION_SETTLE_MS)
+    }
+
+    private fun bestEffortCancelInjectedTouchStream(
+        uiAutomation: UiAutomation,
+        downTime: Long,
+        coordinates: FloatArray,
+    ) {
+        val cancelTime = SystemClock.uptimeMillis()
         try {
-            uiController.injectMotionEvent(cancel)
-        } finally {
-            cancel.recycle()
+            if (
+                !injectTouchEvent(
+                    uiAutomation = uiAutomation,
+                    downTime = downTime,
+                    eventTime = cancelTime,
+                    action = MotionEvent.ACTION_CANCEL,
+                    coordinates = coordinates,
+                )
+            ) {
+                Log.w(PERFORMANCE_LOG_TAG, "best-effort ACTION_CANCEL injection returned false")
+            }
+        } catch (failure: RuntimeException) {
+            Log.w(PERFORMANCE_LOG_TAG, "best-effort ACTION_CANCEL injection failed", failure)
         }
-        uiController.loopMainThreadForAtLeast(INPUT_PRECONDITION_SETTLE_MS)
+    }
+
+    private fun injectTouchEvent(
+        uiAutomation: UiAutomation,
+        downTime: Long,
+        eventTime: Long,
+        action: Int,
+        coordinates: FloatArray,
+    ): Boolean {
+        val event = touchEvent(downTime, eventTime, action, coordinates)
+        return try {
+            uiAutomation.injectInputEvent(event, true)
+        } finally {
+            event.recycle()
+        }
     }
 
     private fun awaitInteractionState(
@@ -918,6 +982,14 @@ class ChessboardDragPerformanceTest {
                 vsyncTimestampNs == other.vsyncTimestampNs
     }
 
+    private data class DragGeometry(
+        val source: FloatArray,
+        val upper: FloatArray,
+        val lower: FloatArray,
+        val terminal: FloatArray,
+        val drawProbeCenterTolerancePx: Float,
+    )
+
     private data class FrameSample(
         val activationLatencyNs: Long,
         val callbackCount: Int,
@@ -999,6 +1071,7 @@ class ChessboardDragPerformanceTest {
 
     private inner class OverlayDrawProbe(
         private val root: View,
+        private val choreographer: Choreographer,
     ) : Choreographer.FrameCallback,
         ViewTreeObserver.OnDrawListener {
         private val lock = Any()
@@ -1023,7 +1096,7 @@ class ChessboardDragPerformanceTest {
                 activeRun = null
                 armed = null
             }
-            Choreographer.getInstance().removeFrameCallback(this)
+            choreographer.removeFrameCallback(this)
             if (root.viewTreeObserver.isAlive) {
                 root.viewTreeObserver.removeOnDrawListener(this)
             }
@@ -1074,7 +1147,7 @@ class ChessboardDragPerformanceTest {
                 armedOnDrawCount = 0
                 lastObservation = "armed; no draw observed"
             }
-            Choreographer.getInstance().postFrameCallback(this)
+            choreographer.postFrameCallback(this)
         }
 
         fun addExpectedCenter(
@@ -1176,7 +1249,7 @@ class ChessboardDragPerformanceTest {
                     }
                 }
             if (remainsArmed) {
-                Choreographer.getInstance().postFrameCallback(this)
+                choreographer.postFrameCallback(this)
             }
         }
 
@@ -1485,7 +1558,7 @@ class ChessboardDragPerformanceTest {
         const val MAXIMUM_REFRESH_RATE_HZ = 60.5f
         const val MAXIMUM_SUSTAINED_VSYNC_GAP_MS = 50.0
         const val MAXIMUM_TOTAL_DURATION_MS = 50.0
-        const val MEASURED_MOVE_COUNT = 240
+        const val MEASURED_MOVE_COUNT = 300
         const val MEASURED_RUN_COUNT = 5
         const val MEASURED_RUN_DURATION_MS = 4_000L
         const val METRICS_THREAD_JOIN_TIMEOUT_MS = 2_000L
@@ -1508,6 +1581,7 @@ class ChessboardDragPerformanceTest {
         const val PERFORMANCE_LOG_TRANSPORT_VERSION = 1
         const val POLL_INTERVAL_MS = 50L
         const val POSITION_REVISION_DESCRIPTION = "Position revision: 7"
+        const val TERMINAL_APPROACH_MOVE_COUNT = 2
         const val TERMINAL_APPROACH_TOLERANCE_MULTIPLIER = 1.5f
         const val TERMINAL_FOLLOW_UP_DELAY_MS = 17L
         const val TERMINAL_PROBE_MOVE_COUNT = 1

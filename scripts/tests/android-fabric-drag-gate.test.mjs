@@ -65,7 +65,7 @@ function validPerformanceSummary() {
       p99UiDurationMs: 20,
       p99VsyncGapMs: 33.33,
       run: index + 1,
-      successfulMoves: 241,
+      successfulMoves: 301,
       worstSustainedVsyncGapMs: 33.33,
       worstTotalDurationMs: 49.5,
       worstUiDurationMs: 30,

@@ -54,7 +54,7 @@ const dragPerformanceThresholds = Object.freeze({
   maximumFinalMoveLatencyMs: 50,
   maximumTotalDurationMs: 50,
   maximumSustainedVsyncGapMs: 50,
-  measuredMoveCount: 241,
+  measuredMoveCount: 301,
   measuredRunCount: 5,
   minimumDeliveryPercent: 95,
   minimumFrameCount: 228,
