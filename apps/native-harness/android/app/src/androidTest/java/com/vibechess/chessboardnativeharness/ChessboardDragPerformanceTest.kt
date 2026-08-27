@@ -99,16 +99,14 @@ class ChessboardDragPerformanceTest {
             repeat(MEASURED_RUN_COUNT) { runIndex ->
                 drainMetricsHandler(metricsHandler)
                 collector.beginRun(runIndex)
-                var inputSpanMs = -1L
                 var frameSample: FrameSample? = null
                 onView(boardMatcher()).perform(
                     sustainedDrag(
                         durationMs = MEASURED_RUN_DURATION_MS,
                         moveCount = MEASURED_MOVE_COUNT,
-                        beforeCancel = { spanMs ->
+                        beforeCancel = { measurementWindow ->
                             drainMetricsHandler(metricsHandler)
-                            inputSpanMs = spanMs
-                            frameSample = collector.finishRun(runIndex)
+                            frameSample = collector.finishRun(runIndex, measurementWindow)
                         },
                     ),
                 )
@@ -123,7 +121,6 @@ class ChessboardDragPerformanceTest {
                 val summary =
                     summarizeRun(
                         runIndex = runIndex,
-                        inputSpanMs = inputSpanMs,
                         successfulMoves = MEASURED_MOVE_COUNT,
                         sample =
                             frameSample
@@ -205,7 +202,7 @@ class ChessboardDragPerformanceTest {
     private fun sustainedDrag(
         durationMs: Long,
         moveCount: Int,
-        beforeCancel: ((Long) -> Unit)? = null,
+        beforeCancel: ((MeasurementWindow) -> Unit)? = null,
     ): ViewAction = object : ViewAction {
         override fun getConstraints(): Matcher<View> = isDisplayed()
 
@@ -231,6 +228,7 @@ class ChessboardDragPerformanceTest {
 
             val firstMoveAt = SystemClock.uptimeMillis()
             var lastMoveAt = firstMoveAt
+            var measurementStartNs = -1L
             repeat(moveCount) { moveIndex ->
                 val targetTime =
                     firstMoveAt +
@@ -242,6 +240,9 @@ class ChessboardDragPerformanceTest {
                 val waitMs = targetTime - SystemClock.uptimeMillis()
                 if (waitMs > 0) {
                     uiController.loopMainThreadForAtLeast(waitMs)
+                }
+                if (moveIndex == 0) {
+                    measurementStartNs = System.nanoTime()
                 }
                 val eventTime = SystemClock.uptimeMillis()
                 val move =
@@ -265,7 +266,18 @@ class ChessboardDragPerformanceTest {
             // Keep the pointer held while the frame-listener thread drains the
             // final moving frame, then close the measurement before CANCEL.
             uiController.loopMainThreadForAtLeast(FRAME_METRICS_DRAIN_MS)
-            beforeCancel?.invoke(lastMoveAt - firstMoveAt)
+            val measurementEndNs = System.nanoTime()
+            assertTrue(
+                "performance drag measurement window must start before it ends",
+                measurementStartNs > 0 && measurementEndNs > measurementStartNs,
+            )
+            beforeCancel?.invoke(
+                MeasurementWindow(
+                    endNs = measurementEndNs,
+                    inputSpanMs = lastMoveAt - firstMoveAt,
+                    startNs = measurementStartNs,
+                ),
+            )
 
             val cancelTime = SystemClock.uptimeMillis()
             val cancel =
@@ -304,28 +316,39 @@ class ChessboardDragPerformanceTest {
 
     private fun summarizeRun(
         runIndex: Int,
-        inputSpanMs: Long,
         successfulMoves: Int,
         sample: FrameSample,
     ): PerformanceRunSummary {
         val sortedDurations = sample.frames.map(FrameDatum::totalDurationNs).sorted()
+        val sortedOverruns =
+            sample.frames
+                .map { frame -> frame.totalDurationNs - frame.deadlineNs }
+                .sorted()
         val jankyFrames =
             sample.frames.count { frame ->
                 frame.totalDurationNs >= frame.deadlineNs
             }
         val frameCount = sortedDurations.size
         return PerformanceRunSummary(
+            callbackCount = sample.callbackCount,
             droppedReports = sample.droppedReports,
+            duplicateMetrics = sample.duplicateMetrics,
             frameCount = frameCount,
-            inputSpanMs = inputSpanMs,
+            inputSpanMs = sample.inputSpanMs,
             invalidMetrics = sample.invalidMetrics,
             jankPercent = if (frameCount == 0) 0.0 else jankyFrames * 100.0 / frameCount,
+            measurementSpanMs = sample.measurementSpanMs,
+            outOfWindowMetrics = sample.outOfWindowMetrics,
             p95Ms = if (frameCount == 0) 0.0 else percentileMs(sortedDurations, 0.95),
+            p95OverrunMs = if (frameCount == 0) 0.0 else percentileMs(sortedOverruns, 0.95),
             p99Ms = if (frameCount == 0) 0.0 else percentileMs(sortedDurations, 0.99),
+            p99OverrunMs = if (frameCount == 0) 0.0 else percentileMs(sortedOverruns, 0.99),
             run = runIndex + 1,
             successfulMoves = successfulMoves,
             worstFrameMs =
                 sortedDurations.lastOrNull()?.div(NANOSECONDS_PER_MILLISECOND) ?: 0.0,
+            worstOverrunMs =
+                sortedOverruns.lastOrNull()?.div(NANOSECONDS_PER_MILLISECOND) ?: 0.0,
         )
     }
 
@@ -337,14 +360,37 @@ class ChessboardDragPerformanceTest {
             summary.inputSpanMs in MINIMUM_INPUT_SPAN_MS..MAXIMUM_INPUT_SPAN_MS,
         )
         assertTrue(
-            "$label collected only ${summary.frameCount} frames",
-            summary.frameCount >= MINIMUM_MEASURED_FRAMES,
+            "$label measurement span was ${summary.measurementSpanMs} ms",
+            summary.measurementSpanMs in
+                MINIMUM_MEASUREMENT_SPAN_MS..MAXIMUM_MEASUREMENT_SPAN_MS,
         )
-        assertTrue("$label p95 was ${summary.p95Ms} ms", summary.p95Ms <= MAXIMUM_P95_MS)
-        assertTrue("$label p99 was ${summary.p99Ms} ms", summary.p99Ms <= MAXIMUM_P99_MS)
+        assertTrue(
+            "$label collected ${summary.frameCount} unique in-window frames",
+            summary.frameCount in MINIMUM_MEASURED_FRAMES..MAXIMUM_MEASURED_FRAMES,
+        )
+        assertEquals(
+            "$label callback accounting",
+            summary.callbackCount,
+            summary.frameCount +
+                summary.duplicateMetrics +
+                summary.outOfWindowMetrics +
+                summary.invalidMetrics,
+        )
         assertTrue(
             "$label jank was ${summary.jankPercent}%",
-            summary.jankPercent <= MAXIMUM_JANK_PERCENT,
+            summary.jankPercent == 0.0,
+        )
+        assertTrue(
+            "$label p95 overrun was ${summary.p95OverrunMs} ms",
+            summary.p95OverrunMs < 0.0,
+        )
+        assertTrue(
+            "$label p99 overrun was ${summary.p99OverrunMs} ms",
+            summary.p99OverrunMs < 0.0,
+        )
+        assertTrue(
+            "$label worst overrun was ${summary.worstOverrunMs} ms",
+            summary.worstOverrunMs < 0.0,
         )
         assertTrue(
             "$label worst frame was ${summary.worstFrameMs} ms",
@@ -364,7 +410,7 @@ class ChessboardDragPerformanceTest {
         summaries: List<PerformanceRunSummary>,
     ): String =
         JSONObject()
-            .put("schemaVersion", 1)
+            .put("schemaVersion", 2)
             .put("displayRefreshHz", refreshRate.toDouble())
             .put(
                 "runs",
@@ -375,12 +421,19 @@ class ChessboardDragPerformanceTest {
                                 .put("run", summary.run)
                                 .put("successfulMoves", summary.successfulMoves)
                                 .put("inputSpanMs", summary.inputSpanMs)
+                                .put("measurementSpanMs", summary.measurementSpanMs)
                                 .put("invalidMetrics", summary.invalidMetrics)
+                                .put("callbackCount", summary.callbackCount)
+                                .put("duplicateMetrics", summary.duplicateMetrics)
+                                .put("outOfWindowMetrics", summary.outOfWindowMetrics)
                                 .put("frameCount", summary.frameCount)
                                 .put("p95Ms", summary.p95Ms)
                                 .put("p99Ms", summary.p99Ms)
+                                .put("p95OverrunMs", summary.p95OverrunMs)
+                                .put("p99OverrunMs", summary.p99OverrunMs)
                                 .put("jankPercent", summary.jankPercent)
                                 .put("worstFrameMs", summary.worstFrameMs)
+                                .put("worstOverrunMs", summary.worstOverrunMs)
                                 .put("droppedReports", summary.droppedReports),
                         )
                     }
@@ -548,31 +601,51 @@ class ChessboardDragPerformanceTest {
 
     private data class FrameDatum(
         val deadlineNs: Long,
+        val intendedVsyncTimestampNs: Long,
         val totalDurationNs: Long,
     )
 
     private data class FrameSample(
+        val callbackCount: Int,
         val droppedReports: Int,
+        val duplicateMetrics: Int,
         val frames: List<FrameDatum>,
+        val inputSpanMs: Long,
         val invalidMetrics: Int,
+        val measurementSpanMs: Long,
+        val outOfWindowMetrics: Int,
+    )
+
+    private data class MeasurementWindow(
+        val endNs: Long,
+        val inputSpanMs: Long,
+        val startNs: Long,
     )
 
     private data class PerformanceRunSummary(
+        val callbackCount: Int,
         val droppedReports: Int,
+        val duplicateMetrics: Int,
         val frameCount: Int,
         val inputSpanMs: Long,
         val invalidMetrics: Int,
         val jankPercent: Double,
+        val measurementSpanMs: Long,
+        val outOfWindowMetrics: Int,
         val p95Ms: Double,
+        val p95OverrunMs: Double,
         val p99Ms: Double,
+        val p99OverrunMs: Double,
         val run: Int,
         val successfulMoves: Int,
         val worstFrameMs: Double,
+        val worstOverrunMs: Double,
     )
 
     private class FrameMetricsCollector : Window.OnFrameMetricsAvailableListener {
         private val lock = Any()
         private var activeRun: Int? = null
+        private val callbackCounts = mutableMapOf<Int, Int>()
         private val droppedReports = mutableMapOf<Int, Int>()
         private val frames = mutableMapOf<Int, MutableList<FrameDatum>>()
         private val invalidMetrics = mutableMapOf<Int, Int>()
@@ -580,6 +653,7 @@ class ChessboardDragPerformanceTest {
         fun beginRun(runIndex: Int) {
             synchronized(lock) {
                 check(activeRun === null) { "another performance run is active" }
+                callbackCounts[runIndex] = 0
                 frames[runIndex] = mutableListOf()
                 droppedReports[runIndex] = 0
                 invalidMetrics[runIndex] = 0
@@ -587,14 +661,50 @@ class ChessboardDragPerformanceTest {
             }
         }
 
-        fun finishRun(runIndex: Int): FrameSample =
+        fun finishRun(
+            runIndex: Int,
+            measurementWindow: MeasurementWindow,
+        ): FrameSample =
             synchronized(lock) {
                 check(activeRun == runIndex) { "performance run $runIndex is not active" }
+                check(measurementWindow.startNs > 0) {
+                    "performance run $runIndex has no measurement start"
+                }
+                check(measurementWindow.endNs > measurementWindow.startNs) {
+                    "performance run $runIndex has an invalid measurement window"
+                }
                 activeRun = null
+
+                val uniqueFrames = mutableListOf<FrameDatum>()
+                val intendedVsyncs = mutableSetOf<Long>()
+                var duplicateMetricCount = 0
+                var outOfWindowMetricCount = 0
+                for (frame in frames.remove(runIndex).orEmpty()) {
+                    if (
+                        frame.intendedVsyncTimestampNs < measurementWindow.startNs ||
+                        frame.intendedVsyncTimestampNs > measurementWindow.endNs
+                    ) {
+                        outOfWindowMetricCount += 1
+                    } else if (!intendedVsyncs.add(frame.intendedVsyncTimestampNs)) {
+                        // Android can deliver a completely duplicated FrameMetrics
+                        // record for one intended-vsync timestamp (b/206956036).
+                        // Keep the first report, matching AndroidX JankStats.
+                        duplicateMetricCount += 1
+                    } else {
+                        uniqueFrames.add(frame)
+                    }
+                }
                 FrameSample(
+                    callbackCount = callbackCounts.remove(runIndex) ?: 0,
                     droppedReports = droppedReports.remove(runIndex) ?: 0,
-                    frames = frames.remove(runIndex)?.toList().orEmpty(),
+                    duplicateMetrics = duplicateMetricCount,
+                    frames = uniqueFrames,
+                    inputSpanMs = measurementWindow.inputSpanMs,
                     invalidMetrics = invalidMetrics.remove(runIndex) ?: 0,
+                    measurementSpanMs =
+                        (measurementWindow.endNs - measurementWindow.startNs) /
+                            NANOSECONDS_PER_MILLISECOND_LONG,
+                    outOfWindowMetrics = outOfWindowMetricCount,
                 )
             }
 
@@ -605,17 +715,25 @@ class ChessboardDragPerformanceTest {
         ) {
             synchronized(lock) {
                 val runIndex = activeRun ?: return
+                callbackCounts[runIndex] = callbackCounts.getValue(runIndex) + 1
                 droppedReports[runIndex] =
                     droppedReports.getValue(runIndex) + dropCountSinceLastInvocation
+                val intendedVsyncTimestamp =
+                    frameMetrics.getMetric(FrameMetrics.INTENDED_VSYNC_TIMESTAMP)
                 val totalDuration = frameMetrics.getMetric(FrameMetrics.TOTAL_DURATION)
                 val deadline = frameMetrics.getMetric(FrameMetrics.DEADLINE)
-                if (totalDuration <= 0 || deadline <= 0) {
+                if (
+                    intendedVsyncTimestamp <= 0 ||
+                    totalDuration <= 0 ||
+                    deadline <= 0
+                ) {
                     invalidMetrics[runIndex] = invalidMetrics.getValue(runIndex) + 1
                     return
                 }
                 frames.getValue(runIndex).add(
                     FrameDatum(
                         deadlineNs = deadline,
+                        intendedVsyncTimestampNs = intendedVsyncTimestamp,
                         totalDurationNs = totalDuration,
                     ),
                 )
@@ -634,9 +752,8 @@ class ChessboardDragPerformanceTest {
         const val INTERACTION_TIMEOUT_MS = 30_000L
         const val MAXIMUM_FRAME_MS = 50.0
         const val MAXIMUM_INPUT_SPAN_MS = 4_100L
-        const val MAXIMUM_JANK_PERCENT = 5.0
-        const val MAXIMUM_P95_MS = 17.0
-        const val MAXIMUM_P99_MS = 34.0
+        const val MAXIMUM_MEASURED_FRAMES = 270
+        const val MAXIMUM_MEASUREMENT_SPAN_MS = 4_300L
         const val MAXIMUM_REFRESH_RATE_HZ = 60.5f
         const val MEASURED_MOVE_COUNT = 240
         const val MEASURED_RUN_COUNT = 5
@@ -645,8 +762,10 @@ class ChessboardDragPerformanceTest {
         const val METRICS_HANDLER_DRAIN_TIMEOUT_MS = 2_000L
         const val MINIMUM_INPUT_SPAN_MS = 3_950L
         const val MINIMUM_MEASURED_FRAMES = 228
+        const val MINIMUM_MEASUREMENT_SPAN_MS = 4_100L
         const val MINIMUM_REFRESH_RATE_HZ = 59.5f
         const val NANOSECONDS_PER_MILLISECOND = 1_000_000.0
+        const val NANOSECONDS_PER_MILLISECOND_LONG = 1_000_000L
         const val OVERLAY_RETIRE_SETTLE_MS = 250L
         const val PERFORMANCE_LOG_PREFIX = "CHESSBOARD_DRAG_PERF "
         const val PERFORMANCE_LOG_TAG = "ChessboardDragPerf"

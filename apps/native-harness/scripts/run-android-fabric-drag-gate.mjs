@@ -39,16 +39,16 @@ export const androidDragPerformanceTest =
 
 const dragPerformanceLogPrefix = 'CHESSBOARD_DRAG_PERF ';
 const dragPerformanceThresholds = Object.freeze({
+  maximumFrameCount: 270,
   maximumFrameMs: 50,
   maximumInputSpanMs: 4_100,
-  maximumJankPercent: 5,
-  maximumP95Ms: 17,
-  maximumP99Ms: 34,
+  maximumMeasurementSpanMs: 4_300,
   maximumRefreshRateHz: 60.5,
   measuredMoveCount: 240,
   measuredRunCount: 5,
   minimumFrameCount: 228,
   minimumInputSpanMs: 3_950,
+  minimumMeasurementSpanMs: 4_100,
   minimumRefreshRateHz: 59.5,
 });
 
@@ -294,8 +294,8 @@ export function parseAndroidDragPerformance(logcat) {
   ) {
     throw new Error('Android drag performance record must be an object.');
   }
-  if (summary.schemaVersion !== 1) {
-    throw new Error('Android drag performance schemaVersion must equal 1.');
+  if (summary.schemaVersion !== 2) {
+    throw new Error('Android drag performance schemaVersion must equal 2.');
   }
   const refreshRate = requireFiniteNumber(
     summary.displayRefreshHz,
@@ -336,9 +336,25 @@ export function parseAndroidDragPerformance(logcat) {
       run.inputSpanMs,
       `run ${String(index + 1)} inputSpanMs`,
     );
+    const measurementSpanMs = requireNonNegativeInteger(
+      run.measurementSpanMs,
+      `run ${String(index + 1)} measurementSpanMs`,
+    );
     const invalidMetrics = requireNonNegativeInteger(
       run.invalidMetrics,
       `run ${String(index + 1)} invalidMetrics`,
+    );
+    const callbackCount = requireNonNegativeInteger(
+      run.callbackCount,
+      `run ${String(index + 1)} callbackCount`,
+    );
+    const duplicateMetrics = requireNonNegativeInteger(
+      run.duplicateMetrics,
+      `run ${String(index + 1)} duplicateMetrics`,
+    );
+    const outOfWindowMetrics = requireNonNegativeInteger(
+      run.outOfWindowMetrics,
+      `run ${String(index + 1)} outOfWindowMetrics`,
     );
     const frameCount = requireNonNegativeInteger(
       run.frameCount,
@@ -359,6 +375,18 @@ export function parseAndroidDragPerformance(logcat) {
     const worstFrameMs = requireNonNegativeNumber(
       run.worstFrameMs,
       `run ${String(index + 1)} worstFrameMs`,
+    );
+    const p95OverrunMs = requireFiniteNumber(
+      run.p95OverrunMs,
+      `run ${String(index + 1)} p95OverrunMs`,
+    );
+    const p99OverrunMs = requireFiniteNumber(
+      run.p99OverrunMs,
+      `run ${String(index + 1)} p99OverrunMs`,
+    );
+    const worstOverrunMs = requireFiniteNumber(
+      run.worstOverrunMs,
+      `run ${String(index + 1)} worstOverrunMs`,
     );
     const droppedReports = requireNonNegativeInteger(
       run.droppedReports,
@@ -382,9 +410,28 @@ export function parseAndroidDragPerformance(logcat) {
         `Android drag performance run ${String(index + 1)} input span is out of range.`,
       );
     }
-    if (frameCount < dragPerformanceThresholds.minimumFrameCount) {
+    if (
+      measurementSpanMs < dragPerformanceThresholds.minimumMeasurementSpanMs ||
+      measurementSpanMs > dragPerformanceThresholds.maximumMeasurementSpanMs
+    ) {
       throw new Error(
-        `Android drag performance run ${String(index + 1)} collected too few frames.`,
+        `Android drag performance run ${String(index + 1)} measurement span is out of range.`,
+      );
+    }
+    if (
+      frameCount < dragPerformanceThresholds.minimumFrameCount ||
+      frameCount > dragPerformanceThresholds.maximumFrameCount
+    ) {
+      throw new Error(
+        `Android drag performance run ${String(index + 1)} collected a frame count outside the cadence range.`,
+      );
+    }
+    if (
+      callbackCount !==
+      frameCount + duplicateMetrics + outOfWindowMetrics + invalidMetrics
+    ) {
+      throw new Error(
+        `Android drag performance run ${String(index + 1)} has inconsistent callback accounting.`,
       );
     }
     if (!(p95Ms <= p99Ms && p99Ms <= worstFrameMs)) {
@@ -392,19 +439,19 @@ export function parseAndroidDragPerformance(logcat) {
         `Android drag performance run ${String(index + 1)} has inconsistent frame percentiles.`,
       );
     }
-    if (p95Ms > dragPerformanceThresholds.maximumP95Ms) {
+    if (!(p95OverrunMs <= p99OverrunMs && p99OverrunMs <= worstOverrunMs)) {
       throw new Error(
-        `Android drag performance run ${String(index + 1)} exceeded p95 budget.`,
+        `Android drag performance run ${String(index + 1)} has inconsistent frame overruns.`,
       );
     }
-    if (p99Ms > dragPerformanceThresholds.maximumP99Ms) {
+    if (p95OverrunMs >= 0 || p99OverrunMs >= 0 || worstOverrunMs >= 0) {
       throw new Error(
-        `Android drag performance run ${String(index + 1)} exceeded p99 budget.`,
+        `Android drag performance run ${String(index + 1)} reached or exceeded a frame deadline.`,
       );
     }
-    if (jankPercent > dragPerformanceThresholds.maximumJankPercent) {
+    if (jankPercent !== 0) {
       throw new Error(
-        `Android drag performance run ${String(index + 1)} exceeded jank budget.`,
+        `Android drag performance run ${String(index + 1)} reported non-zero jank.`,
       );
     }
     if (worstFrameMs >= dragPerformanceThresholds.maximumFrameMs) {
