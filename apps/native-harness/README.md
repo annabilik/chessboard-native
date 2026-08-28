@@ -84,8 +84,11 @@ plain-FEN, native-accessibility, reuse, and log-scanner assertions while running
 driver injects every raw native DOWN/UP pair through `UiAutomation`, without
 Espresso's click-action delay or main-thread idle waits. Intermediate events are
 asynchronous and the final UP is a synchronous ordering barrier. The driver
-paces each DOWN from the preceding actual DOWN by at least the configured 125 ms
-and requires all 71 native gaps to remain below 200 ms. The fixture separately
+waits for each exact React-committed position-change count before scheduling the
+next input, preventing queued touches from reaching JavaScript in a burst. Each
+next DOWN is no earlier than both the preceding DOWN plus the configured 125 ms
+and the commit acknowledgement plus 100 ms; the gate fails if that schedule
+cannot stay below the preceding DOWN plus 200 ms. The fixture separately
 measures all 71 consecutive JavaScript `onPress` gaps and publishes one summary
 after handler 72; the test requires a minimum of 100 ms, a maximum below 200 ms,
 and zero invalid or out-of-bound gaps. The sequence is therefore accepted only
