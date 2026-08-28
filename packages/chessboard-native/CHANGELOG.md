@@ -1,5 +1,16 @@
 # @vibechess/chessboard-native
 
+## 0.1.1-next.1
+
+### Patch Changes
+
+- 9f6698a: <!-- markdownlint-disable MD041 -->
+
+  Prevent interrupted controlled-position animations from updating removed
+  Fabric hosts by quiescing disappearing piece and pending-handoff hosts through
+  a two-frame retirement window and avoiding terminal progress writes during
+  transition teardown.
+
 ## 0.1.1-next.0
 
 ### Patch Changes
