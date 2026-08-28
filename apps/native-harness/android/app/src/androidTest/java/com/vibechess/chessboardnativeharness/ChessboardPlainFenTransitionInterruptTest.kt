@@ -1,7 +1,9 @@
 package com.vibechess.chessboardnativeharness
 
+import android.app.UiAutomation
 import android.content.Context
 import android.content.Intent
+import android.os.Looper
 import android.os.SystemClock
 import android.view.InputDevice
 import android.view.MotionEvent
@@ -17,6 +19,7 @@ import androidx.test.espresso.matcher.ViewMatchers.isRoot
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
+import androidx.test.platform.app.InstrumentationRegistry
 import org.hamcrest.Description
 import org.hamcrest.Matcher
 import org.hamcrest.TypeSafeMatcher
@@ -56,11 +59,10 @@ abstract class PlainFenTransitionInterruptTestBase(
         )
 
         if (injectEachTransition) {
-            onView(injectedTriggerMatcher()).perform(
-                injectRawTapSequence(
-                    tapCount = rapidChangeCount,
-                    minimumIntervalMs = rapidCadenceMs.toLong(),
-                ),
+            injectRawTapSequence(
+                targetLabel = INJECTED_TRIGGER_LABEL,
+                tapCount = rapidChangeCount,
+                minimumIntervalMs = rapidCadenceMs.toLong(),
             )
         } else {
             onView(rapidTriggerMatcher()).perform(performDirectClick())
@@ -97,8 +99,10 @@ abstract class PlainFenTransitionInterruptTestBase(
         // Keep reuse as a separate raw native input after the retirement window.
         // Its DOWN/UP pair has no Espresso click-action post-delay and makes
         // Reanimated replay pending synchronous props after host removal.
-        onView(reuseTriggerMatcher()).perform(
-            injectRawTapSequence(tapCount = 1, minimumIntervalMs = 0),
+        injectRawTapSequence(
+            targetLabel = REUSE_TRIGGER_LABEL,
+            tapCount = 1,
+            minimumIntervalMs = 0,
         )
         awaitState(
             changeCount = rapidChangeCount + 1,
@@ -324,81 +328,100 @@ abstract class PlainFenTransitionInterruptTestBase(
     }
 
     private fun injectRawTapSequence(
+        targetLabel: String,
         tapCount: Int,
         minimumIntervalMs: Long,
-    ): ViewAction = object : ViewAction {
-        override fun getConstraints(): Matcher<View> = isDisplayed()
-
-        override fun getDescription(): String =
-            "inject $tapCount raw native tap(s) with at least $minimumIntervalMs ms between DOWN events"
-
-        override fun perform(uiController: UiController, view: View) {
-            require(tapCount > 0) { "Raw tap count must be positive." }
-            require(minimumIntervalMs >= 0) {
-                "Raw tap minimum interval must be non-negative."
-            }
-            var previousDownAtMs: Long? = null
-            var observedDownGapCount = 0
-
-            repeat(tapCount) { index ->
-                previousDownAtMs?.let { previous ->
-                    val remainingMs = previous + minimumIntervalMs - SystemClock.uptimeMillis()
-                    if (remainingMs > 0) {
-                        uiController.loopMainThreadForAtLeast(remainingMs)
-                    }
-                }
-
-                assertTrue(
-                    "raw tap ${index + 1} target must remain attached",
-                    view.isAttachedToWindow,
-                )
-                assertTrue("raw tap ${index + 1} target must remain shown", view.isShown)
-                assertTrue(
-                    "raw tap ${index + 1} target must retain positive geometry",
-                    view.width > 0 && view.height > 0,
-                )
-                val location = IntArray(2).also(view::getLocationOnScreen)
-                val coordinates =
-                    floatArrayOf(
-                        location[0] + view.width / 2f,
-                        location[1] + view.height / 2f,
-                    )
-                val downAtMs = SystemClock.uptimeMillis()
-                previousDownAtMs?.let { previous ->
-                    val downGapMs = downAtMs - previous
-                    observedDownGapCount += 1
-                    assertTrue(
-                        "raw tap ${index + 1} must start at least $minimumIntervalMs ms after its predecessor",
-                        downGapMs >= minimumIntervalMs,
-                    )
-                    assertTrue(
-                        "raw tap ${index + 1} must interrupt the $transitionDurationMs ms transition",
-                        downGapMs < transitionDurationMs,
-                    )
-                }
-                injectRawTapOrCancelOnFailure(
-                    uiController = uiController,
-                    downTime = downAtMs,
-                    coordinates = coordinates,
-                    tapNumber = index + 1,
-                )
-                previousDownAtMs = downAtMs
-            }
-
-            assertEquals(
-                "every raw tap after the first must contribute one Android DOWN gap",
-                tapCount - 1,
-                observedDownGapCount,
-            )
-            uiController.loopMainThreadForAtLeast(RAW_TAP_DELIVERY_SETTLE_MS)
+    ) {
+        require(tapCount > 0) { "Raw tap count must be positive." }
+        require(minimumIntervalMs >= 0) {
+            "Raw tap minimum interval must be non-negative."
         }
+        assertTrue(
+            "raw touch injection must run off the app main thread",
+            Looper.myLooper() != Looper.getMainLooper(),
+        )
+        val uiAutomation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        var previousDownAtMs: Long? = null
+        var observedDownGapCount = 0
+
+        repeat(tapCount) { index ->
+            val tapNumber = index + 1
+            val coordinates = rawTapTargetCoordinates(targetLabel, tapNumber)
+            previousDownAtMs?.let { previous ->
+                val remainingMs = previous + minimumIntervalMs - SystemClock.uptimeMillis()
+                if (remainingMs > 0) {
+                    SystemClock.sleep(remainingMs)
+                }
+            }
+
+            val downAtMs = SystemClock.uptimeMillis()
+            previousDownAtMs?.let { previous ->
+                val downGapMs = downAtMs - previous
+                observedDownGapCount += 1
+                assertTrue(
+                    "raw tap $tapNumber native DOWN gap=${downGapMs}ms must be at least ${minimumIntervalMs}ms",
+                    downGapMs >= minimumIntervalMs,
+                )
+                assertTrue(
+                    "raw tap $tapNumber native DOWN gap=${downGapMs}ms must interrupt the ${transitionDurationMs}ms transition",
+                    downGapMs < transitionDurationMs,
+                )
+            }
+            injectRawTapOrCancelOnFailure(
+                uiAutomation = uiAutomation,
+                downTime = downAtMs,
+                coordinates = coordinates,
+                tapNumber = tapNumber,
+                terminalSync = index == tapCount - 1,
+            )
+            previousDownAtMs = downAtMs
+        }
+
+        assertEquals(
+            "every raw tap after the first must contribute one Android DOWN gap",
+            tapCount - 1,
+            observedDownGapCount,
+        )
+    }
+
+    private fun rawTapTargetCoordinates(targetLabel: String, tapNumber: Int): FloatArray {
+        var coordinates: FloatArray? = null
+        activityRule.scenario.onActivity { activity ->
+            val targets =
+                descendantViews(activity.window.decorView).filter { view ->
+                    view.contentDescription?.toString() == targetLabel
+                }
+            val view =
+                targets.singleOrNull()
+                    ?: throw AssertionError(
+                        "raw tap $tapNumber must resolve exactly one $targetLabel target; found=${targets.size}",
+                    )
+            assertTrue(
+                "raw tap $tapNumber target must remain attached",
+                view.isAttachedToWindow,
+            )
+            assertTrue("raw tap $tapNumber target must remain shown", view.isShown)
+            assertTrue(
+                "raw tap $tapNumber target must retain positive geometry",
+                view.width > 0 && view.height > 0,
+            )
+            val location = IntArray(2).also(view::getLocationOnScreen)
+            coordinates =
+                floatArrayOf(
+                    location[0] + view.width / 2f,
+                    location[1] + view.height / 2f,
+                )
+        }
+        return coordinates
+            ?: throw AssertionError("raw tap $tapNumber target geometry was not captured")
     }
 
     private fun injectRawTapOrCancelOnFailure(
-        uiController: UiController,
+        uiAutomation: UiAutomation,
         downTime: Long,
         coordinates: FloatArray,
         tapNumber: Int,
+        terminalSync: Boolean,
     ) {
         var downAttempted = false
         var terminalDelivered = false
@@ -413,7 +436,7 @@ abstract class PlainFenTransitionInterruptTestBase(
             val downInjected =
                 try {
                     downAttempted = true
-                    uiController.injectMotionEvent(down)
+                    uiAutomation.injectInputEvent(down, false)
                 } finally {
                     down.recycle()
                 }
@@ -421,7 +444,7 @@ abstract class PlainFenTransitionInterruptTestBase(
                 throw AssertionError("raw tap $tapNumber DOWN injection must succeed")
             }
 
-            uiController.loopMainThreadForAtLeast(RAW_TAP_HOLD_MS)
+            SystemClock.sleep(RAW_TAP_HOLD_MS)
             val upAtMs = SystemClock.uptimeMillis()
             val up =
                 touchEvent(
@@ -432,7 +455,7 @@ abstract class PlainFenTransitionInterruptTestBase(
                 )
             val upInjected =
                 try {
-                    uiController.injectMotionEvent(up)
+                    uiAutomation.injectInputEvent(up, terminalSync)
                 } finally {
                     up.recycle()
                 }
@@ -443,7 +466,7 @@ abstract class PlainFenTransitionInterruptTestBase(
         } catch (failure: Throwable) {
             if (downAttempted && !terminalDelivered) {
                 attemptRawCancel(
-                    uiController = uiController,
+                    uiAutomation = uiAutomation,
                     downTime = downTime,
                     coordinates = coordinates,
                     originalFailure = failure,
@@ -455,7 +478,7 @@ abstract class PlainFenTransitionInterruptTestBase(
     }
 
     private fun attemptRawCancel(
-        uiController: UiController,
+        uiAutomation: UiAutomation,
         downTime: Long,
         coordinates: FloatArray,
         originalFailure: Throwable,
@@ -472,7 +495,7 @@ abstract class PlainFenTransitionInterruptTestBase(
                         coordinates = coordinates,
                     )
                 try {
-                    if (!uiController.injectMotionEvent(cancel)) {
+                    if (!uiAutomation.injectInputEvent(cancel, true)) {
                         throw AssertionError(
                             "raw tap $tapNumber recovery CANCEL injection must succeed",
                         )
@@ -570,12 +593,6 @@ abstract class PlainFenTransitionInterruptTestBase(
     private fun rapidTriggerMatcher(): Matcher<View> =
         contentDescriptionMatcher(RAPID_TRIGGER_LABEL)
 
-    private fun reuseTriggerMatcher(): Matcher<View> =
-        contentDescriptionMatcher(REUSE_TRIGGER_LABEL)
-
-    private fun injectedTriggerMatcher(): Matcher<View> =
-        contentDescriptionMatcher(INJECTED_TRIGGER_LABEL)
-
     private fun contentDescriptionMatcher(expected: String): Matcher<View> =
         object : TypeSafeMatcher<View>() {
             override fun describeTo(description: Description) {
@@ -637,7 +654,6 @@ abstract class PlainFenTransitionInterruptTestBase(
             )
         const val MINIMUM_ASSERTED_HANDLER_GAP_MS = 100.0
         const val POLL_INTERVAL_MS = 50L
-        const val RAW_TAP_DELIVERY_SETTLE_MS = 25L
         const val RAW_TAP_HOLD_MS = 8L
         const val RAPID_TRIGGER_LABEL = "Start rapid plain FEN transition interruptions"
         const val REUSE_TRIGGER_LABEL = "Apply reusable plain FEN transition"

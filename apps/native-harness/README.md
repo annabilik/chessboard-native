@@ -80,20 +80,22 @@ background/resume, full physical accessibility, and iOS were not newly rerun.
 
 `native:android:position-transition:interrupt:200ms:gate` preserves the same
 plain-FEN, native-accessibility, reuse, and log-scanner assertions while running
-72 changes against 200 ms controlled transitions. One custom AndroidTest action
-injects every raw native DOWN/UP pair without Espresso's click-action post-UP
-delay. It paces each DOWN from the preceding actual DOWN by at least the
-configured 125 ms and requires all 71 native gaps to remain below 200 ms. The
-fixture separately measures all 71 consecutive JavaScript `onPress` gaps and
-publishes one summary after handler 72; the test requires a minimum of 100 ms,
-a maximum below 200 ms, and zero invalid or out-of-bound gaps. The sequence is
-therefore accepted only when it measurably interrupts all four 18-change
-transition cycles. Afterward it holds the quiescent hosts for 3.5 seconds,
-covering Reanimated 4.5's Android settled-props cleanup window and the guarded
-removal frames, then injects the reuse control as a separate raw native tap. The
-scanner therefore observes the first event-driven synchronous-props flush after
-host removal. The original 300/190 ms gate remains independently executable and
-its historical evidence is unchanged.
+72 changes against 200 ms controlled transitions. An instrumentation-thread
+driver injects every raw native DOWN/UP pair through `UiAutomation`, without
+Espresso's click-action delay or main-thread idle waits. Intermediate events are
+asynchronous and the final UP is a synchronous ordering barrier. The driver
+paces each DOWN from the preceding actual DOWN by at least the configured 125 ms
+and requires all 71 native gaps to remain below 200 ms. The fixture separately
+measures all 71 consecutive JavaScript `onPress` gaps and publishes one summary
+after handler 72; the test requires a minimum of 100 ms, a maximum below 200 ms,
+and zero invalid or out-of-bound gaps. The sequence is therefore accepted only
+when it measurably interrupts all four 18-change transition cycles. Afterward it
+holds the quiescent hosts for 3.5 seconds, covering Reanimated 4.5's Android
+settled-props cleanup window and the guarded removal frames, then injects the
+reuse control as a separate off-main raw native tap. The scanner therefore
+observes the first event-driven synchronous-props flush after host removal. The
+original 300/190 ms gate remains independently executable and its historical
+evidence is unchanged.
 
 `native:android:position-transition:whole-unmount:gate` runs two focused
 200 ms lifecycle cycles against the transition/provider fixture. The prompt
