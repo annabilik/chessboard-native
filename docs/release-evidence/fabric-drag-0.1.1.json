@@ -1,0 +1,523 @@
+{
+  "schemaVersion": 1,
+  "status": "passed-source-candidate",
+  "subject": "repository-source",
+  "package": {
+    "name": "@vibechess/chessboard-native",
+    "candidateVersion": "0.1.1",
+    "manifestVersionAtTest": "0.1.0",
+    "archive": null,
+    "publication": null
+  },
+  "source": {
+    "commit": "37eb6e60ec8e9c6e670ad0ffcb71c33e4c86ce0e",
+    "tree": "633e29450bb538cb43dc4f4f045635af450e5920",
+    "dirty": false,
+    "status": "",
+    "trackedDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "untrackedFileCount": 0,
+    "untrackedFilesSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "worktreeSha256": "8d4e13754b8484df12b47931400f2490f5ef941986d8a1d5928b079c033b8087",
+    "gateSnapshotNote": "All seven gates recorded this identical clean snapshot at start and finish and sourceChangedDuringRun=false."
+  },
+  "device": {
+    "kind": "physical",
+    "manufacturer": "samsung",
+    "model": "SM-A075F",
+    "androidRelease": "16",
+    "apiLevel": "36",
+    "abi": "arm64-v8a",
+    "displayRefreshHz": 60,
+    "serialOmitted": true
+  },
+  "runtime": {
+    "buildVariant": "release",
+    "react": "19.2.3",
+    "reactNative": "0.86.0",
+    "reactNativeGestureHandler": "2.32.0",
+    "reactNativeReanimated": "4.5.0",
+    "reactNativeWorklets": "0.10.0",
+    "reactNativeSvg": "15.15.4",
+    "fabric": true,
+    "hermes": true,
+    "androidCompileSdk": 36,
+    "androidTargetSdk": 36,
+    "androidMinSdk": 24,
+    "gradle": "9.3.1"
+  },
+  "builtArtifacts": {
+    "note": "Local, noncommitted build outputs from the tested source; these are not npm registry artifacts.",
+    "releaseApk": {
+      "path": "apps/native-harness/android/app/build/outputs/apk/release/app-release.apk",
+      "sha256": "82db78f8a090bbb80cabca29edfdb17aec5118f01bd9733f0b3ce826a424c918"
+    },
+    "releaseAndroidTestApk": {
+      "path": "apps/native-harness/android/app/build/outputs/apk/androidTest/release/app-release-androidTest.apk",
+      "sha256": "1672661c65e9c85a17c3ca2f02cddd25cfbfe0979cf56689d9b8dcab8df02024"
+    }
+  },
+  "performanceThresholds": {
+    "measuredRunCount": 5,
+    "measuredMoveCount": 301,
+    "minimumRefreshRateHz": 59.5,
+    "maximumRefreshRateHz": 60.5,
+    "expectedFrameDurationToleranceMs": 0.01,
+    "jankHeuristicMultiplier": 2,
+    "minimumInputSpanMs": 3950,
+    "maximumInputSpanMs": 4100,
+    "minimumMeasurementSpanMs": 3950,
+    "maximumMeasurementSpanMs": 4100,
+    "minimumFrameCount": 228,
+    "maximumFrameCount": 270,
+    "minimumDeliveryPercent": 95,
+    "maximumActivationLatencyMsExclusive": 83.34,
+    "maximumFinalMoveLatencyMsExclusive": 50,
+    "maximumTotalDurationMsExclusive": 50,
+    "maximumSustainedVsyncGapMsExclusive": 50,
+    "maximumPlausibleDeadlinePeriods": 4,
+    "requiredHeuristicJankCount": 0,
+    "requiredInvalidMetrics": 0,
+    "requiredDuplicatePayloadMismatchCount": 0,
+    "requiredDroppedReports": 0
+  },
+  "gates": [
+    {
+      "id": "accepted-controlled-drag",
+      "status": "passed",
+      "startedAt": "2026-08-27T23:37:34.787Z",
+      "finishedAt": "2026-08-27T23:39:32.068Z",
+      "sourceAtStartMatchesSource": true,
+      "sourceAtFinishMatchesSource": true,
+      "sourceChangedDuringRun": false,
+      "testClass": "com.vibechess.chessboardnativeharness.ChessboardAcceptedDragTest#acceptedDragsPublishCorrelatedControlledCommitsExactlyOnce",
+      "gradle": {
+        "task": ":app:connectedReleaseAndroidTest",
+        "exitCode": 0,
+        "error": null
+      },
+      "performanceRequired": false,
+      "performanceViolations": [],
+      "result": {
+        "directory": "apps/native-harness/android/app/build/reports/fabric-drag-gate",
+        "sha256": "b032206df7fe47648101d33189000fbd95fc140ccc65b4fb1167c3ff966b82d5"
+      },
+      "logcat": {
+        "findingCount": 0,
+        "capturePrematureExit": null,
+        "sha256": "0417edb001afd95fba0418d7486f36f0a2325e1521e10469696bdfcc5144da37"
+      }
+    },
+    {
+      "id": "provider-unmount-during-drag",
+      "status": "passed",
+      "startedAt": "2026-08-27T23:39:45.959Z",
+      "finishedAt": "2026-08-27T23:41:02.255Z",
+      "sourceAtStartMatchesSource": true,
+      "sourceAtFinishMatchesSource": true,
+      "sourceChangedDuringRun": false,
+      "testClass": "com.vibechess.chessboardnativeharness.ChessboardProviderUnmountDragTest#unmountingProviderDuringActiveDragDoesNotUpdateRemovedFabricHosts",
+      "gradle": {
+        "task": ":app:connectedReleaseAndroidTest",
+        "exitCode": 0,
+        "error": null
+      },
+      "performanceRequired": false,
+      "performanceViolations": [],
+      "result": {
+        "directory": "apps/native-harness/android/app/build/reports/fabric-drag-provider-unmount-gate",
+        "sha256": "92ae176e2e8446e2a39ed640e80c8670d1f198d0a608ea6a444a90819e6e49cf"
+      },
+      "logcat": {
+        "findingCount": 0,
+        "capturePrematureExit": null,
+        "sha256": "25dfd1d29da9cb4c7e453969758d14bf60daac4e91b0788cf23c849d9f5aa841"
+      }
+    },
+    {
+      "id": "transition-and-provider-replacement",
+      "status": "passed",
+      "startedAt": "2026-08-27T23:41:10.200Z",
+      "finishedAt": "2026-08-27T23:42:22.428Z",
+      "sourceAtStartMatchesSource": true,
+      "sourceAtFinishMatchesSource": true,
+      "sourceChangedDuringRun": false,
+      "testClass": "com.vibechess.chessboardnativeharness.ChessboardTransitionProviderUnmountDragTest#providerReplacementWhileTransitionAndDragOverlapLeavesStateReusable",
+      "gradle": {
+        "task": ":app:connectedReleaseAndroidTest",
+        "exitCode": 0,
+        "error": null
+      },
+      "performanceRequired": false,
+      "performanceViolations": [],
+      "result": {
+        "directory": "apps/native-harness/android/app/build/reports/fabric-drag-transition-provider-unmount-gate",
+        "sha256": "96e5685b6c614d004bfa43cb3c75fde1e809593c94214c1fceea8e144cffecc6"
+      },
+      "logcat": {
+        "findingCount": 0,
+        "capturePrematureExit": null,
+        "sha256": "147dba60e0d918f6523c52dd388565aa5c68d1c1b874f5e68aa0feb9013c71bc"
+      }
+    },
+    {
+      "id": "background-resume",
+      "status": "passed",
+      "startedAt": "2026-08-27T23:42:31.984Z",
+      "finishedAt": "2026-08-27T23:43:58.052Z",
+      "sourceAtStartMatchesSource": true,
+      "sourceAtFinishMatchesSource": true,
+      "sourceChangedDuringRun": false,
+      "testClass": "com.vibechess.chessboardnativeharness.ChessboardInteractionTest#backgroundResumeCancelsAnActiveDragAndAllowsTheNextGesture",
+      "gradle": {
+        "task": ":app:connectedReleaseAndroidTest",
+        "exitCode": 0,
+        "error": null
+      },
+      "performanceRequired": false,
+      "performanceViolations": [],
+      "result": {
+        "directory": "apps/native-harness/android/app/build/reports/fabric-drag-background-resume-gate",
+        "sha256": "16430db7ee9a503daeed2cad67e080638bfe8caa16384207717fec880b944061"
+      },
+      "logcat": {
+        "findingCount": 0,
+        "capturePrematureExit": null,
+        "sha256": "29ae03068eeda61cd6fc9733a285beb93d538e2c03bcca4df5ed66e382a641f0"
+      }
+    },
+    {
+      "id": "performance-batch-1",
+      "status": "passed",
+      "startedAt": "2026-08-27T23:44:12.673Z",
+      "finishedAt": "2026-08-27T23:45:43.302Z",
+      "sourceAtStartMatchesSource": true,
+      "sourceAtFinishMatchesSource": true,
+      "sourceChangedDuringRun": false,
+      "testClass": "com.vibechess.chessboardnativeharness.ChessboardDragPerformanceTest#sustainedDragMeetsReleaseFrameBudget",
+      "gradle": {
+        "task": ":app:connectedReleaseAndroidTest",
+        "exitCode": 0,
+        "error": null
+      },
+      "performanceRequired": true,
+      "performanceViolations": [],
+      "result": {
+        "directory": "apps/native-harness/android/app/build/reports/fabric-drag-performance-final-run1",
+        "sha256": "ca60c342b461ae96aaabb7a79ddb31643795649d3d6fa19b080fb6fb6caf871f"
+      },
+      "logcat": {
+        "findingCount": 0,
+        "capturePrematureExit": null,
+        "sha256": "4c8694b6d8b98ab3a06a378c26f0621596b7242c15f72eba4a29c80235c47998"
+      },
+      "performance": {
+        "schemaVersion": 4,
+        "displayRefreshHz": 60,
+        "expectedFrameDurationMs": 16.666666666666664,
+        "jankHeuristicMultiplier": 2,
+        "deadlineMetricsPlausible": false,
+        "runs": [
+          {
+            "run": 1,
+            "successfulMoves": 301,
+            "activationLatencyMs": 55.10424,
+            "finalMoveLatencyMs": 32.522086,
+            "inputSpanMs": 4066,
+            "measurementSpanMs": 4050,
+            "frameCount": 241,
+            "deliveryPercent": 97.96747967479675,
+            "worstSustainedVsyncGapMs": 33.081038,
+            "p95UiDurationMs": 7.772786,
+            "p99UiDurationMs": 9.634212,
+            "worstUiDurationMs": 12.646319,
+            "heuristicJankPercent": 0,
+            "p95TotalDurationMs": 15.14321,
+            "p99TotalDurationMs": 16.088318,
+            "worstTotalDurationMs": 17.094089,
+            "invalidMetrics": 0,
+            "duplicatePayloadMismatchCount": 0,
+            "outOfWindowMetrics": 0,
+            "droppedReports": 0
+          },
+          {
+            "run": 2,
+            "successfulMoves": 301,
+            "activationLatencyMs": 63.697702,
+            "finalMoveLatencyMs": 25.51101,
+            "inputSpanMs": 4068,
+            "measurementSpanMs": 4034,
+            "frameCount": 238,
+            "deliveryPercent": 97.14285714285714,
+            "worstSustainedVsyncGapMs": 33.084237,
+            "p95UiDurationMs": 7.716096,
+            "p99UiDurationMs": 9.446891,
+            "worstUiDurationMs": 12.557027,
+            "heuristicJankPercent": 0,
+            "p95TotalDurationMs": 15.233333,
+            "p99TotalDurationMs": 16.410914,
+            "worstTotalDurationMs": 19.461943,
+            "invalidMetrics": 0,
+            "duplicatePayloadMismatchCount": 0,
+            "outOfWindowMetrics": 1,
+            "droppedReports": 0
+          },
+          {
+            "run": 3,
+            "successfulMoves": 301,
+            "activationLatencyMs": 66.546702,
+            "finalMoveLatencyMs": 34.235241,
+            "inputSpanMs": 4074,
+            "measurementSpanMs": 4050,
+            "frameCount": 239,
+            "deliveryPercent": 97.15447154471545,
+            "worstSustainedVsyncGapMs": 33.089683,
+            "p95UiDurationMs": 7.522872,
+            "p99UiDurationMs": 8.48048,
+            "worstUiDurationMs": 9.863305,
+            "heuristicJankPercent": 0,
+            "p95TotalDurationMs": 15.065204,
+            "p99TotalDurationMs": 15.814249,
+            "worstTotalDurationMs": 16.363194,
+            "invalidMetrics": 0,
+            "duplicatePayloadMismatchCount": 0,
+            "outOfWindowMetrics": 0,
+            "droppedReports": 0
+          },
+          {
+            "run": 4,
+            "successfulMoves": 301,
+            "activationLatencyMs": 55.445087,
+            "finalMoveLatencyMs": 34.599318,
+            "inputSpanMs": 4063,
+            "measurementSpanMs": 4043,
+            "frameCount": 240,
+            "deliveryPercent": 97.5609756097561,
+            "worstSustainedVsyncGapMs": 43.11499,
+            "p95UiDurationMs": 7.304567,
+            "p99UiDurationMs": 8.40296,
+            "worstUiDurationMs": 10.261564,
+            "heuristicJankPercent": 0,
+            "p95TotalDurationMs": 15.072221,
+            "p99TotalDurationMs": 15.912096,
+            "worstTotalDurationMs": 16.429598,
+            "invalidMetrics": 0,
+            "duplicatePayloadMismatchCount": 0,
+            "outOfWindowMetrics": 0,
+            "droppedReports": 0
+          },
+          {
+            "run": 5,
+            "successfulMoves": 301,
+            "activationLatencyMs": 66.727318,
+            "finalMoveLatencyMs": 24.185703,
+            "inputSpanMs": 4072,
+            "measurementSpanMs": 4033,
+            "frameCount": 239,
+            "deliveryPercent": 97.55102040816327,
+            "worstSustainedVsyncGapMs": 33.101942,
+            "p95UiDurationMs": 7.316046,
+            "p99UiDurationMs": 7.920323,
+            "worstUiDurationMs": 12.258137,
+            "heuristicJankPercent": 0,
+            "p95TotalDurationMs": 15.018467,
+            "p99TotalDurationMs": 15.567922,
+            "worstTotalDurationMs": 19.720906,
+            "invalidMetrics": 0,
+            "duplicatePayloadMismatchCount": 0,
+            "outOfWindowMetrics": 0,
+            "droppedReports": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "performance-batch-2",
+      "status": "passed",
+      "startedAt": "2026-08-27T23:46:01.815Z",
+      "finishedAt": "2026-08-27T23:48:52.051Z",
+      "sourceAtStartMatchesSource": true,
+      "sourceAtFinishMatchesSource": true,
+      "sourceChangedDuringRun": false,
+      "testClass": "com.vibechess.chessboardnativeharness.ChessboardDragPerformanceTest#sustainedDragMeetsReleaseFrameBudget",
+      "gradle": {
+        "task": ":app:connectedReleaseAndroidTest",
+        "exitCode": 0,
+        "error": null
+      },
+      "performanceRequired": true,
+      "performanceViolations": [],
+      "result": {
+        "directory": "apps/native-harness/android/app/build/reports/fabric-drag-performance-final-run2",
+        "sha256": "13ef439df44b58bbe25136f4b5e32188b5b07750963a1d3327147a1bee743062"
+      },
+      "logcat": {
+        "findingCount": 0,
+        "capturePrematureExit": null,
+        "sha256": "f2d966c23712e5a43330d250709b32776dfadbd93a056c4ff62bcabe45a7665e"
+      },
+      "performance": {
+        "schemaVersion": 4,
+        "displayRefreshHz": 60,
+        "expectedFrameDurationMs": 16.666666666666664,
+        "jankHeuristicMultiplier": 2,
+        "deadlineMetricsPlausible": false,
+        "runs": [
+          {
+            "run": 1,
+            "successfulMoves": 301,
+            "activationLatencyMs": 67.104559,
+            "finalMoveLatencyMs": 22.886944,
+            "inputSpanMs": 4078,
+            "measurementSpanMs": 4033,
+            "frameCount": 241,
+            "deliveryPercent": 98.36734693877551,
+            "worstSustainedVsyncGapMs": 33.252866,
+            "p95UiDurationMs": 8.022613,
+            "p99UiDurationMs": 9.161641,
+            "worstUiDurationMs": 10.366737,
+            "heuristicJankPercent": 0,
+            "p95TotalDurationMs": 15.634178,
+            "p99TotalDurationMs": 16.828314,
+            "worstTotalDurationMs": 17.762996,
+            "invalidMetrics": 0,
+            "duplicatePayloadMismatchCount": 0,
+            "outOfWindowMetrics": 1,
+            "droppedReports": 0
+          },
+          {
+            "run": 2,
+            "successfulMoves": 301,
+            "activationLatencyMs": 59.947021,
+            "finalMoveLatencyMs": 21.072482,
+            "inputSpanMs": 4068,
+            "measurementSpanMs": 4033,
+            "frameCount": 239,
+            "deliveryPercent": 97.55102040816327,
+            "worstSustainedVsyncGapMs": 33.333334,
+            "p95UiDurationMs": 7.54298,
+            "p99UiDurationMs": 8.244295,
+            "worstUiDurationMs": 9.329453,
+            "heuristicJankPercent": 0,
+            "p95TotalDurationMs": 15.379401,
+            "p99TotalDurationMs": 16.439264,
+            "worstTotalDurationMs": 17.43348,
+            "invalidMetrics": 0,
+            "duplicatePayloadMismatchCount": 0,
+            "outOfWindowMetrics": 1,
+            "droppedReports": 0
+          },
+          {
+            "run": 3,
+            "successfulMoves": 301,
+            "activationLatencyMs": 64.416175,
+            "finalMoveLatencyMs": 25.159867,
+            "inputSpanMs": 4069,
+            "measurementSpanMs": 4033,
+            "frameCount": 239,
+            "deliveryPercent": 97.55102040816327,
+            "worstSustainedVsyncGapMs": 33.333334,
+            "p95UiDurationMs": 7.627822,
+            "p99UiDurationMs": 8.461615,
+            "worstUiDurationMs": 13.183174,
+            "heuristicJankPercent": 0,
+            "p95TotalDurationMs": 15.561293,
+            "p99TotalDurationMs": 16.31659,
+            "worstTotalDurationMs": 20.070174,
+            "invalidMetrics": 0,
+            "duplicatePayloadMismatchCount": 0,
+            "outOfWindowMetrics": 0,
+            "droppedReports": 0
+          },
+          {
+            "run": 4,
+            "successfulMoves": 301,
+            "activationLatencyMs": 66.916483,
+            "finalMoveLatencyMs": 37.403868,
+            "inputSpanMs": 4073,
+            "measurementSpanMs": 4045,
+            "frameCount": 241,
+            "deliveryPercent": 97.96747967479675,
+            "worstSustainedVsyncGapMs": 33.660514,
+            "p95UiDurationMs": 7.420482,
+            "p99UiDurationMs": 8.8493,
+            "worstUiDurationMs": 11.045359,
+            "heuristicJankPercent": 0,
+            "p95TotalDurationMs": 15.257131,
+            "p99TotalDurationMs": 16.397549,
+            "worstTotalDurationMs": 18.17859,
+            "invalidMetrics": 0,
+            "duplicatePayloadMismatchCount": 0,
+            "outOfWindowMetrics": 0,
+            "droppedReports": 0
+          },
+          {
+            "run": 5,
+            "successfulMoves": 301,
+            "activationLatencyMs": 70.774714,
+            "finalMoveLatencyMs": 20.875868,
+            "inputSpanMs": 4074,
+            "measurementSpanMs": 4032,
+            "frameCount": 241,
+            "deliveryPercent": 98.36734693877551,
+            "worstSustainedVsyncGapMs": 33.10505,
+            "p95UiDurationMs": 7.239578,
+            "p99UiDurationMs": 8.694279,
+            "worstUiDurationMs": 16.696505,
+            "heuristicJankPercent": 0,
+            "p95TotalDurationMs": 15.122881,
+            "p99TotalDurationMs": 16.245026,
+            "worstTotalDurationMs": 24.039275,
+            "invalidMetrics": 0,
+            "duplicatePayloadMismatchCount": 0,
+            "outOfWindowMetrics": 0,
+            "droppedReports": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "interaction-matrix",
+      "status": "passed",
+      "startedAt": "2026-08-27T23:52:00.726Z",
+      "finishedAt": "2026-08-27T23:53:21.466Z",
+      "sourceAtStartMatchesSource": true,
+      "sourceAtFinishMatchesSource": true,
+      "sourceChangedDuringRun": false,
+      "testClass": "com.vibechess.chessboardnativeharness.ChessboardInteractionTest",
+      "testCount": 4,
+      "coveredTests": [
+        "draggablePieceCapturesTheScrollGestureAndRejectsExactlyOnce",
+        "emptySquareDefersToTheParentScrollView",
+        "clippedSparePieceReachesTheBoardExactlyOnceWithoutScrolling",
+        "backgroundResumeCancelsAnActiveDragAndAllowsTheNextGesture"
+      ],
+      "gradle": {
+        "task": ":app:connectedReleaseAndroidTest",
+        "exitCode": 0,
+        "error": null
+      },
+      "performanceRequired": false,
+      "performanceViolations": [],
+      "result": {
+        "directory": "apps/native-harness/android/app/build/reports/fabric-drag-interaction-matrix-gate",
+        "sha256": "4e961dd65336c19bb409196200ddf5c0a36e5f23efd55e0a84eb19cbce2c65e5"
+      },
+      "logcat": {
+        "findingCount": 0,
+        "capturePrematureExit": null,
+        "sha256": "f0dc5ddf5fd3ac8d96b54d1b3ff2d8f8d24858543f9fc3abc48596022736b903"
+      }
+    }
+  ],
+  "rawEvidence": {
+    "committed": false,
+    "location": "apps/native-harness/android/app/build/reports",
+    "note": "The seven result.json records and raw logcat captures are local build reports. This sanitized record preserves their hashes without copying raw logs, local absolute paths, or the device serial."
+  },
+  "scopeLimitations": [
+    "The gate covers one physical Samsung SM-A075F running Android 16/API 36 at 60 Hz.",
+    "The subject is clean repository source, not a packed or published npm artifact.",
+    "This is not broad Android device, accessibility, memory, or package-wide performance qualification.",
+    "Physical Android accessibility and all iOS acceptance remain separate release gates."
+  ]
+}
