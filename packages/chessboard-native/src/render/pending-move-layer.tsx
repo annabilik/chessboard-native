@@ -95,6 +95,7 @@ function PendingHandoffHost({
     <Animated.View
       accessibilityElementsHidden
       accessible={false}
+      collapsable={false}
       importantForAccessibility="no-hide-descendants"
       pointerEvents="none"
       style={[

@@ -24,16 +24,20 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-@RunWith(AndroidJUnit4::class)
-@LargeTest
-class ChessboardPlainFenTransitionInterruptTest {
+abstract class PlainFenTransitionInterruptTestBase(
+    private val fixtureName: String,
+    private val rapidCadenceMs: Int,
+    private val rapidChangeCount: Int,
+    private val transitionDurationMs: Int,
+) {
+    private val transitionSettleMs = transitionDurationMs + 300L
     private val launchIntent =
         Intent(
             ApplicationProvider.getApplicationContext<Context>(),
             MainActivity::class.java,
         ).putExtra(
             MainActivity.EXTRA_FIXTURE,
-            "interaction-plain-fen-transition-interrupt",
+            fixtureName,
         )
 
     @get:Rule
@@ -50,14 +54,14 @@ class ChessboardPlainFenTransitionInterruptTest {
 
         onView(rapidTriggerMatcher()).perform(performDirectClick())
         awaitState(
-            changeCount = RAPID_CHANGE_COUNT,
+            changeCount = rapidChangeCount,
             currentFen = E2_FEN,
             pieceSquare = "e2",
             sequencePhase = "rapid-complete",
         )
-        onView(isRoot()).perform(waitForAtLeast(TRANSITION_SETTLE_MS))
+        onView(isRoot()).perform(waitForAtLeast(transitionSettleMs))
         assertStableState(
-            changeCount = RAPID_CHANGE_COUNT,
+            changeCount = rapidChangeCount,
             currentFen = E2_FEN,
             expectedBoardValue = "e4, empty; selected",
             expectedBoardIndex = E4_INDEX,
@@ -77,14 +81,14 @@ class ChessboardPlainFenTransitionInterruptTest {
 
         onView(reuseTriggerMatcher()).perform(performDirectClick())
         awaitState(
-            changeCount = RAPID_CHANGE_COUNT + 1,
+            changeCount = rapidChangeCount + 1,
             currentFen = E4_FEN,
             pieceSquare = "e4",
             sequencePhase = "reused",
         )
-        onView(isRoot()).perform(waitForAtLeast(TRANSITION_SETTLE_MS))
+        onView(isRoot()).perform(waitForAtLeast(transitionSettleMs))
         assertStableState(
-            changeCount = RAPID_CHANGE_COUNT + 1,
+            changeCount = rapidChangeCount + 1,
             currentFen = E4_FEN,
             expectedBoardValue = "e2, empty",
             expectedBoardIndex = E2_INDEX,
@@ -102,7 +106,7 @@ class ChessboardPlainFenTransitionInterruptTest {
             index = E4_INDEX,
         )
         assertStableState(
-            changeCount = RAPID_CHANGE_COUNT + 1,
+            changeCount = rapidChangeCount + 1,
             currentFen = E4_FEN,
             expectedBoardValue = "e4, white pawn; selected",
             expectedBoardIndex = E4_INDEX,
@@ -142,9 +146,9 @@ class ChessboardPlainFenTransitionInterruptTest {
             "Piece square: $pieceSquare",
             "Position change count: $changeCount",
             "Position input tier: plain-fen",
-            "Rapid cadence ms: $RAPID_CADENCE_MS",
+            "Rapid cadence ms: $rapidCadenceMs",
             "Sequence phase: $sequencePhase",
-            "Transition duration ms: $TRANSITION_DURATION_MS",
+            "Transition duration ms: $transitionDurationMs",
         )
 
     private fun waitForState(expected: Set<String>): ViewAction = object : ViewAction {
@@ -367,11 +371,27 @@ class ChessboardPlainFenTransitionInterruptTest {
         const val E4_FEN = "8/8/8/8/4P3/8/8/8 w - - 0 1"
         const val INTERACTION_TIMEOUT_MS = 30_000L
         const val POLL_INTERVAL_MS = 50L
-        const val RAPID_CADENCE_MS = 190
-        const val RAPID_CHANGE_COUNT = 18
         const val RAPID_TRIGGER_LABEL = "Start rapid plain FEN transition interruptions"
         const val REUSE_TRIGGER_LABEL = "Apply reusable plain FEN transition"
-        const val TRANSITION_DURATION_MS = 300
-        const val TRANSITION_SETTLE_MS = 600L
     }
 }
+
+@RunWith(AndroidJUnit4::class)
+@LargeTest
+class ChessboardPlainFenTransitionInterruptTest :
+    PlainFenTransitionInterruptTestBase(
+        fixtureName = "interaction-plain-fen-transition-interrupt",
+        rapidCadenceMs = 190,
+        rapidChangeCount = 18,
+        transitionDurationMs = 300,
+    )
+
+@RunWith(AndroidJUnit4::class)
+@LargeTest
+class ChessboardPlainFenTransitionInterrupt200Test :
+    PlainFenTransitionInterruptTestBase(
+        fixtureName = "interaction-plain-fen-transition-interrupt-200ms",
+        rapidCadenceMs = 125,
+        rapidChangeCount = 72,
+        transitionDurationMs = 200,
+    )

@@ -283,6 +283,36 @@ describe('pure interaction reducer', () => {
     ]);
   });
 
+  it.each(['drag', 'tap', 'accessibility', 'keyboard'] as const)(
+    'confirms an accepted %s intent semantically with its matching commit ID',
+    (input) => {
+      const awaiting = phase(
+        accept(request(moveIntent(`committed-${input}`, input)).state).state,
+        'awaiting-commit',
+      );
+      const committed = reduceInteraction(awaiting, {
+        committedIntentId: awaiting.intent.intentId,
+        revision: 8,
+        type: 'controlled-position',
+      });
+
+      expect(committed.state).toEqual(
+        expect.objectContaining({ phase: 'idle', positionRevision: 8 }),
+      );
+      expect(effectTypes(committed.effects)).toEqual([
+        'cancel-timeout',
+        'publish-outcome',
+      ]);
+      const outcome = committed.effects[1];
+      if (outcome?.type !== 'publish-outcome') {
+        throw new Error('Expected one committed move outcome.');
+      }
+      expect(outcome.outcome).toBe('committed');
+      expect(outcome.intent.input).toBe(input);
+      expect(outcome.intent.intentId).toBe(awaiting.intent.intentId);
+    },
+  );
+
   it('correlates controlled commits when an intent ID is available', () => {
     const awaiting = phase(accept(request().state).state, 'awaiting-commit');
     const matching = reduceInteraction(awaiting, {

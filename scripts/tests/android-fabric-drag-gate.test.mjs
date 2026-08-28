@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import {
   adbArguments,
   androidDragPerformanceTest,
+  androidPlainFenTransitionInterrupt200Test,
   androidPlainFenTransitionInterruptTest,
   androidProviderUnmountDragTest,
   androidTransitionProviderUnmountDragTest,
@@ -998,6 +999,23 @@ test('allows the rapid plain FEN transition interruption target', () => {
   );
 });
 
+test('allows the repeated 200/125 ms plain FEN interruption target', () => {
+  assert.equal(
+    resolveAndroidInstrumentationTest({
+      ANDROID_TEST_CLASS: ` ${androidPlainFenTransitionInterrupt200Test} `,
+    }),
+    androidPlainFenTransitionInterrupt200Test,
+  );
+  assert.deepEqual(
+    buildGradleArguments(androidPlainFenTransitionInterrupt200Test),
+    [
+      ':app:connectedReleaseAndroidTest',
+      '--no-daemon',
+      `-Pandroid.testInstrumentationRunnerArguments.class=${androidPlainFenTransitionInterrupt200Test}`,
+    ],
+  );
+});
+
 test('allows the sustained drag performance target', () => {
   assert.equal(
     resolveAndroidInstrumentationTest({
@@ -1080,6 +1098,16 @@ test('publishes a separate rapid plain FEN transition interruption gate', async 
   assert.equal(
     harnessPackage.scripts['android:position-transition:interrupt:gate'],
     `ANDROID_TEST_CLASS=${androidPlainFenTransitionInterruptTest} ANDROID_FABRIC_DRAG_EVIDENCE_DIR=android/app/build/reports/fabric-plain-fen-transition-interrupt-gate node scripts/run-android-fabric-drag-gate.mjs`,
+  );
+  assert.equal(
+    rootPackage.scripts[
+      'native:android:position-transition:interrupt:200ms:gate'
+    ],
+    'pnpm --filter @vibechess/chessboard-native-harness android:position-transition:interrupt:200ms:gate',
+  );
+  assert.equal(
+    harnessPackage.scripts['android:position-transition:interrupt:200ms:gate'],
+    `ANDROID_TEST_CLASS=${androidPlainFenTransitionInterrupt200Test} ANDROID_FABRIC_DRAG_EVIDENCE_DIR=android/app/build/reports/fabric-plain-fen-transition-interrupt-200ms-gate node scripts/run-android-fabric-drag-gate.mjs`,
   );
 });
 

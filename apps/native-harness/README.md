@@ -40,6 +40,7 @@ pnpm native:android:accessibility
 pnpm native:android:accessibility:managed
 pnpm native:android:drag:gate
 pnpm native:android:position-transition:interrupt:gate
+pnpm native:android:position-transition:interrupt:200ms:gate
 pnpm native:ios:gems
 pnpm native:ios:pods
 pnpm native:ios
@@ -75,6 +76,13 @@ transition/provider, accepted-drag, and provider-unmount regression gates. See
 the [commit-bound evidence record](../../docs/release-evidence/fabric-transition-retirement-9f6698a.md).
 That record covers repository source rather than an npm artifact; performance,
 background/resume, full physical accessibility, and iOS were not newly rerun.
+
+`native:android:position-transition:interrupt:200ms:gate` preserves the same
+plain-FEN, native-accessibility, reuse, and log-scanner assertions while running
+72 changes at the app's 125 ms interruption cadence against 200 ms controlled
+transitions. The four repeated 18-change cycles are a focused regression for
+epoch-clock isolation; the original 300/190 ms gate remains independently
+executable and its historical evidence is unchanged.
 
 The iOS commands require Xcode, the Ruby version pinned by the Gemfile, Bundler,
 and CocoaPods. Release builds use the simulator SDK with code signing disabled;

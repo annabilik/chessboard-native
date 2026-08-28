@@ -41,7 +41,9 @@ function keyedDescriptors<Descriptor extends KeyedTransitionHostDescriptor>(
  * missing key is therefore available to the same render that first omits it,
  * without mutating a ref that an abandoned concurrent render could leak. The
  * caller must render quiescent entries under their exact descriptor key while
- * omitting every animated style and renderer child.
+ * omitting every animated style and renderer child, and the retained native
+ * host must be non-collapsible so Fabric cannot flatten the empty shell before
+ * the guarded removal commit.
  */
 export function useTransitionHostRetirement<
   Descriptor extends KeyedTransitionHostDescriptor,

@@ -82,11 +82,12 @@ enters rather than inventing identity.
 
 P3.2 adds the ordinary mounted runtime. A layout effect compares only committed
 semantic snapshots, installs one detached plan for the exact target revision,
-and drives all actors from one board-local Reanimated progress value. Current
-move targets translate from their measured source cells, current enter actors
-fade in, and detached removed/captured/ambiguous actors fade out underneath the
-current piece plane. Current renderers always receive the target square; exit
-renderers receive the old square and detached old piece.
+and drives all actors from one board-local Reanimated progress value owned by
+that mounted presentation epoch. Current move targets translate from their
+measured source cells, current enter actors fade in, and detached
+removed/captured/ambiguous actors fade out underneath the current piece plane.
+Current renderers always receive the target square; exit renderers receive the
+old square and detached old piece.
 
 P3.3 presents every identity-safe type-changing replacement with two detached
 views on that same clock. The old artwork begins at the source, travels to the
@@ -105,14 +106,17 @@ replay.
 
 Animated native hosts retire commit-first. When an ordinary layer update makes
 a keyed current, exit, replacement, or pending-handoff actor disappear, that
-same host first commits as a hidden empty shell with no animated style. It
-remains mounted through two guarded animation-frame callbacks before removal;
-if the key becomes live again first, the callbacks become inert and the host is
-reused. This also covers anonymous actors produced from plain FEN, whose
-current-host identity follows their square. Whole-board or provider teardown
-cannot retain descendant shells, so it cancels animation and ownership without
-writing a terminal value to the shared progress clock. None of these native
-lifecycle rules delays or changes the authoritative controlled position.
+same non-collapsible host first commits as a hidden empty shell with no animated
+style. It remains mounted through two guarded animation-frame callbacks before
+removal; if the key becomes live again first, the callbacks become inert and
+the host is reused. This also covers anonymous actors produced from plain FEN,
+whose current-host identity follows their square. A newer transition or
+geometry rebase allocates a fresh progress clock after cancelling the prior
+clock, so a retained descriptor can never receive newer-epoch writes.
+Whole-board or provider teardown cannot retain descendant shells, so it
+cancels animation and ownership without writing a terminal value to a retired
+progress clock. None of these native lifecycle rules delays or changes the
+authoritative controlled position.
 
 P3.4 keeps semantic planning and visual continuity separate through a private
 `TransitionPresentation` actor graph between the pure plan and render layers.
@@ -139,16 +143,18 @@ invalid measurement settles directly to the latest controlled state. A logical
 row or column count change also snaps because the adjacent snapshots no longer
 share one square domain; it is not treated as a measured-size rebase.
 
-A matching `committedIntentId` may hand one pending on-board or spare target to
-the current controlled actor only when the lifecycle and presentation share the
-exact from/to revisions and the intent's source, piece, and target correlate to
-one current plan actor. The pending host crossfades out while the canonical
-target host crossfades in at the same point, so the primary actor does not
-replay its source-to-target move; other operations in the exact adjacent plan
-remain independent. A newer unrelated position, a nonmatching actor, and a null
-off-board target use ordinary controlled-transition behavior; an actual
-controlled removal takes the generic exit path. None creates a pending handoff
-or grants the interaction lifecycle authority over position.
+A matching `committedIntentId` may hand one pending on-board or spare drag
+target to the current controlled actor only when the lifecycle and presentation
+share the exact from/to revisions and the intent's source, piece, and target
+correlate to one current plan actor. The pending host crossfades out while the
+canonical target host crossfades in at the same point, so the primary actor does
+not replay its source-to-target move; other operations in the exact adjacent
+plan remain independent. Tap, keyboard, and accessibility commits use the
+ordinary configured transition. A newer unrelated position, a nonmatching
+actor, and a null off-board target also use ordinary controlled-transition
+behavior; an actual controlled removal takes the generic exit path. None
+creates a pending handoff or grants the interaction lifecycle authority over
+position.
 
 `reduceMotion="system"` follows the operating system, `always` settles without
 motion, and `never` explicitly permits motion. Changing into reduced motion

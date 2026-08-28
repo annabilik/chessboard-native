@@ -119,7 +119,7 @@ describe('pending controlled-commit handoff derivation', () => {
     },
   );
 
-  it('copies board and spare actors into deeply frozen presentation data', () => {
+  it('copies board and spare drag actors into deeply frozen presentation data', () => {
     const boardLifecycle = awaitingCommit();
     const boardHandoff = derivePendingCommitHandoff(
       options({ lifecycle: boardLifecycle }),
@@ -132,7 +132,6 @@ describe('pending controlled-commit handoff derivation', () => {
 
     const spareLifecycle = awaitingCommit(
       intent({
-        input: 'accessibility',
         source: Object.freeze({
           kind: 'spare' as const,
           spareId: 'white-queen',
@@ -151,6 +150,15 @@ describe('pending controlled-commit handoff derivation', () => {
     );
     expect(Object.isFrozen(spareHandoff?.source)).toBe(true);
   });
+
+  it.each(['tap', 'accessibility', 'keyboard'] as const)(
+    'keeps an exactly correlated %s commit on the ordinary transition path',
+    (input) => {
+      const lifecycle = awaitingCommit(intent({ input }));
+
+      expect(derivePendingCommitHandoff(options({ lifecycle }))).toBeNull();
+    },
+  );
 
   it.each([
     ['missing board', { boardId: null }],

@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import {
   cancelAnimation,
-  useSharedValue,
+  makeMutable,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
@@ -39,6 +39,8 @@ interface ActivePositionTransition extends MountedPositionTransition {
   readonly geometryEpoch: Revision;
   readonly targetKey: string;
 }
+
+type UnmountedPositionTransition = Omit<ActivePositionTransition, 'progress'>;
 
 interface CommittedTransitionInput {
   readonly dimensions: ValidatedBoardDimensions | null;
@@ -161,7 +163,6 @@ export function usePositionTransitionRuntime({
   position,
   reducedMotion,
 }: UsePositionTransitionRuntimeOptions): Readonly<MountedPositionTransition> | null {
-  const progress = useSharedValue(1);
   const [active, setActive] =
     useState<Readonly<ActivePositionTransition> | null>(null);
   const activeRef = useRef<Readonly<ActivePositionTransition> | null>(null);
@@ -227,7 +228,7 @@ export function usePositionTransitionRuntime({
     const durationChanged = previous.durationMs !== current.durationMs;
     const mounted = activeRef.current;
     const mountedProgress =
-      mounted === null ? 1 : clampProgress(progress.get());
+      mounted === null ? 1 : clampProgress(mounted.progress.get());
     committedRef.current = current;
     const reportWarning = (code: string, message: string): void => {
       if (!development) {
@@ -242,22 +243,27 @@ export function usePositionTransitionRuntime({
     };
 
     const mount = (
-      nextActive: Readonly<ActivePositionTransition>,
+      nextTransition: Readonly<UnmountedPositionTransition>,
       animationDurationMs: number,
     ): void => {
-      progress.value = 0;
+      // A progress clock belongs to exactly one mounted presentation epoch.
+      // Retiring hosts can therefore retain the cancelled prior clock without
+      // receiving writes from a newer semantic transition.
+      const progress = makeMutable(0);
+      const nextActive: Readonly<ActivePositionTransition> = Object.freeze({
+        ...nextTransition,
+        progress,
+      });
       activeRef.current = nextActive;
       setActive(nextActive);
       const presentationEpoch = nextActive.presentation.epoch;
       const targetKey = nextActive.targetKey;
-      progress.value = withTiming(
-        1,
-        { duration: animationDurationMs },
-        (finished): void => {
+      progress.set(
+        withTiming(1, { duration: animationDurationMs }, (finished): void => {
           if (finished) {
             scheduleOnRN(finishActive, presentationEpoch, targetKey);
           }
-        },
+        }),
       );
     };
 
@@ -274,7 +280,7 @@ export function usePositionTransitionRuntime({
         current.geometryEpoch === null ||
         current.layout === null
       ) {
-        cancelAnimation(progress);
+        cancelAnimation(mounted.progress);
         clearActive();
         return;
       }
@@ -286,7 +292,7 @@ export function usePositionTransitionRuntime({
         0,
         Math.min(mounted.durationMs, mounted.deadlineMs - Date.now()),
       );
-      cancelAnimation(progress);
+      cancelAnimation(mounted.progress);
       clearActive();
       if (remainingDurationMs <= 0) {
         return;
@@ -309,7 +315,6 @@ export function usePositionTransitionRuntime({
           geometryEpoch: current.geometryEpoch,
           plan: mounted.plan,
           presentation,
-          progress,
           targetKey: mounted.targetKey,
         }),
         remainingDurationMs,
@@ -321,7 +326,9 @@ export function usePositionTransitionRuntime({
       mounted?.targetKey !== previous.key
         ? null
         : sampleTransitionPresentation(mounted.presentation, mountedProgress);
-    cancelAnimation(progress);
+    if (mounted !== null) {
+      cancelAnimation(mounted.progress);
+    }
     clearActive();
 
     if (current.snapshot === null || dimensions === null || dimensionsChanged) {
@@ -365,13 +372,12 @@ export function usePositionTransitionRuntime({
       return;
     }
 
-    const nextActive: Readonly<ActivePositionTransition> = Object.freeze({
+    const nextActive: Readonly<UnmountedPositionTransition> = Object.freeze({
       deadlineMs: Date.now() + durationMs,
       durationMs,
       geometryEpoch: current.geometryEpoch,
       plan: planning.plan,
       presentation,
-      progress,
       targetKey: current.key,
     });
     mount(nextActive, durationMs);
@@ -388,16 +394,18 @@ export function usePositionTransitionRuntime({
     logWarning,
     pendingHandoff,
     position,
-    progress,
     reducedMotion,
   ]);
 
   useLayoutEffect(
     () => () => {
-      cancelAnimation(progress);
+      const mounted = activeRef.current;
+      if (mounted !== null) {
+        cancelAnimation(mounted.progress);
+      }
       activeRef.current = null;
     },
-    [progress],
+    [],
   );
 
   return active !== null &&
