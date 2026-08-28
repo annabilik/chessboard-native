@@ -1,11 +1,12 @@
-import { render } from '@testing-library/react-native';
-import { useState, type ReactElement } from 'react';
+import { act, render } from '@testing-library/react-native';
+import { StrictMode, useState, type ReactElement } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import type { TestInstance } from 'test-renderer';
 
 import type { MountedPositionTransition } from '../../src/internal/use-position-transition-runtime';
 import { createTransitionPresentation } from '../../src/internal/transition-presentation';
+import type { PendingCommitHandoffDescriptor } from '../../src/internal/pending-commit-handoff';
 import type { PositionTransitionPlan } from '../../src/internal/transition-planner';
 import type {
   PieceRenderer,
@@ -18,6 +19,8 @@ import {
   PieceLayer,
   resolvePieceTransitionAnimatedStyle,
 } from '../../src/render/piece-layer';
+import { PendingMoveLayer } from '../../src/render/pending-move-layer';
+import { useTransitionHostRetirement } from '../../src/render/use-transition-host-retirement';
 
 const EMPTY_STYLE: Readonly<ViewStyle> = Object.freeze({});
 const DEFAULT_GHOST_STYLE: Readonly<ViewStyle> = Object.freeze({
@@ -68,17 +71,90 @@ function transition(
   value: Readonly<PositionTransitionPlan>,
   layout: ReturnType<typeof createBoardSurfaceLayout>,
   progress = testSharedValue(0),
+  pendingHandoff: Readonly<PendingCommitHandoffDescriptor> | null = null,
 ): Readonly<MountedPositionTransition> {
   return Object.freeze({
     durationMs: 300,
     plan: value,
     presentation: createTransitionPresentation({
       currentLayout: layout,
+      pendingHandoff,
       plan: value,
       previousLayout: layout,
     }),
     progress,
   });
+}
+
+function pendingHandoff(): Readonly<PendingCommitHandoffDescriptor> {
+  return Object.freeze({
+    boardId: 'handoff',
+    epoch: 0,
+    fromRevision: 1,
+    intentId: 'intent-1',
+    piece: Object.freeze({ id: 'runner', pieceType: 'token' }),
+    source: Object.freeze({ kind: 'board' as const, square: 'a1' }),
+    targetSquare: 'b1',
+    toRevision: 2,
+  });
+}
+
+interface RetirementFrameHarness {
+  readonly cancelSpy: jest.SpyInstance;
+  readonly frames: ((timestamp: number) => void)[];
+  readonly runNext: () => void;
+}
+
+function installRetirementFrameHarness(): RetirementFrameHarness {
+  const frames: ((timestamp: number) => void)[] = [];
+  let nextFrameId = 1;
+  jest
+    .spyOn(globalThis, 'requestAnimationFrame')
+    .mockImplementation((callback) => {
+      frames.push(callback);
+      const frameId = nextFrameId;
+      nextFrameId += 1;
+      return frameId;
+    });
+  const cancelSpy = jest
+    .spyOn(globalThis, 'cancelAnimationFrame')
+    // A queued native callback can still win cancellation; guards must make it
+    // inert even when this test deliberately leaves the callback runnable.
+    .mockImplementation(() => undefined);
+  return {
+    cancelSpy,
+    frames,
+    runNext: () => {
+      const frame = frames.shift();
+      if (frame === undefined) {
+        throw new Error('Expected one queued retirement frame.');
+      }
+      frame(16);
+    },
+  };
+}
+
+interface RetirementProbeDescriptor {
+  readonly key: string;
+  readonly label: string;
+}
+
+function RetirementProbe({
+  descriptors,
+}: {
+  readonly descriptors: readonly Readonly<RetirementProbeDescriptor>[];
+}): ReactElement {
+  const displayed = useTransitionHostRetirement(descriptors);
+  return (
+    <View>
+      {displayed.map(({ descriptor, quiescent }) => (
+        <View
+          key={descriptor.key}
+          testID={`${quiescent ? 'retiring' : 'live'}:${descriptor.label}`}
+        />
+      ))}
+    </View>
+  );
 }
 
 function currentPosition(
@@ -545,6 +621,357 @@ describe('mounted piece transition projection', () => {
     expect(
       activeDescriptor.viewDescriptors.shareableViewDescriptors.value,
     ).toEqual([]);
+  });
+
+  it('derives retirement only from committed descriptors under StrictMode', async () => {
+    const retirement = installRetirementFrameHarness();
+    const first = Object.freeze({ key: 'shared', label: 'first' });
+    const replacement = Object.freeze({ key: 'shared', label: 'replacement' });
+    const tree = (
+      descriptors: readonly Readonly<RetirementProbeDescriptor>[],
+    ): ReactElement => (
+      <StrictMode>
+        <RetirementProbe descriptors={descriptors} />
+      </StrictMode>
+    );
+    const result = await render(tree([first]));
+    const initialHost = requiredNode(rootOf(result), 'live:first');
+
+    await result.rerender(tree([]));
+    expect(requiredNode(rootOf(result), 'retiring:first')).toBe(initialHost);
+    expect(retirement.frames).toHaveLength(1);
+
+    await result.rerender(tree([replacement]));
+    expect(requiredNode(rootOf(result), 'live:replacement')).toBe(initialHost);
+    expect(retirement.cancelSpy).toHaveBeenCalledTimes(1);
+    await act(() => {
+      retirement.runNext();
+    });
+    expect(retirement.frames).toEqual([]);
+    expect(requiredNode(rootOf(result), 'live:replacement')).toBe(initialHost);
+  });
+
+  it('reuses the returning anonymous square host across rapid A-B-A controlled commits', async () => {
+    const retirement = installRetirementFrameHarness();
+    const layout = createBoardSurfaceLayout(
+      { height: 100, width: 200 },
+      { columns: 2, rows: 1 },
+      'white',
+    );
+    const piece = Object.freeze({ pieceType: 'token' });
+    const ab = transition(
+      plan({
+        moves: Object.freeze([
+          Object.freeze({
+            after: piece,
+            before: piece,
+            from: 'a1',
+            kind: 'move' as const,
+            matchedBy: 'piece-type' as const,
+            to: 'b1',
+          }),
+        ]),
+      }),
+      layout,
+    );
+    const ba = transition(
+      plan({
+        epoch: 4,
+        fromRevision: 2,
+        moves: Object.freeze([
+          Object.freeze({
+            after: piece,
+            before: piece,
+            from: 'b1',
+            kind: 'move' as const,
+            matchedBy: 'piece-type' as const,
+            to: 'a1',
+          }),
+        ]),
+        toRevision: 3,
+      }),
+      layout,
+    );
+    const result = await render(
+      <PieceLayer
+        boardId="anonymous-interruption"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
+        layout={layout}
+        pieceRenderers={{ token: Probe }}
+        position={currentPosition({ a1: piece }, 1)}
+        style={EMPTY_STYLE}
+      />,
+    );
+    const initialArtwork = requiredNode(rootOf(result), 'token:a1:static');
+    const aHost = initialArtwork.parent;
+    if (aHost === null) {
+      throw new Error('Expected the initial anonymous current host.');
+    }
+
+    await result.rerender(
+      <PieceLayer
+        boardId="anonymous-interruption"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
+        layout={layout}
+        pieceRenderers={{ token: Probe }}
+        position={currentPosition({ b1: piece }, 2)}
+        style={EMPTY_STYLE}
+        transition={ab}
+      />,
+    );
+    expect(aHost.children).toEqual([]);
+    const bArtwork = requiredNode(rootOf(result), 'token:b1:transition');
+    const bHost = bArtwork.parent;
+    if (bHost === null) {
+      throw new Error('Expected the B current host.');
+    }
+    expect(retirement.frames).toHaveLength(1);
+
+    await result.rerender(
+      <PieceLayer
+        boardId="anonymous-interruption"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
+        layout={layout}
+        pieceRenderers={{ token: Probe }}
+        position={currentPosition({ a1: piece }, 3)}
+        style={EMPTY_STYLE}
+        transition={ba}
+      />,
+    );
+    expect(requiredNode(rootOf(result), 'token:a1:transition').parent).toBe(
+      aHost,
+    );
+    expect(bHost.children).toEqual([]);
+    expect(retirement.cancelSpy).toHaveBeenCalledTimes(1);
+    expect(retirement.frames).toHaveLength(2);
+    await act(() => {
+      retirement.runNext();
+    });
+    expect(retirement.frames).toHaveLength(1);
+    expect(requiredNode(rootOf(result), 'token:a1:transition').parent).toBe(
+      aHost,
+    );
+
+    await result.unmount();
+    expect(retirement.cancelSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('retires disappearing piece hosts for two guarded frames and reuses an exact live key before either frame', async () => {
+    const retirement = installRetirementFrameHarness();
+    const layout = createBoardSurfaceLayout(
+      { height: 100, width: 100 },
+      { columns: 1, rows: 1 },
+      'white',
+    );
+    const exitPlan = plan({
+      exits: Object.freeze([
+        Object.freeze({
+          from: 'a1',
+          kind: 'exit' as const,
+          piece: Object.freeze({ id: 'gone', pieceType: 'token' }),
+          reason: 'removed' as const,
+        }),
+      ]),
+    });
+    const mounted = transition(exitPlan, layout, testSharedValue(0.5));
+    const tree = (
+      currentTransition: Readonly<MountedPositionTransition> | null,
+    ): ReactElement => (
+      <PieceLayer
+        boardId="retirement"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
+        layout={layout}
+        pieceRenderers={{ token: Probe }}
+        position={currentPosition({})}
+        style={EMPTY_STYLE}
+        transition={currentTransition}
+      />
+    );
+    const result = await render(tree(mounted));
+    const initialArtwork = requiredNode(rootOf(result), 'gone:a1:transition');
+    const initialHost = initialArtwork.parent;
+    if (initialHost === null) {
+      throw new Error('Expected one detached animated piece host.');
+    }
+    const activeDescriptor = attachedStyleDescriptor(initialHost);
+    if (activeDescriptor === null) {
+      throw new Error('Expected the detached host animated style.');
+    }
+
+    await result.rerender(tree(null));
+    const firstRetiringHost = rootOf(result).children[0];
+    expect(firstRetiringHost).toBe(initialHost);
+    expect(initialHost.children).toEqual([]);
+    expect(attachedStyleDescriptor(initialHost)).toBeNull();
+    expect(propsOf(initialHost)['style']).not.toContain(activeDescriptor);
+    expect(
+      StyleSheet.flatten<ViewStyle>(
+        propsOf(initialHost)['style'] as StyleProp<ViewStyle>,
+      ),
+    ).toEqual(expect.objectContaining({ opacity: 0 }));
+    expect(retirement.frames).toHaveLength(1);
+
+    await result.rerender(tree(mounted));
+    const beforeFirstReplacement = requiredNode(
+      rootOf(result),
+      'gone:a1:transition',
+    );
+    expect(beforeFirstReplacement.parent).toBe(initialHost);
+    expect(retirement.cancelSpy).toHaveBeenCalledTimes(1);
+    await act(() => {
+      retirement.runNext();
+    });
+    expect(retirement.frames).toEqual([]);
+    expect(requiredNode(rootOf(result), 'gone:a1:transition').parent).toBe(
+      initialHost,
+    );
+
+    await result.rerender(tree(null));
+    await act(() => {
+      retirement.runNext();
+    });
+    expect(retirement.frames).toHaveLength(1);
+    expect(rootOf(result).children[0]).toBe(initialHost);
+
+    await result.rerender(tree(mounted));
+    expect(retirement.cancelSpy).toHaveBeenCalledTimes(2);
+    expect(requiredNode(rootOf(result), 'gone:a1:transition').parent).toBe(
+      initialHost,
+    );
+    await act(() => {
+      retirement.runNext();
+    });
+    expect(rootOf(result).children).toHaveLength(1);
+
+    await result.rerender(tree(null));
+    await act(() => {
+      retirement.runNext();
+    });
+    expect(rootOf(result).children[0]).toBe(initialHost);
+    await act(() => {
+      retirement.runNext();
+    });
+    expect(rootOf(result).children).toEqual([]);
+  });
+
+  it('keeps anonymous capture actors at one square in separate transition host key scopes', async () => {
+    const layout = createBoardSurfaceLayout(
+      { height: 100, width: 200 },
+      { columns: 2, rows: 1 },
+      'white',
+    );
+    const capturePlan = plan({
+      exits: Object.freeze([
+        Object.freeze({
+          from: 'b1',
+          kind: 'exit' as const,
+          piece: Object.freeze({ pieceType: 'token' }),
+          reason: 'captured' as const,
+        }),
+      ]),
+      moves: Object.freeze([
+        Object.freeze({
+          after: Object.freeze({ pieceType: 'token' }),
+          before: Object.freeze({ pieceType: 'token' }),
+          from: 'a1',
+          kind: 'move' as const,
+          matchedBy: 'piece-type' as const,
+          to: 'b1',
+        }),
+      ]),
+    });
+    const result = await render(
+      <PieceLayer
+        boardId="anonymous-capture"
+        draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
+        layout={layout}
+        pieceRenderers={{ token: Probe }}
+        position={currentPosition({
+          b1: Object.freeze({ pieceType: 'token' }),
+        })}
+        style={EMPTY_STYLE}
+        transition={transition(capturePlan, layout)}
+      />,
+    );
+    const actors = rootOf(result).queryAll(
+      (node) => node.props['testID'] === 'token:b1:transition',
+    );
+    expect(actors).toHaveLength(2);
+    expect(actors[0]?.parent).not.toBe(actors[1]?.parent);
+  });
+
+  it('retires pending handoff hosts without artwork and cancels the second frame on unmount', async () => {
+    const retirement = installRetirementFrameHarness();
+    const layout = createBoardSurfaceLayout(
+      { height: 100, width: 200 },
+      { columns: 2, rows: 1 },
+      'white',
+    );
+    const movePlan = plan({
+      moves: Object.freeze([
+        Object.freeze({
+          after: Object.freeze({ id: 'runner', pieceType: 'token' }),
+          before: Object.freeze({ id: 'runner', pieceType: 'token' }),
+          from: 'a1',
+          kind: 'move' as const,
+          matchedBy: 'piece-id' as const,
+          to: 'b1',
+        }),
+      ]),
+    });
+    const mounted = transition(
+      movePlan,
+      layout,
+      testSharedValue(0.5),
+      pendingHandoff(),
+    );
+    const tree = (
+      currentTransition: Readonly<MountedPositionTransition> | null,
+    ): ReactElement => (
+      <PendingMoveLayer
+        boardId="handoff"
+        layout={layout}
+        lifecycle={null}
+        pieceRenderers={{ token: Probe }}
+        style={EMPTY_STYLE}
+        transition={currentTransition}
+      />
+    );
+    const result = await render(tree(mounted));
+    const pendingArtwork = requiredNode(rootOf(result), 'runner:b1:static');
+    const pendingHost = pendingArtwork.parent?.parent ?? null;
+    if (pendingHost === null) {
+      throw new Error('Expected one pending handoff animated host.');
+    }
+    const activeDescriptor = attachedStyleDescriptor(pendingHost);
+    if (activeDescriptor === null) {
+      throw new Error('Expected the pending handoff animated style.');
+    }
+
+    await result.rerender(tree(null));
+    expect(rootOf(result).children[0]).toBe(pendingHost);
+    expect(pendingHost.children).toEqual([]);
+    expect(attachedStyleDescriptor(pendingHost)).toBeNull();
+    expect(propsOf(pendingHost)['style']).not.toContain(activeDescriptor);
+    expect(
+      StyleSheet.flatten<ViewStyle>(
+        propsOf(pendingHost)['style'] as StyleProp<ViewStyle>,
+      ),
+    ).toEqual(expect.objectContaining({ opacity: 0 }));
+    expect(retirement.frames).toHaveLength(1);
+
+    await act(() => {
+      retirement.runNext();
+    });
+    expect(retirement.frames).toHaveLength(1);
+    expect(rootOf(result).children[0]).toBe(pendingHost);
+
+    await result.unmount();
+    expect(retirement.cancelSpy).toHaveBeenCalledTimes(1);
+    await act(() => {
+      retirement.runNext();
+    });
+    expect(retirement.frames).toEqual([]);
   });
 
   it('renders a capture exit below its moving current actor and fades both generic enter/exit paths', async () => {

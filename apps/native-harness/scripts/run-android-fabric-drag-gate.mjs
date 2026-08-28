@@ -34,6 +34,8 @@ export const androidProviderUnmountDragTest =
   'com.vibechess.chessboardnativeharness.ChessboardProviderUnmountDragTest#unmountingProviderDuringActiveDragDoesNotUpdateRemovedFabricHosts';
 export const androidTransitionProviderUnmountDragTest =
   'com.vibechess.chessboardnativeharness.ChessboardTransitionProviderUnmountDragTest#providerReplacementWhileTransitionAndDragOverlapLeavesStateReusable';
+export const androidPlainFenTransitionInterruptTest =
+  'com.vibechess.chessboardnativeharness.ChessboardPlainFenTransitionInterruptTest#rapidPlainFenUpdatesRetireInterruptedTransitionHostsAndRemainReusable';
 export const androidDragPerformanceTest =
   'com.vibechess.chessboardnativeharness.ChessboardDragPerformanceTest#sustainedDragMeetsReleaseFrameBudget';
 

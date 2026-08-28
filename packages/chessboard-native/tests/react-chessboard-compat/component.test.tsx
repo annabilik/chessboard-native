@@ -47,6 +47,22 @@ async function drag(): Promise<void> {
   });
 }
 
+async function flushAnimationFrame(): Promise<void> {
+  await act(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
+      }),
+  );
+}
+
+async function flushRetirementFrames(): Promise<void> {
+  await flushAnimationFrame();
+  await flushAnimationFrame();
+}
+
 function pieceKind(props: PieceRendererProps): string {
   if (props.state.isDragging) return 'dragging';
   if (props.state.isPending && props.state.isGhost) return 'pending-source';
@@ -131,5 +147,6 @@ describe('react-chessboard compatibility component', () => {
     );
     expect(count(rootOf(result), 'compat-piece:static:b2')).toBe(1);
     expect(onPieceDrop).toHaveBeenCalledTimes(1);
+    await flushRetirementFrames();
   });
 });

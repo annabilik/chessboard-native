@@ -1,4 +1,4 @@
-import { memo, type ReactElement } from 'react';
+import { memo, useMemo, type ReactElement } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -23,6 +23,7 @@ import type {
 } from '../public-types';
 import type { BoardCellRect, BoardSurfaceLayout } from './board-layout';
 import { PIECE_HOST_STRUCTURAL_RESET } from './piece-host-style';
+import { useTransitionHostRetirement } from './use-transition-host-retirement';
 
 /** One current controlled piece projected into measured board-local geometry. */
 export interface BoardPieceLayout {
@@ -375,6 +376,7 @@ interface BoardPieceHostProps {
   readonly isPendingSource: boolean;
   readonly layout: Readonly<BoardPieceLayout>;
   readonly progress: SharedValue<number> | null;
+  readonly quiescent: boolean;
   readonly renderer: PieceRenderer;
   readonly style: Readonly<ViewStyle>;
   readonly transition: Readonly<PieceTransitionVisual> | null;
@@ -398,6 +400,7 @@ function BoardPieceHost({
   isPendingSource,
   layout,
   progress,
+  quiescent,
   renderer: Renderer,
   style,
   transition,
@@ -441,14 +444,26 @@ function BoardPieceHost({
         resolvedStyle,
         PIECE_HOST_STRUCTURAL_RESET,
         boardPieceHostLayoutStyle(layout),
-        transition === null || progress === null
-          ? { opacity: baseOpacity }
-          : animatedStyle,
+        quiescent
+          ? styles.quiescent
+          : transition === null || progress === null
+            ? { opacity: baseOpacity }
+            : animatedStyle,
       ]}
     >
-      <Renderer {...rendererProps} />
+      {quiescent ? null : <Renderer {...rendererProps} />}
     </Animated.View>
   );
+}
+
+interface BoardPieceHostDescriptor {
+  readonly isDragSource: boolean;
+  readonly isPendingSource: boolean;
+  readonly key: string;
+  readonly layout: Readonly<BoardPieceLayout>;
+  readonly progress: SharedValue<number> | null;
+  readonly renderer: PieceRenderer;
+  readonly transition: Readonly<PieceTransitionVisual> | null;
 }
 
 /** Board-owned decorative piece plane above squares and below annotations. */
@@ -463,11 +478,76 @@ export const PieceLayer = memo(function PieceLayer({
   style,
   transition = null,
 }: PieceLayerProps): ReactElement {
-  const pieces = createBoardPieceLayouts(layout, position?.value ?? null);
-  const transitionProjection = createPieceTransitionProjection(
-    layout,
-    transition,
+  const pieces = useMemo(
+    () => createBoardPieceLayouts(layout, position?.value ?? null),
+    [layout, position?.value],
   );
+  const transitionProjection = useMemo(
+    () => createPieceTransitionProjection(layout, transition),
+    [layout, transition],
+  );
+  const liveHosts = useMemo(() => {
+    const hosts: Readonly<BoardPieceHostDescriptor>[] = [];
+    const appendDetached = (
+      pieceLayout: Readonly<DetachedReplacementLayout>,
+      role: 'exit' | 'replacement',
+    ): void => {
+      const renderer = resolvePieceRenderer(
+        pieceRenderers,
+        pieceLayout.piece.pieceType,
+      );
+      if (renderer === null) {
+        return;
+      }
+      hosts.push(
+        Object.freeze({
+          isDragSource: false,
+          isPendingSource: false,
+          key: `${role}:${pieceLayout.key}`,
+          layout: pieceLayout,
+          progress: transition?.progress ?? null,
+          renderer,
+          transition: pieceLayout.transition,
+        }),
+      );
+    };
+    for (const pieceLayout of transitionProjection.exits) {
+      appendDetached(pieceLayout, 'exit');
+    }
+    for (const pieceLayout of transitionProjection.replacements) {
+      appendDetached(pieceLayout, 'replacement');
+    }
+    for (const pieceLayout of pieces) {
+      const renderer = resolvePieceRenderer(
+        pieceRenderers,
+        pieceLayout.piece.pieceType,
+      );
+      if (renderer === null) {
+        continue;
+      }
+      hosts.push(
+        Object.freeze({
+          isDragSource: pieceLayout.square === dragSourceSquare,
+          isPendingSource: pieceLayout.square === pendingSourceSquare,
+          key: `current:${pieceLayout.key}`,
+          layout: pieceLayout,
+          progress: transition?.progress ?? null,
+          renderer,
+          transition:
+            transitionProjection.current.get(pieceLayout.square) ?? null,
+        }),
+      );
+    }
+    return Object.freeze(hosts);
+  }, [
+    dragSourceSquare,
+    pendingSourceSquare,
+    pieceRenderers,
+    pieces,
+    transition?.progress,
+    transitionProjection,
+  ]);
+  const displayedHosts = useTransitionHostRetirement(liveHosts);
 
   return (
     <View
@@ -477,75 +557,21 @@ export const PieceLayer = memo(function PieceLayer({
       pointerEvents="none"
       style={styles.layer}
     >
-      {transitionProjection.exits.map((pieceLayout) => {
-        const Renderer = resolvePieceRenderer(
-          pieceRenderers,
-          pieceLayout.piece.pieceType,
-        );
-        return Renderer === null ? null : (
-          <BoardPieceHost
-            boardId={boardId}
-            draggingPieceGhostStyle={draggingPieceGhostStyle}
-            isDragSource={false}
-            isPendingSource={false}
-            key={pieceLayout.key}
-            layout={pieceLayout}
-            progress={transition?.progress ?? null}
-            renderer={Renderer}
-            style={style}
-            transition={pieceLayout.transition}
-          />
-        );
-      })}
-      {transitionProjection.replacements.map((pieceLayout) => {
-        const Renderer = resolvePieceRenderer(
-          pieceRenderers,
-          pieceLayout.piece.pieceType,
-        );
-        return Renderer === null ? null : (
-          <BoardPieceHost
-            boardId={boardId}
-            draggingPieceGhostStyle={draggingPieceGhostStyle}
-            isDragSource={false}
-            isPendingSource={false}
-            key={pieceLayout.key}
-            layout={pieceLayout}
-            progress={transition?.progress ?? null}
-            renderer={Renderer}
-            style={style}
-            transition={pieceLayout.transition}
-          />
-        );
-      })}
-      {pieces.map((pieceLayout) => {
-        const Renderer = resolvePieceRenderer(
-          pieceRenderers,
-          pieceLayout.piece.pieceType,
-        );
-        if (Renderer === null) {
-          return null;
-        }
-
-        const isDragSource = pieceLayout.square === dragSourceSquare;
-        const isPendingSource = pieceLayout.square === pendingSourceSquare;
-
-        return (
-          <BoardPieceHost
-            boardId={boardId}
-            draggingPieceGhostStyle={draggingPieceGhostStyle}
-            isDragSource={isDragSource}
-            isPendingSource={isPendingSource}
-            key={pieceLayout.key}
-            layout={pieceLayout}
-            progress={transition?.progress ?? null}
-            renderer={Renderer}
-            style={style}
-            transition={
-              transitionProjection.current.get(pieceLayout.square) ?? null
-            }
-          />
-        );
-      })}
+      {displayedHosts.map(({ descriptor, quiescent }) => (
+        <BoardPieceHost
+          boardId={boardId}
+          draggingPieceGhostStyle={draggingPieceGhostStyle}
+          isDragSource={descriptor.isDragSource}
+          isPendingSource={descriptor.isPendingSource}
+          key={descriptor.key}
+          layout={descriptor.layout}
+          progress={descriptor.progress}
+          quiescent={quiescent}
+          renderer={descriptor.renderer}
+          style={style}
+          transition={descriptor.transition}
+        />
+      ))}
     </View>
   );
 }, pieceLayerPropsAreEqual);
@@ -558,5 +584,8 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     zIndex: 20,
+  },
+  quiescent: {
+    opacity: 0,
   },
 });

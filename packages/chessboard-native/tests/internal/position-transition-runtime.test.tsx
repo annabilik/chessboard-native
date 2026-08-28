@@ -12,6 +12,7 @@ import {
   type ReactElement,
 } from 'react';
 import { View } from 'react-native';
+import type { SharedValue } from 'react-native-reanimated';
 
 import {
   STANDARD_BOARD_DIMENSIONS,
@@ -107,6 +108,21 @@ function RuntimeProbe({ current }: { current: NormalizedPositionValue }) {
       testID={transition === null ? 'transition-settled' : 'transition-active'}
     />
   );
+}
+
+function observeProgressWrites(progress: SharedValue<number>): unknown[] {
+  const writes: unknown[] = [];
+  let current: unknown = progress.value;
+  Object.defineProperty(progress, 'value', {
+    configurable: true,
+    enumerable: true,
+    get: () => current,
+    set: (next: unknown) => {
+      writes.push(next);
+      current = next;
+    },
+  });
+  return writes;
 }
 
 describe('mounted controlled-position transition runtime', () => {
@@ -305,6 +321,43 @@ describe('mounted controlled-position transition runtime', () => {
       jest.advanceTimersByTime(1_020);
     });
     expect(result.queryByTestId('transition-active')).toBeNull();
+  });
+
+  it('does not publish orphan terminal progress writes after cancellation or unmount', async () => {
+    const a = position(1, {
+      a1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    const b = position(2, {
+      b1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    const cancelled = await renderHook(useHarness, {
+      initialProps: { position: a },
+    });
+    await cancelled.rerender({ position: b });
+    const cancelledProgress = cancelled.result.current?.progress;
+    if (cancelledProgress === undefined) {
+      throw new Error('Expected an active transition before cancellation.');
+    }
+    const cancellationWrites = observeProgressWrites(cancelledProgress);
+
+    await cancelled.rerender({ position: null });
+    expect(cancelled.result.current).toBeNull();
+    expect(cancellationWrites).not.toContain(1);
+    await cancelled.unmount();
+    expect(cancellationWrites).not.toContain(1);
+
+    const unmounted = await renderHook(useHarness, {
+      initialProps: { position: a },
+    });
+    await unmounted.rerender({ position: b });
+    const unmountedProgress = unmounted.result.current?.progress;
+    if (unmountedProgress === undefined) {
+      throw new Error('Expected an active transition before unmount.');
+    }
+    const unmountWrites = observeProgressWrites(unmountedProgress);
+
+    await unmounted.unmount();
+    expect(unmountWrites).not.toContain(1);
   });
 
   it.each([

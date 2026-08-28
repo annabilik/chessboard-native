@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import {
   adbArguments,
   androidDragPerformanceTest,
+  androidPlainFenTransitionInterruptTest,
   androidProviderUnmountDragTest,
   androidTransitionProviderUnmountDragTest,
   buildAndroidDragPerformanceEvidence,
@@ -980,6 +981,23 @@ test('allows the transition/provider overlap lifecycle target', () => {
   );
 });
 
+test('allows the rapid plain FEN transition interruption target', () => {
+  assert.equal(
+    resolveAndroidInstrumentationTest({
+      ANDROID_TEST_CLASS: ` ${androidPlainFenTransitionInterruptTest} `,
+    }),
+    androidPlainFenTransitionInterruptTest,
+  );
+  assert.deepEqual(
+    buildGradleArguments(androidPlainFenTransitionInterruptTest),
+    [
+      ':app:connectedReleaseAndroidTest',
+      '--no-daemon',
+      `-Pandroid.testInstrumentationRunnerArguments.class=${androidPlainFenTransitionInterruptTest}`,
+    ],
+  );
+});
+
 test('allows the sustained drag performance target', () => {
   assert.equal(
     resolveAndroidInstrumentationTest({
@@ -1041,6 +1059,27 @@ test('publishes a separate transition/provider overlap gate and evidence directo
   assert.equal(
     harnessPackage.scripts['android:drag:transition-lifecycle:gate'],
     `ANDROID_TEST_CLASS=${androidTransitionProviderUnmountDragTest} ANDROID_FABRIC_DRAG_EVIDENCE_DIR=android/app/build/reports/fabric-drag-transition-provider-unmount-gate node scripts/run-android-fabric-drag-gate.mjs`,
+  );
+});
+
+test('publishes a separate rapid plain FEN transition interruption gate', async () => {
+  const [rootPackage, harnessPackage] = await Promise.all([
+    readFile(path.join(repositoryRoot, 'package.json'), 'utf8').then(
+      JSON.parse,
+    ),
+    readFile(
+      path.join(repositoryRoot, 'apps/native-harness/package.json'),
+      'utf8',
+    ).then(JSON.parse),
+  ]);
+
+  assert.equal(
+    rootPackage.scripts['native:android:position-transition:interrupt:gate'],
+    'pnpm --filter @vibechess/chessboard-native-harness android:position-transition:interrupt:gate',
+  );
+  assert.equal(
+    harnessPackage.scripts['android:position-transition:interrupt:gate'],
+    `ANDROID_TEST_CLASS=${androidPlainFenTransitionInterruptTest} ANDROID_FABRIC_DRAG_EVIDENCE_DIR=android/app/build/reports/fabric-plain-fen-transition-interrupt-gate node scripts/run-android-fabric-drag-gate.mjs`,
   );
 });
 

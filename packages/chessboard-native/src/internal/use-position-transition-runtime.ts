@@ -213,7 +213,6 @@ export function usePositionTransitionRuntime({
     const previous = committedRef.current;
     if (sameCommittedInput(previous, current)) {
       if (active !== null && activeRef.current !== active) {
-        progress.value = 1;
         clearActive();
       }
       return;
@@ -276,7 +275,6 @@ export function usePositionTransitionRuntime({
         current.layout === null
       ) {
         cancelAnimation(progress);
-        progress.value = 1;
         clearActive();
         return;
       }
@@ -291,7 +289,6 @@ export function usePositionTransitionRuntime({
       cancelAnimation(progress);
       clearActive();
       if (remainingDurationMs <= 0) {
-        progress.value = 1;
         return;
       }
       const epoch = nextEpochRef.current;
@@ -303,7 +300,6 @@ export function usePositionTransitionRuntime({
         progress: mountedProgress,
       });
       if (!presentationHasActors(presentation)) {
-        progress.value = 1;
         return;
       }
       mount(
@@ -326,7 +322,6 @@ export function usePositionTransitionRuntime({
         ? null
         : sampleTransitionPresentation(mounted.presentation, mountedProgress);
     cancelAnimation(progress);
-    progress.value = 1;
     clearActive();
 
     if (current.snapshot === null || dimensions === null || dimensionsChanged) {
@@ -400,7 +395,6 @@ export function usePositionTransitionRuntime({
   useLayoutEffect(
     () => () => {
       cancelAnimation(progress);
-      progress.value = 1;
       activeRef.current = null;
     },
     [progress],

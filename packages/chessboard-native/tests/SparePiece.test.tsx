@@ -847,6 +847,7 @@ describe('SparePiece', () => {
       'accessibilityValue',
       expect.objectContaining({ text: 'c1, fairy piece' }),
     );
+    await flushRetirementFrames();
   });
 
   it('keeps a selected spare when its tapped target is controlled-disabled', async () => {
@@ -1858,7 +1859,7 @@ describe('SparePiece', () => {
     await waitFor(() => {
       expect(onMoveRequest).toHaveBeenCalledTimes(1);
     });
-    await flushAnimationFrame();
+    await flushRetirementFrames();
     expect(
       result.queryAllByTestId(providerOverlayId('target-board'), {
         includeHiddenElements: true,

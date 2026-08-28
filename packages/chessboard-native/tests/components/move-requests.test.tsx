@@ -162,6 +162,10 @@ function nodesByTestId(root: TestInstance, testID: string): TestInstance[] {
   return root.queryAll((node) => node.props['testID'] === testID);
 }
 
+function containsInstance(root: TestInstance, target: TestInstance): boolean {
+  return root === target || root.queryAll((node) => node === target).length > 0;
+}
+
 function hiddenNodesByTestId(
   result: Awaited<ReturnType<typeof render>>,
   testID: string,
@@ -584,13 +588,14 @@ describe('public controlled move requests', () => {
     ) {
       throw new Error('Expected canonical and pending animated hosts.');
     }
+    const pendingHandoffHost = pending.parent.parent;
     const canonicalStyle = animatedStyle(canonical.parent);
-    const pendingStyle = animatedStyle(pending.parent.parent);
+    const pendingStyle = animatedStyle(pendingHandoffHost);
     expect(canonicalStyle['transform']).toBeUndefined();
     expect(pendingStyle['transform']).toBeUndefined();
     expect(pendingStyle['opacity']).toBe(1);
-    expect(pending.parent.parent).toHaveProp('accessible', false);
-    expect(pending.parent.parent).toHaveProp('pointerEvents', 'none');
+    expect(pendingHandoffHost).toHaveProp('accessible', false);
+    expect(pendingHandoffHost).toHaveProp('pointerEvents', 'none');
 
     await act(() => {
       // The first frame is a mount/presentation barrier. The detached provider
@@ -684,6 +689,11 @@ describe('public controlled move requests', () => {
     });
     await flushDecisions();
     expectNoVisual(board, 'pending-target', 'b1');
+    expect(containsInstance(board, pendingHandoffHost)).toBe(true);
+    expect(pendingHandoffHost.children).toEqual([]);
+    expect(nativeStyle(pendingHandoffHost)).toEqual(
+      expect.objectContaining({ opacity: 0 }),
+    );
     const settledCanonical = nodesByTestId(
       board,
       'move-piece:static:b1:token',
@@ -697,6 +707,11 @@ describe('public controlled move requests', () => {
     const settledStyle = nativeStyle(settledCanonical.parent);
     expect(settledStyle.opacity).toBe(1);
     expect(settledStyle.transform).toBeUndefined();
+
+    await act(() => {
+      jest.advanceTimersByTime(34);
+    });
+    expect(containsInstance(board, pendingHandoffHost)).toBe(false);
     expect(onMoveRequest).toHaveBeenCalledTimes(1);
     expect(outcomes).toHaveLength(1);
   });

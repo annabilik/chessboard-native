@@ -35,6 +35,7 @@
     "native:android:drag:lifecycle:gate": "pnpm --filter @vibechess/chessboard-native-harness android:drag:lifecycle:gate",
     "native:android:drag:performance:gate": "pnpm --filter @vibechess/chessboard-native-harness android:drag:performance:gate",
     "native:android:drag:transition-lifecycle:gate": "pnpm --filter @vibechess/chessboard-native-harness android:drag:transition-lifecycle:gate",
+    "native:android:position-transition:interrupt:gate": "pnpm --filter @vibechess/chessboard-native-harness android:position-transition:interrupt:gate",
     "native:android:release": "pnpm --filter @vibechess/chessboard-native-harness android:release",
     "native:ios": "pnpm --filter @vibechess/chessboard-native-harness ios",
     "native:ios:accessibility": "pnpm --filter @vibechess/chessboard-native-harness ios:accessibility",

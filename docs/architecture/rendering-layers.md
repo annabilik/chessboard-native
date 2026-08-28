@@ -257,6 +257,17 @@ not replayed; secondary operations still use their adjacent transition plan.
 Unrelated commits, actor mismatches, and off-board removals use the ordinary
 transition layers and never manufacture a pending target.
 
+Current, exit, replacement, and pending-handoff actors share one keyed host
+retirement protocol. A disappearing actor keeps its exact `Animated.View` host
+for a quiescent commit with static zero opacity, no renderer child, and no
+attached animated style. Two guarded animation-frame callbacks drain before
+the empty host is removed; a same-key actor that returns during either frame
+cancels retirement and reuses it. Namespaced actor keys keep current, exit, and
+replacement roles distinct even when anonymous plain-FEN pieces reuse a square.
+Transition cancellation and whole-layer teardown avoid the explicit terminal
+progress assignment that could otherwise outlive descendant hosts. The pending
+handoff layer follows the same rule and remains presentation-only.
+
 P2.2 adds the layer-six board gesture plane. When enabled by the public
 interaction boundaries, it is one absolute, accessibility-hidden native view
 rather than one handler per square. `onMoveRequest` enables single-pointer pan
