@@ -3,6 +3,8 @@ package com.vibechess.chessboardnativeharness
 import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
+import android.view.InputDevice
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.view.ViewCompat
@@ -10,7 +12,6 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.UiController
 import androidx.test.espresso.ViewAction
-import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.isRoot
 import androidx.test.ext.junit.rules.ActivityScenarioRule
@@ -55,10 +56,12 @@ abstract class PlainFenTransitionInterruptTestBase(
         )
 
         if (injectEachTransition) {
-            repeat(rapidChangeCount) {
-                onView(injectedTriggerMatcher()).perform(click())
-                onView(isRoot()).perform(waitForAtLeast(rapidCadenceMs.toLong()))
-            }
+            onView(injectedTriggerMatcher()).perform(
+                injectRawTapSequence(
+                    tapCount = rapidChangeCount,
+                    minimumIntervalMs = rapidCadenceMs.toLong(),
+                ),
+            )
         } else {
             onView(rapidTriggerMatcher()).perform(performDirectClick())
         }
@@ -68,6 +71,9 @@ abstract class PlainFenTransitionInterruptTestBase(
             pieceSquare = "e2",
             sequencePhase = "rapid-complete",
         )
+        if (injectEachTransition) {
+            assertInjectedGapTelemetry(expectedGapCount = rapidChangeCount - 1)
+        }
         onView(isRoot()).perform(waitForAtLeast(postSequenceSettleMs))
         assertStableState(
             changeCount = rapidChangeCount,
@@ -88,16 +94,21 @@ abstract class PlainFenTransitionInterruptTestBase(
             index = E2_INDEX,
         )
 
-        // This must remain a real Espresso input after the retirement window.
-        // Its DOWN/UP pair makes Reanimated replay pending synchronous props, so
-        // the log scanner proves removed tags are absent from the native registry.
-        onView(reuseTriggerMatcher()).perform(click())
+        // Keep reuse as a separate raw native input after the retirement window.
+        // Its DOWN/UP pair has no Espresso click-action post-delay and makes
+        // Reanimated replay pending synchronous props after host removal.
+        onView(reuseTriggerMatcher()).perform(
+            injectRawTapSequence(tapCount = 1, minimumIntervalMs = 0),
+        )
         awaitState(
             changeCount = rapidChangeCount + 1,
             currentFen = E4_FEN,
             pieceSquare = "e4",
             sequencePhase = "reused",
         )
+        if (injectEachTransition) {
+            assertInjectedGapTelemetry(expectedGapCount = rapidChangeCount - 1)
+        }
         onView(isRoot()).perform(waitForAtLeast(transitionDurationMs + 300L))
         assertStableState(
             changeCount = rapidChangeCount + 1,
@@ -312,6 +323,238 @@ abstract class PlainFenTransitionInterruptTestBase(
         }
     }
 
+    private fun injectRawTapSequence(
+        tapCount: Int,
+        minimumIntervalMs: Long,
+    ): ViewAction = object : ViewAction {
+        override fun getConstraints(): Matcher<View> = isDisplayed()
+
+        override fun getDescription(): String =
+            "inject $tapCount raw native tap(s) with at least $minimumIntervalMs ms between DOWN events"
+
+        override fun perform(uiController: UiController, view: View) {
+            require(tapCount > 0) { "Raw tap count must be positive." }
+            require(minimumIntervalMs >= 0) {
+                "Raw tap minimum interval must be non-negative."
+            }
+            var previousDownAtMs: Long? = null
+            var observedDownGapCount = 0
+
+            repeat(tapCount) { index ->
+                previousDownAtMs?.let { previous ->
+                    val remainingMs = previous + minimumIntervalMs - SystemClock.uptimeMillis()
+                    if (remainingMs > 0) {
+                        uiController.loopMainThreadForAtLeast(remainingMs)
+                    }
+                }
+
+                assertTrue(
+                    "raw tap ${index + 1} target must remain attached",
+                    view.isAttachedToWindow,
+                )
+                assertTrue("raw tap ${index + 1} target must remain shown", view.isShown)
+                assertTrue(
+                    "raw tap ${index + 1} target must retain positive geometry",
+                    view.width > 0 && view.height > 0,
+                )
+                val location = IntArray(2).also(view::getLocationOnScreen)
+                val coordinates =
+                    floatArrayOf(
+                        location[0] + view.width / 2f,
+                        location[1] + view.height / 2f,
+                    )
+                val downAtMs = SystemClock.uptimeMillis()
+                previousDownAtMs?.let { previous ->
+                    val downGapMs = downAtMs - previous
+                    observedDownGapCount += 1
+                    assertTrue(
+                        "raw tap ${index + 1} must start at least $minimumIntervalMs ms after its predecessor",
+                        downGapMs >= minimumIntervalMs,
+                    )
+                    assertTrue(
+                        "raw tap ${index + 1} must interrupt the $transitionDurationMs ms transition",
+                        downGapMs < transitionDurationMs,
+                    )
+                }
+                injectRawTapOrCancelOnFailure(
+                    uiController = uiController,
+                    downTime = downAtMs,
+                    coordinates = coordinates,
+                    tapNumber = index + 1,
+                )
+                previousDownAtMs = downAtMs
+            }
+
+            assertEquals(
+                "every raw tap after the first must contribute one Android DOWN gap",
+                tapCount - 1,
+                observedDownGapCount,
+            )
+            uiController.loopMainThreadForAtLeast(RAW_TAP_DELIVERY_SETTLE_MS)
+        }
+    }
+
+    private fun injectRawTapOrCancelOnFailure(
+        uiController: UiController,
+        downTime: Long,
+        coordinates: FloatArray,
+        tapNumber: Int,
+    ) {
+        var downAttempted = false
+        var terminalDelivered = false
+        try {
+            val down =
+                touchEvent(
+                    downTime = downTime,
+                    eventTime = downTime,
+                    action = MotionEvent.ACTION_DOWN,
+                    coordinates = coordinates,
+                )
+            val downInjected =
+                try {
+                    downAttempted = true
+                    uiController.injectMotionEvent(down)
+                } finally {
+                    down.recycle()
+                }
+            if (!downInjected) {
+                throw AssertionError("raw tap $tapNumber DOWN injection must succeed")
+            }
+
+            uiController.loopMainThreadForAtLeast(RAW_TAP_HOLD_MS)
+            val upAtMs = SystemClock.uptimeMillis()
+            val up =
+                touchEvent(
+                    downTime = downTime,
+                    eventTime = upAtMs,
+                    action = MotionEvent.ACTION_UP,
+                    coordinates = coordinates,
+                )
+            val upInjected =
+                try {
+                    uiController.injectMotionEvent(up)
+                } finally {
+                    up.recycle()
+                }
+            if (!upInjected) {
+                throw AssertionError("raw tap $tapNumber UP injection must succeed")
+            }
+            terminalDelivered = true
+        } catch (failure: Throwable) {
+            if (downAttempted && !terminalDelivered) {
+                attemptRawCancel(
+                    uiController = uiController,
+                    downTime = downTime,
+                    coordinates = coordinates,
+                    originalFailure = failure,
+                    tapNumber = tapNumber,
+                )
+            }
+            throw failure
+        }
+    }
+
+    private fun attemptRawCancel(
+        uiController: UiController,
+        downTime: Long,
+        coordinates: FloatArray,
+        originalFailure: Throwable,
+        tapNumber: Int,
+    ) {
+        val cancelResult =
+            runCatching {
+                val cancelAtMs = SystemClock.uptimeMillis()
+                val cancel =
+                    touchEvent(
+                        downTime = downTime,
+                        eventTime = cancelAtMs,
+                        action = MotionEvent.ACTION_CANCEL,
+                        coordinates = coordinates,
+                    )
+                try {
+                    if (!uiController.injectMotionEvent(cancel)) {
+                        throw AssertionError(
+                            "raw tap $tapNumber recovery CANCEL injection must succeed",
+                        )
+                    }
+                } finally {
+                    cancel.recycle()
+                }
+            }
+        cancelResult.exceptionOrNull()?.let(originalFailure::addSuppressed)
+    }
+
+    private fun touchEvent(
+        downTime: Long,
+        eventTime: Long,
+        action: Int,
+        coordinates: FloatArray,
+    ): MotionEvent =
+        MotionEvent.obtain(
+            downTime,
+            eventTime,
+            action,
+            coordinates[0],
+            coordinates[1],
+            0,
+        ).apply {
+            source = InputDevice.SOURCE_TOUCHSCREEN
+        }
+
+    private fun assertInjectedGapTelemetry(expectedGapCount: Int) {
+        onView(isRoot()).check { root, error ->
+            if (error != null) {
+                throw error
+            }
+            val telemetry =
+                descendantViews(root)
+                    .mapNotNull { view -> view.contentDescription?.toString() }
+                    .singleOrNull { description ->
+                        description.startsWith(INJECTED_GAP_TELEMETRY_PREFIX)
+                    }
+                    ?: throw AssertionError("Missing injected-gap telemetry")
+            val match =
+                INJECTED_GAP_TELEMETRY_PATTERN.matchEntire(telemetry)
+                    ?: throw AssertionError("Malformed injected-gap telemetry: $telemetry")
+            val gapCount = match.groupValues[1].toInt()
+            val minimumGapMs = match.groupValues[2].toDouble()
+            val maximumGapMs = match.groupValues[3].toDouble()
+            val belowMinimumCount = match.groupValues[4].toInt()
+            val atOrAboveTransitionCount = match.groupValues[5].toInt()
+            val invalidCount = match.groupValues[6].toInt()
+
+            assertEquals(
+                "every successful injected onPress after the first must contribute one gap",
+                expectedGapCount,
+                gapCount,
+            )
+            assertTrue("every injected JS handler gap must be positive", minimumGapMs > 0)
+            assertTrue(
+                "injected JS handler gaps must preserve the robust minimum cadence",
+                minimumGapMs >= MINIMUM_ASSERTED_HANDLER_GAP_MS,
+            )
+            assertTrue(
+                "every injected JS handler gap must interrupt the configured transition",
+                maximumGapMs < transitionDurationMs,
+            )
+            assertTrue(
+                "injected JS handler telemetry must be internally ordered",
+                maximumGapMs >= minimumGapMs,
+            )
+            assertEquals(
+                "no injected JS handler gap may fall below the robust minimum",
+                0,
+                belowMinimumCount,
+            )
+            assertEquals(
+                "no injected JS handler gap may reach the transition duration",
+                0,
+                atOrAboveTransitionCount,
+            )
+            assertEquals("all injected JS handler gaps must be finite", 0, invalidCount)
+        }
+    }
+
     private fun performDirectClick(): ViewAction = object : ViewAction {
         override fun getConstraints(): Matcher<View> = isDisplayed()
 
@@ -386,8 +629,16 @@ abstract class PlainFenTransitionInterruptTestBase(
         const val E4_INDEX = 36
         const val E4_FEN = "8/8/8/8/4P3/8/8/8 w - - 0 1"
         const val INTERACTION_TIMEOUT_MS = 30_000L
+        const val INJECTED_GAP_TELEMETRY_PREFIX = "Injected gap telemetry: "
         const val INJECTED_TRIGGER_LABEL = "Apply one injected plain FEN transition"
+        val INJECTED_GAP_TELEMETRY_PATTERN =
+            Regex(
+                """^Injected gap telemetry: (\d+)\|(\d+\.\d{3})\|(\d+\.\d{3})\|(\d+)\|(\d+)\|(\d+)$""",
+            )
+        const val MINIMUM_ASSERTED_HANDLER_GAP_MS = 100.0
         const val POLL_INTERVAL_MS = 50L
+        const val RAW_TAP_DELIVERY_SETTLE_MS = 25L
+        const val RAW_TAP_HOLD_MS = 8L
         const val RAPID_TRIGGER_LABEL = "Start rapid plain FEN transition interruptions"
         const val REUSE_TRIGGER_LABEL = "Apply reusable plain FEN transition"
     }

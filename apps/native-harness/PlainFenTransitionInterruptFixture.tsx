@@ -9,11 +9,16 @@ import { defaultPieceRenderers } from '@vibechess/chessboard-native/pieces';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+// Hermes exposes this monotonic clock, but React Native's no-DOM type surface
+// intentionally does not declare the browser `performance` global.
+declare const performance: Readonly<{ now: () => number }>;
+
 const BOARD_LABEL =
   'Plain FEN transition interrupt test board, white orientation';
 const E2_FEN = '8/8/8/8/8/8/4P3/8 w - - 0 1';
 const E4_FEN = '8/8/8/8/4P3/8/8/8 w - - 0 1';
 const BOARD_SELECTION = Object.freeze({ selectedSquare: 'e4' as const });
+const INJECTED_GAP_MINIMUM_MS = 100;
 const INTERACTION_PERMISSIONS = Object.freeze({
   accessibility: true,
   drag: true,
@@ -94,11 +99,20 @@ function ConfiguredPlainFenTransitionInterruptFixture({
 }: PlainFenTransitionInterruptFixtureProps) {
   const [changeCount, setChangeCount] = useState(0);
   const [currentFen, setCurrentFen] = useState(E2_FEN);
+  const [injectedGapTelemetry, setInjectedGapTelemetry] =
+    useState('0|none|none|0|0|0');
   const [pieceSquare, setPieceSquare] = useState<SquareId>('e2');
   const [sequencePhase, setSequencePhase] = useState<
     'idle' | 'rapid-complete' | 'reused' | 'running'
   >('idle');
   const changeCountRef = useRef(0);
+  const injectedGapAtOrAboveTransitionCountRef = useRef(0);
+  const injectedGapBelowMinimumCountRef = useRef(0);
+  const injectedGapCountRef = useRef(0);
+  const injectedGapInvalidCountRef = useRef(0);
+  const injectedGapMaximumMsRef = useRef<number | null>(null);
+  const injectedGapMinimumMsRef = useRef<number | null>(null);
+  const lastInjectedPressAtMsRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(
@@ -152,12 +166,51 @@ function ConfiguredPlainFenTransitionInterruptFixture({
       return;
     }
 
+    const pressedAtMs = performance.now();
+    const previousPressAtMs = lastInjectedPressAtMsRef.current;
+    lastInjectedPressAtMsRef.current = pressedAtMs;
+    if (previousPressAtMs !== null) {
+      const gapMs = pressedAtMs - previousPressAtMs;
+      injectedGapCountRef.current += 1;
+      if (!Number.isFinite(gapMs) || gapMs <= 0) {
+        injectedGapInvalidCountRef.current += 1;
+      } else {
+        injectedGapMinimumMsRef.current =
+          injectedGapMinimumMsRef.current === null
+            ? gapMs
+            : Math.min(injectedGapMinimumMsRef.current, gapMs);
+        injectedGapMaximumMsRef.current =
+          injectedGapMaximumMsRef.current === null
+            ? gapMs
+            : Math.max(injectedGapMaximumMsRef.current, gapMs);
+        if (gapMs < INJECTED_GAP_MINIMUM_MS) {
+          injectedGapBelowMinimumCountRef.current += 1;
+        }
+        if (gapMs >= transitionDurationMs) {
+          injectedGapAtOrAboveTransitionCountRef.current += 1;
+        }
+      }
+    }
+
     setSequencePhase('running');
     const nextCount = publishNextFen();
     if (nextCount === rapidChangeCount) {
+      setInjectedGapTelemetry(
+        `${String(injectedGapCountRef.current)}|${
+          injectedGapMinimumMsRef.current === null
+            ? 'none'
+            : injectedGapMinimumMsRef.current.toFixed(3)
+        }|${
+          injectedGapMaximumMsRef.current === null
+            ? 'none'
+            : injectedGapMaximumMsRef.current.toFixed(3)
+        }|${String(injectedGapBelowMinimumCountRef.current)}|${String(
+          injectedGapAtOrAboveTransitionCountRef.current,
+        )}|${String(injectedGapInvalidCountRef.current)}`,
+      );
       setSequencePhase('rapid-complete');
     }
-  }, [publishNextFen, rapidChangeCount, sequencePhase]);
+  }, [publishNextFen, rapidChangeCount, sequencePhase, transitionDurationMs]);
 
   const proveReuse = useCallback(() => {
     if (sequencePhase !== 'rapid-complete') {
@@ -200,6 +253,11 @@ function ConfiguredPlainFenTransitionInterruptFixture({
           label="Position change count"
           testID="plain-fen-transition:change-count"
           value={String(changeCount)}
+        />
+        <AuditStatus
+          label="Injected gap telemetry"
+          testID="plain-fen-transition:injected-gap-telemetry"
+          value={injectedGapTelemetry}
         />
         <AuditStatus
           label="Sequence phase"
