@@ -13,6 +13,7 @@ import {
   androidPlainFenTransitionInterruptTest,
   androidProviderUnmountDragTest,
   androidTransitionProviderUnmountDragTest,
+  androidTransitionProviderWholeUnmountTest,
   buildAndroidDragPerformanceEvidence,
   buildSourceEvidence,
   buildGradleArguments,
@@ -982,6 +983,23 @@ test('allows the transition/provider overlap lifecycle target', () => {
   );
 });
 
+test('allows the controlled-transition whole-provider unmount target', () => {
+  assert.equal(
+    resolveAndroidInstrumentationTest({
+      ANDROID_TEST_CLASS: ` ${androidTransitionProviderWholeUnmountTest} `,
+    }),
+    androidTransitionProviderWholeUnmountTest,
+  );
+  assert.deepEqual(
+    buildGradleArguments(androidTransitionProviderWholeUnmountTest),
+    [
+      ':app:connectedReleaseAndroidTest',
+      '--no-daemon',
+      `-Pandroid.testInstrumentationRunnerArguments.class=${androidTransitionProviderWholeUnmountTest}`,
+    ],
+  );
+});
+
 test('allows the rapid plain FEN transition interruption target', () => {
   assert.equal(
     resolveAndroidInstrumentationTest({
@@ -1077,6 +1095,29 @@ test('publishes a separate transition/provider overlap gate and evidence directo
   assert.equal(
     harnessPackage.scripts['android:drag:transition-lifecycle:gate'],
     `ANDROID_TEST_CLASS=${androidTransitionProviderUnmountDragTest} ANDROID_FABRIC_DRAG_EVIDENCE_DIR=android/app/build/reports/fabric-drag-transition-provider-unmount-gate node scripts/run-android-fabric-drag-gate.mjs`,
+  );
+});
+
+test('publishes a separate controlled-transition whole-unmount gate', async () => {
+  const [rootPackage, harnessPackage] = await Promise.all([
+    readFile(path.join(repositoryRoot, 'package.json'), 'utf8').then(
+      JSON.parse,
+    ),
+    readFile(
+      path.join(repositoryRoot, 'apps/native-harness/package.json'),
+      'utf8',
+    ).then(JSON.parse),
+  ]);
+
+  assert.equal(
+    rootPackage.scripts[
+      'native:android:position-transition:whole-unmount:gate'
+    ],
+    'pnpm --filter @vibechess/chessboard-native-harness android:position-transition:whole-unmount:gate',
+  );
+  assert.equal(
+    harnessPackage.scripts['android:position-transition:whole-unmount:gate'],
+    `ANDROID_TEST_CLASS=${androidTransitionProviderWholeUnmountTest} ANDROID_FABRIC_DRAG_EVIDENCE_DIR=android/app/build/reports/fabric-position-transition-whole-unmount-gate node scripts/run-android-fabric-drag-gate.mjs`,
   );
 });
 

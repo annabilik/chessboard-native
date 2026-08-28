@@ -75,6 +75,7 @@ function squareForChangeCount(changeCount: number): SquareId {
 interface PlainFenTransitionInterruptFixtureProps {
   readonly boardId: string;
   readonly cadenceMs: number;
+  readonly postSequenceSettleMs: number;
   readonly rapidChangeCount: number;
   readonly transitionDurationMs: number;
 }
@@ -87,6 +88,7 @@ interface PlainFenTransitionInterruptFixtureProps {
 function ConfiguredPlainFenTransitionInterruptFixture({
   boardId,
   cadenceMs,
+  postSequenceSettleMs,
   rapidChangeCount,
   transitionDurationMs,
 }: PlainFenTransitionInterruptFixtureProps) {
@@ -142,6 +144,21 @@ function ConfiguredPlainFenTransitionInterruptFixture({
     }, cadenceMs);
   }, [cadenceMs, publishNextFen, rapidChangeCount, sequencePhase]);
 
+  const publishInjectedTransition = useCallback(() => {
+    if (
+      (sequencePhase !== 'idle' && sequencePhase !== 'running') ||
+      changeCountRef.current >= rapidChangeCount
+    ) {
+      return;
+    }
+
+    setSequencePhase('running');
+    const nextCount = publishNextFen();
+    if (nextCount === rapidChangeCount) {
+      setSequencePhase('rapid-complete');
+    }
+  }, [publishNextFen, rapidChangeCount, sequencePhase]);
+
   const proveReuse = useCallback(() => {
     if (sequencePhase !== 'rapid-complete') {
       return;
@@ -173,6 +190,11 @@ function ConfiguredPlainFenTransitionInterruptFixture({
           label="Rapid cadence ms"
           testID="plain-fen-transition:cadence"
           value={String(cadenceMs)}
+        />
+        <AuditStatus
+          label="Post-sequence settle ms"
+          testID="plain-fen-transition:post-sequence-settle"
+          value={String(postSequenceSettleMs)}
         />
         <AuditStatus
           label="Position change count"
@@ -229,6 +251,22 @@ function ConfiguredPlainFenTransitionInterruptFixture({
         >
           <Text style={styles.triggerLabel}>Prove one more transition</Text>
         </Pressable>
+        <Pressable
+          accessibilityLabel="Apply one injected plain FEN transition"
+          accessibilityRole="button"
+          disabled={
+            (sequencePhase !== 'idle' && sequencePhase !== 'running') ||
+            changeCount >= rapidChangeCount
+          }
+          onPress={publishInjectedTransition}
+          style={({ pressed }) => [
+            styles.trigger,
+            pressed ? styles.triggerPressed : null,
+          ]}
+          testID="plain-fen-transition:injected-trigger"
+        >
+          <Text style={styles.triggerLabel}>Apply one injected transition</Text>
+        </Pressable>
       </View>
       <View style={styles.boardFrame}>
         <View style={styles.board} testID="plain-fen-transition:board-host">
@@ -256,6 +294,7 @@ export function PlainFenTransitionInterruptFixture() {
     <ConfiguredPlainFenTransitionInterruptFixture
       boardId="native-plain-fen-transition-interrupt"
       cadenceMs={190}
+      postSequenceSettleMs={600}
       rapidChangeCount={18}
       transitionDurationMs={300}
     />
@@ -268,6 +307,7 @@ export function PlainFenTransitionInterrupt200Fixture() {
     <ConfiguredPlainFenTransitionInterruptFixture
       boardId="native-plain-fen-transition-interrupt-200ms"
       cadenceMs={125}
+      postSequenceSettleMs={3_500}
       rapidChangeCount={72}
       transitionDurationMs={200}
     />
@@ -292,8 +332,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   controls: {
+    alignSelf: 'stretch',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
+    justifyContent: 'center',
   },
   status: {
     alignSelf: 'stretch',

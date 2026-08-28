@@ -41,6 +41,7 @@ pnpm native:android:accessibility:managed
 pnpm native:android:drag:gate
 pnpm native:android:position-transition:interrupt:gate
 pnpm native:android:position-transition:interrupt:200ms:gate
+pnpm native:android:position-transition:whole-unmount:gate
 pnpm native:ios:gems
 pnpm native:ios:pods
 pnpm native:ios
@@ -80,9 +81,27 @@ background/resume, full physical accessibility, and iOS were not newly rerun.
 `native:android:position-transition:interrupt:200ms:gate` preserves the same
 plain-FEN, native-accessibility, reuse, and log-scanner assertions while running
 72 changes at the app's 125 ms interruption cadence against 200 ms controlled
-transitions. The four repeated 18-change cycles are a focused regression for
-epoch-clock isolation; the original 300/190 ms gate remains independently
+transitions. AndroidTest injects a real native tap for every position change so
+Reanimated's input-event synchronous-props flush runs throughout all four
+18-change cycles. After the rapid sequence it holds the quiescent hosts for 3.5
+seconds, covering Reanimated 4.5's Android settled-props cleanup window and the
+guarded removal frames, then injects the reuse control as another real native
+tap. The scanner therefore observes the first event-driven synchronous-props
+flush after host removal. The original 300/190 ms gate remains independently
 executable and its historical evidence is unchanged.
+
+`native:android:position-transition:whole-unmount:gate` runs two focused
+200 ms lifecycle cycles against the transition/provider fixture. The prompt
+cycle starts a controlled transition, removes the complete board/provider
+subtree after 50 ms, injects a real native sibling-control tap while the board
+is absent, promptly remounts by another real tap, and starts another transition
+with a real post-remount tap. The long cycle repeats the immediate absent tap,
+keeps the subtree absent for 3.5 seconds, injects another real absent tap that
+remounts it, and starts a final transition with a real native tap. It asserts
+zero boards while absent, exactly one reusable board after each remount, and the
+latest canonical square and revision. The shared scanner remains the crash and
+stale-Fabric-tag oracle. This mandatory physical Android lifecycle gate is
+separate from, and does not replace, the held-drag provider-replacement gate.
 
 The iOS commands require Xcode, the Ruby version pinned by the Gemfile, Bundler,
 and CocoaPods. Release builds use the simulator SDK with code signing disabled;

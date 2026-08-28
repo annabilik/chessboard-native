@@ -7,6 +7,7 @@ import Animated, {
 
 import type { NormalizedControlledValue } from '../internal/controlled-domain';
 import {
+  MAX_TRANSITION_PRESENTATION_RESIDUALS,
   projectTransitionPresentationActor,
   type ProjectedTransitionPresentationActor,
   type TransitionPresentationActorKind,
@@ -458,13 +459,25 @@ function BoardPieceHost({
 }
 
 interface BoardPieceHostDescriptor {
+  readonly canonical: boolean;
   readonly isDragSource: boolean;
   readonly isPendingSource: boolean;
   readonly key: string;
   readonly layout: Readonly<BoardPieceLayout>;
+  readonly nativeDrainToken: string | null;
   readonly progress: SharedValue<number> | null;
   readonly renderer: PieceRenderer;
   readonly transition: Readonly<PieceTransitionVisual> | null;
+}
+
+/**
+ * Maximum simultaneous registry-backed PieceLayer actors for one board.
+ *
+ * At most one current and one semantic detached actor can originate from each
+ * cell, plus the library-wide bounded interruption residuals.
+ */
+export function pieceLayerNativeDrainHostBudget(cellCount: number): number {
+  return cellCount * 2 + MAX_TRANSITION_PRESENTATION_RESIDUALS;
 }
 
 /** Board-owned decorative piece plane above squares and below annotations. */
@@ -502,10 +515,15 @@ export const PieceLayer = memo(function PieceLayer({
       }
       hosts.push(
         Object.freeze({
+          canonical: false,
           isDragSource: false,
           isPendingSource: false,
           key: `${role}:${pieceLayout.key}`,
           layout: pieceLayout,
+          nativeDrainToken:
+            transition === null
+              ? null
+              : `transition:${String(transition.presentation.epoch)}`,
           progress: transition?.progress ?? null,
           renderer,
           transition: pieceLayout.transition,
@@ -528,10 +546,16 @@ export const PieceLayer = memo(function PieceLayer({
       }
       hosts.push(
         Object.freeze({
+          canonical: true,
           isDragSource: pieceLayout.square === dragSourceSquare,
           isPendingSource: pieceLayout.square === pendingSourceSquare,
           key: `current:${pieceLayout.key}`,
           layout: pieceLayout,
+          nativeDrainToken:
+            transitionProjection.current.has(pieceLayout.square) &&
+            transition !== null
+              ? `transition:${String(transition.presentation.epoch)}`
+              : null,
           progress: transition?.progress ?? null,
           renderer,
           transition:
@@ -548,7 +572,10 @@ export const PieceLayer = memo(function PieceLayer({
     transition?.progress,
     transitionProjection,
   ]);
-  const displayedHosts = useTransitionHostRetirement(liveHosts);
+  const displayedHosts = useTransitionHostRetirement(
+    liveHosts,
+    pieceLayerNativeDrainHostBudget(layout.cells.length),
+  );
 
   return (
     <View
@@ -558,21 +585,23 @@ export const PieceLayer = memo(function PieceLayer({
       pointerEvents="none"
       style={styles.layer}
     >
-      {displayedHosts.map(({ descriptor, quiescent }) => (
-        <BoardPieceHost
-          boardId={boardId}
-          draggingPieceGhostStyle={draggingPieceGhostStyle}
-          isDragSource={descriptor.isDragSource}
-          isPendingSource={descriptor.isPendingSource}
-          key={descriptor.key}
-          layout={descriptor.layout}
-          progress={descriptor.progress}
-          quiescent={quiescent}
-          renderer={descriptor.renderer}
-          style={style}
-          transition={descriptor.transition}
-        />
-      ))}
+      {displayedHosts.map(({ descriptor, nativeDrain, quiescent }) =>
+        !nativeDrain && !descriptor.canonical ? null : (
+          <BoardPieceHost
+            boardId={boardId}
+            draggingPieceGhostStyle={draggingPieceGhostStyle}
+            isDragSource={descriptor.isDragSource}
+            isPendingSource={descriptor.isPendingSource}
+            key={descriptor.key}
+            layout={descriptor.layout}
+            progress={nativeDrain ? descriptor.progress : null}
+            quiescent={quiescent}
+            renderer={descriptor.renderer}
+            style={style}
+            transition={nativeDrain ? descriptor.transition : null}
+          />
+        ),
+      )}
     </View>
   );
 }, pieceLayerPropsAreEqual);

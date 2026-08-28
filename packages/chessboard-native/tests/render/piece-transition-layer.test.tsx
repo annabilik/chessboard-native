@@ -1,11 +1,20 @@
 import { act, render } from '@testing-library/react-native';
 import { StrictMode, useState, type ReactElement } from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  Platform,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import type { TestInstance } from 'test-renderer';
 
 import type { MountedPositionTransition } from '../../src/internal/use-position-transition-runtime';
-import { createTransitionPresentation } from '../../src/internal/transition-presentation';
+import {
+  createTransitionPresentation,
+  sampleTransitionPresentation,
+} from '../../src/internal/transition-presentation';
 import type { PendingCommitHandoffDescriptor } from '../../src/internal/pending-commit-handoff';
 import type { PositionTransitionPlan } from '../../src/internal/transition-planner';
 import type {
@@ -17,10 +26,18 @@ import { createBoardSurfaceLayout } from '../../src/render/board-layout';
 import {
   createPieceTransitionProjection,
   PieceLayer,
+  pieceLayerNativeDrainHostBudget,
   resolvePieceTransitionAnimatedStyle,
 } from '../../src/render/piece-layer';
-import { PendingMoveLayer } from '../../src/render/pending-move-layer';
-import { useTransitionHostRetirement } from '../../src/render/use-transition-host-retirement';
+import {
+  PendingMoveLayer,
+  PENDING_MOVE_NATIVE_DRAIN_HOST_BUDGET,
+} from '../../src/render/pending-move-layer';
+import {
+  ANDROID_TRANSITION_HOST_NATIVE_DRAIN_MS,
+  transitionHostNativeDrainMs,
+  useTransitionHostRetirement,
+} from '../../src/render/use-transition-host-retirement';
 
 const EMPTY_STYLE: Readonly<ViewStyle> = Object.freeze({});
 const DEFAULT_GHOST_STYLE: Readonly<ViewStyle> = Object.freeze({
@@ -99,6 +116,94 @@ function pendingHandoff(): Readonly<PendingCommitHandoffDescriptor> {
   });
 }
 
+function fullPosition(
+  layout: ReturnType<typeof createBoardSurfaceLayout>,
+  generation: number,
+): PositionObject {
+  return Object.freeze(
+    Object.fromEntries(
+      layout.cells.map(({ square }) => [
+        square,
+        Object.freeze({
+          id: `generation:${String(generation)}:${square}`,
+          pieceType: 'token',
+        }),
+      ]),
+    ),
+  );
+}
+
+function fullReplacementPlan(
+  layout: ReturnType<typeof createBoardSurfaceLayout>,
+  generation: number,
+  epoch: number,
+  fromRevision: number,
+  toRevision: number,
+): Readonly<PositionTransitionPlan> {
+  const before = fullPosition(layout, generation - 1);
+  const after = fullPosition(layout, generation);
+  return plan({
+    epoch,
+    fromRevision,
+    replacements: Object.freeze(
+      layout.cells.map(({ square }) =>
+        Object.freeze({
+          after: after[square] ?? Object.freeze({ pieceType: 'token' }),
+          before: before[square] ?? Object.freeze({ pieceType: 'token' }),
+          from: square,
+          kind: 'replace' as const,
+          matchedBy: 'explicit' as const,
+          to: square,
+        }),
+      ),
+    ),
+    toRevision,
+  });
+}
+
+function saturatedFullBoardTransition(
+  layout: ReturnType<typeof createBoardSurfaceLayout>,
+  generation: number,
+): Readonly<MountedPositionTransition> {
+  const seedFromRevision = generation * 2;
+  const seedPlan = fullReplacementPlan(
+    layout,
+    generation - 1,
+    seedFromRevision,
+    seedFromRevision,
+    seedFromRevision + 1,
+  );
+  const seedPresentation = createTransitionPresentation({
+    currentLayout: layout,
+    plan: seedPlan,
+    previousLayout: layout,
+  });
+  const saturatedPlan = fullReplacementPlan(
+    layout,
+    generation,
+    seedFromRevision + 1,
+    seedFromRevision + 1,
+    seedFromRevision + 2,
+  );
+  return Object.freeze({
+    durationMs: 200,
+    plan: saturatedPlan,
+    presentation: createTransitionPresentation({
+      currentLayout: layout,
+      plan: saturatedPlan,
+      previousLayout: layout,
+      prior: sampleTransitionPresentation(seedPresentation, 0.5),
+    }),
+    progress: testSharedValue(0.5),
+  });
+}
+
+interface RetirementProbeDescriptor {
+  readonly key: string;
+  readonly label: string;
+  readonly nativeDrainToken: string | null;
+}
+
 interface RetirementFrameHarness {
   readonly cancelSpy: jest.SpyInstance;
   readonly frames: ((timestamp: number) => void)[];
@@ -134,23 +239,26 @@ function installRetirementFrameHarness(): RetirementFrameHarness {
   };
 }
 
-interface RetirementProbeDescriptor {
-  readonly key: string;
-  readonly label: string;
-}
-
 function RetirementProbe({
   descriptors,
+  maximumNativeDrainHosts = 1,
+  nativeDrainMs = 0,
 }: {
   readonly descriptors: readonly Readonly<RetirementProbeDescriptor>[];
+  readonly maximumNativeDrainHosts?: number;
+  readonly nativeDrainMs?: number;
 }): ReactElement {
-  const displayed = useTransitionHostRetirement(descriptors);
+  const displayed = useTransitionHostRetirement(
+    descriptors,
+    maximumNativeDrainHosts,
+    nativeDrainMs,
+  );
   return (
     <View>
-      {displayed.map(({ descriptor, quiescent }) => (
+      {displayed.map(({ descriptor, nativeDrain, quiescent }) => (
         <View
           key={descriptor.key}
-          testID={`${quiescent ? 'retiring' : 'live'}:${descriptor.label}`}
+          testID={`${quiescent ? 'retiring' : 'live'}:${nativeDrain ? 'admitted' : 'static'}:${descriptor.label}`}
         />
       ))}
     </View>
@@ -623,32 +731,375 @@ describe('mounted piece transition projection', () => {
     ).toEqual([]);
   });
 
-  it('derives retirement only from committed descriptors under StrictMode', async () => {
+  it('maps only Android transition hosts to the settled-props drain guard', () => {
+    expect(transitionHostNativeDrainMs('android')).toBe(
+      ANDROID_TRANSITION_HOST_NATIVE_DRAIN_MS,
+    );
+    expect(transitionHostNativeDrainMs('ios')).toBe(0);
+    expect(transitionHostNativeDrainMs('web')).toBe(0);
+  });
+
+  it('admits all transition hosts when no native drain window is required', async () => {
+    const descriptor = Object.freeze({
+      key: 'unbounded-off-android',
+      label: 'unbounded-off-android',
+      nativeDrainToken: 'epoch:1',
+    });
+    const result = await render(
+      <RetirementProbe
+        descriptors={[descriptor]}
+        maximumNativeDrainHosts={0}
+      />,
+    );
+
+    requiredNode(rootOf(result), 'live:admitted:unbounded-off-android');
+  });
+
+  it('derives admission only from committed descriptors under StrictMode', async () => {
     const retirement = installRetirementFrameHarness();
-    const first = Object.freeze({ key: 'shared', label: 'first' });
-    const replacement = Object.freeze({ key: 'shared', label: 'replacement' });
+    const first = Object.freeze({
+      key: 'shared',
+      label: 'first',
+      nativeDrainToken: 'epoch:1',
+    });
+    const replacement = Object.freeze({
+      key: 'shared',
+      label: 'replacement',
+      nativeDrainToken: 'epoch:2',
+    });
     const tree = (
       descriptors: readonly Readonly<RetirementProbeDescriptor>[],
     ): ReactElement => (
       <StrictMode>
-        <RetirementProbe descriptors={descriptors} />
+        <RetirementProbe
+          descriptors={descriptors}
+          nativeDrainMs={ANDROID_TRANSITION_HOST_NATIVE_DRAIN_MS}
+        />
       </StrictMode>
     );
     const result = await render(tree([first]));
-    const initialHost = requiredNode(rootOf(result), 'live:first');
+    const initialHost = requiredNode(rootOf(result), 'live:admitted:first');
 
     await result.rerender(tree([]));
-    expect(requiredNode(rootOf(result), 'retiring:first')).toBe(initialHost);
-    expect(retirement.frames).toHaveLength(1);
+    expect(requiredNode(rootOf(result), 'retiring:admitted:first')).toBe(
+      initialHost,
+    );
+    expect(retirement.frames).toEqual([]);
 
     await result.rerender(tree([replacement]));
-    expect(requiredNode(rootOf(result), 'live:replacement')).toBe(initialHost);
-    expect(retirement.cancelSpy).toHaveBeenCalledTimes(1);
-    await act(() => {
-      retirement.runNext();
-    });
+    expect(requiredNode(rootOf(result), 'live:admitted:replacement')).toBe(
+      initialHost,
+    );
     expect(retirement.frames).toEqual([]);
-    expect(requiredNode(rootOf(result), 'live:replacement')).toBe(initialHost);
+    expect(rootOf(result).children).toHaveLength(1);
+  });
+
+  it('preserves admission and makes canceled timer and frame callbacks inert when an exact key revives', async () => {
+    jest.useFakeTimers();
+    try {
+      const clearTimeoutSpy = jest.spyOn(globalThis, 'clearTimeout');
+      const retirement = installRetirementFrameHarness();
+      const first = Object.freeze({
+        key: 'reviving',
+        label: 'first',
+        nativeDrainToken: 'epoch:1',
+      });
+      const replacement = Object.freeze({
+        key: 'reviving',
+        label: 'replacement',
+        nativeDrainToken: 'epoch:2',
+      });
+      const tree = (
+        descriptors: readonly Readonly<RetirementProbeDescriptor>[],
+      ): ReactElement => (
+        <RetirementProbe
+          descriptors={descriptors}
+          nativeDrainMs={ANDROID_TRANSITION_HOST_NATIVE_DRAIN_MS}
+        />
+      );
+      const result = await render(tree([first]));
+      const initialHost = requiredNode(rootOf(result), 'live:admitted:first');
+
+      await result.rerender(tree([]));
+      await act(() => {
+        jest.advanceTimersByTime(1_000);
+      });
+      await result.rerender(tree([replacement]));
+      expect(clearTimeoutSpy).toHaveBeenCalledTimes(1);
+      expect(requiredNode(rootOf(result), 'live:admitted:replacement')).toBe(
+        initialHost,
+      );
+      await act(() => {
+        jest.advanceTimersByTime(ANDROID_TRANSITION_HOST_NATIVE_DRAIN_MS + 1);
+      });
+      expect(retirement.frames).toEqual([]);
+
+      await result.rerender(tree([]));
+      await act(() => {
+        jest.advanceTimersByTime(ANDROID_TRANSITION_HOST_NATIVE_DRAIN_MS);
+      });
+      expect(retirement.frames).toHaveLength(1);
+      await act(() => {
+        retirement.runNext();
+      });
+      expect(retirement.frames).toHaveLength(1);
+      await result.rerender(tree([replacement]));
+      expect(retirement.cancelSpy).toHaveBeenCalledTimes(1);
+      await act(() => {
+        retirement.runNext();
+      });
+      expect(retirement.frames).toEqual([]);
+      expect(requiredNode(rootOf(result), 'live:admitted:replacement')).toBe(
+        initialHost,
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('cancels admitted drain timers and overflow frames when the owner layer unmounts', async () => {
+    jest.useFakeTimers();
+    try {
+      const clearTimeoutSpy = jest.spyOn(globalThis, 'clearTimeout');
+      const retirement = installRetirementFrameHarness();
+      const admitted = Object.freeze({
+        key: 'admitted',
+        label: 'admitted',
+        nativeDrainToken: 'epoch:1',
+      });
+      const overflow = Object.freeze({
+        key: 'overflow',
+        label: 'overflow',
+        nativeDrainToken: 'epoch:1',
+      });
+      const tree = (
+        descriptors: readonly Readonly<RetirementProbeDescriptor>[],
+      ): ReactElement => (
+        <RetirementProbe
+          descriptors={descriptors}
+          maximumNativeDrainHosts={1}
+          nativeDrainMs={ANDROID_TRANSITION_HOST_NATIVE_DRAIN_MS}
+        />
+      );
+      const result = await render(tree([admitted, overflow]));
+      await result.rerender(tree([]));
+      expect(retirement.frames).toHaveLength(1);
+
+      await result.unmount();
+      expect(clearTimeoutSpy).toHaveBeenCalledTimes(1);
+      expect(retirement.cancelSpy).toHaveBeenCalledTimes(1);
+      await act(() => {
+        jest.advanceTimersByTime(ANDROID_TRANSITION_HOST_NATIVE_DRAIN_MS + 1);
+        retirement.runNext();
+      });
+      expect(retirement.frames).toEqual([]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('counts admitted live and retiring hosts, then admits a denied key only in a later epoch after drain', async () => {
+    jest.useFakeTimers();
+    try {
+      const retirement = installRetirementFrameHarness();
+      const admitted = Object.freeze({
+        key: 'admitted',
+        label: 'admitted',
+        nativeDrainToken: 'epoch:1',
+      });
+      const denied = (token: string): Readonly<RetirementProbeDescriptor> =>
+        Object.freeze({
+          key: 'denied',
+          label: token,
+          nativeDrainToken: token,
+        });
+      const tree = (
+        descriptors: readonly Readonly<RetirementProbeDescriptor>[],
+      ): ReactElement => (
+        <RetirementProbe
+          descriptors={descriptors}
+          maximumNativeDrainHosts={1}
+          nativeDrainMs={ANDROID_TRANSITION_HOST_NATIVE_DRAIN_MS}
+        />
+      );
+      const result = await render(tree([admitted, denied('epoch:1')]));
+      requiredNode(rootOf(result), 'live:admitted:admitted');
+      requiredNode(rootOf(result), 'live:static:epoch:1');
+
+      await result.rerender(tree([denied('epoch:1')]));
+      requiredNode(rootOf(result), 'retiring:admitted:admitted');
+      requiredNode(rootOf(result), 'live:static:epoch:1');
+      await act(() => {
+        jest.advanceTimersByTime(ANDROID_TRANSITION_HOST_NATIVE_DRAIN_MS);
+      });
+      expect(retirement.frames).toHaveLength(1);
+      await act(() => {
+        retirement.runNext();
+        retirement.runNext();
+      });
+      expect(rootOf(result).children).toHaveLength(1);
+      requiredNode(rootOf(result), 'live:static:epoch:1');
+
+      await result.rerender(tree([denied('epoch:2')]));
+      requiredNode(rootOf(result), 'live:admitted:epoch:2');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('retires overflow after two frames but holds admitted hosts through the native drain', async () => {
+    jest.useFakeTimers();
+    try {
+      const retirement = installRetirementFrameHarness();
+      const admitted = Object.freeze({
+        key: 'admitted',
+        label: 'admitted',
+        nativeDrainToken: 'epoch:1',
+      });
+      const overflow = Object.freeze({
+        key: 'overflow',
+        label: 'overflow',
+        nativeDrainToken: 'epoch:1',
+      });
+      const tree = (
+        descriptors: readonly Readonly<RetirementProbeDescriptor>[],
+      ): ReactElement => (
+        <RetirementProbe
+          descriptors={descriptors}
+          maximumNativeDrainHosts={1}
+          nativeDrainMs={ANDROID_TRANSITION_HOST_NATIVE_DRAIN_MS}
+        />
+      );
+      const result = await render(tree([admitted, overflow]));
+      await result.rerender(tree([]));
+      requiredNode(rootOf(result), 'retiring:admitted:admitted');
+      requiredNode(rootOf(result), 'retiring:static:overflow');
+      expect(retirement.frames).toHaveLength(1);
+
+      await act(() => {
+        retirement.runNext();
+        retirement.runNext();
+      });
+      expect(rootOf(result).children).toHaveLength(1);
+      requiredNode(rootOf(result), 'retiring:admitted:admitted');
+
+      await act(() => {
+        jest.advanceTimersByTime(ANDROID_TRANSITION_HOST_NATIVE_DRAIN_MS);
+      });
+      expect(retirement.frames).toHaveLength(1);
+      await act(() => {
+        retirement.runNext();
+        retirement.runNext();
+      });
+      expect(rootOf(result).children).toEqual([]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('caps 72 saturated full-board interruption epochs, renders overflow canonical state statically, and recovers capacity', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    jest.useFakeTimers();
+    try {
+      const retirement = installRetirementFrameHarness();
+      const layout = createBoardSurfaceLayout(
+        { height: 800, width: 800 },
+        { columns: 8, rows: 8 },
+        'white',
+      );
+      const renderers = Object.freeze({ token: Probe });
+      const tree = (generation: number): ReactElement => (
+        <PieceLayer
+          boardId="bounded-full-board-churn"
+          draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
+          layout={layout}
+          pieceRenderers={renderers}
+          position={currentPosition(
+            fullPosition(layout, generation),
+            generation,
+          )}
+          style={EMPTY_STYLE}
+          transition={saturatedFullBoardTransition(layout, generation)}
+        />
+      );
+      const drainFrames = (): void => {
+        while (retirement.frames.length > 0) {
+          retirement.runNext();
+        }
+      };
+      const result = await render(tree(100));
+      const expectedBudget = pieceLayerNativeDrainHostBudget(
+        layout.cells.length,
+      );
+      expect(expectedBudget).toBe(192);
+      expect(rootOf(result).children).toHaveLength(expectedBudget);
+
+      for (let generation = 101; generation < 172; generation += 1) {
+        await result.rerender(tree(generation));
+        await act(() => {
+          jest.advanceTimersByTime(125);
+          drainFrames();
+        });
+
+        const root = rootOf(result);
+        expect(root.children.length).toBeLessThanOrEqual(
+          expectedBudget + layout.cells.length,
+        );
+        const canonicalArtwork = root.queryAll((node) => {
+          const testID: unknown = node.props['testID'];
+          return (
+            typeof testID === 'string' &&
+            testID.startsWith(`generation:${String(generation)}:`)
+          );
+        });
+        expect(canonicalArtwork).toHaveLength(layout.cells.length);
+        for (const artwork of canonicalArtwork) {
+          const testID: unknown = artwork.props['testID'];
+          if (typeof testID !== 'string' || artwork.parent === null) {
+            throw new Error('Expected one canonical full-board piece host.');
+          }
+          if (testID.endsWith(':static')) {
+            expect(attachedStyleDescriptor(artwork.parent)).toBeNull();
+          } else {
+            expect(testID.endsWith(':transition')).toBe(true);
+            expect(attachedStyleDescriptor(artwork.parent)).not.toBeNull();
+          }
+        }
+      }
+
+      await result.rerender(
+        <PieceLayer
+          boardId="bounded-full-board-churn"
+          draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
+          layout={layout}
+          pieceRenderers={renderers}
+          position={currentPosition({}, 172)}
+          style={EMPTY_STYLE}
+        />,
+      );
+      await act(() => {
+        jest.advanceTimersByTime(ANDROID_TRANSITION_HOST_NATIVE_DRAIN_MS);
+        drainFrames();
+      });
+      expect(rootOf(result).children).toEqual([]);
+
+      await result.rerender(tree(1_000));
+      expect(rootOf(result).children).toHaveLength(expectedBudget);
+      const recoveredArtwork = rootOf(result).queryAll((node) => {
+        const testID: unknown = node.props['testID'];
+        return typeof testID === 'string' && testID.endsWith(':transition');
+      });
+      expect(recoveredArtwork).toHaveLength(expectedBudget);
+      for (const artwork of recoveredArtwork) {
+        if (artwork.parent === null) {
+          throw new Error('Expected one recovered animated piece host.');
+        }
+        expect(attachedStyleDescriptor(artwork.parent)).not.toBeNull();
+      }
+      await result.unmount();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('reuses the returning anonymous square host across rapid A-B-A controlled commits', async () => {
@@ -973,6 +1424,112 @@ describe('mounted piece transition projection', () => {
       retirement.runNext();
     });
     expect(retirement.frames).toEqual([]);
+  });
+
+  it('omits pending overflow before first commit and admits it only in a later epoch after capacity drains', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    jest.useFakeTimers();
+    try {
+      const retirement = installRetirementFrameHarness();
+      const layout = createBoardSurfaceLayout(
+        { height: 100, width: 200 },
+        { columns: 2, rows: 1 },
+        'white',
+      );
+      const movePlan = plan({
+        moves: Object.freeze([
+          Object.freeze({
+            after: Object.freeze({ id: 'runner', pieceType: 'token' }),
+            before: Object.freeze({ id: 'runner', pieceType: 'token' }),
+            from: 'a1',
+            kind: 'move' as const,
+            matchedBy: 'piece-id' as const,
+            to: 'b1',
+          }),
+        ]),
+      });
+      const base = transition(
+        movePlan,
+        layout,
+        testSharedValue(0.5),
+        pendingHandoff(),
+      );
+      const baseActor = base.presentation.pending[0];
+      if (baseActor === undefined) {
+        throw new Error('Expected one pending handoff actor.');
+      }
+      const mounted = (
+        epoch: number,
+        ids: readonly string[],
+      ): Readonly<MountedPositionTransition> =>
+        Object.freeze({
+          ...base,
+          presentation: Object.freeze({
+            ...base.presentation,
+            epoch,
+            pending: Object.freeze(
+              ids.map((id) =>
+                Object.freeze({
+                  ...baseActor,
+                  actorKey: `pending:${id}`,
+                  piece: Object.freeze({ id, pieceType: 'token' }),
+                }),
+              ),
+            ),
+          }),
+          progress: testSharedValue(0.5),
+        });
+      const tree = (
+        currentTransition: Readonly<MountedPositionTransition>,
+      ): ReactElement => (
+        <PendingMoveLayer
+          boardId="bounded-pending"
+          layout={layout}
+          lifecycle={null}
+          pieceRenderers={{ token: Probe }}
+          style={EMPTY_STYLE}
+          transition={currentTransition}
+        />
+      );
+      const admittedIds = Array.from(
+        { length: PENDING_MOVE_NATIVE_DRAIN_HOST_BUDGET },
+        (_, index) => `admitted-${String(index)}`,
+      );
+      const result = await render(tree(mounted(1, admittedIds)));
+      expect(rootOf(result).children).toHaveLength(
+        PENDING_MOVE_NATIVE_DRAIN_HOST_BUDGET,
+      );
+
+      await result.rerender(tree(mounted(2, ['overflow'])));
+      expect(
+        rootOf(result).queryAll(
+          (node) => node.props['testID'] === 'overflow:b1:static',
+        ),
+      ).toEqual([]);
+      expect(
+        rootOf(result).queryAll((node) => {
+          const testID: unknown = node.props['testID'];
+          return typeof testID === 'string' && testID.endsWith(':static');
+        }),
+      ).toEqual([]);
+
+      await act(() => {
+        jest.advanceTimersByTime(ANDROID_TRANSITION_HOST_NATIVE_DRAIN_MS);
+        while (retirement.frames.length > 0) {
+          retirement.runNext();
+        }
+      });
+      await result.rerender(tree(mounted(3, ['overflow'])));
+      const recovered = requiredNode(rootOf(result), 'overflow:b1:static');
+      const recoveredHost = recovered.parent?.parent ?? null;
+      if (recoveredHost === null) {
+        throw new Error('Expected the recovered pending animated host.');
+      }
+      expect(attachedStyleDescriptor(recoveredHost)).not.toBeNull();
+      await result.unmount();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('renders a capture exit below its moving current actor and fades both generic enter/exit paths', async () => {

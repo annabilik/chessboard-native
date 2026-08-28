@@ -105,17 +105,35 @@ dispatched only after commit in development and deduplicated across effect
 replay.
 
 Animated native hosts retire commit-first. When an ordinary layer update makes
-a keyed current, exit, replacement, or pending-handoff actor disappear, that
-same non-collapsible host first commits as a hidden empty shell with no animated
-style. It remains mounted through two guarded animation-frame callbacks before
-removal; if the key becomes live again first, the callbacks become inert and
-the host is reused. This also covers anonymous actors produced from plain FEN,
-whose current-host identity follows their square. A newer transition or
-geometry rebase allocates a fresh progress clock after cancelling the prior
-clock, so a retained descriptor can never receive newer-epoch writes.
+a keyed current, exit, replacement, or pending-handoff actor disappear, an
+admitted non-collapsible host first commits as a hidden empty shell with no
+animated style. Android admission is bounded across live and retiring hosts:
+`PieceLayer` uses `2 * cells + 64` slots (192 for an 8-by-8 board), and
+`PendingMoveLayer` uses 65. While the layer stays mounted, each admitted shell
+remains for a three-second native drain guard, exceeding Reanimated 4.5's
+two-second settled-props cutoff and 500 ms poll, then through two guarded
+animation-frame callbacks before removal. If its exact key becomes live again
+first, the timer and callbacks become inert and the same admitted host is
+reused. This also covers anonymous actors produced from plain FEN, whose
+current-host identity follows their square.
+
+Once the budget is full, a canonical current actor renders its latest
+controlled target statically without attaching an animated style or native view
+descriptor. Detached and pending actors, whose transition endpoint is hidden,
+are omitted. Denial lasts for that exact transition epoch; a later epoch can be
+admitted after capacity drains. Overflow hosts use only the ordinary two-frame
+commit barrier. Non-Android platforms admit every transition actor and also use
+only those two frames. A newer transition or geometry rebase allocates a fresh
+progress clock after cancelling the prior clock, so a retained descriptor can
+never receive newer-epoch writes.
+
 Whole-board or provider teardown cannot retain descendant shells, so it
 cancels animation and ownership without writing a terminal value to a retired
-progress clock. None of these native lifecycle rules delays or changes the
+progress clock; hook cleanup cancels pending timers and frame callbacks but
+cannot provide the three-second drain after the layer itself is removed. The
+physical Android gate must therefore cover an active-transition teardown, a
+real touch while the board is absent, and another real touch after prompt
+remount. None of these native lifecycle rules delays or changes the
 authoritative controlled position.
 
 P3.4 keeps semantic planning and visual continuity separate through a private

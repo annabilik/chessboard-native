@@ -10,6 +10,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.UiController
 import androidx.test.espresso.ViewAction
+import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.isRoot
 import androidx.test.ext.junit.rules.ActivityScenarioRule
@@ -26,11 +27,12 @@ import org.junit.runner.RunWith
 
 abstract class PlainFenTransitionInterruptTestBase(
     private val fixtureName: String,
+    private val injectEachTransition: Boolean,
+    private val postSequenceSettleMs: Long,
     private val rapidCadenceMs: Int,
     private val rapidChangeCount: Int,
     private val transitionDurationMs: Int,
 ) {
-    private val transitionSettleMs = transitionDurationMs + 300L
     private val launchIntent =
         Intent(
             ApplicationProvider.getApplicationContext<Context>(),
@@ -52,14 +54,21 @@ abstract class PlainFenTransitionInterruptTestBase(
             sequencePhase = "idle",
         )
 
-        onView(rapidTriggerMatcher()).perform(performDirectClick())
+        if (injectEachTransition) {
+            repeat(rapidChangeCount) {
+                onView(injectedTriggerMatcher()).perform(click())
+                onView(isRoot()).perform(waitForAtLeast(rapidCadenceMs.toLong()))
+            }
+        } else {
+            onView(rapidTriggerMatcher()).perform(performDirectClick())
+        }
         awaitState(
             changeCount = rapidChangeCount,
             currentFen = E2_FEN,
             pieceSquare = "e2",
             sequencePhase = "rapid-complete",
         )
-        onView(isRoot()).perform(waitForAtLeast(transitionSettleMs))
+        onView(isRoot()).perform(waitForAtLeast(postSequenceSettleMs))
         assertStableState(
             changeCount = rapidChangeCount,
             currentFen = E2_FEN,
@@ -79,14 +88,17 @@ abstract class PlainFenTransitionInterruptTestBase(
             index = E2_INDEX,
         )
 
-        onView(reuseTriggerMatcher()).perform(performDirectClick())
+        // This must remain a real Espresso input after the retirement window.
+        // Its DOWN/UP pair makes Reanimated replay pending synchronous props, so
+        // the log scanner proves removed tags are absent from the native registry.
+        onView(reuseTriggerMatcher()).perform(click())
         awaitState(
             changeCount = rapidChangeCount + 1,
             currentFen = E4_FEN,
             pieceSquare = "e4",
             sequencePhase = "reused",
         )
-        onView(isRoot()).perform(waitForAtLeast(transitionSettleMs))
+        onView(isRoot()).perform(waitForAtLeast(transitionDurationMs + 300L))
         assertStableState(
             changeCount = rapidChangeCount + 1,
             currentFen = E4_FEN,
@@ -146,6 +158,7 @@ abstract class PlainFenTransitionInterruptTestBase(
             "Piece square: $pieceSquare",
             "Position change count: $changeCount",
             "Position input tier: plain-fen",
+            "Post-sequence settle ms: $postSequenceSettleMs",
             "Rapid cadence ms: $rapidCadenceMs",
             "Sequence phase: $sequencePhase",
             "Transition duration ms: $transitionDurationMs",
@@ -317,6 +330,9 @@ abstract class PlainFenTransitionInterruptTestBase(
     private fun reuseTriggerMatcher(): Matcher<View> =
         contentDescriptionMatcher(REUSE_TRIGGER_LABEL)
 
+    private fun injectedTriggerMatcher(): Matcher<View> =
+        contentDescriptionMatcher(INJECTED_TRIGGER_LABEL)
+
     private fun contentDescriptionMatcher(expected: String): Matcher<View> =
         object : TypeSafeMatcher<View>() {
             override fun describeTo(description: Description) {
@@ -370,6 +386,7 @@ abstract class PlainFenTransitionInterruptTestBase(
         const val E4_INDEX = 36
         const val E4_FEN = "8/8/8/8/4P3/8/8/8 w - - 0 1"
         const val INTERACTION_TIMEOUT_MS = 30_000L
+        const val INJECTED_TRIGGER_LABEL = "Apply one injected plain FEN transition"
         const val POLL_INTERVAL_MS = 50L
         const val RAPID_TRIGGER_LABEL = "Start rapid plain FEN transition interruptions"
         const val REUSE_TRIGGER_LABEL = "Apply reusable plain FEN transition"
@@ -381,6 +398,8 @@ abstract class PlainFenTransitionInterruptTestBase(
 class ChessboardPlainFenTransitionInterruptTest :
     PlainFenTransitionInterruptTestBase(
         fixtureName = "interaction-plain-fen-transition-interrupt",
+        injectEachTransition = false,
+        postSequenceSettleMs = 600,
         rapidCadenceMs = 190,
         rapidChangeCount = 18,
         transitionDurationMs = 300,
@@ -391,6 +410,8 @@ class ChessboardPlainFenTransitionInterruptTest :
 class ChessboardPlainFenTransitionInterrupt200Test :
     PlainFenTransitionInterruptTestBase(
         fixtureName = "interaction-plain-fen-transition-interrupt-200ms",
+        injectEachTransition = true,
+        postSequenceSettleMs = 3_500,
         rapidCadenceMs = 125,
         rapidChangeCount = 72,
         transitionDurationMs = 200,
