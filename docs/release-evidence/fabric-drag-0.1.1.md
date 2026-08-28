@@ -1,18 +1,42 @@
 # Android Fabric drag evidence: 0.1.1 source candidate
 
 - Status: **Android drag RC gate passed**
-- Subject: clean repository source
-- Source commit: `37eb6e60ec8e9c6e670ad0ffcb71c33e4c86ce0e`
+- Physical-test subject: clean repository source
+- Physical-test source commit: `37eb6e60ec8e9c6e670ad0ffcb71c33e4c86ce0e`
 - Source tree: `633e29450bb538cb43dc4f4f045635af450e5920`
 - Machine record:
   [`fabric-drag-0.1.1.json`](./fabric-drag-0.1.1.json)
-- npm archive: not built or tested
-- Publication: none
+- Published prerelease: `@vibechess/chessboard-native@0.1.1-next.0`
+- Release source commit: `a3d7a48423659fabe99909f9cbc32b30c8b8c304`
+- Registry archive SHA-256:
+  `65d0ea2203a35e662d09d75cb2e425cef8d561bcd4207e8735dee18384ed18c7`
+- Dry-run workflow:
+  [`33153492603`](https://github.com/annabilik/chessboard-native/actions/runs/33153492603)
+- Publication and registry-verification workflow:
+  [`33153978975`](https://github.com/annabilik/chessboard-native/actions/runs/33153978975)
+- Physical retest of registry archive: **not run**
 
 All seven Release instrumentation gates passed on the same clean source
 snapshot. Each gate recorded the clean worktree SHA-256
 `8d4e13754b8484df12b47931400f2490f5ef941986d8a1d5928b079c033b8087`
 at start and finish, and reported no source change during execution.
+
+## Publication and registry verification
+
+The trusted-OIDC workflow published the prerelease under `next` and completed
+its separate registry-verification job. The independently downloaded registry
+tarball exactly matched the prepared archive, exposed SLSA provenance, and
+passed clean Expo type checking, Android and iOS exports, and bare React Native
+type checking. Credential-free checks resolved the exact version and `next` to
+`0.1.1-next.0`; `latest` remained `0.1.0`. The archive contains 433 files. Its
+npm integrity is
+`sha512-LC0SWHWaubIZAcAH+DOeN7bcKALvE3g8HMExYCsGYGOwAMix8YXZnFT937107R2hWxLtzRvgyFgzyTWKsaULpw==`.
+
+The release source commit is a descendant of the physical-test commit, with no
+diff under `packages/chessboard-native/src`. Later changes were release
+metadata, evidence, and packed-consumer tooling. This source relationship does
+not mean the registry tarball was installed and rerun through the
+physical-device gates.
 
 ## Device and runtime
 
@@ -71,8 +95,9 @@ noncommitted build reports under
 their hashes without copying raw logs or machine-specific absolute paths.
 
 This result clears the Android Fabric drag gate for the 0.1.1 repository-source
-candidate. It does **not** establish that an npm package was packed, published,
-or installed and retested, and it is not a claim of universal production
-readiness. Broader Android-device coverage, physical Android accessibility,
-memory qualification, package-wide performance, and all iOS gates remain
-separate release work.
+candidate. The linked prerelease has been packed, published, and automatically
+verified from the registry, but the registry tarball itself was not installed
+into the physical harness and rerun. The physical result therefore remains
+source-bound. This is not a claim of universal production readiness. Broader
+Android-device coverage, physical Android accessibility, memory qualification,
+package-wide performance, and all iOS gates remain separate release work.

@@ -6,8 +6,50 @@
     "name": "@vibechess/chessboard-native",
     "candidateVersion": "0.1.1",
     "manifestVersionAtTest": "0.1.0",
-    "archive": null,
-    "publication": null
+    "archive": {
+      "version": "0.1.1-next.0",
+      "sourceCommit": "a3d7a48423659fabe99909f9cbc32b30c8b8c304",
+      "registryUrl": "https://registry.npmjs.org/@vibechess/chessboard-native/-/chessboard-native-0.1.1-next.0.tgz",
+      "sha256": "65d0ea2203a35e662d09d75cb2e425cef8d561bcd4207e8735dee18384ed18c7",
+      "integrity": "sha512-LC0SWHWaubIZAcAH+DOeN7bcKALvE3g8HMExYCsGYGOwAMix8YXZnFT937107R2hWxLtzRvgyFgzyTWKsaULpw==",
+      "shasum": "c154eb04dd10756f9690f54812a9b9de4f3c438b",
+      "fileCount": 433,
+      "unpackedSizeBytes": 2277398
+    },
+    "dryRun": {
+      "status": "passed",
+      "workflowRun": "https://github.com/annabilik/chessboard-native/actions/runs/33153492603"
+    },
+    "publication": {
+      "status": "published",
+      "mode": "trusted-oidc",
+      "publishedAt": "2026-08-28T08:12:12.266Z",
+      "distTag": "next",
+      "workflowRun": "https://github.com/annabilik/chessboard-native/actions/runs/33153978975"
+    },
+    "verification": {
+      "status": "passed",
+      "workflowRun": "https://github.com/annabilik/chessboard-native/actions/runs/33153978975",
+      "registryArchiveMatchesPreparedArchive": true,
+      "distTags": {
+        "latest": "0.1.0",
+        "next": "0.1.1-next.0"
+      },
+      "cleanConsumers": {
+        "expoTypecheck": "passed",
+        "expoAndroidExport": "passed",
+        "expoIosExport": "passed",
+        "bareReactNativeTypecheck": "passed"
+      },
+      "provenance": {
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/@vibechess%2fchessboard-native@0.1.1-next.0",
+        "predicateType": "https://slsa.dev/provenance/v1"
+      }
+    },
+    "physicalRegistryArtifactRetest": {
+      "status": "not-run",
+      "note": "The npm registry tarball was not installed into the physical harness and rerun through the seven Android Fabric drag gates."
+    }
   },
   "source": {
     "commit": "37eb6e60ec8e9c6e670ad0ffcb71c33e4c86ce0e",
@@ -19,6 +61,14 @@
     "untrackedFilesSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "worktreeSha256": "8d4e13754b8484df12b47931400f2490f5ef941986d8a1d5928b079c033b8087",
     "gateSnapshotNote": "All seven gates recorded this identical clean snapshot at start and finish and sourceChangedDuringRun=false."
+  },
+  "sourceRelationship": {
+    "physicalGateCommit": "37eb6e60ec8e9c6e670ad0ffcb71c33e4c86ce0e",
+    "releaseCommit": "a3d7a48423659fabe99909f9cbc32b30c8b8c304",
+    "physicalGateCommitIsAncestor": true,
+    "comparedPath": "packages/chessboard-native/src",
+    "sourceDiff": "none",
+    "note": "Version metadata, evidence, and packed-consumer tooling changed after the physical run; the registry tarball was not physically retested."
   },
   "device": {
     "kind": "physical",
@@ -516,7 +566,8 @@
   },
   "scopeLimitations": [
     "The gate covers one physical Samsung SM-A075F running Android 16/API 36 at 60 Hz.",
-    "The subject is clean repository source, not a packed or published npm artifact.",
+    "The physical-gate subject is clean repository source commit 37eb6e60ec8e9c6e670ad0ffcb71c33e4c86ce0e, not the packed npm artifact.",
+    "The published registry archive was byte-verified and installed into automated clean Expo and bare React Native consumers, but the archive itself was not rerun through the physical Android gates.",
     "This is not broad Android device, accessibility, memory, or package-wide performance qualification.",
     "Physical Android accessibility and all iOS acceptance remain separate release gates."
   ]
