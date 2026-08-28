@@ -70,7 +70,11 @@ Fabric/Reanimated log scanner. The gate requires a physical Android device by
 default; set `ANDROID_SERIAL` to select the release Galaxy when multiple devices
 are connected. Evidence is written under
 `apps/native-harness/android/app/build/reports/fabric-plain-fen-transition-interrupt-gate/`.
-The Galaxy acceptance run and its commit-bound evidence are pending.
+A clean-source Samsung `SM-A075F` run passed this gate and the focused
+transition/provider, accepted-drag, and provider-unmount regression gates. See
+the [commit-bound evidence record](../../docs/release-evidence/fabric-transition-retirement-9f6698a.md).
+That record covers repository source rather than an npm artifact; performance,
+background/resume, full physical accessibility, and iOS were not newly rerun.
 
 The iOS commands require Xcode, the Ruby version pinned by the Gemfile, Bundler,
 and CocoaPods. Release builds use the simulator SDK with code signing disabled;

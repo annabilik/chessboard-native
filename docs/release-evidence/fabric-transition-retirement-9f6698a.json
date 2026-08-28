@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "status": "passed-source-candidate",
+  "subject": "repository-source",
+  "package": {
+    "name": "@vibechess/chessboard-native",
+    "manifestVersionAtTest": "0.1.1-next.0",
+    "npmArtifactTested": false,
+    "note": "The physical harness consumed workspace repository source. No npm archive was installed or tested."
+  },
+  "source": {
+    "commit": "9f6698a1cb2ea3eaa69a5e645e09146a6b89024e",
+    "tree": "cea39a3f3ffe2c99cb82f982519e1fc096861f33",
+    "dirty": false,
+    "status": "",
+    "trackedDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "untrackedFileCount": 0,
+    "untrackedFilesSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "worktreeSha256": "5f6bdd5614134164614738efe3b27a0efc3026684a780123093f6c26f88aee59"
+  },
+  "device": {
+    "kind": "physical",
+    "manufacturer": "samsung",
+    "model": "SM-A075F",
+    "androidRelease": "16",
+    "apiLevel": "36",
+    "abi": "arm64-v8a",
+    "serialOmitted": true
+  },
+  "gates": [
+    {
+      "id": "plain-fen-transition-interruption",
+      "status": "passed",
+      "startedAt": "2026-08-28T10:27:08.908Z",
+      "finishedAt": "2026-08-28T10:28:27.433Z",
+      "sourceAtStartDirty": false,
+      "sourceAtFinishDirty": false,
+      "sourceChangedDuringRun": false,
+      "testClass": "com.vibechess.chessboardnativeharness.ChessboardPlainFenTransitionInterruptTest#rapidPlainFenUpdatesRetireInterruptedTransitionHostsAndRemainReusable",
+      "gradle": {
+        "task": ":app:connectedReleaseAndroidTest",
+        "exitCode": 0,
+        "error": null
+      },
+      "result": {
+        "directory": "apps/native-harness/android/app/build/reports/fabric-plain-fen-transition-interrupt-gate",
+        "sha256": "f4cfb1d59a33b762bd1b325bf06914731ebb421670fca4b8b1b8609c3a8c3894"
+      },
+      "logcat": {
+        "findingCount": 0,
+        "capturePrematureExit": null,
+        "sha256": "e0808bd718576c6d50786411667906e30783d4672f39f8a433603d5e76805bb9"
+      }
+    },
+    {
+      "id": "transition-and-provider-replacement",
+      "status": "passed",
+      "startedAt": "2026-08-28T10:29:02.712Z",
+      "finishedAt": "2026-08-28T10:30:46.249Z",
+      "sourceAtStartDirty": false,
+      "sourceAtFinishDirty": false,
+      "sourceChangedDuringRun": false,
+      "testClass": "com.vibechess.chessboardnativeharness.ChessboardTransitionProviderUnmountDragTest#providerReplacementWhileTransitionAndDragOverlapLeavesStateReusable",
+      "gradle": {
+        "task": ":app:connectedReleaseAndroidTest",
+        "exitCode": 0,
+        "error": null
+      },
+      "result": {
+        "directory": "apps/native-harness/android/app/build/reports/fabric-drag-transition-provider-unmount-gate",
+        "sha256": "b9daea4ca7188ea722df11270020314bf38d5748852001148c95488f2eb9b0f0"
+      },
+      "logcat": {
+        "findingCount": 0,
+        "capturePrematureExit": null,
+        "sha256": "a46cf3be070e1bc874bf230b81ca233cdc364383ab35069cfa7a715562378865"
+      }
+    },
+    {
+      "id": "accepted-controlled-drag",
+      "status": "passed",
+      "startedAt": "2026-08-28T10:30:53.191Z",
+      "finishedAt": "2026-08-28T10:32:07.808Z",
+      "sourceAtStartDirty": false,
+      "sourceAtFinishDirty": false,
+      "sourceChangedDuringRun": false,
+      "testClass": "com.vibechess.chessboardnativeharness.ChessboardAcceptedDragTest#acceptedDragsPublishCorrelatedControlledCommitsExactlyOnce",
+      "gradle": {
+        "task": ":app:connectedReleaseAndroidTest",
+        "exitCode": 0,
+        "error": null
+      },
+      "result": {
+        "directory": "apps/native-harness/android/app/build/reports/fabric-drag-gate",
+        "sha256": "e5cacc0cb43f87f63bf2291d1243bb2434a835bc6e1fa30e60f49bfbc847557c"
+      },
+      "logcat": {
+        "findingCount": 0,
+        "capturePrematureExit": null,
+        "sha256": "e2a0ef0be9a670903770e2a24dbbb775dd338687d9d1b7184edc962b40560969"
+      }
+    },
+    {
+      "id": "provider-unmount-during-drag",
+      "status": "passed",
+      "startedAt": "2026-08-28T10:32:16.329Z",
+      "finishedAt": "2026-08-28T10:33:42.615Z",
+      "sourceAtStartDirty": false,
+      "sourceAtFinishDirty": false,
+      "sourceChangedDuringRun": false,
+      "testClass": "com.vibechess.chessboardnativeharness.ChessboardProviderUnmountDragTest#unmountingProviderDuringActiveDragDoesNotUpdateRemovedFabricHosts",
+      "gradle": {
+        "task": ":app:connectedReleaseAndroidTest",
+        "exitCode": 0,
+        "error": null
+      },
+      "result": {
+        "directory": "apps/native-harness/android/app/build/reports/fabric-drag-provider-unmount-gate",
+        "sha256": "8baeece8ddea86049b439c4b4905f6e5eefd4840b6a1708ad3c6469b94f5ed67"
+      },
+      "logcat": {
+        "findingCount": 0,
+        "capturePrematureExit": null,
+        "sha256": "a2f4ec1ab84e0b91f0265199948cc6190c11e5239ddb4f6047ecb4ceb625c580"
+      }
+    }
+  ],
+  "scope": {
+    "newlyRun": [
+      "plain-FEN controlled-transition interruption and host reuse",
+      "transition plus provider replacement",
+      "accepted controlled drag",
+      "provider unmount during active drag"
+    ],
+    "notNewlyRun": [
+      "physical transition or drag performance",
+      "background and resume behavior",
+      "full physical accessibility",
+      "iOS"
+    ],
+    "note": "This record is source-bound and does not establish behavior for any npm registry artifact."
+  }
+}
