@@ -98,7 +98,7 @@ When `.changeset/pre.json` already records `next` prerelease mode, do not run
 `pnpm changeset version`; Changesets advances the prerelease suffix.
 
 Review the resulting package version and changelog. It must be exactly one
-unpublished `0.1.0-next.N` version. Review and commit all intentional manifest,
+unpublished `X.Y.Z-next.N` version. Review and commit all intentional manifest,
 lockfile, changelog, and Changesets state changes in a pull request. Run the
 portable release gate before merging:
 
@@ -155,7 +155,7 @@ Before the bootstrap:
 Dispatch the **npm release** workflow on `main` with:
 
 - `mode`: `bootstrap-token`
-- `expected-version`: the exact reviewed `0.1.0-next.N` manifest version
+- `expected-version`: the exact reviewed `X.Y.Z-next.N` manifest version
 
 The workflow must publish the already inspected archive explicitly as a public
 scoped package under `next`; its effective command is equivalent to:

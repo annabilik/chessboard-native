@@ -3,6 +3,7 @@ package com.vibechess.chessboardnativeharness
 import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
+import android.util.Log
 import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.View
@@ -21,11 +22,12 @@ import androidx.test.espresso.matcher.ViewMatchers.isRoot
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
+import androidx.test.platform.app.InstrumentationRegistry
 import com.facebook.react.R
 import org.hamcrest.Description
 import org.hamcrest.Matcher
-import org.hamcrest.Matchers.equalTo
 import org.hamcrest.TypeSafeMatcher
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -35,6 +37,8 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 @LargeTest
 class ChessboardInteractionTest {
+    private var backgroundDragInput: InjectedTouchStream? = null
+
     private val launchIntent =
         Intent(
             ApplicationProvider.getApplicationContext<Context>(),
@@ -138,12 +142,7 @@ class ChessboardInteractionTest {
             lastTarget = "none",
         )
         onView(boardMatcher()).perform(beginDragBetweenSquares(file = 3, fromRank = 4, toRank = 5))
-        onView(reactTestIdMatcher(DRAG_OVERLAY_TEST_ID)).check { view, error ->
-            if (error != null) {
-                throw error
-            }
-            assertTrue("the fixture must enter an active native drag before backgrounding", view.isShown)
-        }
+        onView(isRoot()).perform(waitForReactTestId(DRAG_OVERLAY_TEST_ID))
 
         activityRule.scenario.moveToState(Lifecycle.State.CREATED)
         activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
@@ -154,7 +153,12 @@ class ChessboardInteractionTest {
             lastSource = "none",
             lastTarget = "none",
         )
+        onView(isRoot()).perform(waitForReactTestIdToDisappear(DRAG_OVERLAY_TEST_ID))
+        onView(boardMatcher()).perform(
+            cancelLingeringInjectedTouchStream(file = 3, rank = 5),
+        )
         onView(boardMatcher()).perform(swipeBetweenSquares(file = 3, fromRank = 4, toRank = 5))
+        backgroundDragInput = null
         awaitInteractionState(
             callbackCount = 1,
             decision = "rejected",
@@ -168,6 +172,34 @@ class ChessboardInteractionTest {
             lastSource = "board:d4",
             lastTarget = "d5",
         )
+    }
+
+    @After
+    fun closeBackgroundDragInputAfterFailure() {
+        val stream = backgroundDragInput ?: return
+        backgroundDragInput = null
+        val cancelTime = SystemClock.uptimeMillis()
+        val cancel =
+            touchEvent(
+                stream.downTime,
+                cancelTime,
+                MotionEvent.ACTION_CANCEL,
+                stream.lastCoordinates,
+            )
+        try {
+            val injected =
+                InstrumentationRegistry
+                    .getInstrumentation()
+                    .uiAutomation
+                    .injectInputEvent(cancel, true)
+            if (!injected) {
+                Log.w(LOG_TAG, "Failure cleanup ACTION_CANCEL was not acknowledged")
+            }
+        } catch (failure: Throwable) {
+            Log.w(LOG_TAG, "Failure cleanup ACTION_CANCEL threw", failure)
+        } finally {
+            cancel.recycle()
+        }
     }
 
     private fun awaitInteractionState(
@@ -299,6 +331,50 @@ class ChessboardInteractionTest {
         }
     }
 
+    private fun waitForReactTestId(testId: String): ViewAction = object : ViewAction {
+        override fun getConstraints(): Matcher<View> = isRoot()
+
+        override fun getDescription(): String = "wait for React test id $testId"
+
+        override fun perform(uiController: UiController, root: View) {
+            val deadline = SystemClock.uptimeMillis() + INTERACTION_TIMEOUT_MS
+            do {
+                if (
+                    descendantViews(root).any { view ->
+                        view.getTag(R.id.react_test_id) == testId && view.isShown
+                    }
+                ) {
+                    return
+                }
+                uiController.loopMainThreadForAtLeast(POLL_INTERVAL_MS)
+            } while (SystemClock.uptimeMillis() < deadline)
+
+            throw AssertionError("Timed out waiting for visible React test id $testId")
+        }
+    }
+
+    private fun waitForReactTestIdToDisappear(testId: String): ViewAction = object : ViewAction {
+        override fun getConstraints(): Matcher<View> = isRoot()
+
+        override fun getDescription(): String = "wait for React test id $testId to disappear"
+
+        override fun perform(uiController: UiController, root: View) {
+            val deadline = SystemClock.uptimeMillis() + INTERACTION_TIMEOUT_MS
+            do {
+                if (
+                    descendantViews(root).none { view ->
+                        view.getTag(R.id.react_test_id) == testId && view.isShown
+                    }
+                ) {
+                    return
+                }
+                uiController.loopMainThreadForAtLeast(POLL_INTERVAL_MS)
+            } while (SystemClock.uptimeMillis() < deadline)
+
+            throw AssertionError("Timed out waiting for React test id $testId to disappear")
+        }
+    }
+
     private fun swipeBetweenSquares(
         file: Int,
         fromRank: Int,
@@ -343,36 +419,103 @@ class ChessboardInteractionTest {
         override fun perform(uiController: UiController, view: View) {
             val start = squareCenter(file, fromRank).calculateCoordinates(view)
             val end = squareCenter(file, toRank).calculateCoordinates(view)
-            val downTime = SystemClock.uptimeMillis()
-            val events =
-                listOf(
-                    touchEvent(downTime, downTime, MotionEvent.ACTION_DOWN, start),
-                    touchEvent(
-                        downTime,
-                        downTime + TOUCH_STEP_MS,
-                        MotionEvent.ACTION_MOVE,
-                        floatArrayOf(
-                            (start[0] + end[0]) / 2f,
-                            (start[1] + end[1]) / 2f,
-                        ),
-                    ),
-                    touchEvent(
-                        downTime,
-                        downTime + TOUCH_STEP_MS * 2,
-                        MotionEvent.ACTION_MOVE,
-                        end,
-                    ),
+            val middle =
+                floatArrayOf(
+                    (start[0] + end[0]) / 2f,
+                    (start[1] + end[1]) / 2f,
                 )
-
-            try {
-                events.forEach { event ->
-                    assertTrue("native touch injection must succeed", uiController.injectMotionEvent(event))
-                }
-            } finally {
-                events.forEach(MotionEvent::recycle)
-            }
+            // A failed attempt can leave InputDispatcher's synthetic
+            // DeviceId(-1) pointer down across instrumentation restarts.
+            cancelLingeringInjectedTouchStream(uiController, start)
+            val downTime = SystemClock.uptimeMillis()
+            backgroundDragInput = InjectedTouchStream(downTime, start.copyOf())
+            injectRequiredTouchEvent(
+                uiController = uiController,
+                downTime = downTime,
+                action = MotionEvent.ACTION_DOWN,
+                coordinates = start,
+                description = "background drag ACTION_DOWN",
+            )
+            uiController.loopMainThreadForAtLeast(TOUCH_STEP_MS)
+            injectRequiredTouchEvent(
+                uiController = uiController,
+                downTime = downTime,
+                action = MotionEvent.ACTION_MOVE,
+                coordinates = middle,
+                description = "background drag first ACTION_MOVE",
+            )
+            backgroundDragInput?.lastCoordinates = middle.copyOf()
+            uiController.loopMainThreadForAtLeast(TOUCH_STEP_MS)
+            injectRequiredTouchEvent(
+                uiController = uiController,
+                downTime = downTime,
+                action = MotionEvent.ACTION_MOVE,
+                coordinates = end,
+                description = "background drag second ACTION_MOVE",
+            )
+            backgroundDragInput?.lastCoordinates = end.copyOf()
             uiController.loopMainThreadForAtLeast(DRAG_START_SETTLE_MS)
         }
+    }
+
+    private fun injectRequiredTouchEvent(
+        uiController: UiController,
+        downTime: Long,
+        action: Int,
+        coordinates: FloatArray,
+        description: String,
+    ) {
+        val eventTime = SystemClock.uptimeMillis()
+        val event = touchEvent(downTime, eventTime, action, coordinates)
+        try {
+            assertTrue(
+                "$description injection must succeed " +
+                    "(downTime=$downTime, eventTime=$eventTime, x=${coordinates[0]}, y=${coordinates[1]})",
+                uiController.injectMotionEvent(event),
+            )
+        } finally {
+            event.recycle()
+        }
+    }
+
+    private fun cancelLingeringInjectedTouchStream(
+        file: Int,
+        rank: Int,
+    ): ViewAction = object : ViewAction {
+        override fun getConstraints(): Matcher<View> = isDisplayed()
+
+        override fun getDescription(): String =
+            "close the harness-owned native touch stream at file $file rank $rank"
+
+        override fun perform(uiController: UiController, view: View) {
+            // Activity lifecycle cancellation clears the package gesture, but
+            // Android's synthetic DeviceId(-1) stream remains down until the
+            // instrumentation owner closes it. Its acknowledgement can be
+            // false after the original target surface pauses; the subsequent
+            // full swipe and semantic callback assertions prove recovery.
+            val coordinates = squareCenter(file, rank).calculateCoordinates(view)
+            cancelLingeringInjectedTouchStream(uiController, coordinates)
+        }
+    }
+
+    private fun cancelLingeringInjectedTouchStream(
+        uiController: UiController,
+        coordinates: FloatArray,
+    ) {
+        val cancelTime = SystemClock.uptimeMillis()
+        val cancel =
+            touchEvent(
+                cancelTime,
+                cancelTime,
+                MotionEvent.ACTION_CANCEL,
+                coordinates,
+            )
+        try {
+            uiController.injectMotionEvent(cancel)
+        } finally {
+            cancel.recycle()
+        }
+        uiController.loopMainThreadForAtLeast(INPUT_CANCEL_SETTLE_MS)
     }
 
     private fun touchEvent(
@@ -391,6 +534,11 @@ class ChessboardInteractionTest {
         ).apply {
             source = InputDevice.SOURCE_TOUCHSCREEN
         }
+
+    private class InjectedTouchStream(
+        val downTime: Long,
+        var lastCoordinates: FloatArray,
+    )
 
     private fun squareCenter(file: Int, rank: Int): CoordinatesProvider =
         CoordinatesProvider { view -> squareCenterOnView(view, file, rank) }
@@ -414,12 +562,6 @@ class ChessboardInteractionTest {
         override fun matchesSafely(view: View): Boolean =
             view.contentDescription?.toString()?.startsWith(BOARD_LABEL) == true
     }
-
-    private fun reactTestIdMatcher(testId: String): Matcher<View> =
-        androidx.test.espresso.matcher.ViewMatchers.withTagKey(
-            R.id.react_test_id,
-            equalTo(testId),
-        )
 
     private fun spareMatcher(): Matcher<View> = object : TypeSafeMatcher<View>() {
         override fun describeTo(description: Description) {
@@ -460,6 +602,7 @@ class ChessboardInteractionTest {
         IntArray(2).also(view::getLocationOnScreen)
 
     private companion object {
+        const val LOG_TAG = "ChessboardInteraction"
         const val BOARD_DIMENSION = 8
         const val BOARD_LABEL = "Interaction test board, white orientation"
         const val DRAG_OVERLAY_TEST_ID =
@@ -467,6 +610,7 @@ class ChessboardInteractionTest {
         const val POSITION_REVISION_DESCRIPTION = "Position revision: 7"
         const val SPARE_LABEL = "Clipped white queen spare"
         const val INTERACTION_TIMEOUT_MS = 30_000L
+        const val INPUT_CANCEL_SETTLE_MS = 50L
         const val POLL_INTERVAL_MS = 50L
         const val SETTLE_INTERVAL_MS = 500L
         const val DRAG_START_SETTLE_MS = 500L

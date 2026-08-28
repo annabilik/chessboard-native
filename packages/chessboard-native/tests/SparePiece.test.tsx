@@ -35,6 +35,7 @@ import {
   useChessboardProvider,
   type ChessboardProviderRuntime,
 } from '../src/internal/provider-context';
+import type { InteractionPresentationSharedValues } from '../src/internal/interaction-presentation';
 import { getSparePieceGestureTestId } from '../src/render/spare-piece-gesture-layer';
 import { getBoardGestureTestIds } from '../src/render/board-gesture-layer';
 
@@ -79,6 +80,21 @@ interface MeasureInWindowView {
   readonly measureInWindow: (
     callback: (x: number, y: number, width: number, height: number) => void,
   ) => void;
+}
+
+function presentationValues(
+  presentation: Readonly<InteractionPresentationSharedValues>,
+) {
+  return {
+    epoch: presentation.epoch.value,
+    phase: presentation.phase.value,
+    pointerWindowX: presentation.pointerWindowX.value,
+    pointerWindowY: presentation.pointerWindowY.value,
+    pointerX: presentation.pointerX.value,
+    pointerY: presentation.pointerY.value,
+    sourceSquare: presentation.sourceSquare.value,
+    targetSquare: presentation.targetSquare.value,
+  };
 }
 
 function boardByLabel(result: SpareRenderResult, label: string): TestInstance {
@@ -179,6 +195,34 @@ async function startSpareDrag(
   });
 }
 
+async function flushAnimationFrame(): Promise<void> {
+  await act(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
+      }),
+  );
+}
+
+async function flushRetirementFrames(): Promise<void> {
+  await flushAnimationFrame();
+  await flushAnimationFrame();
+}
+
+async function cancelSpareDrag(
+  callbacks: Readonly<PanCallbacks>,
+): Promise<void> {
+  await act(() => {
+    callbacks.onFinalize?.(
+      { absoluteX: 36, absoluteY: 24, x: 36, y: 24 },
+      false,
+    );
+  });
+  await flushRetirementFrames();
+}
+
 async function releaseSpareDrag(
   callbacks: Readonly<PanCallbacks>,
   point: Readonly<{ x: number; y: number }>,
@@ -198,6 +242,7 @@ async function releaseSpareDrag(
     await Promise.resolve();
     await Promise.resolve();
   });
+  await flushRetirementFrames();
 }
 
 function providerOverlayId(boardId: string): string {
@@ -1090,8 +1135,9 @@ describe('SparePiece', () => {
     await releaseSpareDrag(boundedCallbacks, { x: 125, y: 225 });
     expect(onMoveRequest).not.toHaveBeenCalled();
 
-    await beginSpareDrag('reserve');
+    const unboundedCallbacks = await beginSpareDrag('reserve');
     expect(runtimeRef.current?.drag.getSnapshot().active?.bounds).toBeNull();
+    await cancelSpareDrag(unboundedCallbacks);
   });
 
   it('invalidates a retained spare start when the same target id is replaced at the same effective default activation distance', async () => {
@@ -1239,6 +1285,7 @@ describe('SparePiece', () => {
         includeHiddenElements: true,
       }),
     ).toHaveLength(1);
+    await cancelSpareDrag(secondCallbacks);
   });
 
   it('publishes only validated spare hover boundaries and renders the source as a target-correlated ghost', async () => {
@@ -1312,12 +1359,7 @@ describe('SparePiece', () => {
       expect(dragCalls().at(-1)?.square).toBeNull();
     });
 
-    await act(() => {
-      callbacks.onFinalize?.(
-        { absoluteX: 350, absoluteY: 250, x: 275, y: 75 },
-        false,
-      );
-    });
+    await cancelSpareDrag(callbacks);
     expect(
       result.queryAllByTestId(providerOverlayId('target-board'), {
         includeHiddenElements: true,
@@ -1339,6 +1381,99 @@ describe('SparePiece', () => {
     await releaseSpareDrag(retainedCallbacks, { x: 125, y: 225 });
 
     expect(onMoveRequest).not.toHaveBeenCalled();
+  });
+
+  it('releases an active spare-source lease and session without mutating its orphaned presentation', async () => {
+    mockBoardWindowBounds();
+    const runtimeRef: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    const onMoveRequest = moveRequestMock({ status: 'accepted' });
+    const result = await render(
+      renderTarget({ onMoveRequest, runtimeRef, showSpare: true }),
+    );
+    await measureBoard(boardByLabel(result, 'target board'));
+
+    const retiredCallbacks = await beginSpareDrag('reserve');
+    await act(() => {
+      retiredCallbacks.onUpdate?.({
+        absoluteX: 125,
+        absoluteY: 225,
+        x: 49,
+        y: 25,
+      });
+    });
+    const runtime = runtimeRef.current;
+    if (runtime === null) {
+      throw new Error('Expected the provider runtime probe to commit.');
+    }
+    await waitFor(() => {
+      expect(runtime.drag.getSnapshot().active?.targetSquare).toBe('a2');
+    });
+    const descriptor = runtime.drag.getSnapshot().active;
+    if (descriptor?.source.kind !== 'spare') {
+      throw new Error('Expected an active spare overlay descriptor.');
+    }
+    const retainedPresentation = descriptor.presentation;
+    const valuesBeforeUnmount = presentationValues(retainedPresentation);
+    expect(valuesBeforeUnmount).toEqual({
+      epoch: 0,
+      phase: 2,
+      pointerWindowX: 125,
+      pointerWindowY: 225,
+      pointerX: 49,
+      pointerY: 25,
+      sourceSquare: null,
+      targetSquare: 'a2',
+    });
+
+    await result.rerender(
+      renderTarget({ onMoveRequest, runtimeRef, showSpare: false }),
+    );
+    expect(runtime.drag.getSnapshot().active).toBeNull();
+    expect(
+      result.queryAllByTestId(providerOverlayId('target-board'), {
+        includeHiddenElements: true,
+      }),
+    ).toEqual([]);
+    expect(presentationValues(retainedPresentation)).toEqual(
+      valuesBeforeUnmount,
+    );
+    expect(onMoveRequest).not.toHaveBeenCalled();
+
+    // A fresh source can establish and finish a new drop session; the retired
+    // source's terminal signal remains rejected by its unmounted generation.
+    await act(() => {
+      retiredCallbacks.onFinalize?.(
+        { absoluteX: 125, absoluteY: 225, x: 49, y: 25 },
+        false,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(runtime.drag.getSnapshot().active).toBeNull();
+    expect(onMoveRequest).not.toHaveBeenCalled();
+    expect(presentationValues(retainedPresentation)).toEqual(
+      valuesBeforeUnmount,
+    );
+
+    await result.rerender(
+      renderTarget({ onMoveRequest, runtimeRef, showSpare: true }),
+    );
+    const freshCallbacks = await beginSpareDrag('reserve');
+    await releaseSpareDrag(
+      freshCallbacks,
+      { x: 49, y: 25 },
+      { x: 125, y: 225 },
+    );
+    await waitFor(() => {
+      expect(onMoveRequest).toHaveBeenCalledTimes(1);
+    });
+    expect(presentationValues(retainedPresentation)).toEqual(
+      valuesBeforeUnmount,
+    );
   });
 
   it('cancels an active spare drag when its target unmounts, ignores the stale terminal, and recovers after remount', async () => {
@@ -1723,6 +1858,7 @@ describe('SparePiece', () => {
     await waitFor(() => {
       expect(onMoveRequest).toHaveBeenCalledTimes(1);
     });
+    await flushAnimationFrame();
     expect(
       result.queryAllByTestId(providerOverlayId('target-board'), {
         includeHiddenElements: true,

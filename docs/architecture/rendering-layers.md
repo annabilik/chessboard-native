@@ -133,10 +133,13 @@ must not merge it onto the wrapper a second time.
 
 For ordinary piece paint the chain is built-in `piece`, `theme.piece`, then
 `styles.piece`. Active drag-overlay paint appends built-in,
-`theme.draggingPiece`, and `styles.draggingPiece`; its transform is appended
-after pointer translations by the overlay worklet and is omitted under reduced
-motion. The active source ghost instead appends the corresponding
-`draggingPieceGhost` chain. The named target board's resolved transient styles
+`theme.draggingPiece`, and `styles.draggingPiece`. On iOS its transform is
+appended after pointer translations by the overlay worklet. On Android the
+absolute outer host follows the pointer through animated `left`/`top`, while
+the lift or consumer transform is applied statically to that host. Reduced
+motion omits the lift or consumer transform on both platforms. The active
+source ghost instead appends the corresponding `draggingPieceGhost` chain. The
+named target board's resolved transient styles
 apply to both board-origin and spare-origin active drags. A spare's own `style`
 remains its resting base paint until the provider lease is active; the target
 board then owns overlay and ghost presentation.
@@ -269,15 +272,17 @@ movement and oriented target hit testing remain in shared values.
 The same internal presentation state projects drag lift, a source ghost, and
 decision or controlled-commit pending flags without retaining a semantic
 position. The board publishes the active drag visual and shared pointer values
-to its nearest provider. The provider-level overlay sibling uses a direct
-animated transform, so frame updates do not rerender custom artwork or commit
-React state. Exactly one overlay can be active in a provider even when multiple
-boards and spare sources are present; source ghost and pending projection remain
-routed to the owning board ID and mount token. P5.1 resolves public drag-overlay
-and source-ghost styles after the static piece chain. Board and spare drag
-target-square changes update the public drop-target paint and square-renderer
-state only when the canonical hover square changes. Pending and pressed remain
-renderer state; transition-specific public styling remains future work.
+to its nearest provider. The provider-level overlay sibling uses UI-runtime
+pointer positioning—an animated transform on iOS and absolute `left`/`top`
+layout coordinates on Android—so frame updates do not rerender custom artwork
+or cross into JavaScript. Exactly one overlay can be active in a provider even
+when multiple boards and spare sources are present; source ghost and pending
+projection remain routed to the owning board ID and mount token. P5.1 resolves
+public drag-overlay and source-ghost styles after the static piece chain. Board
+and spare drag target-square changes update the public drop-target paint and
+square-renderer state only when the canonical hover square changes. Pending and
+pressed remain renderer state; transition-specific public styling remains
+future work.
 
 P2.6 adds a `SparePiece` source host with one visual-only piece renderer, one
 accessible button, and one board-external pan recognizer. Its visual root fixes
@@ -286,8 +291,19 @@ that source host and into the provider-level sibling, so a palette child may
 use `overflow: 'hidden'` without cropping artwork that travels to a board
 elsewhere in the same provider. The provider overlay is not a native window
 portal; clipping an ancestor of the full provider scope can still crop it. The
-overlay stays mounted during asynchronous release measurement and is removed
-on every terminal verified, rejected, cancelled, replaced, or stale path.
+overlay stays mounted during asynchronous release measurement. Every terminal
+verified, rejected, cancelled, or stale path clears the active lease
+immediately, detaches the animated style in a hidden pointerless retirement
+commit, retains that shell through one full native-update drain frame, and
+removes it on the next. A replacement path reuses the host and makes both
+obsolete retirement callbacks inert. This protocol applies while the provider
+remains mounted. Whole-provider teardown cannot retain a descendant shell, so
+its cleanup only revokes semantic ownership and never resets orphaned
+presentation shared values. On Android, residual native terminal frames use
+only the shadow-tree `left`/`top` path rather than synchronous props on a
+removed host. Resting board-piece hosts preserve native and custom-renderer
+identity while omitting their Reanimated style descriptor; only actors in a
+controlled transition attach one.
 
 P1.5 promotes only the stable outer host to one adjustable accessibility
 control. It uses `pointerEvents="box-none"` so ordinary touch remains available

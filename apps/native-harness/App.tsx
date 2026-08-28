@@ -6,20 +6,27 @@ import {
   type AnnotationOperation,
   type AnnotationTool,
   type ControlledAnnotations,
+  type ControlledPosition,
   type OnAnnotationOperation,
   type OnMoveRequest,
   type SquareId,
 } from '@vibechess/chessboard-native';
 import { defaultPieceRenderers } from '@vibechess/chessboard-native/pieces';
 import { Chessboard as ReactChessboardCompat } from '@vibechess/chessboard-native/react-chessboard-compat';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+import { TransitionProviderUnmountFixture } from './TransitionProviderUnmountFixture';
 
 const AUDIT_BOARD_LABEL = 'Accessibility audit board, white orientation';
 const AUDIT_BOARD_HINT =
   'Swipe up or down through squares, or use directional accessibility actions.';
 const INTERACTION_BOARD_LABEL = 'Interaction test board, white orientation';
+const ACCEPTED_INTERACTION_BOARD_LABEL =
+  'Accepted interaction test board, white orientation';
+const PROVIDER_UNMOUNT_INTERACTION_BOARD_LABEL =
+  'Provider unmount interaction test board, white orientation';
 const ANNOTATION_BOARD_LABEL = 'Annotation test board, white orientation';
 const INTERACTION_POSITION = Object.freeze({
   revision: 7,
@@ -43,7 +50,10 @@ interface AppProps {
     | 'annotation-square'
     | 'compatibility'
     | 'interaction'
-    | 'interaction-lifecycle';
+    | 'interaction-accepted'
+    | 'interaction-lifecycle'
+    | 'interaction-provider-unmount'
+    | 'interaction-transition-provider-unmount';
 }
 
 const EMPTY_ANNOTATIONS = Object.freeze({
@@ -396,6 +406,269 @@ function InteractionFixture({
   );
 }
 
+function AcceptedInteractionFixture() {
+  const [position, setPosition] =
+    useState<ControlledPosition>(INTERACTION_POSITION);
+  const positionRef = useRef<ControlledPosition>(INTERACTION_POSITION);
+  const pieceSquareRef = useRef<SquareId>('d4');
+  const [abortCount, setAbortCount] = useState(0);
+  const [callbackCount, setCallbackCount] = useState(0);
+  const [commitCount, setCommitCount] = useState(0);
+  const [decision, setDecision] = useState<'accepted' | 'none' | 'rejected'>(
+    'none',
+  );
+  const [lastBaseRevision, setLastBaseRevision] = useState<number | null>(null);
+  const [lastInput, setLastInput] = useState('none');
+  const [lastIntentId, setLastIntentId] = useState<string | null>(null);
+  const [lastSource, setLastSource] = useState('none');
+  const [lastTarget, setLastTarget] = useState<SquareId | null>(null);
+  const [pieceSquare, setPieceSquare] = useState<SquareId>('d4');
+  const acceptAndCommitMove = useCallback<OnMoveRequest>((intent, context) => {
+    setCallbackCount((count) => count + 1);
+    setLastBaseRevision(intent.basePositionRevision);
+    setLastInput(intent.input);
+    setLastSource(
+      intent.source.kind === 'board'
+        ? `board:${intent.source.square}`
+        : `spare:${intent.source.spareId}`,
+    );
+    setLastTarget(intent.targetSquare);
+
+    const current = positionRef.current;
+    const targetSquare = intent.targetSquare;
+    if (
+      context.signal.aborted ||
+      intent.source.kind !== 'board' ||
+      intent.source.square !== pieceSquareRef.current ||
+      targetSquare === null ||
+      intent.basePositionRevision !== current.revision
+    ) {
+      if (context.signal.aborted) {
+        setAbortCount((count) => count + 1);
+      }
+      setDecision('rejected');
+      return {
+        reason:
+          'Accepted interaction fixture received a stale or invalid intent.',
+        status: 'rejected',
+      };
+    }
+
+    const nextPosition = Object.freeze({
+      committedIntentId: intent.intentId,
+      revision: current.revision + 1,
+      value: Object.freeze({
+        [targetSquare]: Object.freeze({ ...intent.piece }),
+      }),
+    }) satisfies ControlledPosition;
+    positionRef.current = nextPosition;
+    pieceSquareRef.current = targetSquare;
+    setPosition(nextPosition);
+    setPieceSquare(targetSquare);
+    setCommitCount((count) => count + 1);
+    setLastIntentId(intent.intentId);
+    setDecision('accepted');
+    return { status: 'accepted' };
+  }, []);
+  const commitCorrelation =
+    lastIntentId === null
+      ? 'none'
+      : position.committedIntentId === lastIntentId
+        ? 'matched'
+        : 'mismatched';
+
+  return (
+    <View style={styles.interactionContent}>
+      <View style={styles.interactionStatus}>
+        <Text style={styles.title}>Native accepted-drag fixture</Text>
+        <AuditStatus
+          label="Callback count"
+          testID="interaction-accepted:callback-count"
+          value={String(callbackCount)}
+        />
+        <AuditStatus
+          label="Commit count"
+          testID="interaction-accepted:commit-count"
+          value={String(commitCount)}
+        />
+        <AuditStatus
+          label="Abort count"
+          testID="interaction-accepted:abort-count"
+          value={String(abortCount)}
+        />
+        <AuditStatus
+          label="Last target"
+          testID="interaction-accepted:last-target"
+          value={lastTarget ?? 'none'}
+        />
+        <AuditStatus
+          label="Last source"
+          testID="interaction-accepted:last-source"
+          value={lastSource}
+        />
+        <AuditStatus
+          label="Last input"
+          testID="interaction-accepted:last-input"
+          value={lastInput}
+        />
+        <AuditStatus
+          label="Last base revision"
+          testID="interaction-accepted:last-base-revision"
+          value={lastBaseRevision === null ? 'none' : String(lastBaseRevision)}
+        />
+        <AuditStatus
+          label="Position revision"
+          testID="interaction-accepted:position-revision"
+          value={String(position.revision)}
+        />
+        <AuditStatus
+          label="Piece square"
+          testID="interaction-accepted:piece-square"
+          value={pieceSquare}
+        />
+        <AuditStatus
+          label="Commit correlation"
+          testID="interaction-accepted:commit-correlation"
+          value={commitCorrelation}
+        />
+        <AuditStatus
+          label="Decision"
+          testID="interaction-accepted:decision"
+          value={decision}
+        />
+      </View>
+      <View style={styles.acceptedInteractionBoard}>
+        <ChessboardProvider>
+          <View style={styles.board} testID="interaction-accepted:board-host">
+            <Chessboard
+              accessibility={{ boardLabel: ACCEPTED_INTERACTION_BOARD_LABEL }}
+              boardId="native-interaction-accepted"
+              interactionPermissions={{ accessibility: true, drag: true }}
+              onMoveRequest={acceptAndCommitMove}
+              pieceRenderers={defaultPieceRenderers}
+              position={position}
+              reduceMotion="never"
+              transitionDurationMs={300}
+            />
+          </View>
+        </ChessboardProvider>
+      </View>
+    </View>
+  );
+}
+
+function ProviderUnmountInteractionFixture() {
+  const [abortCount, setAbortCount] = useState(0);
+  const [callbackCount, setCallbackCount] = useState(0);
+  const [dragStartCount, setDragStartCount] = useState(0);
+  const [providerGeneration, setProviderGeneration] = useState(0);
+  const remountFrameRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (remountFrameRef.current !== null) {
+        cancelAnimationFrame(remountFrameRef.current);
+      }
+    },
+    [],
+  );
+
+  const remountProviderAfterDragStart = useCallback(() => {
+    setDragStartCount((count) => count + 1);
+    if (remountFrameRef.current !== null) {
+      return;
+    }
+    remountFrameRef.current = requestAnimationFrame(() => {
+      remountFrameRef.current = null;
+      setProviderGeneration((generation) => generation + 1);
+    });
+  }, []);
+  const rejectUnexpectedMove = useCallback<OnMoveRequest>(
+    (_intent, context) => {
+      setCallbackCount((count) => count + 1);
+      if (context.signal.aborted) {
+        setAbortCount((count) => count + 1);
+      }
+      return {
+        reason:
+          'Provider-unmount fixture must replace the active drag before release.',
+        status: 'rejected',
+      };
+    },
+    [],
+  );
+
+  return (
+    <View style={styles.interactionContent}>
+      <View style={styles.interactionStatus}>
+        <Text style={styles.title}>Native provider-unmount fixture</Text>
+        <AuditStatus
+          label="Drag start count"
+          testID="interaction-provider-unmount:drag-start-count"
+          value={String(dragStartCount)}
+        />
+        <AuditStatus
+          label="Remount count"
+          testID="interaction-provider-unmount:remount-count"
+          value={String(providerGeneration)}
+        />
+        <AuditStatus
+          label="Provider generation"
+          testID="interaction-provider-unmount:provider-generation"
+          value={String(providerGeneration)}
+        />
+        <AuditStatus
+          label="Callback count"
+          testID="interaction-provider-unmount:callback-count"
+          value={String(callbackCount)}
+        />
+        <AuditStatus
+          label="Commit count"
+          testID="interaction-provider-unmount:commit-count"
+          value="0"
+        />
+        <AuditStatus
+          label="Abort count"
+          testID="interaction-provider-unmount:abort-count"
+          value={String(abortCount)}
+        />
+        <AuditStatus
+          label="Position revision"
+          testID="interaction-provider-unmount:position-revision"
+          value={String(INTERACTION_POSITION.revision)}
+        />
+        <AuditStatus
+          label="Piece square"
+          testID="interaction-provider-unmount:piece-square"
+          value="d4"
+        />
+      </View>
+      <View style={styles.acceptedInteractionBoard}>
+        <ChessboardProvider key={providerGeneration}>
+          <View
+            style={styles.board}
+            testID="interaction-provider-unmount:board-host"
+          >
+            <Chessboard
+              accessibility={{
+                boardLabel: PROVIDER_UNMOUNT_INTERACTION_BOARD_LABEL,
+              }}
+              boardId="native-interaction-provider-unmount"
+              interactionPermissions={{ accessibility: true, drag: true }}
+              onMoveRequest={rejectUnexpectedMove}
+              onPieceDragStart={remountProviderAfterDragStart}
+              pieceRenderers={defaultPieceRenderers}
+              position={INTERACTION_POSITION}
+              reduceMotion="never"
+              transitionDurationMs={300}
+            />
+          </View>
+        </ChessboardProvider>
+      </View>
+    </View>
+  );
+}
+
 function CompatibilityFixture() {
   return (
     <View style={styles.auditContent}>
@@ -437,6 +710,12 @@ export default function App({ fixture = 'accessibility' }: AppProps) {
         <AnnotationFixture
           tool={fixture === 'annotation-arrow' ? 'arrow' : 'square'}
         />
+      ) : fixture === 'interaction-accepted' ? (
+        <AcceptedInteractionFixture />
+      ) : fixture === 'interaction-provider-unmount' ? (
+        <ProviderUnmountInteractionFixture />
+      ) : fixture === 'interaction-transition-provider-unmount' ? (
+        <TransitionProviderUnmountFixture />
       ) : fixture === 'interaction' || fixture === 'interaction-lifecycle' ? (
         <InteractionFixture
           pendingUntilAbort={fixture === 'interaction-lifecycle'}
@@ -464,6 +743,12 @@ const styles = StyleSheet.create({
     gap: 2,
     marginTop: 20,
     maxWidth: 480,
+  },
+  acceptedInteractionBoard: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
   },
   title: {
     color: '#282520',

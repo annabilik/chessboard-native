@@ -31,7 +31,6 @@ import {
 } from '../internal/board-gesture-adapter';
 import {
   projectInteractionPresentation,
-  resetInteractionPresentationSharedValues,
   syncInteractionPresentationSharedValues,
   useInteractionPresentationSharedValues,
 } from '../internal/interaction-presentation';
@@ -486,6 +485,25 @@ function BoardInteractionControllerContent({
         return;
       }
       signalGenerationAtCommit.current = REJECTED_SIGNAL_GENERATION;
+      const reduction = reduceBoardGestureAdapter(adapter.current, {
+        correlation,
+        reason:
+          reason === 'app-background'
+            ? 'app-background'
+            : reason === 'geometry-change'
+              ? 'geometry-change'
+              : reason === 'unmount'
+                ? 'unmount'
+                : 'user',
+        type: 'cancel',
+      });
+      if (reason === 'unmount') {
+        // The provider already revoked the lease. Keep reducer correlation
+        // correct, but do not queue presentation writes or React state while
+        // Fabric is deleting this controller's native subtree.
+        adapter.current = reduction.state;
+        return;
+      }
       if (acceptingSignals.current) {
         setProviderResetRevision((revision) => {
           if (revision === Number.MAX_SAFE_INTEGER) {
@@ -496,20 +514,7 @@ function BoardInteractionControllerContent({
           return revision + 1;
         });
       }
-      applyReduction(
-        reduceBoardGestureAdapter(adapter.current, {
-          correlation,
-          reason:
-            reason === 'app-background'
-              ? 'app-background'
-              : reason === 'geometry-change'
-                ? 'geometry-change'
-                : reason === 'unmount'
-                  ? 'unmount'
-                  : 'user',
-          type: 'cancel',
-        }),
-      );
+      applyReduction(reduction);
     },
     [applyReduction],
   );
@@ -936,9 +941,11 @@ function BoardInteractionControllerContent({
         );
       }
       onDragSourceChangeAtCommit.current?.(null);
-      resetInteractionPresentationSharedValues(presentation);
+      // Do not mutate UI-thread presentation values during teardown. Their
+      // consumers are being removed in the same Fabric commit, so queued
+      // Reanimated writes could otherwise target an already-deleted host.
     };
-  }, [presentation, providerRuntime]);
+  }, [providerRuntime]);
 
   return (
     <BoardGestureLayer

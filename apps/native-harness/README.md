@@ -38,6 +38,7 @@ pnpm native:android
 pnpm native:android:release
 pnpm native:android:accessibility
 pnpm native:android:accessibility:managed
+pnpm native:android:drag:gate
 pnpm native:ios:gems
 pnpm native:ios:pods
 pnpm native:ios
@@ -50,6 +51,14 @@ pnpm native:ios:accessibility
 Gradle-managed device and needs hardware virtualization. The iOS audit selects
 an available iPhone simulator, preferring one that is already booted; set
 `IOS_SIMULATOR_UDID` to require a particular available simulator.
+
+`native:android:drag:gate` runs the focused Release test for repeated accepted
+drags followed by correlated controlled-position commits and 300 ms position
+transitions. It clears and captures logcat around the test, then fails on known
+Fabric/Reanimated stale host signatures even when instrumentation itself
+succeeds. Set `ANDROID_SERIAL` when more than one device is connected. Evidence
+is written under
+`apps/native-harness/android/app/build/reports/fabric-drag-gate/`.
 
 The iOS commands require Xcode, the Ruby version pinned by the Gemfile, Bundler,
 and CocoaPods. Release builds use the simulator SDK with code signing disabled;
