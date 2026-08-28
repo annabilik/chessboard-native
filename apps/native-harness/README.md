@@ -39,6 +39,7 @@ pnpm native:android:release
 pnpm native:android:accessibility
 pnpm native:android:accessibility:managed
 pnpm native:android:drag:gate
+pnpm native:android:position-transition:interrupt:gate
 pnpm native:ios:gems
 pnpm native:ios:pods
 pnpm native:ios
@@ -59,6 +60,21 @@ Fabric/Reanimated stale host signatures even when instrumentation itself
 succeeds. Set `ANDROID_SERIAL` when more than one device is connected. Evidence
 is written under
 `apps/native-harness/android/app/build/reports/fabric-drag-gate/`.
+
+`native:android:position-transition:interrupt:gate` runs a focused Release
+fixture that alternates one anonymous pawn between actual plain-FEN positions
+18 times at 190 ms while each controlled transition is configured for 300 ms,
+then publishes one more update to prove host reuse. It verifies the final FEN,
+piece count, square, and native adjustable-board state and applies the same
+Fabric/Reanimated log scanner. The gate requires a physical Android device by
+default; set `ANDROID_SERIAL` to select the release Galaxy when multiple devices
+are connected. Evidence is written under
+`apps/native-harness/android/app/build/reports/fabric-plain-fen-transition-interrupt-gate/`.
+A clean-source Samsung `SM-A075F` run passed this gate and the focused
+transition/provider, accepted-drag, and provider-unmount regression gates. See
+the [commit-bound evidence record](../../docs/release-evidence/fabric-transition-retirement-9f6698a.md).
+That record covers repository source rather than an npm artifact; performance,
+background/resume, full physical accessibility, and iOS were not newly rerun.
 
 The iOS commands require Xcode, the Ruby version pinned by the Gemfile, Bundler,
 and CocoaPods. Release builds use the simulator SDK with code signing disabled;

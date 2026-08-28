@@ -32,6 +32,7 @@ const consumers = {
       '.bundle',
       '.watchmanconfig',
       'App.tsx',
+      'PlainFenTransitionInterruptFixture.tsx',
       'TransitionProviderUnmountFixture.tsx',
       'Gemfile',
       'Gemfile.lock',

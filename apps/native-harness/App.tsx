@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { PlainFenTransitionInterruptFixture } from './PlainFenTransitionInterruptFixture';
 import { TransitionProviderUnmountFixture } from './TransitionProviderUnmountFixture';
 
 const AUDIT_BOARD_LABEL = 'Accessibility audit board, white orientation';
@@ -52,6 +53,7 @@ interface AppProps {
     | 'interaction'
     | 'interaction-accepted'
     | 'interaction-lifecycle'
+    | 'interaction-plain-fen-transition-interrupt'
     | 'interaction-provider-unmount'
     | 'interaction-transition-provider-unmount';
 }
@@ -714,6 +716,8 @@ export default function App({ fixture = 'accessibility' }: AppProps) {
         <AcceptedInteractionFixture />
       ) : fixture === 'interaction-provider-unmount' ? (
         <ProviderUnmountInteractionFixture />
+      ) : fixture === 'interaction-plain-fen-transition-interrupt' ? (
+        <PlainFenTransitionInterruptFixture />
       ) : fixture === 'interaction-transition-provider-unmount' ? (
         <TransitionProviderUnmountFixture />
       ) : fixture === 'interaction' || fixture === 'interaction-lifecycle' ? (

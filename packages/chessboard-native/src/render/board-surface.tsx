@@ -1411,18 +1411,14 @@ export function BoardSurface({
           {showNotation ? (
             <BoardNotationLayer layout={layout} styles={styles} theme={theme} />
           ) : null}
-          {pendingLifecycle === null &&
-          (positionTransition?.presentation.pending.length ?? 0) ===
-            0 ? null : (
-            <PendingMoveLayer
-              boardId={pendingLifecycle?.boardId ?? model.boardId ?? ''}
-              layout={layout}
-              lifecycle={pendingLifecycle}
-              pieceRenderers={pieceRenderers}
-              style={pieceStyle}
-              transition={positionTransition}
-            />
-          )}
+          <PendingMoveLayer
+            boardId={pendingLifecycle?.boardId ?? model.boardId ?? ''}
+            layout={layout}
+            lifecycle={pendingLifecycle}
+            pieceRenderers={pieceRenderers}
+            style={pieceStyle}
+            transition={positionTransition}
+          />
           {(!dragEnabled &&
             !tapEnabled &&
             !annotationGestureEnabled &&

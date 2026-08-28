@@ -87,6 +87,22 @@ async function flushDecisions(): Promise<void> {
   });
 }
 
+async function flushAnimationFrame(): Promise<void> {
+  await act(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
+      }),
+  );
+}
+
+async function flushRetirementFrames(): Promise<void> {
+  await flushAnimationFrame();
+  await flushAnimationFrame();
+}
+
 function gesturePlanes(root: TestInstance): TestInstance[] {
   return root.queryAll(
     (node) =>
@@ -526,6 +542,7 @@ describe('public controlled selection activation', () => {
         }),
       ).toBeNull();
       expect(actionsRef.current?.cancelMove()).toBe(false);
+      await flushRetirementFrames();
     },
   );
 

@@ -103,6 +103,17 @@ completion can clear only the still-matching epoch. Planner warnings are
 dispatched only after commit in development and deduplicated across effect
 replay.
 
+Animated native hosts retire commit-first. When an ordinary layer update makes
+a keyed current, exit, replacement, or pending-handoff actor disappear, that
+same host first commits as a hidden empty shell with no animated style. It
+remains mounted through two guarded animation-frame callbacks before removal;
+if the key becomes live again first, the callbacks become inert and the host is
+reused. This also covers anonymous actors produced from plain FEN, whose
+current-host identity follows their square. Whole-board or provider teardown
+cannot retain descendant shells, so it cancels animation and ownership without
+writing a terminal value to the shared progress clock. None of these native
+lifecycle rules delays or changes the authoritative controlled position.
+
 P3.4 keeps semantic planning and visual continuity separate through a private
 `TransitionPresentation` actor graph between the pure plan and render layers.
 The graph carries the exact revision pair, current, detached, and pending

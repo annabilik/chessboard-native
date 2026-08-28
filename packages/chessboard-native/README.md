@@ -1062,6 +1062,15 @@ A missing or mismatched correlation, an actor mismatch, and an off-board target
 use ordinary controlled-transition behavior instead; none fabricates a handoff
 actor.
 
+Rapid controlled updates are safe for both revisioned positions and plain FEN
+without stable piece IDs. When an interruption removes a current, exit,
+replacement, or pending-handoff actor, the board first quiesces that exact
+native host by removing its artwork and animated style, retains the empty host
+through two animation-frame callbacks, and then removes it. If the same keyed
+actor returns first, it reuses the host and cancels retirement. Cancellation or
+unmount does not force a terminal write to the shared transition clock. These
+presentation-lifecycle safeguards never delay the latest controlled `position`.
+
 Revisioned positions may supply a `transition` hint for exact actor identity.
 Malformed, stale, or contradictory hints are warning-only in development and
 never invalidate an otherwise valid position.
