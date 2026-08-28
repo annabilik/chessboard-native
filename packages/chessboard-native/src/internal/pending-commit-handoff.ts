@@ -45,7 +45,7 @@ function copySource(source: Readonly<MoveSource>): Readonly<MoveSource> {
 }
 
 /**
- * Derive one exact pending-to-controlled presentation handoff.
+ * Derive one exact drag pending-to-controlled presentation handoff.
  *
  * The returned value is correlation and actor metadata only. It can seed a
  * visual transition, but it cannot render or restore a semantic position.
@@ -68,6 +68,7 @@ export function derivePendingCommitHandoff({
   const intent = lifecycle.intent;
   const committedIntentId = position.committedIntentId;
   if (
+    intent.input !== 'drag' ||
     lifecycle.boardId !== boardId ||
     intent.boardId !== boardId ||
     intent.basePositionRevision !== lifecycle.positionRevision ||

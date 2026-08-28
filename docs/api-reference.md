@@ -112,8 +112,9 @@ type ControlledPosition = {
   changed semantic snapshot must advance it.
 - Do not switch between plain and revisioned tiers while the board is mounted.
 - After accepting a `MoveIntent`, publish the new position with a newer
-  revision. Set `committedIntentId` to that intent's ID when exact pending-to-
-  commit handoff matters.
+  revision and set `committedIntentId` to that intent's ID to confirm the
+  request. For drag input, that correlation may also enable the visual
+  pending-to-commit handoff.
 - `BoardTransition` is presentation-only and must describe the exact adjacent
   `fromRevision`/`toRevision` pair. It does not apply chess rules.
 

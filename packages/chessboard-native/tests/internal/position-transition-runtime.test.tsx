@@ -233,6 +233,8 @@ describe('mounted controlled-position transition runtime', () => {
       throw new Error('Expected one sampled A-B current actor.');
     }
     await hook.rerender({ durationMs: 1_000, position: c });
+    expect(hook.result.current?.progress).not.toBe(aToB.progress);
+    const retiredProgress = aToB.progress.get();
     expect(hook.result.current?.plan).toEqual(
       expect.objectContaining({
         epoch: 1,
@@ -254,10 +256,63 @@ describe('mounted controlled-position transition runtime', () => {
     await act(() => {
       jest.advanceTimersByTime(420);
     });
+    expect(aToB.progress.get()).toBe(retiredProgress);
     expect(hook.result.current?.plan.epoch).toBe(1);
 
     await act(() => {
       jest.advanceTimersByTime(600);
+    });
+    expect(hook.result.current).toBeNull();
+  });
+
+  it('isolates repeated 200 ms transitions from every retired epoch clock at a 125 ms cadence', async () => {
+    const squarePosition = (
+      revision: number,
+      square: 'e2' | 'e4',
+    ): NormalizedPositionValue =>
+      position(revision, {
+        [square]: Object.freeze({ id: 'pawn', pieceType: 'wP' }),
+      });
+    const hook = await renderHook(useHarness, {
+      initialProps: {
+        durationMs: 200,
+        position: squarePosition(0, 'e2'),
+      },
+    });
+    const retiredClocks: {
+      readonly progress: SharedValue<number>;
+      readonly value: number;
+    }[] = [];
+    let priorClock: SharedValue<number> | null = null;
+
+    for (let change = 1; change <= 18; change += 1) {
+      await hook.rerender({
+        durationMs: 200,
+        position: squarePosition(change, change % 2 === 0 ? 'e2' : 'e4'),
+      });
+      const mounted = hook.result.current;
+      if (mounted === null) {
+        throw new Error(`Expected transition ${String(change)} to mount.`);
+      }
+      expect(mounted.durationMs).toBe(200);
+      if (priorClock !== null) {
+        expect(mounted.progress).not.toBe(priorClock);
+        retiredClocks.push({
+          progress: priorClock,
+          value: priorClock.get(),
+        });
+      }
+      await act(() => {
+        jest.advanceTimersByTime(125);
+      });
+      for (const retired of retiredClocks) {
+        expect(retired.progress.get()).toBe(retired.value);
+      }
+      priorClock = mounted.progress;
+    }
+
+    await act(() => {
+      jest.advanceTimersByTime(210);
     });
     expect(hook.result.current).toBeNull();
   });
@@ -459,6 +514,7 @@ describe('mounted controlled-position transition runtime', () => {
       position: b,
     });
     expect(hook.result.current).not.toBeNull();
+    expect(hook.result.current?.progress).not.toBe(beforeRebase.progress);
     expect(hook.result.current?.presentation.epoch).not.toBe(
       beforeRebase.presentation.epoch,
     );

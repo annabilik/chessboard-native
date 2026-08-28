@@ -11,10 +11,6 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 const BOARD_LABEL =
   'Plain FEN transition interrupt test board, white orientation';
-const BOARD_ID = 'native-plain-fen-transition-interrupt';
-const CADENCE_MS = 190;
-const RAPID_CHANGE_COUNT = 18;
-const TRANSITION_DURATION_MS = 300;
 const E2_FEN = '8/8/8/8/8/8/4P3/8 w - - 0 1';
 const E4_FEN = '8/8/8/8/4P3/8/8/8 w - - 0 1';
 const BOARD_SELECTION = Object.freeze({ selectedSquare: 'e4' as const });
@@ -76,12 +72,24 @@ function squareForChangeCount(changeCount: number): SquareId {
   return changeCount % 2 === 0 ? 'e2' : 'e4';
 }
 
+interface PlainFenTransitionInterruptFixtureProps {
+  readonly boardId: string;
+  readonly cadenceMs: number;
+  readonly rapidChangeCount: number;
+  readonly transitionDurationMs: number;
+}
+
 /**
- * App-parity fixture for interrupting 300 ms controlled transitions with
- * actual plain FEN strings every 190 ms. FEN normalization deliberately
- * supplies no revision envelope, committed intent, or stable piece ID.
+ * App-parity fixture for interrupting controlled transitions with actual
+ * plain FEN strings. FEN normalization deliberately supplies no revision
+ * envelope, committed intent, or stable piece ID.
  */
-export function PlainFenTransitionInterruptFixture() {
+function ConfiguredPlainFenTransitionInterruptFixture({
+  boardId,
+  cadenceMs,
+  rapidChangeCount,
+  transitionDurationMs,
+}: PlainFenTransitionInterruptFixtureProps) {
   const [changeCount, setChangeCount] = useState(0);
   const [currentFen, setCurrentFen] = useState(E2_FEN);
   const [pieceSquare, setPieceSquare] = useState<SquareId>('e2');
@@ -122,7 +130,7 @@ export function PlainFenTransitionInterruptFixture() {
     publishNextFen();
     intervalRef.current = setInterval(() => {
       const nextCount = publishNextFen();
-      if (nextCount < RAPID_CHANGE_COUNT) {
+      if (nextCount < rapidChangeCount) {
         return;
       }
 
@@ -131,8 +139,8 @@ export function PlainFenTransitionInterruptFixture() {
         intervalRef.current = null;
       }
       setSequencePhase('rapid-complete');
-    }, CADENCE_MS);
-  }, [publishNextFen, sequencePhase]);
+    }, cadenceMs);
+  }, [cadenceMs, publishNextFen, rapidChangeCount, sequencePhase]);
 
   const proveReuse = useCallback(() => {
     if (sequencePhase !== 'rapid-complete') {
@@ -159,12 +167,12 @@ export function PlainFenTransitionInterruptFixture() {
         <AuditStatus
           label="Transition duration ms"
           testID="plain-fen-transition:transition-duration"
-          value={String(TRANSITION_DURATION_MS)}
+          value={String(transitionDurationMs)}
         />
         <AuditStatus
           label="Rapid cadence ms"
           testID="plain-fen-transition:cadence"
-          value={String(CADENCE_MS)}
+          value={String(cadenceMs)}
         />
         <AuditStatus
           label="Position change count"
@@ -204,7 +212,9 @@ export function PlainFenTransitionInterruptFixture() {
           ]}
           testID="plain-fen-transition:rapid-trigger"
         >
-          <Text style={styles.triggerLabel}>Run 18 changes at 190 ms</Text>
+          <Text style={styles.triggerLabel}>
+            Run {rapidChangeCount} changes at {cadenceMs} ms
+          </Text>
         </Pressable>
         <Pressable
           accessibilityLabel="Apply reusable plain FEN transition"
@@ -224,7 +234,7 @@ export function PlainFenTransitionInterruptFixture() {
         <View style={styles.board} testID="plain-fen-transition:board-host">
           <Chessboard
             accessibility={{ boardLabel: BOARD_LABEL }}
-            boardId={BOARD_ID}
+            boardId={boardId}
             interactionPermissions={INTERACTION_PERMISSIONS}
             onMoveRequest={rejectUnexpectedMove}
             pieceRenderers={PIECE_RENDERERS}
@@ -232,11 +242,35 @@ export function PlainFenTransitionInterruptFixture() {
             reduceMotion="never"
             selection={BOARD_SELECTION}
             showNotation
-            transitionDurationMs={TRANSITION_DURATION_MS}
+            transitionDurationMs={transitionDurationMs}
           />
         </View>
       </View>
     </View>
+  );
+}
+
+/** Preserve the source-qualified 300/190 ms retirement acceptance profile. */
+export function PlainFenTransitionInterruptFixture() {
+  return (
+    <ConfiguredPlainFenTransitionInterruptFixture
+      boardId="native-plain-fen-transition-interrupt"
+      cadenceMs={190}
+      rapidChangeCount={18}
+      transitionDurationMs={300}
+    />
+  );
+}
+
+/** Four app-parity interruption cycles at the 200/125 ms failing cadence. */
+export function PlainFenTransitionInterrupt200Fixture() {
+  return (
+    <ConfiguredPlainFenTransitionInterruptFixture
+      boardId="native-plain-fen-transition-interrupt-200ms"
+      cadenceMs={125}
+      rapidChangeCount={72}
+      transitionDurationMs={200}
+    />
   );
 }
 

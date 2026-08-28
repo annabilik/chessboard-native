@@ -1005,8 +1005,8 @@ engine or another board source of truth.
 
 Every valid position prop is authoritative as soon as it renders. When the
 previous and current committed positions form an animatable revision pair, the
-board derives detached piece operations and presents them with one board-local
-Reanimated clock:
+board derives detached piece operations and presents them with one board-local,
+epoch-local Reanimated clock:
 
 - ordinary continuing pieces translate from their old measured cell to their
   current canonical square;
@@ -1053,23 +1053,27 @@ and zero duration still snap. Reduced motion also snaps immediately, clears
 sampled continuity, and does not replay a settled revision if motion is later
 re-enabled.
 
-A newer revision with the active move's matching `committedIntentId` and a
+A newer revision with the active drag move's matching `committedIntentId` and a
 non-null target may crossfade the pending target into the canonical current
 actor without replaying its source-to-target move. The handoff also requires the
 exact plan revisions and a current actor matching the intent's source, piece,
 and target. Other changed actors still follow the exact adjacent semantic plan.
-A missing or mismatched correlation, an actor mismatch, and an off-board target
-use ordinary controlled-transition behavior instead; none fabricates a handoff
-actor.
+Tap, keyboard, and accessibility commits retain matching-ID semantic
+confirmation but use the ordinary configured transition. A missing or
+mismatched correlation, an actor mismatch, and an off-board target also use
+ordinary controlled-transition behavior; none fabricates a handoff actor.
 
 Rapid controlled updates are safe for both revisioned positions and plain FEN
 without stable piece IDs. When an interruption removes a current, exit,
 replacement, or pending-handoff actor, the board first quiesces that exact
-native host by removing its artwork and animated style, retains the empty host
-through two animation-frame callbacks, and then removes it. If the same keyed
-actor returns first, it reuses the host and cancels retirement. Cancellation or
-unmount does not force a terminal write to the shared transition clock. These
-presentation-lifecycle safeguards never delay the latest controlled `position`.
+native host by removing its artwork and animated style, retains the
+non-collapsible empty host through two animation-frame callbacks, and then
+removes it. If the same keyed actor returns first, it reuses the host and
+cancels retirement. Every newer transition or geometry rebase receives a fresh
+progress clock; retained descriptors keep only their cancelled prior clock and
+cannot receive newer-epoch writes. Cancellation or unmount does not force a
+terminal write to a retired transition clock. These presentation-lifecycle
+safeguards never delay the latest controlled `position`.
 
 Revisioned positions may supply a `transition` hint for exact actor identity.
 Malformed, stale, or contradictory hints are warning-only in development and

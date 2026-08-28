@@ -943,6 +943,7 @@ describe('mounted piece transition projection', () => {
     if (pendingHost === null) {
       throw new Error('Expected one pending handoff animated host.');
     }
+    expect(pendingHost).toHaveProp('collapsable', false);
     const activeDescriptor = attachedStyleDescriptor(pendingHost);
     if (activeDescriptor === null) {
       throw new Error('Expected the pending handoff animated style.');
@@ -1283,6 +1284,7 @@ describe('mounted piece transition projection', () => {
       throw new Error('Expected one transient host.');
     }
     expect(gone.parent).toHaveProp('accessible', false);
+    expect(gone.parent).toHaveProp('collapsable', false);
     expect(gone.parent).toHaveProp(
       'importantForAccessibility',
       'no-hide-descendants',
