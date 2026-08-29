@@ -5,11 +5,13 @@ pass. It tests the immutable npm archive inside an isolated copy of the Expo
 gallery. It does not accept workspace links, simulators, automated
 accessibility audits, or an unrecorded verbal result as physical evidence.
 
-The current record targets `@vibechess/chessboard-native@0.1.0` and is
-still pending. See the
-[`0.1.0` evidence summary](./release-evidence/accessibility-0.1.0.md)
+The current record targets `@vibechess/chessboard-native@0.1.1-next.3`.
+Consult the
+[`0.1.1-next.3` evidence summary](./release-evidence/accessibility-0.1.1-next.3.md)
 and its
-[machine-checked result record](./release-evidence/accessibility-0.1.0.json).
+[machine-checked result record](./release-evidence/accessibility-0.1.1-next.3.json).
+The earlier [`0.1.0` record](./release-evidence/accessibility-0.1.0.md) remains
+as historical pending evidence and is not rewritten by this pass.
 
 ## Required equipment
 
@@ -45,12 +47,12 @@ gallery_commit="$(git -C "$repository_root" rev-parse HEAD)"
 work_root="$(mktemp -d)"
 trap 'rm -rf "$work_root"' EXIT
 npm pack \
-  @vibechess/chessboard-native@0.1.0 \
+  @vibechess/chessboard-native@0.1.1-next.3 \
   --ignore-scripts \
   --pack-destination "$work_root"
 
-archive="$work_root/vibechess-chessboard-native-0.1.0.tgz"
-expected_sha256="7457c0f66774c03ca18a3bc05496471d1bf58f4163069f5e15245b64aeb8ea67"
+archive="$work_root/vibechess-chessboard-native-0.1.1-next.3.tgz"
+expected_sha256="573cde3c9c9d137453a8ddae31011f5d4a9c723dc0a2688ddff78776634bacf6"
 printf '%s  %s\n' "$expected_sha256" "$archive" | shasum -a 256 --check
 
 node "$repository_root/scripts/smoke-packed.mjs" \
@@ -67,7 +69,7 @@ The digest check must print the archive name followed by `OK`. Its expected
 SHA-256 is:
 
 ```text
-7457c0f66774c03ca18a3bc05496471d1bf58f4163069f5e15245b64aeb8ea67
+573cde3c9c9d137453a8ddae31011f5d4a9c723dc0a2688ddff78776634bacf6
 ```
 
 Stop if the digest differs or if the prepared consumer resolves the package
@@ -124,7 +126,7 @@ allows only `passed`.
 ## Record and validate results
 
 Update
-[`accessibility-0.1.0.json`](./release-evidence/accessibility-0.1.0.json)
+[`accessibility-0.1.1-next.3.json`](./release-evidence/accessibility-0.1.1-next.3.json)
 after each session. Reference at least one durable HTTPS recording or reviewed
 artifact for each platform. The normal repository check validates the pending
 record's schema, exact package and publication identity, route mapping, complete
@@ -136,17 +138,18 @@ gallery:
 pnpm accessibility:evidence:check
 ```
 
-After both physical sessions, update the evidence summary with the exact gallery
-commit, device descriptions, HTTPS artifact links, and passed rows. Change the
-corresponding support-matrix rows to complete wording, then run the strict gate:
+After each physical session, update the evidence summary with the exact gallery
+commit, device description, HTTPS artifact links, and current platform row.
+Change that platform's support-matrix row to complete wording only when all 26
+checks pass. After both sessions pass, run the strict gate:
 
 ```sh
-expected_version="0.1.0"
-expected_source_commit="f8aa4653e9d75d3141dfcbae52a1223a327f6945"
-expected_archive_sha256="7457c0f66774c03ca18a3bc05496471d1bf58f41"\
-"63069f5e15245b64aeb8ea67"
+expected_version="0.1.1-next.3"
+expected_source_commit="3d8aa5b0df5b95f2e9b0d711dcb00947b693c538"
+expected_archive_sha256="573cde3c9c9d137453a8ddae31011f5d4a9c723d"\
+"c0a2688ddff78776634bacf6"
 expected_publication_run="https://github.com/annabilik/chessboard-native"
-expected_publication_run="$expected_publication_run/actions/runs/30806201340"
+expected_publication_run="$expected_publication_run/actions/runs/33224004537"
 
 pnpm accessibility:evidence:complete \
   --expected-version "$expected_version" \
