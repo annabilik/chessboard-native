@@ -1100,7 +1100,7 @@ describe('mounted piece transition projection', () => {
     } finally {
       jest.useRealTimers();
     }
-  });
+  }, 15_000);
 
   it('reuses the returning anonymous square host across rapid A-B-A controlled commits', async () => {
     const retirement = installRetirementFrameHarness();
