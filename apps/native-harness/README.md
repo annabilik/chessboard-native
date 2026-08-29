@@ -41,6 +41,7 @@ pnpm native:android:accessibility:managed
 pnpm native:android:drag:gate
 pnpm native:android:position-transition:interrupt:gate
 pnpm native:android:position-transition:interrupt:200ms:gate
+pnpm native:android:position-transition:whole-unmount:gate
 pnpm native:ios:gems
 pnpm native:ios:pods
 pnpm native:ios
@@ -71,18 +72,47 @@ Fabric/Reanimated log scanner. The gate requires a physical Android device by
 default; set `ANDROID_SERIAL` to select the release Galaxy when multiple devices
 are connected. Evidence is written under
 `apps/native-harness/android/app/build/reports/fabric-plain-fen-transition-interrupt-gate/`.
-A clean-source Samsung `SM-A075F` run passed this gate and the focused
-transition/provider, accepted-drag, and provider-unmount regression gates. See
-the [commit-bound evidence record](../../docs/release-evidence/fabric-transition-retirement-9f6698a.md).
-That record covers repository source rather than an npm artifact; performance,
-background/resume, full physical accessibility, and iOS were not newly rerun.
+A clean-source Samsung `SM-A075F` run passed this gate and the corrected 200 ms,
+whole-provider-unmount, and transition/provider-overlap gates. See the
+[final commit-bound evidence record](../../docs/release-evidence/fabric-transition-retirement-bf151bd.md).
+That record covers repository source rather than an npm artifact or the
+VibeChess application Gate C; performance, background/resume, full physical
+accessibility, visual baselines, and iOS were not newly rerun.
 
 `native:android:position-transition:interrupt:200ms:gate` preserves the same
 plain-FEN, native-accessibility, reuse, and log-scanner assertions while running
-72 changes at the app's 125 ms interruption cadence against 200 ms controlled
-transitions. The four repeated 18-change cycles are a focused regression for
-epoch-clock isolation; the original 300/190 ms gate remains independently
-executable and its historical evidence is unchanged.
+72 changes against 200 ms controlled transitions. An instrumentation-thread
+driver injects every raw native DOWN/UP pair through `UiAutomation`, without
+Espresso's click-action delay or main-thread idle waits. Intermediate events are
+asynchronous and the final UP is a synchronous ordering barrier. The driver
+waits for each exact React-committed position-change count before scheduling the
+next input, preventing queued touches from reaching JavaScript in a burst. Each
+next DOWN is no earlier than both the preceding DOWN plus the configured 125 ms
+and the commit acknowledgement plus 100 ms; the gate fails if that schedule
+cannot stay below the preceding DOWN plus 200 ms. The fixture separately
+measures all 71 consecutive JavaScript `onPress` gaps and publishes one summary
+after handler 72; the test requires a minimum of 100 ms, a maximum below 200 ms,
+and zero invalid or out-of-bound gaps. The sequence is therefore accepted only
+when it measurably interrupts all four 18-change transition cycles. Afterward it
+holds the quiescent hosts for 3.5 seconds, covering Reanimated 4.5's Android
+settled-props cleanup window and the guarded removal frames, then injects the
+reuse control as a separate off-main raw native tap. The scanner therefore
+observes the first event-driven synchronous-props flush after host removal. The
+original 300/190 ms gate remains independently executable and its historical
+evidence is unchanged.
+
+`native:android:position-transition:whole-unmount:gate` runs two focused
+200 ms lifecycle cycles against the transition/provider fixture. The prompt
+cycle starts a controlled transition, removes the complete board/provider
+subtree after 50 ms, injects a real native sibling-control tap while the board
+is absent, promptly remounts by another real tap, and starts another transition
+with a real post-remount tap. The long cycle repeats the immediate absent tap,
+keeps the subtree absent for 3.5 seconds, injects another real absent tap that
+remounts it, and starts a final transition with a real native tap. It asserts
+zero boards while absent, exactly one reusable board after each remount, and the
+latest canonical square and revision. The shared scanner remains the crash and
+stale-Fabric-tag oracle. This mandatory physical Android lifecycle gate is
+separate from, and does not replace, the held-drag provider-replacement gate.
 
 The iOS commands require Xcode, the Ruby version pinned by the Gemfile, Bundler,
 and CocoaPods. Release builds use the simulator SDK with code signing disabled;

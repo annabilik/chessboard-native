@@ -1064,16 +1064,34 @@ mismatched correlation, an actor mismatch, and an off-board target also use
 ordinary controlled-transition behavior; none fabricates a handoff actor.
 
 Rapid controlled updates are safe for both revisioned positions and plain FEN
-without stable piece IDs. When an interruption removes a current, exit,
-replacement, or pending-handoff actor, the board first quiesces that exact
-native host by removing its artwork and animated style, retains the
-non-collapsible empty host through two animation-frame callbacks, and then
-removes it. If the same keyed actor returns first, it reuses the host and
-cancels retirement. Every newer transition or geometry rebase receives a fresh
+without stable piece IDs. While the layer remains mounted, Android bounds
+registry-backed transition-host admission across both live and retiring actors:
+`PieceLayer` admits at most `2 * cells + 64` hosts (192 on an 8-by-8 board), and
+`PendingMoveLayer` admits at most 65. When an admitted actor disappears, the
+board first quiesces that exact non-collapsible native host by removing its
+artwork and animated style. It retains the empty host through a three-second
+Reanimated 4.5 settled-props drain guard and then two guarded animation-frame
+callbacks. If the same keyed actor returns first, it preserves its admission
+and native host and cancels retirement.
+
+Capacity overflow degrades presentation rather than growing the native graph:
+the latest canonical current actor renders immediately at its controlled target
+with no animated style or native view descriptor, while detached and pending
+actors whose endpoint opacity is zero are omitted. A denied actor stays denied
+for that transition epoch; a later epoch may be admitted after retired capacity
+drains. These overflow lifetimes retire through the ordinary two-frame commit
+barrier. Non-Android platforms admit all transition actors and use only that
+two-frame barrier. Every newer transition or geometry rebase receives a fresh
 progress clock; retained descriptors keep only their cancelled prior clock and
-cannot receive newer-epoch writes. Cancellation or unmount does not force a
-terminal write to a retired transition clock. These presentation-lifecycle
-safeguards never delay the latest controlled `position`.
+cannot receive newer-epoch writes. Cancellation does not force a terminal write
+to a retired transition clock, and none of these safeguards delays the latest
+controlled `position`.
+
+A whole-layer, board, or provider unmount necessarily removes all descendant
+hosts immediately; hook cleanup can only cancel its timers and frame callbacks,
+not retain those hosts through the Android drain window. Active-transition
+teardown, an independent real touch while absent, and a real touch after prompt
+remount therefore remain a mandatory physical Android lifecycle gate.
 
 Revisioned positions may supply a `transition` hint for exact actor identity.
 Malformed, stale, or contradictory hints are warning-only in development and

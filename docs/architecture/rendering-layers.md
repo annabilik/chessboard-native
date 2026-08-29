@@ -259,18 +259,36 @@ Unrelated commits, actor mismatches, and off-board removals use the ordinary
 transition layers and never manufacture a pending target.
 
 Current, exit, replacement, and pending-handoff actors share one keyed host
-retirement protocol. A disappearing actor keeps its exact, non-collapsible
-`Animated.View` host for a quiescent commit with static zero opacity, no
-renderer child, and no attached animated style. Two guarded animation-frame
-callbacks drain before the empty host is removed; a same-key actor that returns
-during either frame cancels retirement and reuses it. Namespaced actor keys keep
-current, exit, and replacement roles distinct even when anonymous plain-FEN
-pieces reuse a square. Each mounted presentation and geometry rebase owns a
-fresh progress value, so retained descriptors keep only a cancelled clock that
-newer epochs never write. Transition cancellation and whole-layer teardown
-avoid the explicit terminal progress assignment that could otherwise outlive
-descendant hosts. The pending handoff layer follows the same rule and remains
-presentation-only.
+retirement protocol. Android bounds registry-backed admission across admitted
+live and retiring actors: `PieceLayer` has `2 * cells + 64` slots (192 on an
+8-by-8 board), and `PendingMoveLayer` has 65. When an admitted actor disappears
+during an ordinary layer update, its exact non-collapsible `Animated.View` host
+first commits as a quiescent shell with static zero opacity, no renderer child,
+and no attached animated style. While the layer remains mounted, that shell
+stays for three seconds, exceeding Reanimated 4.5's strict two-second
+settled-props cutoff plus its 500 ms garbage-collection polling interval. Two
+guarded animation-frame callbacks then drain before removal. A same-key actor
+that returns during either stage cancels retirement, preserves admission, and
+reuses the host.
+
+At capacity, a canonical current actor settles immediately at its latest target
+with no animated style or native view descriptor. Overflow detached and pending
+actors are omitted because their endpoint opacity is zero. Denial remains fixed
+for that transition epoch; a later epoch can be admitted after retired capacity
+drains. Overflow lifetimes use only the ordinary two-frame commit barrier.
+Non-Android platforms admit all transition actors and use only those two frames.
+Namespaced actor keys keep current, exit, and replacement roles distinct even
+when anonymous plain-FEN pieces reuse a square. Each mounted presentation and
+geometry rebase owns a fresh progress value, so retained descriptors keep only
+a cancelled clock that newer epochs never write. The pending handoff layer
+follows the same rule and remains presentation-only.
+
+Transition cancellation avoids the explicit terminal progress assignment that
+could otherwise outlive descendant hosts. Whole-layer, board, or provider
+teardown cannot retain descendant shells: hook cleanup only cancels timers and
+frame callbacks. Active-transition removal, a real native touch while absent,
+and a real touch after prompt remount remain a mandatory physical Android
+lifecycle gate.
 
 P2.2 adds the layer-six board gesture plane. When enabled by the public
 interaction boundaries, it is one absolute, accessibility-hidden native view

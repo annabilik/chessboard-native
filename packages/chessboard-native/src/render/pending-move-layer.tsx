@@ -7,6 +7,7 @@ import Animated, {
 
 import type { MoveIntentLifecycle } from '../internal/interaction-reducer';
 import {
+  MAX_TRANSITION_PRESENTATION_RESIDUALS,
   projectTransitionPresentationActor,
   type PendingTransitionPresentationActor,
 } from '../internal/transition-presentation';
@@ -34,6 +35,7 @@ interface PendingHandoffHostDescriptor {
   readonly actor: Readonly<PendingTransitionPresentationActor>;
   readonly key: string;
   readonly left: number;
+  readonly nativeDrainToken: string;
   readonly progress: SharedValue<number>;
   readonly renderer: NonNullable<ReturnType<typeof resolvePieceRenderer>>;
   readonly size: number;
@@ -112,6 +114,10 @@ function PendingHandoffHost({
 const EMPTY_PENDING_ACTORS: readonly Readonly<PendingTransitionPresentationActor>[] =
   Object.freeze([]);
 
+/** Residual cap plus the single correlated pending handoff actor. */
+export const PENDING_MOVE_NATIVE_DRAIN_HOST_BUDGET =
+  MAX_TRANSITION_PRESENTATION_RESIDUALS + 1;
+
 /** Presentation-only copy at the requested target while consumer state waits. */
 export function PendingMoveLayer({
   boardId,
@@ -146,6 +152,7 @@ export function PendingMoveLayer({
           actor,
           key: actor.actorKey,
           left: cell.rect.left + (cell.rect.width - size) / 2,
+          nativeDrainToken: `transition:${String(transition.presentation.epoch)}`,
           progress: transition.progress,
           renderer,
           size,
@@ -156,7 +163,10 @@ export function PendingMoveLayer({
     }
     return Object.freeze(hosts);
   }, [layout, pendingActors, pieceRenderers, transition]);
-  const displayedHandoffHosts = useTransitionHostRetirement(liveHandoffHosts);
+  const displayedHandoffHosts = useTransitionHostRetirement(
+    liveHandoffHosts,
+    PENDING_MOVE_NATIVE_DRAIN_HOST_BUDGET,
+  ).filter(({ nativeDrain }) => nativeDrain);
   const liveLifecycle =
     lifecycle !== null &&
     (lifecycle.phase === 'deciding' || lifecycle.phase === 'awaiting-commit') &&

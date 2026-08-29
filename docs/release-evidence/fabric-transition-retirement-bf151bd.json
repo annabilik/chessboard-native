@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 1,
+  "status": "passed-source-candidate",
+  "subject": "repository-source",
+  "package": {
+    "name": "@vibechess/chessboard-native",
+    "manifestVersionAtTest": "0.1.1-next.2",
+    "npmArtifactTested": false,
+    "consumerAppGateCTested": false,
+    "note": "The physical harness consumed clean workspace repository source. No npm archive or VibeChess application Gate C candidate was installed or tested."
+  },
+  "source": {
+    "commit": "bf151bdd0ccf91505937ef5a37efc9511b22fb24",
+    "tree": "590a65d066c68bd169cb92c327216fb0ffa56bb2",
+    "dirty": false,
+    "status": "",
+    "trackedDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "untrackedFileCount": 0,
+    "untrackedFilesSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "worktreeSha256": "4f8741a582239f60d950f06394166f3564c5ea389e5850f8c099f6e2c7bf00ab",
+    "gateSnapshotNote": "All four raw results recorded this identical clean snapshot at start and finish and sourceChangedDuringRun=false."
+  },
+  "device": {
+    "kind": "physical",
+    "manufacturer": "samsung",
+    "model": "SM-A075F",
+    "androidRelease": "16",
+    "apiLevel": "36",
+    "abi": "arm64-v8a",
+    "serialOmitted": true
+  },
+  "gates": [
+    {
+      "id": "plain-fen-transition-interruption-200ms",
+      "status": "passed",
+      "startedAt": "2026-08-28T23:47:52.432Z",
+      "finishedAt": "2026-08-28T23:49:03.114Z",
+      "sourceAtStartMatchesSource": true,
+      "sourceAtFinishMatchesSource": true,
+      "sourceChangedDuringRun": false,
+      "testClass": "com.vibechess.chessboardnativeharness.ChessboardPlainFenTransitionInterrupt200Test#rapidPlainFenUpdatesRetireInterruptedTransitionHostsAndRemainReusable",
+      "gradle": {
+        "task": ":app:connectedReleaseAndroidTest",
+        "exitCode": 0,
+        "error": null
+      },
+      "cadenceProof": {
+        "transitionDurationMs": 200,
+        "tapAndUpdateCount": 72,
+        "commitAcknowledgement": "Every DOWN after the first waited for the exact preceding React-committed position-change count, then for at least 100 ms after that acknowledgement.",
+        "nativeDownGaps": {
+          "count": 71,
+          "minimumInclusiveMs": 125,
+          "maximumExclusiveMs": 200,
+          "status": "passed"
+        },
+        "javascriptOnPressGaps": {
+          "count": 71,
+          "minimumInclusiveMs": 100,
+          "maximumExclusiveMs": 200,
+          "belowMinimumCount": 0,
+          "atOrAboveTransitionDurationCount": 0,
+          "invalidCount": 0,
+          "status": "passed"
+        },
+        "postSequenceSettleMs": 3500,
+        "reuseInput": "separate off-main raw UiAutomation DOWN/UP pair"
+      },
+      "result": {
+        "directory": "apps/native-harness/android/app/build/reports/fabric-plain-fen-transition-interrupt-200ms-gate",
+        "sha256": "64b8d9c071e258ecde27d3f7b24d34b195b1496c0611de080f3ba61c59cf096a"
+      },
+      "logcat": {
+        "findingCount": 0,
+        "capturePrematureExit": null,
+        "sha256": "38ee07bedd89e9c0cf6784ad65d0d8bf58c05b001f5f89fa999369a2cf86f2f7"
+      },
+      "performance": {
+        "required": false,
+        "violations": []
+      }
+    },
+    {
+      "id": "plain-fen-transition-interruption-300ms",
+      "status": "passed",
+      "startedAt": "2026-08-28T23:49:29.839Z",
+      "finishedAt": "2026-08-28T23:50:26.342Z",
+      "sourceAtStartMatchesSource": true,
+      "sourceAtFinishMatchesSource": true,
+      "sourceChangedDuringRun": false,
+      "testClass": "com.vibechess.chessboardnativeharness.ChessboardPlainFenTransitionInterruptTest#rapidPlainFenUpdatesRetireInterruptedTransitionHostsAndRemainReusable",
+      "gradle": {
+        "task": ":app:connectedReleaseAndroidTest",
+        "exitCode": 0,
+        "error": null
+      },
+      "semantics": {
+        "transitionDurationMs": 300,
+        "plainFenChangeCount": 18,
+        "cadenceMs": 190,
+        "reuseAfterRetirement": true
+      },
+      "result": {
+        "directory": "apps/native-harness/android/app/build/reports/fabric-plain-fen-transition-interrupt-gate",
+        "sha256": "71b15a70fe29621de4b72f241535f5321dfdd6b0d2e9fa5830840ecde71db849"
+      },
+      "logcat": {
+        "findingCount": 0,
+        "capturePrematureExit": null,
+        "sha256": "c2760365735ec9d4e859f7f4b435c99faf84034be0b724911c1c5247f04ddb40"
+      },
+      "performance": {
+        "required": false,
+        "violations": []
+      }
+    },
+    {
+      "id": "whole-provider-unmount-during-transition",
+      "status": "passed",
+      "startedAt": "2026-08-28T23:50:28.747Z",
+      "finishedAt": "2026-08-28T23:51:23.602Z",
+      "sourceAtStartMatchesSource": true,
+      "sourceAtFinishMatchesSource": true,
+      "sourceChangedDuringRun": false,
+      "testClass": "com.vibechess.chessboardnativeharness.ChessboardTransitionProviderWholeUnmountTest#wholeProviderUnmountDuringActiveTransitionSurvivesNativeTouchesAndRemainsReusable",
+      "gradle": {
+        "task": ":app:connectedReleaseAndroidTest",
+        "exitCode": 0,
+        "error": null
+      },
+      "semantics": {
+        "transitionDurationMs": 200,
+        "unmountDelayMs": 50,
+        "promptCycle": "real native touch while the board/provider subtree was absent, prompt remount, and real post-remount transition input",
+        "longCycle": "immediate real native touch while absent, 3.5-second absent drain window, real remount touch, and real post-remount transition input",
+        "canonicalStateAndSingleBoardAfterRemount": true
+      },
+      "result": {
+        "directory": "apps/native-harness/android/app/build/reports/fabric-position-transition-whole-unmount-gate",
+        "sha256": "0d116596bbcb6238f0cb9245be799bdbe9e83e1a0a325af0fc2158b6e7f81282"
+      },
+      "logcat": {
+        "findingCount": 0,
+        "capturePrematureExit": null,
+        "sha256": "0f06401f512e6f1f54e75153012d950c76201ecff29648d6a9796128eccb7d91"
+      },
+      "performance": {
+        "required": false,
+        "violations": []
+      }
+    },
+    {
+      "id": "transition-and-provider-replacement-during-drag",
+      "status": "passed",
+      "startedAt": "2026-08-28T23:51:25.995Z",
+      "finishedAt": "2026-08-28T23:52:21.933Z",
+      "sourceAtStartMatchesSource": true,
+      "sourceAtFinishMatchesSource": true,
+      "sourceChangedDuringRun": false,
+      "testClass": "com.vibechess.chessboardnativeharness.ChessboardTransitionProviderUnmountDragTest#providerReplacementWhileTransitionAndDragOverlapLeavesStateReusable",
+      "gradle": {
+        "task": ":app:connectedReleaseAndroidTest",
+        "exitCode": 0,
+        "error": null
+      },
+      "semantics": {
+        "overlapCycles": 4,
+        "controlledTransitionAndHeldDragOverlap": true,
+        "keyedProviderReplacementDuringActivePointerStream": true,
+        "canonicalStateAndOverlayCleanup": true
+      },
+      "result": {
+        "directory": "apps/native-harness/android/app/build/reports/fabric-drag-transition-provider-unmount-gate",
+        "sha256": "ba413ca17d40a0d64fb859732de7d24d0214c900cbbb6f2663fe6eb449486a97"
+      },
+      "logcat": {
+        "findingCount": 0,
+        "capturePrematureExit": null,
+        "sha256": "8681fd5659aa585dd49df18a6223a02906dc37677a90ecaec84ea078b4bf7cf5"
+      },
+      "performance": {
+        "required": false,
+        "violations": []
+      }
+    }
+  ],
+  "scope": {
+    "newlyRun": [
+      "commit-acknowledged 200 ms plain-FEN transition interruption, native/JavaScript cadence proof, retirement-window drain, and reuse",
+      "300 ms plain-FEN controlled-transition interruption and reuse regression",
+      "whole board/provider unmount during active 200 ms transitions with prompt and long-absence native-touch cycles",
+      "controlled transition, active drag, and keyed provider replacement overlap"
+    ],
+    "notNewlyRun": [
+      "npm registry artifact installation or physical retest",
+      "VibeChess application integration Gate C",
+      "physical transition or drag performance",
+      "background and resume behavior",
+      "full physical accessibility",
+      "visual baselines",
+      "iOS"
+    ],
+    "excludedAttempts": "Earlier failed or cadence-invalid development attempts are not evidence inputs and are intentionally excluded.",
+    "note": "This record is source-bound and establishes only the four focused Android behaviors above."
+  }
+}
