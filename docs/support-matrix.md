@@ -117,14 +117,14 @@ automatically to any older npm archive.
 | Touch annotation gestures                                               | Supported             | Deterministic component tests and the controlled-annotations gallery route                        | Physical gesture matrix remains pending.                                                                              |
 | Adjustable board accessibility model                                    | Supported contract    | Component tests; Android Espresso and iOS XCUITest audits are available in opt-in native CI       | Physical TalkBack and VoiceOver validation is a release gate and remains pending.                                     |
 | Reduced-motion policy                                                   | Supported             | Unit/component tests and gallery route                                                            | Physical platform confirmation remains part of the manual matrix.                                                     |
-| Controlled position transitions                                         | Supported             | Tests plus [four clean-source Galaxy gates][transition-evidence]                                  | Source-bound only; performance, background/resume, full accessibility, visual baselines, and iOS were not rerun.      |
+| Controlled position transitions                                         | Supported             | Tests plus [four final clean-source Galaxy gates][transition-evidence], including 200 ms cadence  | Source-bound only; no npm/app Gate C; performance, background/resume, accessibility, visuals, and iOS were not rerun. |
 | `react-chessboard` 5.10 compatibility adapter                           | Supported             | API report, adapter/component tests, gallery route, and closed parity ledger                      | Included in published `0.1.0` and later; npm `0.1.0-next.1` lacks it, and browser-only exclusions remain intentional. |
 | Chess rules, legal moves, promotion choice, and premove queue           | Not provided          | Explicit architecture contract and gallery consumer example                                       | The application or a chess rules library owns them.                                                                   |
 | Hover, right-click, modifier-key arrow colors, and ancestor auto-scroll | Not supported         | Explicit `drop` rows in the pinned parity ledger                                                  | React Native Web and browser-specific compatibility are post-1.0 work.                                                |
 
 <!-- markdownlint-enable MD013 -->
 
-[transition-evidence]: ./release-evidence/fabric-transition-retirement-9f6698a.md
+[transition-evidence]: ./release-evidence/fabric-transition-retirement-bf151bd.md
 
 ## Evidence matrix
 

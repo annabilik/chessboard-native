@@ -72,11 +72,12 @@ Fabric/Reanimated log scanner. The gate requires a physical Android device by
 default; set `ANDROID_SERIAL` to select the release Galaxy when multiple devices
 are connected. Evidence is written under
 `apps/native-harness/android/app/build/reports/fabric-plain-fen-transition-interrupt-gate/`.
-A clean-source Samsung `SM-A075F` run passed this gate and the focused
-transition/provider, accepted-drag, and provider-unmount regression gates. See
-the [commit-bound evidence record](../../docs/release-evidence/fabric-transition-retirement-9f6698a.md).
-That record covers repository source rather than an npm artifact; performance,
-background/resume, full physical accessibility, and iOS were not newly rerun.
+A clean-source Samsung `SM-A075F` run passed this gate and the corrected 200 ms,
+whole-provider-unmount, and transition/provider-overlap gates. See the
+[final commit-bound evidence record](../../docs/release-evidence/fabric-transition-retirement-bf151bd.md).
+That record covers repository source rather than an npm artifact or the
+VibeChess application Gate C; performance, background/resume, full physical
+accessibility, visual baselines, and iOS were not newly rerun.
 
 `native:android:position-transition:interrupt:200ms:gate` preserves the same
 plain-FEN, native-accessibility, reuse, and log-scanner assertions while running
