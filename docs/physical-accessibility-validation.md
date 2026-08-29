@@ -62,7 +62,8 @@ node "$repository_root/scripts/smoke-packed.mjs" \
 
 printf 'Gallery commit: %s\n' "$gallery_commit"
 cd "$work_root/gallery"
-npm start
+npx expo install --check
+npm start -- --clear
 ```
 
 The digest check must print the archive name followed by `OK`. Its expected
@@ -77,8 +78,11 @@ through a link. Record the repository commit printed above as `galleryCommit`;
 it identifies the clean gallery fixtures separately from the package's
 immutable source commit. The strict checker later requires that commit to exist,
 be an ancestor of the evidence commit, and still match every validation fixture
-path. Open the development server from Expo Go on each physical device. Use
-Expo's tunnel mode only when normal LAN discovery is unavailable.
+path. The Expo dependency check must report that dependencies are up to date;
+the cache-cleared start prevents stale Worklets transformations from crossing
+gallery dependency updates. Open the development server from Expo Go on each
+physical device. Use Expo's tunnel mode only when normal LAN discovery is
+unavailable.
 
 ## Run each platform session
 
