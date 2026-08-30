@@ -33,7 +33,9 @@ interface PendingMoveLayerProps {
   readonly onPendingCommitActorPrepared?: (
     acknowledgement: Readonly<PendingCommitTransitionAcknowledgement>,
     prepared: boolean,
+    environment: Readonly<object>,
   ) => void;
+  readonly pendingCommitMapperEnvironment?: Readonly<object> | null;
   readonly pendingCommitPreparation?: Readonly<PendingCommitHandoffDescriptor> | null;
   readonly pendingCommitPreparationKind?: 'canonical-drain' | 'pending';
   readonly pieceRenderers: PieceRenderers;
@@ -134,6 +136,7 @@ export function PendingMoveLayer({
   layout,
   lifecycle,
   onPendingCommitActorPrepared,
+  pendingCommitMapperEnvironment = null,
   pendingCommitPreparation = null,
   pendingCommitPreparationKind = 'pending',
   pieceRenderers,
@@ -142,8 +145,10 @@ export function PendingMoveLayer({
 }: PendingMoveLayerProps): ReactElement | null {
   const pendingActors =
     transition?.presentation.pending ?? EMPTY_PENDING_ACTORS;
+  const transitionEpoch = transition?.presentation.epoch ?? null;
+  const transitionProgress = transition?.progress ?? null;
   const liveHandoffHosts = useMemo(() => {
-    if (transition === null) {
+    if (transitionEpoch === null || transitionProgress === null) {
       return Object.freeze([]);
     }
     const hosts: Readonly<PendingHandoffHostDescriptor>[] = [];
@@ -165,8 +170,8 @@ export function PendingMoveLayer({
           actor,
           key: actor.actorKey,
           left: cell.rect.left + (cell.rect.width - size) / 2,
-          nativeDrainToken: `transition:${String(transition.presentation.epoch)}`,
-          progress: transition.progress,
+          nativeDrainToken: `transition:${String(transitionEpoch)}`,
+          progress: transitionProgress,
           renderer,
           size,
           top: cell.rect.top + (cell.rect.height - size) / 2,
@@ -175,7 +180,13 @@ export function PendingMoveLayer({
       );
     }
     return Object.freeze(hosts);
-  }, [layout, pendingActors, pieceRenderers, transition]);
+  }, [
+    layout,
+    pendingActors,
+    pieceRenderers,
+    transitionEpoch,
+    transitionProgress,
+  ]);
   const displayedHandoffHosts = useTransitionHostRetirement(
     liveHandoffHosts,
     PENDING_MOVE_NATIVE_DRAIN_HOST_BUDGET,
@@ -186,16 +197,18 @@ export function PendingMoveLayer({
   const canonicalDrainActive =
     directPreparationMatches &&
     pendingCommitPreparationKind === 'canonical-drain';
-  const preparedPendingActor = canonicalDrainActive
+  const preparedPendingHost = canonicalDrainActive
     ? undefined
     : displayedHandoffHosts.find(
         ({ descriptor, quiescent }) =>
           !quiescent && descriptor.actor.kind === 'pending-handoff',
-      )?.descriptor.actor;
+      );
+  const preparedPendingActor = preparedPendingHost?.descriptor.actor;
   useLayoutEffect(() => {
     if (
       preparedPendingActor === undefined ||
       transition === null ||
+      pendingCommitMapperEnvironment === null ||
       onPendingCommitActorPrepared === undefined
     ) {
       return;
@@ -204,12 +217,25 @@ export function PendingMoveLayer({
       actorKey: preparedPendingActor.actorKey,
       presentationEpoch: transition.presentation.epoch,
     });
-    onPendingCommitActorPrepared(acknowledgement, true);
+    onPendingCommitActorPrepared(
+      acknowledgement,
+      true,
+      pendingCommitMapperEnvironment,
+    );
     return () => {
-      onPendingCommitActorPrepared(acknowledgement, false);
+      onPendingCommitActorPrepared(
+        acknowledgement,
+        false,
+        pendingCommitMapperEnvironment,
+      );
     };
   }, [
     onPendingCommitActorPrepared,
+    pendingCommitMapperEnvironment,
+    preparedPendingHost?.descriptor.progress,
+    preparedPendingHost?.descriptor.visual,
+    preparedPendingHost?.nativeDrain,
+    preparedPendingHost?.quiescent,
     preparedPendingActor?.actorKey,
     transition?.presentation.epoch,
   ]);

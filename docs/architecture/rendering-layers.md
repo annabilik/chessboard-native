@@ -265,11 +265,16 @@ handoff's revision pair and source, piece, and target must also match one curren
 plan actor. The transition mounts paused at progress zero. The pending layer
 remains fully visible while an inner non-Reanimated mask hides the canonical
 target without changing its persistent outer opacity mapper. Both layers must
-acknowledge the same actor and presentation epoch; after one guarded JavaScript
-animation frame, the board removes the mask and publishes the exact start
-acknowledgement. Only then does the runtime start a fresh full configured-
-duration clock. The source-to-target move is not replayed; secondary operations
-still use their adjacent transition plan.
+acknowledge the same actor, presentation epoch, mapper environment, and
+monotonic structural host generations. The canonical host's Reanimated style
+mapper observes progress zero and computed opacity zero before a same-host
+animated reaction schedules one UI-runtime frame. That frame revalidates the
+exact mapper inputs and sends the full lease to React Native only after the
+preceding UI update queue has flushed. The board removes the mask and publishes
+the exact start acknowledgement only while that lease still matches both live
+hosts. The runtime then starts a fresh full configured-duration clock. The
+source-to-target move is not replayed; secondary operations still use their
+adjacent transition plan.
 
 If that exact crossfade cannot mount or continue, a canonical-drain mode fails
 closed to the latest controlled position. A current-position-derived static
@@ -314,11 +319,13 @@ could otherwise outlive descendant hosts. Whole-layer, board, or provider
 teardown cannot retain descendant shells: hook cleanup only cancels timers and
 frame callbacks. Active-transition removal, a real native touch while absent,
 and a real touch after prompt remount remain a mandatory physical Android
-lifecycle gate. The exact-handoff host-ready frame and canonical-drain warm
-frame are JavaScript `requestAnimationFrame` ordering barriers: deterministic
-tests prove their identity and commit ordering, but cannot prove a corresponding
-Fabric draw or UI-thread mapper update. The physical Release terminal-handoff
-gate remains mandatory for that native guarantee.
+lifecycle gate. The exact-handoff host-ready acknowledgement is a UI-runtime
+mapper barrier: it is causally ordered after the opacity-zero native update
+queue flush, but does not by itself prove that a corresponding frame was drawn
+to the screen. The canonical-drain warm frame remains a JavaScript
+`requestAnimationFrame` ordering barrier. Deterministic tests prove their
+identity and commit ordering; the physical Release terminal-handoff gate
+remains mandatory for continuous native presentation.
 
 P2.2 adds the layer-six board gesture plane. When enabled by the public
 interaction boundaries, it is one absolute, accessibility-hidden native view

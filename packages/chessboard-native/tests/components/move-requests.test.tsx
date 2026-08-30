@@ -14,6 +14,7 @@ import {
   fireGestureHandler,
   getByGestureTestId,
 } from 'react-native-gesture-handler/jest-utils';
+import * as Worklets from 'react-native-worklets';
 import type { TestInstance } from 'test-renderer';
 
 import { ChessboardProvider } from '../../src';
@@ -27,6 +28,7 @@ import {
   useInteractionPresentationSharedValues,
   type InteractionPresentationSharedValues,
 } from '../../src/internal/interaction-presentation';
+import type { PendingCommitMapperLease } from '../../src/internal/pending-commit-handoff';
 import type {
   CanDragPiece,
   MoveDecision,
@@ -38,6 +40,33 @@ import type {
   PositionObject,
 } from '../../src';
 import { getBoardGestureTestIds } from '../../src/render/board-gesture-layer';
+
+jest.mock('react-native-reanimated', () => {
+  const actual = jest.requireActual<typeof import('react-native-reanimated')>(
+    'react-native-reanimated',
+  );
+  const ReactModule = jest.requireActual<typeof import('react')>('react');
+
+  function useAnimatedReaction<PreparedResult>(
+    prepare: () => PreparedResult,
+    react: (prepared: PreparedResult, previous: PreparedResult | null) => void,
+    dependencies?: readonly unknown[],
+  ): void {
+    const previous = ReactModule.useRef<PreparedResult | null>(null);
+    ReactModule.useEffect(() => {
+      const prepared = prepare();
+      react(prepared, previous.current);
+      previous.current = prepared;
+    }, dependencies);
+  }
+
+  return {
+    ...actual,
+    __esModule: true,
+    default: actual.default,
+    useAnimatedReaction,
+  };
+});
 
 const BOARD_SIZE = 200;
 const START = Object.freeze({ x: 25, y: 25 });
@@ -112,6 +141,50 @@ async function flushDecisions(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
   });
+}
+
+async function flushCapturedAnimationFrames(
+  frames: ((timestamp: number) => void)[],
+  maximumTurns = 16,
+): Promise<void> {
+  for (let frameTurn = 0; frameTurn < maximumTurns; frameTurn += 1) {
+    const queuedFrames = frames.splice(0);
+    await act(async () => {
+      for (const frame of queuedFrames) {
+        frame(16 + frameTurn * 16);
+      }
+      // Worklets' Jest scheduleOnRN implementation queues a microtask, and
+      // that RN update can commit the next mapper-ready frame.
+      jest.runAllTicks();
+      await Promise.resolve();
+    });
+  }
+}
+
+function pendingCommitMapperLease(
+  value: unknown,
+): Readonly<PendingCommitMapperLease> | null {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const candidate = value as Readonly<Record<string, unknown>>;
+  return typeof candidate['actorKey'] === 'string' &&
+    typeof candidate['canonicalHostGeneration'] === 'number' &&
+    typeof candidate['pendingHostGeneration'] === 'number' &&
+    typeof candidate['presentationEpoch'] === 'number' &&
+    typeof candidate['serial'] === 'number'
+    ? (value as Readonly<PendingCommitMapperLease>)
+    : null;
+}
+
+function pendingCommitMapperScheduleCalls(
+  calls: readonly (readonly unknown[])[],
+): readonly Readonly<PendingCommitMapperLease>[] {
+  return calls
+    .map((call) => pendingCommitMapperLease(call[1]))
+    .filter(
+      (lease): lease is Readonly<PendingCommitMapperLease> => lease !== null,
+    );
 }
 
 function gesturePlanes(root: TestInstance): TestInstance[] {
@@ -691,17 +764,7 @@ describe('public controlled move requests', () => {
       ).toHaveLength(1);
       jest.useFakeTimers();
       expect(frames.length).toBeGreaterThan(0);
-      for (let frameTurn = 0; frameTurn < 4; frameTurn += 1) {
-        const hostReadyFrames = frames.splice(0);
-        if (hostReadyFrames.length === 0) {
-          break;
-        }
-        await act(() => {
-          for (const frame of hostReadyFrames) {
-            frame(16 + frameTurn * 16);
-          }
-        });
-      }
+      await flushCapturedAnimationFrames(frames);
       const admittedPendingArtwork = nodesByTestId(
         board,
         'move-piece:pending-target:b8:wP',
@@ -1291,6 +1354,9 @@ describe('public controlled move requests', () => {
       phase: number | null;
     }>[] = [];
     const targetRenderRoles: string[] = [];
+    let updatePieceOpacity: (opacity: number) => void = (): void => {
+      throw new Error('Expected the synchronous commit harness to mount.');
+    };
     function RuntimeProbe(): null {
       runtime.current = useChessboardProvider().runtime;
       return null;
@@ -1323,6 +1389,7 @@ describe('public controlled move requests', () => {
       );
     }
     function Harness(): ReactElement {
+      const [pieceOpacity, setPieceOpacity] = useState(1);
       const [position, setPosition] = useState<{
         committedIntentId?: string;
         revision: number;
@@ -1331,6 +1398,7 @@ describe('public controlled move requests', () => {
         revision: 40,
         value: { a2: { id: 'sync', pieceType: 'token' } },
       });
+      updatePieceOpacity = setPieceOpacity;
       return (
         <ChessboardProvider>
           <RuntimeProbe />
@@ -1350,14 +1418,36 @@ describe('public controlled move requests', () => {
             pieceRenderers={{ token: OrderingPieceProbe }}
             position={position}
             reduceMotion="never"
-            styles={{ draggingPieceGhost: { opacity: 0 } }}
+            styles={{
+              draggingPieceGhost: { opacity: 0 },
+              piece: { opacity: pieceOpacity },
+            }}
             transitionDurationMs={100}
           />
         </ChessboardProvider>
       );
     }
 
-    const result = await render(<Harness />);
+    const reportUnexpectedConsoleError = console.error.bind(console);
+    const strictModeConsoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation((...arguments_: unknown[]) => {
+        if (
+          arguments_.some(
+            (argument) =>
+              typeof argument === 'string' &&
+              argument.includes('findNodeHandle'),
+          )
+        ) {
+          return;
+        }
+        reportUnexpectedConsoleError(...arguments_);
+      });
+    const result = await render(
+      <StrictMode>
+        <Harness />
+      </StrictMode>,
+    );
     const board = rootOf(result);
     await measure(board);
     const pan = getByGestureTestId(getBoardGestureTestIds(boardId).pan);
@@ -1406,6 +1496,7 @@ describe('public controlled move requests', () => {
         completionFrames.push(callback);
         return completionFrames.length;
       });
+    const scheduleOnRNSpy = jest.spyOn(Worklets, 'scheduleOnRN');
     await act(() => {
       const end = {
         absoluteX: BOTTOM_RIGHT.x,
@@ -1435,23 +1526,142 @@ describe('public controlled move requests', () => {
       throw new Error('Expected the synchronous controlled target.');
     }
     expect(boardPieceHost(synchronousTarget)).toBe(freshDragSourceHost);
+    const preparedPending = nodesByTestId(
+      board,
+      'move-piece:pending-target:b1:token',
+    )[0];
+    if (preparedPending?.parent?.parent == null) {
+      throw new Error('Expected the prepared pending transition host.');
+    }
+    const preparedCanonicalHost = boardPieceHost(synchronousTarget);
+    expect(Number(animatedStyle(preparedCanonicalHost)['opacity'])).toBe(0);
+    expect(
+      Number(
+        nativeStyle(boardPieceOcclusionBoundary(synchronousTarget)).opacity,
+      ),
+    ).toBe(0);
+    expect(
+      Number(animatedStyle(preparedPending.parent.parent)['opacity']),
+    ).toBe(1);
+    expect(
+      pendingCommitMapperScheduleCalls(scheduleOnRNSpy.mock.calls),
+    ).toHaveLength(0);
     expect(completionFrames.length).toBeGreaterThan(0);
+    const staleMapperFrames = completionFrames.splice(0);
+    await act(() => {
+      updatePieceOpacity(0.8);
+    });
+    expect(completionFrames.length).toBeGreaterThan(0);
+    expect(Number(animatedStyle(preparedCanonicalHost)['opacity'])).toBe(0);
+    expect(
+      Number(
+        nativeStyle(boardPieceOcclusionBoundary(synchronousTarget)).opacity,
+      ),
+    ).toBe(0);
     jest.useFakeTimers();
-    for (let frameTurn = 0; frameTurn < 16; frameTurn += 1) {
-      const queuedFrames = completionFrames.splice(0);
-      if (queuedFrames.length === 0) {
+    await act(() => {
+      jest.advanceTimersByTime(25);
+    });
+    expect(Number(animatedStyle(preparedCanonicalHost)['opacity'])).toBe(0);
+    expect(
+      Number(animatedStyle(preparedPending.parent.parent)['opacity']),
+    ).toBe(1);
+    await act(async () => {
+      for (const frame of staleMapperFrames) {
+        frame(16);
+      }
+      jest.runAllTicks();
+      await Promise.resolve();
+    });
+    const staleMapperReadyLeases = pendingCommitMapperScheduleCalls(
+      scheduleOnRNSpy.mock.calls,
+    );
+    expect(staleMapperReadyLeases).toHaveLength(1);
+    expect(
+      Number(
+        nativeStyle(boardPieceOcclusionBoundary(synchronousTarget)).opacity,
+      ),
+    ).toBe(0);
+    expect(
+      Number(animatedStyle(preparedPending.parent.parent)['opacity']),
+    ).toBe(1);
+    for (let turn = 0; turn < 8; turn += 1) {
+      if (
+        pendingCommitMapperScheduleCalls(scheduleOnRNSpy.mock.calls).length > 1
+      ) {
         break;
       }
-      await act(() => {
-        for (const frame of queuedFrames) {
-          frame(16 + frameTurn * 16);
+      const mapperFrames = completionFrames.splice(0);
+      await act(async () => {
+        for (const frame of mapperFrames) {
+          frame(16 + turn * 16);
         }
+        jest.runAllTicks();
+        await Promise.resolve();
       });
     }
+    const mapperReadyLeases = pendingCommitMapperScheduleCalls(
+      scheduleOnRNSpy.mock.calls,
+    );
+    expect(mapperReadyLeases).toHaveLength(2);
+    const staleMapperReadyLease = mapperReadyLeases[0];
+    const replacementMapperReadyLease = mapperReadyLeases[1];
+    if (
+      staleMapperReadyLease === undefined ||
+      replacementMapperReadyLease === undefined
+    ) {
+      throw new Error('Expected stale and replacement mapper-ready leases.');
+    }
+    expect(
+      Number.isSafeInteger(replacementMapperReadyLease.canonicalHostGeneration),
+    ).toBe(true);
+    expect(
+      Number.isSafeInteger(replacementMapperReadyLease.pendingHostGeneration),
+    ).toBe(true);
+    expect(Number.isSafeInteger(replacementMapperReadyLease.serial)).toBe(true);
+    expect(replacementMapperReadyLease.serial).toBeGreaterThan(
+      staleMapperReadyLease.serial,
+    );
+    await act(async () => {
+      jest.runAllTicks();
+      await Promise.resolve();
+    });
+    expect(
+      nativeStyle(boardPieceOcclusionBoundary(synchronousTarget)).opacity,
+    ).toBeUndefined();
+    expect(Number(animatedStyle(preparedCanonicalHost)['opacity'])).toBe(0);
+    expect(
+      Number(animatedStyle(preparedPending.parent.parent)['opacity']),
+    ).toBe(1);
+    const firstClockFrames = completionFrames.splice(0);
+    expect(firstClockFrames.length).toBeGreaterThan(0);
     completionFrameSpy.mockRestore();
+    await act(() => {
+      for (const frame of firstClockFrames) {
+        frame(25);
+      }
+    });
+    await act(() => {
+      jest.advanceTimersByTime(50);
+    });
+    const runningCanonicalOpacity = Number(
+      animatedStyle(preparedCanonicalHost)['opacity'],
+    );
+    const runningPendingOpacity = Number(
+      animatedStyle(preparedPending.parent.parent)['opacity'],
+    );
+    expect(runningCanonicalOpacity).toBeGreaterThan(0);
+    expect(runningCanonicalOpacity).toBeLessThan(1);
+    expect(runningPendingOpacity).toBeGreaterThan(0);
+    expect(runningPendingOpacity).toBeLessThan(1);
+    expect(runningCanonicalOpacity / 0.8 + runningPendingOpacity).toBeCloseTo(
+      1,
+      5,
+    );
     targetRenderRoles.length = 0;
     await act(() => {
       jest.advanceTimersByTime(500);
+      jest.runAllTicks();
     });
     await flushDecisions();
     const completionPending = nodesByTestId(
@@ -1475,7 +1685,17 @@ describe('public controlled move requests', () => {
     expect(
       nativeStyle(boardPieceOcclusionBoundary(completedTarget)).opacity,
     ).toBeUndefined();
+    scheduleOnRNSpy.mockRestore();
     await result.unmount();
+    expect(
+      strictModeConsoleErrorSpy.mock.calls.every((arguments_) =>
+        arguments_.some(
+          (argument) =>
+            typeof argument === 'string' && argument.includes('findNodeHandle'),
+        ),
+      ),
+    ).toBe(true);
+    strictModeConsoleErrorSpy.mockRestore();
   });
 
   it('warms and retires a preserved pending handoff after Suspense tears down its runtime effect', async () => {
@@ -2033,20 +2253,11 @@ describe('public controlled move requests', () => {
           callbacks.onFinalize?.(terminal, true);
         });
         expectOneVisual(board, 'pending-target', 'b1');
+
         jest.useFakeTimers();
 
         if (start) {
-          for (let frameTurn = 0; frameTurn < 4; frameTurn += 1) {
-            const queuedFrames = frames.splice(0);
-            if (queuedFrames.length === 0) {
-              break;
-            }
-            await act(() => {
-              for (const frame of queuedFrames) {
-                frame(16 + frameTurn * 16);
-              }
-            });
-          }
+          await flushCapturedAnimationFrames(frames);
           const runningPending = nodesByTestId(
             board,
             'move-piece:pending-target:b1:token',

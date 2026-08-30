@@ -53,6 +53,7 @@ import {
   derivePendingCommitHandoff,
   pendingCommitHandoffHasCanonicalSuccessor,
   type PendingCommitHandoffDescriptor,
+  type PendingCommitMapperLease,
   type PendingCommitTransitionAcknowledgement,
 } from '../internal/pending-commit-handoff';
 import {
@@ -217,8 +218,29 @@ interface PendingCommitCanonicalDrainGeneration {
 }
 
 interface PendingCommitHostAcknowledgements {
-  readonly canonical: Readonly<PendingCommitTransitionAcknowledgement> | null;
-  readonly pending: Readonly<PendingCommitTransitionAcknowledgement> | null;
+  readonly canonical: Readonly<PreparedPendingCommitHost> | null;
+  readonly pending: Readonly<PreparedPendingCommitHost> | null;
+}
+
+interface PendingCommitMapperEnvironment {
+  readonly baseOpacity: number;
+  readonly barrierKey: string;
+  readonly canonicalRenderer: PieceRenderer;
+  readonly geometryEpoch: Revision;
+  readonly layout: Readonly<BoardSurfaceLayout>;
+  readonly pendingRenderer: PieceRenderer;
+  readonly pieceStyle: Readonly<ViewStyle>;
+  readonly targetPiece: Readonly<{
+    readonly id?: string;
+    readonly pieceType: string;
+  }>;
+  readonly targetSquare: SquareId;
+}
+
+interface PreparedPendingCommitHost {
+  readonly acknowledgement: Readonly<PendingCommitTransitionAcknowledgement>;
+  readonly environment: Readonly<object>;
+  readonly generation: number;
 }
 
 const EMPTY_PENDING_COMMIT_HOST_ACKNOWLEDGEMENTS: Readonly<PendingCommitHostAcknowledgements> =
@@ -233,6 +255,21 @@ function pendingCommitAcknowledgementsMatch(
     right !== null &&
     left.actorKey === right.actorKey &&
     left.presentationEpoch === right.presentationEpoch
+  );
+}
+
+function pendingCommitMapperLeasesMatch(
+  left: Readonly<PendingCommitMapperLease> | null,
+  right: Readonly<PendingCommitMapperLease> | null,
+): boolean {
+  return (
+    left !== null &&
+    right !== null &&
+    left.actorKey === right.actorKey &&
+    left.presentationEpoch === right.presentationEpoch &&
+    left.canonicalHostGeneration === right.canonicalHostGeneration &&
+    left.pendingHostGeneration === right.pendingHostGeneration &&
+    left.serial === right.serial
   );
 }
 
@@ -534,9 +571,26 @@ export function BoardSurface({
     EMPTY_PENDING_COMMIT_HOST_ACKNOWLEDGEMENTS,
   );
   const [
-    pendingCommitStartAcknowledgement,
-    setPendingCommitStartAcknowledgement,
-  ] = useState<Readonly<PendingCommitTransitionAcknowledgement> | null>(null);
+    pendingCommitCanonicalMapperReadyLease,
+    setPendingCommitCanonicalMapperReadyLease,
+  ] = useState<Readonly<PendingCommitMapperLease> | null>(null);
+  const pendingCommitMapperMountedRef = useRef(true);
+  useEffect(() => {
+    pendingCommitMapperMountedRef.current = true;
+    return () => {
+      pendingCommitMapperMountedRef.current = false;
+    };
+  }, []);
+  const nextPendingCommitHostGenerationRef = useRef(0);
+  const allocatePendingCommitHostGeneration = useCallback((): number | null => {
+    const current = nextPendingCommitHostGenerationRef.current;
+    if (!Number.isSafeInteger(current) || current >= Number.MAX_SAFE_INTEGER) {
+      return null;
+    }
+    const next = current + 1;
+    nextPendingCommitHostGenerationRef.current = next;
+    return next;
+  }, []);
   const handlePendingHandoffExit = useCallback(
     (
       acknowledgement: Readonly<PendingCommitTransitionAcknowledgement>,
@@ -569,38 +623,89 @@ export function BoardSurface({
     (
       acknowledgement: Readonly<PendingCommitTransitionAcknowledgement>,
       prepared: boolean,
+      environment: Readonly<object>,
     ): void => {
+      const generation = prepared
+        ? allocatePendingCommitHostGeneration()
+        : null;
       setPendingCommitHostAcknowledgements((current) =>
         prepared
-          ? pendingCommitAcknowledgementsMatch(
-              current.canonical,
-              acknowledgement,
-            )
-            ? current
-            : Object.freeze({ ...current, canonical: acknowledgement })
-          : pendingCommitAcknowledgementsMatch(
-                current.canonical,
+          ? generation === null
+            ? current.canonical === null
+              ? current
+              : Object.freeze({ ...current, canonical: null })
+            : current.canonical?.environment === environment &&
+                pendingCommitAcknowledgementsMatch(
+                  current.canonical.acknowledgement,
+                  acknowledgement,
+                )
+              ? current
+              : Object.freeze({
+                  ...current,
+                  canonical: Object.freeze({
+                    acknowledgement,
+                    environment,
+                    generation,
+                  }),
+                })
+          : current.canonical?.environment === environment &&
+              pendingCommitAcknowledgementsMatch(
+                current.canonical.acknowledgement,
                 acknowledgement,
               )
             ? Object.freeze({ ...current, canonical: null })
             : current,
       );
     },
-    [],
+    [allocatePendingCommitHostGeneration],
   );
   const handlePendingCommitActorPrepared = useCallback(
     (
       acknowledgement: Readonly<PendingCommitTransitionAcknowledgement>,
       prepared: boolean,
+      environment: Readonly<object>,
     ): void => {
+      const generation = prepared
+        ? allocatePendingCommitHostGeneration()
+        : null;
       setPendingCommitHostAcknowledgements((current) =>
         prepared
-          ? pendingCommitAcknowledgementsMatch(current.pending, acknowledgement)
-            ? current
-            : Object.freeze({ ...current, pending: acknowledgement })
-          : pendingCommitAcknowledgementsMatch(current.pending, acknowledgement)
+          ? generation === null
+            ? current.pending === null
+              ? current
+              : Object.freeze({ ...current, pending: null })
+            : current.pending?.environment === environment &&
+                pendingCommitAcknowledgementsMatch(
+                  current.pending.acknowledgement,
+                  acknowledgement,
+                )
+              ? current
+              : Object.freeze({
+                  ...current,
+                  pending: Object.freeze({
+                    acknowledgement,
+                    environment,
+                    generation,
+                  }),
+                })
+          : current.pending?.environment === environment &&
+              pendingCommitAcknowledgementsMatch(
+                current.pending.acknowledgement,
+                acknowledgement,
+              )
             ? Object.freeze({ ...current, pending: null })
             : current,
+      );
+    },
+    [allocatePendingCommitHostGeneration],
+  );
+  const handlePendingCommitCanonicalMapperReady = useCallback(
+    (lease: Readonly<PendingCommitMapperLease>): void => {
+      if (!pendingCommitMapperMountedRef.current) {
+        return;
+      }
+      setPendingCommitCanonicalMapperReadyLease((current) =>
+        current !== null && current.serial >= lease.serial ? current : lease,
       );
     },
     [],
@@ -1365,15 +1470,25 @@ export function BoardSurface({
     })
       ? pendingCommitBarrierHandoff
       : null;
+  const pendingCommitPendingRenderer =
+    correlatedPendingCommitHandoff === null
+      ? null
+      : resolvePieceRenderer(
+          pieceRenderers,
+          correlatedPendingCommitHandoff.piece.pieceType,
+        );
+  const pendingCommitCanonicalRenderer =
+    pendingCommitTargetPiece === null
+      ? null
+      : resolvePieceRenderer(
+          pieceRenderers,
+          pendingCommitTargetPiece.pieceType,
+        );
   const renderablePendingCommitHandoff =
     correlatedPendingCommitHandoff !== null &&
     pendingCommitTargetPiece !== null &&
-    resolvePieceRenderer(
-      pieceRenderers,
-      correlatedPendingCommitHandoff.piece.pieceType,
-    ) !== null &&
-    resolvePieceRenderer(pieceRenderers, pendingCommitTargetPiece.pieceType) !==
-      null
+    pendingCommitPendingRenderer !== null &&
+    pendingCommitCanonicalRenderer !== null
       ? correlatedPendingCommitHandoff
       : null;
   const canonicalDrainDescriptor = useMemo(
@@ -1461,6 +1576,51 @@ export function BoardSurface({
     exactPendingCommitPreparationBarrier?.mode === 'canonical-drain'
       ? null
       : animatedPendingCommitHandoff;
+  const pendingCommitMapperBaseOpacity =
+    pendingCommitTargetSquare === null
+      ? null
+      : canonicalDrainBaseOpacity({
+          dragSourceSquare: activeDragSourceSquare,
+          draggingPieceGhostStyle,
+          pendingSourceSquare,
+          pieceStyle,
+          targetSquare: pendingCommitTargetSquare,
+        });
+  const pendingCommitMapperEnvironment =
+    useMemo<Readonly<PendingCommitMapperEnvironment> | null>(
+      () =>
+        pendingCommitBarrierKey === null ||
+        pendingCommitMapperBaseOpacity === null ||
+        pendingCommitCanonicalRenderer === null ||
+        pendingCommitPendingRenderer === null ||
+        pendingCommitTargetPiece === null ||
+        pendingCommitTargetSquare === null ||
+        nextGeometryEpochMetadata.revision === null ||
+        layout === null
+          ? null
+          : Object.freeze({
+              baseOpacity: pendingCommitMapperBaseOpacity,
+              barrierKey: pendingCommitBarrierKey,
+              canonicalRenderer: pendingCommitCanonicalRenderer,
+              geometryEpoch: nextGeometryEpochMetadata.revision,
+              layout,
+              pendingRenderer: pendingCommitPendingRenderer,
+              pieceStyle,
+              targetPiece: pendingCommitTargetPiece,
+              targetSquare: pendingCommitTargetSquare,
+            }),
+      [
+        layout,
+        nextGeometryEpochMetadata.revision,
+        pendingCommitBarrierKey,
+        pendingCommitCanonicalRenderer,
+        pendingCommitMapperBaseOpacity,
+        pendingCommitPendingRenderer,
+        pendingCommitTargetPiece,
+        pendingCommitTargetSquare,
+        pieceStyle,
+      ],
+    );
   useLayoutEffect(() => {
     if (
       pendingCommitPreparationBarrier !== null &&
@@ -1482,7 +1642,7 @@ export function BoardSurface({
       setPendingCommitHostAcknowledgements(
         EMPTY_PENDING_COMMIT_HOST_ACKNOWLEDGEMENTS,
       );
-      setPendingCommitStartAcknowledgement(null);
+      setPendingCommitCanonicalMapperReadyLease(null);
     }
     setPendingCommitPreparationBarrier((current) =>
       current?.key === pendingCommitBarrierKey
@@ -1516,13 +1676,37 @@ export function BoardSurface({
     pendingCommitBarrierKey,
     pendingCommitPreparationBarrier?.key,
   ]);
-  const combinedPendingHandoffAcknowledgement =
-    pendingCommitAcknowledgementsMatch(
-      pendingCommitHostAcknowledgements.canonical,
-      pendingCommitHostAcknowledgements.pending,
-    )
-      ? pendingCommitHostAcknowledgements.canonical
-      : null;
+  const combinedPendingHandoffMapperLease =
+    useMemo<Readonly<PendingCommitMapperLease> | null>(() => {
+      const canonical = pendingCommitHostAcknowledgements.canonical;
+      const pending = pendingCommitHostAcknowledgements.pending;
+      if (
+        canonical === null ||
+        pending === null ||
+        pendingCommitMapperEnvironment === null ||
+        canonical.environment !== pendingCommitMapperEnvironment ||
+        pending.environment !== pendingCommitMapperEnvironment ||
+        !pendingCommitAcknowledgementsMatch(
+          canonical.acknowledgement,
+          pending.acknowledgement,
+        )
+      ) {
+        return null;
+      }
+      return Object.freeze({
+        actorKey: canonical.acknowledgement.actorKey,
+        canonicalHostGeneration: canonical.generation,
+        pendingHostGeneration: pending.generation,
+        presentationEpoch: canonical.acknowledgement.presentationEpoch,
+        serial: Math.max(canonical.generation, pending.generation),
+      });
+    }, [pendingCommitHostAcknowledgements, pendingCommitMapperEnvironment]);
+  const runtimePendingHandoffAcknowledgement = pendingCommitMapperLeasesMatch(
+    pendingCommitCanonicalMapperReadyLease,
+    combinedPendingHandoffMapperLease,
+  )
+    ? pendingCommitCanonicalMapperReadyLease
+    : null;
   const positionTransition = usePositionTransitionRuntime({
     development,
     dimensions: model.dimensions,
@@ -1534,7 +1718,7 @@ export function BoardSurface({
       : { logWarning: logTransitionWarning }),
     onPendingHandoffExit: handlePendingHandoffExit,
     pendingHandoff: runtimePendingCommitHandoff,
-    pendingHandoffAcknowledgement: pendingCommitStartAcknowledgement,
+    pendingHandoffAcknowledgement: runtimePendingHandoffAcknowledgement,
     pendingHandoffRequired: currentPendingCommitHandoff !== null,
     position: model.position,
     reducedMotion,
@@ -1599,6 +1783,22 @@ export function BoardSurface({
     effectivePendingCommitMode === 'animated'
       ? expectedPendingHandoffAcknowledgement
       : null;
+  const effectivePendingCommitMapperLease =
+    combinedPendingHandoffMapperLease !== null &&
+    effectivePendingHandoffAcknowledgement !== null &&
+    combinedPendingHandoffMapperLease.actorKey ===
+      effectivePendingHandoffAcknowledgement.actorKey &&
+    combinedPendingHandoffMapperLease.presentationEpoch ===
+      effectivePendingHandoffAcknowledgement.presentationEpoch
+      ? combinedPendingHandoffMapperLease
+      : null;
+  const effectivePendingCommitStartAcknowledgement =
+    pendingCommitMapperLeasesMatch(
+      pendingCommitCanonicalMapperReadyLease,
+      effectivePendingCommitMapperLease,
+    )
+      ? effectivePendingHandoffAcknowledgement
+      : null;
   useLayoutEffect(() => {
     if (
       effectivePendingCommitMode !== 'canonical-drain' ||
@@ -1630,49 +1830,6 @@ export function BoardSurface({
     effectivePendingCommitPreparation,
     exactPendingCommitPreparationBarrier,
     storedCanonicalDrainGenerationMatches,
-  ]);
-  useLayoutEffect(() => {
-    if (
-      !pendingCommitAcknowledgementsMatch(
-        combinedPendingHandoffAcknowledgement,
-        effectivePendingHandoffAcknowledgement,
-      )
-    ) {
-      setPendingCommitStartAcknowledgement((current) =>
-        current !== null &&
-        !pendingCommitAcknowledgementsMatch(
-          current,
-          effectivePendingHandoffAcknowledgement,
-        )
-          ? null
-          : current,
-      );
-      return;
-    }
-    if (
-      pendingCommitAcknowledgementsMatch(
-        pendingCommitStartAcknowledgement,
-        effectivePendingHandoffAcknowledgement,
-      )
-    ) {
-      return;
-    }
-    let mounted = true;
-    const frame = requestAnimationFrame(() => {
-      if (mounted) {
-        setPendingCommitStartAcknowledgement(
-          effectivePendingHandoffAcknowledgement,
-        );
-      }
-    });
-    return () => {
-      mounted = false;
-      cancelAnimationFrame(frame);
-    };
-  }, [
-    combinedPendingHandoffAcknowledgement,
-    effectivePendingHandoffAcknowledgement,
-    pendingCommitStartAcknowledgement,
   ]);
   useLayoutEffect(() => {
     if (
@@ -1754,7 +1911,7 @@ export function BoardSurface({
         effectivePendingHandoffAcknowledgement,
       ) ||
       !pendingCommitAcknowledgementsMatch(
-        pendingCommitStartAcknowledgement,
+        effectivePendingCommitStartAcknowledgement,
         effectivePendingHandoffAcknowledgement,
       )
     ) {
@@ -1773,8 +1930,8 @@ export function BoardSurface({
   }, [
     exactPendingCommitPreparationBarrier?.acknowledgement,
     exactPendingCommitPreparationBarrier?.stage,
+    effectivePendingCommitStartAcknowledgement,
     effectivePendingHandoffAcknowledgement,
-    pendingCommitStartAcknowledgement,
     pendingCommitBarrierKey,
   ]);
   useLayoutEffect(() => {
@@ -1807,11 +1964,7 @@ export function BoardSurface({
       ? initialPendingCommitMode !== null
       : exactPendingCommitPreparationBarrier.stage !== 'retired');
   const pendingCommitTransitionIsReady =
-    effectivePendingHandoffAcknowledgement !== null &&
-    pendingCommitAcknowledgementsMatch(
-      pendingCommitStartAcknowledgement,
-      effectivePendingHandoffAcknowledgement,
-    );
+    effectivePendingCommitStartAcknowledgement !== null;
   // An animated handoff keeps the pending actor and canonical mask until both
   // mappers have survived the guarded host-ready frame. A canonical drain is
   // stronger: it immediately replaces any stale special actor with one static
@@ -2263,8 +2416,15 @@ export function BoardSurface({
               onPendingCommitCanonicalPrepared={
                 handlePendingCommitCanonicalPrepared
               }
+              onPendingCommitCanonicalMapperReady={
+                handlePendingCommitCanonicalMapperReady
+              }
+              pendingCommitMapperEnvironment={pendingCommitMapperEnvironment}
+              pendingCommitMapperLease={effectivePendingCommitMapperLease}
               pendingCommitPreparation={pendingCommitPreparation}
-              pendingCommitTransitionReady={pendingCommitStartAcknowledgement}
+              pendingCommitTransitionReady={
+                effectivePendingCommitStartAcknowledgement
+              }
               pendingSourceSquare={pendingSourceSquare}
               pieceRenderers={pieceRenderers}
               position={model.position}
@@ -2286,6 +2446,7 @@ export function BoardSurface({
             layout={layout}
             lifecycle={pendingLifecycle}
             onPendingCommitActorPrepared={handlePendingCommitActorPrepared}
+            pendingCommitMapperEnvironment={pendingCommitMapperEnvironment}
             pendingCommitPreparation={pendingMovePreparation}
             pendingCommitPreparationKind={pendingMovePreparationKind}
             pieceRenderers={pieceRenderers}

@@ -251,16 +251,18 @@ The same correlation can affect drag presentation without changing those
 semantics. For a drag intent with a matching newer revision and non-null target,
 a handoff is eligible only when its exact revision pair and intent source,
 piece, and target resolve to one current transition actor. The board mounts the
-pending-to-canonical crossfade paused at progress zero, waits for both admitted
-hosts and one guarded frame, then starts a fresh full configured-duration clock
-instead of replaying the move from its source. If an exact handoff actor cannot
-mount or is lost after correlation, the board fails closed to the latest
-controlled output and uses a generation-guarded canonical drain when that
-actor is renderable. Tap, keyboard, and accessibility commits retain their
-semantic confirmation but use ordinary configured transition behavior. A
-missing or mismatched `committedIntentId` or a null off-board target also uses
-that ordinary path. The handoff is visual-only and cannot keep the interaction
-lifecycle or a position snapshot alive.
+pending-to-canonical crossfade paused at progress zero and waits for both exact
+structural hosts. The canonical host's UI-runtime opacity mapper then
+acknowledges its monotonic host-generation lease from the next UI frame; only
+that current lease can unmask the host and start a fresh full configured-
+duration clock instead of replaying the move from its source. If an exact
+handoff actor cannot mount or is lost after correlation, the board fails closed
+to the latest controlled output and uses a generation-guarded canonical drain
+when that actor is renderable. Tap, keyboard, and accessibility commits retain
+their semantic confirmation but use ordinary configured transition behavior.
+A missing or mismatched `committedIntentId` or a null off-board target also
+uses that ordinary path. The handoff is visual-only and cannot keep the
+interaction lifecycle or a position snapshot alive.
 
 Every asynchronous result carries the interaction epoch and intent ID. Effects
 also carry the reducer revision that produced them. The mounted runtime rejects

@@ -35,6 +35,20 @@ export interface PendingCommitTransitionAcknowledgement {
   readonly presentationEpoch: InteractionEpoch;
 }
 
+/**
+ * One exact pair of mounted handoff hosts whose canonical p0 mapper may ACK.
+ *
+ * Host generations are allocated by the mounted BoardSurface whenever either
+ * structural host is (re)prepared. The serial is monotonic for that surface,
+ * so a delayed UI-runtime callback can never satisfy a replacement lifetime
+ * that happens to reuse the same semantic actor key and presentation epoch.
+ */
+export interface PendingCommitMapperLease extends PendingCommitTransitionAcknowledgement {
+  readonly canonicalHostGeneration: number;
+  readonly pendingHostGeneration: number;
+  readonly serial: number;
+}
+
 export interface DerivePendingCommitHandoffOptions {
   readonly boardId: string | null;
   readonly lifecycle: Readonly<MoveIntentLifecycle> | null;
