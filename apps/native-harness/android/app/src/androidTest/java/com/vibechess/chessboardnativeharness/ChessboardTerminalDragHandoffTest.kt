@@ -1042,14 +1042,16 @@ class ChessboardTerminalDragHandoffTest {
         }
 
         fun awaitActiveOverlayAtTarget() {
+            // Source visibility is a measured visual invariant, not an input
+            // precondition. Record it for the complete session so a negative
+            // control can emit its evidence before failing closed.
             awaitSnapshot("active overlay at the intended target") { snapshot, current ->
                 val overlays =
                     snapshot.actors.filter { actor ->
                         actor.role == ActorRole.OVERLAY && actor.visible
                     }
                 overlays.size == 1 &&
-                    overlays.all { actor -> near(actor.center, current.target) } &&
-                    sourceAlpha(snapshot, current.source) <= VISIBILITY_EPSILON
+                    overlays.all { actor -> near(actor.center, current.target) }
             }
         }
 
