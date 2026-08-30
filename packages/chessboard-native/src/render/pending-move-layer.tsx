@@ -1,4 +1,4 @@
-import { useMemo, type ReactElement } from 'react';
+import { useLayoutEffect, useMemo, type ReactElement } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -6,6 +6,10 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import type { MoveIntentLifecycle } from '../internal/interaction-reducer';
+import type {
+  PendingCommitHandoffDescriptor,
+  PendingCommitTransitionAcknowledgement,
+} from '../internal/pending-commit-handoff';
 import {
   MAX_TRANSITION_PRESENTATION_RESIDUALS,
   projectTransitionPresentationActor,
@@ -26,6 +30,12 @@ interface PendingMoveLayerProps {
   readonly boardId: string;
   readonly layout: Readonly<BoardSurfaceLayout>;
   readonly lifecycle: Readonly<MoveIntentLifecycle> | null;
+  readonly onPendingCommitActorPrepared?: (
+    acknowledgement: Readonly<PendingCommitTransitionAcknowledgement>,
+    prepared: boolean,
+  ) => void;
+  readonly pendingCommitPreparation?: Readonly<PendingCommitHandoffDescriptor> | null;
+  readonly pendingCommitPreparationKind?: 'canonical-drain' | 'pending';
   readonly pieceRenderers: PieceRenderers;
   readonly style: Readonly<ViewStyle>;
   readonly transition?: Readonly<MountedPositionTransition> | null;
@@ -123,6 +133,9 @@ export function PendingMoveLayer({
   boardId,
   layout,
   lifecycle,
+  onPendingCommitActorPrepared,
+  pendingCommitPreparation = null,
+  pendingCommitPreparationKind = 'pending',
   pieceRenderers,
   style,
   transition = null,
@@ -167,30 +180,84 @@ export function PendingMoveLayer({
     liveHandoffHosts,
     PENDING_MOVE_NATIVE_DRAIN_HOST_BUDGET,
   ).filter(({ nativeDrain }) => nativeDrain);
-  const liveLifecycle =
+  const directPreparationMatches =
+    pendingCommitPreparation?.boardId === boardId &&
+    pendingCommitPreparation.targetSquare !== null;
+  const canonicalDrainActive =
+    directPreparationMatches &&
+    pendingCommitPreparationKind === 'canonical-drain';
+  const preparedPendingActor = canonicalDrainActive
+    ? undefined
+    : displayedHandoffHosts.find(
+        ({ descriptor, quiescent }) =>
+          !quiescent && descriptor.actor.kind === 'pending-handoff',
+      )?.descriptor.actor;
+  useLayoutEffect(() => {
+    if (
+      preparedPendingActor === undefined ||
+      transition === null ||
+      onPendingCommitActorPrepared === undefined
+    ) {
+      return;
+    }
+    const acknowledgement = Object.freeze({
+      actorKey: preparedPendingActor.actorKey,
+      presentationEpoch: transition.presentation.epoch,
+    });
+    onPendingCommitActorPrepared(acknowledgement, true);
+    return () => {
+      onPendingCommitActorPrepared(acknowledgement, false);
+    };
+  }, [
+    onPendingCommitActorPrepared,
+    preparedPendingActor?.actorKey,
+    transition?.presentation.epoch,
+  ]);
+  const candidateLiveLifecycle =
     lifecycle !== null &&
     (lifecycle.phase === 'deciding' || lifecycle.phase === 'awaiting-commit') &&
     lifecycle.intent.targetSquare !== null
       ? lifecycle
       : null;
-  if (liveLifecycle === null && displayedHandoffHosts.length === 0) {
+  const liveLifecycle = canonicalDrainActive ? null : candidateLiveLifecycle;
+  const preparedPendingCommit =
+    liveLifecycle === null &&
+    (canonicalDrainActive || preparedPendingActor === undefined) &&
+    directPreparationMatches
+      ? pendingCommitPreparation
+      : null;
+  const preparedVisualKind =
+    preparedPendingCommit === null ? 'pending' : pendingCommitPreparationKind;
+  const preparedVisualTestId =
+    preparedPendingCommit === null ||
+    preparedVisualKind !== 'canonical-drain' ||
+    preparedPendingCommit.targetSquare === null
+      ? undefined
+      : `chessboard-native:${boardId}:canonical-drain:${preparedPendingCommit.targetSquare}`;
+  if (
+    liveLifecycle === null &&
+    preparedPendingCommit === null &&
+    displayedHandoffHosts.length === 0
+  ) {
     return null;
   }
 
+  const liveSource =
+    liveLifecycle?.intent.source ?? preparedPendingCommit?.source ?? null;
+  const livePiece =
+    liveLifecycle?.intent.piece ?? preparedPendingCommit?.piece ?? null;
+  const liveTargetSquare =
+    liveLifecycle?.intent.targetSquare ??
+    preparedPendingCommit?.targetSquare ??
+    null;
   const liveCell =
-    liveLifecycle === null
+    liveTargetSquare === null
       ? undefined
-      : layout.cells.find(
-          ({ square }) => square === liveLifecycle.intent.targetSquare,
-        );
-  const liveTargetSquare = liveLifecycle?.intent.targetSquare ?? null;
+      : layout.cells.find(({ square }) => square === liveTargetSquare);
   const liveRenderer =
-    liveLifecycle === null
+    livePiece === null
       ? null
-      : resolvePieceRenderer(
-          pieceRenderers,
-          liveLifecycle.intent.piece.pieceType,
-        );
+      : resolvePieceRenderer(pieceRenderers, livePiece.pieceType);
   const liveSize =
     liveCell === undefined
       ? null
@@ -212,13 +279,13 @@ export function PendingMoveLayer({
       pointerEvents="none"
       style={styles.layer}
     >
-      {liveLifecycle === null ||
-      liveRenderer === null ||
+      {liveRenderer === null ||
       liveSize === null ||
       liveLeft === null ||
       liveTop === null ||
-      liveTargetSquare === null ? null : liveLifecycle.intent.source.kind ===
-        'board' ? (
+      liveTargetSquare === null ||
+      liveSource === null ||
+      livePiece === null ? null : liveSource.kind === 'board' ? (
         <InteractionPieceVisual
           boardId={boardId}
           containerStyle={{
@@ -227,13 +294,16 @@ export function PendingMoveLayer({
             top: liveTop,
             width: liveSize,
           }}
-          kind="pending"
-          piece={liveLifecycle.intent.piece}
+          kind={preparedVisualKind}
+          piece={livePiece}
           renderer={liveRenderer}
           size={liveSize}
-          source={liveLifecycle.intent.source}
+          source={liveSource}
           square={liveTargetSquare}
           style={style}
+          {...(preparedVisualTestId === undefined
+            ? {}
+            : { testID: preparedVisualTestId })}
         />
       ) : (
         <InteractionPieceVisual
@@ -244,13 +314,16 @@ export function PendingMoveLayer({
             top: liveTop,
             width: liveSize,
           }}
-          kind="pending"
-          piece={liveLifecycle.intent.piece}
+          kind={preparedVisualKind}
+          piece={livePiece}
           renderer={liveRenderer}
           size={liveSize}
-          source={liveLifecycle.intent.source}
+          source={liveSource}
           square={liveTargetSquare}
           style={style}
+          {...(preparedVisualTestId === undefined
+            ? {}
+            : { testID: preparedVisualTestId })}
         />
       )}
       {displayedHandoffHosts.map(({ descriptor, quiescent }) => (
@@ -258,7 +331,7 @@ export function PendingMoveLayer({
           boardId={boardId}
           descriptor={descriptor}
           key={descriptor.key}
-          quiescent={quiescent}
+          quiescent={canonicalDrainActive || quiescent}
           style={style}
         />
       ))}

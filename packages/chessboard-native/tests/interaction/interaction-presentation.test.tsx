@@ -389,6 +389,16 @@ describe('interaction presentation foundation', () => {
     expect(interactionPieceVisualState('pending')).toEqual(
       expect.objectContaining({ isPending: true }),
     );
+    expect(interactionPieceVisualState('canonical-drain')).toEqual({
+      isDragging: false,
+      isGhost: false,
+      isPending: false,
+      isPressed: false,
+      isTransitioning: false,
+    });
+    expect(
+      Object.isFrozen(interactionPieceVisualState('canonical-drain')),
+    ).toBe(true);
     expect(Object.isFrozen(interactionPieceVisualState('pending'))).toBe(true);
   });
 

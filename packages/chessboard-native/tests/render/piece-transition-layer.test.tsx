@@ -368,6 +368,28 @@ function animatedStyle(node: TestInstance): Readonly<ViewStyle> {
   return value;
 }
 
+function nativeStyle(node: TestInstance): Readonly<ViewStyle> {
+  return StyleSheet.flatten<ViewStyle>(
+    propsOf(node)['style'] as StyleProp<ViewStyle>,
+  );
+}
+
+function boardPieceHost(artwork: TestInstance): TestInstance {
+  const host = artwork.parent?.parent ?? null;
+  if (host === null) {
+    throw new Error('Expected a board-piece host and occlusion boundary.');
+  }
+  return host;
+}
+
+function boardPieceOcclusionBoundary(artwork: TestInstance): TestInstance {
+  const boundary = artwork.parent;
+  if (boundary === null) {
+    throw new Error('Expected a board-piece occlusion boundary.');
+  }
+  return boundary;
+}
+
 const Probe: PieceRenderer = (props: PieceRendererProps) => (
   <View
     testID={`${props.piece.id ?? props.piece.pieceType}:${props.square ?? 'spare'}:${props.state.isTransitioning ? 'transition' : 'static'}`}
@@ -588,10 +610,7 @@ describe('mounted piece transition projection', () => {
     );
 
     const artwork = requiredNode(rootOf(result), 'runner:b1:transition');
-    if (artwork.parent === null) {
-      throw new Error('Expected one animated piece host.');
-    }
-    expect(animatedStyle(artwork.parent)).toEqual(
+    expect(animatedStyle(boardPieceHost(artwork))).toEqual(
       expect.objectContaining({
         opacity: 1,
         transform: [{ translateX: -100 }, { translateY: 0 }],
@@ -615,10 +634,7 @@ describe('mounted piece transition projection', () => {
       rootOf(halfwayResult),
       'runner:b1:transition',
     );
-    if (currentArtwork.parent === null) {
-      throw new Error('Expected the updated animated piece host.');
-    }
-    expect(animatedStyle(currentArtwork.parent).transform).toEqual([
+    expect(animatedStyle(boardPieceHost(currentArtwork)).transform).toEqual([
       { translateX: -50 },
       { translateY: 0 },
     ]);
@@ -633,6 +649,7 @@ describe('mounted piece transition projection', () => {
       });
       return (
         <View
+          style={{ height: '100%', width: '100%' }}
           testID={`stateful:${String(mount)}:${props.square ?? 'spare'}:${props.state.isTransitioning ? 'transition' : 'static'}`}
         />
       );
@@ -655,6 +672,7 @@ describe('mounted piece transition projection', () => {
       ]),
     });
     const renderers = Object.freeze({ stateful: StatefulProbe });
+    const moveProgress = testSharedValue(0.5);
     const result = await render(
       <PieceLayer
         boardId="stateful-transition"
@@ -669,10 +687,10 @@ describe('mounted piece transition projection', () => {
       />,
     );
     const initialArtwork = requiredNode(rootOf(result), 'stateful:1:a1:static');
-    const initialHost = initialArtwork.parent;
-    if (initialHost === null) {
-      throw new Error('Expected the initial canonical piece host.');
-    }
+    const initialHost = boardPieceHost(initialArtwork);
+    expect(nativeStyle(boardPieceOcclusionBoundary(initialArtwork))).toEqual(
+      expect.objectContaining({ height: '100%', width: '100%' }),
+    );
     expect(attachedStyleDescriptor(initialHost)).toBeNull();
 
     await result.rerender(
@@ -685,17 +703,14 @@ describe('mounted piece transition projection', () => {
           b1: Object.freeze({ id: 'runner', pieceType: 'stateful' }),
         })}
         style={EMPTY_STYLE}
-        transition={transition(movePlan, layout, testSharedValue(0.5))}
+        transition={transition(movePlan, layout, moveProgress)}
       />,
     );
     const transitioningArtwork = requiredNode(
       rootOf(result),
       'stateful:1:b1:transition',
     );
-    const transitioningHost = transitioningArtwork.parent;
-    if (transitioningHost === null) {
-      throw new Error('Expected the transitioning canonical piece host.');
-    }
+    const transitioningHost = boardPieceHost(transitioningArtwork);
     expect(transitioningHost).toBe(initialHost);
     const activeDescriptor = attachedStyleDescriptor(transitioningHost);
     if (activeDescriptor === null) {
@@ -706,6 +721,7 @@ describe('mounted piece transition projection', () => {
     ).toHaveLength(1);
     expect(mounts).toBe(1);
 
+    moveProgress.value = 1;
     await result.rerender(
       <PieceLayer
         boardId="stateful-transition"
@@ -719,16 +735,277 @@ describe('mounted piece transition projection', () => {
       />,
     );
     const settledArtwork = requiredNode(rootOf(result), 'stateful:1:b1:static');
-    const settledHost = settledArtwork.parent;
-    if (settledHost === null) {
-      throw new Error('Expected the settled canonical piece host.');
-    }
+    const settledHost = boardPieceHost(settledArtwork);
     expect(settledHost).toBe(initialHost);
     expect(mounts).toBe(1);
-    expect(attachedStyleDescriptor(settledHost)).toBeNull();
+    expect(attachedStyleDescriptor(settledHost)).toBe(activeDescriptor);
     expect(
       activeDescriptor.viewDescriptors.shareableViewDescriptors.value,
-    ).toEqual([]);
+    ).toHaveLength(1);
+    expect(animatedStyle(settledHost).opacity).toBe(1);
+
+    await result.rerender(
+      <PieceLayer
+        boardId="stateful-transition"
+        dragSourceSquare="b1"
+        draggingPieceGhostStyle={{ opacity: 0 }}
+        layout={layout}
+        pieceRenderers={renderers}
+        position={currentPosition({
+          b1: Object.freeze({ id: 'runner', pieceType: 'stateful' }),
+        })}
+        style={EMPTY_STYLE}
+      />,
+    );
+    const draggedArtwork = requiredNode(rootOf(result), 'stateful:1:b1:static');
+    const draggedHost = boardPieceHost(draggedArtwork);
+    expect(draggedHost).toBe(initialHost);
+    expect(attachedStyleDescriptor(draggedHost)).toBe(activeDescriptor);
+    expect(animatedStyle(draggedHost).opacity).toBe(1);
+    const draggedOcclusionBoundary =
+      boardPieceOcclusionBoundary(draggedArtwork);
+    expect(nativeStyle(draggedOcclusionBoundary).opacity).toBe(0);
+
+    await result.rerender(
+      <PieceLayer
+        boardId="stateful-transition"
+        draggingPieceGhostStyle={{ opacity: 0 }}
+        layout={layout}
+        pieceRenderers={renderers}
+        position={currentPosition({
+          b1: Object.freeze({ id: 'runner', pieceType: 'stateful' }),
+        })}
+        style={EMPTY_STYLE}
+      />,
+    );
+    const restoredArtwork = requiredNode(
+      rootOf(result),
+      'stateful:1:b1:static',
+    );
+    const restoredHost = boardPieceHost(restoredArtwork);
+    expect(restoredHost).toBe(initialHost);
+    expect(attachedStyleDescriptor(restoredHost)).toBe(activeDescriptor);
+    expect(
+      nativeStyle(boardPieceOcclusionBoundary(restoredArtwork)).opacity,
+    ).toBeUndefined();
+    expect(mounts).toBe(1);
+  });
+
+  it('prepares one pending controlled commit behind a hard mask while the canonical mapper drains', async () => {
+    function PreparationProbe(props: PieceRendererProps): ReactElement {
+      const role = props.state.isPending
+        ? props.state.isGhost
+          ? 'pending-source'
+          : 'pending-target'
+        : 'canonical';
+      return (
+        <View
+          testID={`prepared:${role}:${props.square ?? 'spare'}:${props.piece.pieceType}`}
+        />
+      );
+    }
+    const layout = createBoardSurfaceLayout(
+      { height: 100, width: 200 },
+      { columns: 2, rows: 1 },
+      'white',
+    );
+    const handoff = pendingHandoff();
+    const movePlan = plan({
+      moves: Object.freeze([
+        Object.freeze({
+          after: Object.freeze({ id: 'runner', pieceType: 'token' }),
+          before: Object.freeze({ id: 'runner', pieceType: 'token' }),
+          from: 'a1',
+          kind: 'move' as const,
+          matchedBy: 'piece-id' as const,
+          to: 'b1',
+        }),
+      ]),
+    });
+    const renderers = Object.freeze({ token: PreparationProbe });
+    const tree = (
+      stage: 'pending' | 'prepared' | 'transition',
+    ): ReactElement => {
+      const mounted =
+        stage === 'transition'
+          ? transition(movePlan, layout, testSharedValue(0), handoff)
+          : null;
+      return (
+        <View>
+          <PieceLayer
+            boardId="handoff"
+            draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
+            layout={layout}
+            pendingCommitPreparation={stage === 'prepared' ? handoff : null}
+            pendingSourceSquare={stage === 'pending' ? 'a1' : null}
+            pieceRenderers={renderers}
+            position={
+              stage === 'pending'
+                ? currentPosition(
+                    {
+                      a1: Object.freeze({
+                        id: 'runner',
+                        pieceType: 'token',
+                      }),
+                    },
+                    1,
+                  )
+                : currentPosition({
+                    b1: Object.freeze({
+                      id: 'runner',
+                      pieceType: 'token',
+                    }),
+                  })
+            }
+            style={EMPTY_STYLE}
+            transition={mounted}
+          />
+          <PendingMoveLayer
+            boardId="handoff"
+            layout={layout}
+            lifecycle={null}
+            pendingCommitPreparation={stage === 'prepared' ? handoff : null}
+            pieceRenderers={renderers}
+            style={EMPTY_STYLE}
+            transition={mounted}
+          />
+        </View>
+      );
+    };
+
+    const result = await render(tree('pending'));
+    const sourceArtwork = requiredNode(
+      rootOf(result),
+      'prepared:pending-source:a1:token',
+    );
+    const sourceHost = boardPieceHost(sourceArtwork);
+    const descriptor = attachedStyleDescriptor(sourceHost);
+    if (descriptor === null) {
+      throw new Error('Expected pending source native-style admission.');
+    }
+    expect(animatedStyle(sourceHost).opacity).toBe(0.45);
+
+    await result.rerender(tree('prepared'));
+    const preparedCanonicalArtwork = requiredNode(
+      rootOf(result),
+      'prepared:canonical:b1:token',
+    );
+    const preparedCanonicalHost = boardPieceHost(preparedCanonicalArtwork);
+    const preparedPendingHost = requiredNode(
+      rootOf(result),
+      'prepared:pending-target:b1:token',
+    ).parent;
+    if (preparedPendingHost === null) {
+      throw new Error('Expected both prepared commit actors.');
+    }
+    expect(preparedCanonicalHost).toBe(sourceHost);
+    expect(attachedStyleDescriptor(preparedCanonicalHost)).toBe(descriptor);
+    // The retained source mapper may still expose its old pending opacity, or
+    // the replacement base-one mapper may already have evaluated. The child
+    // mask keeps either ordering draw-safe while the canonical mapper drains.
+    const preparedOuterOpacity = Number(
+      animatedStyle(preparedCanonicalHost).opacity,
+    );
+    expect(preparedOuterOpacity).toBeGreaterThanOrEqual(0.45);
+    expect(preparedOuterOpacity).toBeLessThanOrEqual(1);
+    expect(
+      nativeStyle(boardPieceOcclusionBoundary(preparedCanonicalArtwork))
+        .opacity,
+    ).toBe(0);
+    expect(nativeStyle(preparedPendingHost).opacity ?? 1).toBe(1);
+
+    await result.rerender(tree('transition'));
+    const transitionCanonicalArtwork = requiredNode(
+      rootOf(result),
+      'prepared:canonical:b1:token',
+    );
+    const transitionCanonicalHost = boardPieceHost(transitionCanonicalArtwork);
+    const transitionPendingHost = requiredNode(
+      rootOf(result),
+      'prepared:pending-target:b1:token',
+    ).parent?.parent;
+    if (transitionPendingHost == null) {
+      throw new Error('Expected both crossfade actors.');
+    }
+    expect(transitionCanonicalHost).toBe(sourceHost);
+    expect(attachedStyleDescriptor(transitionCanonicalHost)).toBe(descriptor);
+    const transitionOuterOpacity = Number(
+      animatedStyle(transitionCanonicalHost).opacity,
+    );
+    const transitionMaskOpacity = Number(
+      nativeStyle(boardPieceOcclusionBoundary(transitionCanonicalArtwork))
+        .opacity,
+    );
+    const transitionPendingOpacity = Number(
+      animatedStyle(transitionPendingHost).opacity,
+    );
+    expect(transitionOuterOpacity).toBeGreaterThanOrEqual(0);
+    expect(transitionOuterOpacity).toBeLessThanOrEqual(1);
+    expect(transitionMaskOpacity).toBe(0);
+    expect(transitionPendingOpacity).toBe(1);
+    expect(
+      transitionOuterOpacity * transitionMaskOpacity + transitionPendingOpacity,
+    ).toBe(1);
+  });
+
+  it('mounts an anonymous square-keyed controlled target already admitted at opacity zero', async () => {
+    function AnonymousProbe(props: PieceRendererProps): ReactElement {
+      return (
+        <View
+          testID={`anonymous:${props.state.isPending ? 'pending' : 'canonical'}:${props.square ?? 'spare'}`}
+        />
+      );
+    }
+    const layout = createBoardSurfaceLayout(
+      { height: 100, width: 200 },
+      { columns: 2, rows: 1 },
+      'white',
+    );
+    const handoff = Object.freeze({
+      ...pendingHandoff(),
+      piece: Object.freeze({ pieceType: 'token' }),
+    });
+    const result = await render(
+      <View>
+        <PieceLayer
+          boardId="handoff"
+          draggingPieceGhostStyle={DEFAULT_GHOST_STYLE}
+          layout={layout}
+          pendingCommitPreparation={handoff}
+          pieceRenderers={{ token: AnonymousProbe }}
+          position={currentPosition({
+            b1: Object.freeze({ pieceType: 'token' }),
+          })}
+          style={EMPTY_STYLE}
+        />
+        <PendingMoveLayer
+          boardId="handoff"
+          layout={layout}
+          lifecycle={null}
+          pendingCommitPreparation={handoff}
+          pieceRenderers={{ token: AnonymousProbe }}
+          style={EMPTY_STYLE}
+        />
+      </View>,
+    );
+    const canonicalArtwork = requiredNode(
+      rootOf(result),
+      'anonymous:canonical:b1',
+    );
+    const canonicalHost = boardPieceHost(canonicalArtwork);
+    const pendingHost = requiredNode(
+      rootOf(result),
+      'anonymous:pending:b1',
+    ).parent;
+    if (pendingHost === null) {
+      throw new Error('Expected anonymous prepared actors.');
+    }
+    expect(attachedStyleDescriptor(canonicalHost)).not.toBeNull();
+    expect(animatedStyle(canonicalHost).opacity).toBe(1);
+    expect(
+      nativeStyle(boardPieceOcclusionBoundary(canonicalArtwork)).opacity,
+    ).toBe(0);
+    expect(nativeStyle(pendingHost).opacity ?? 1).toBe(1);
   });
 
   it('maps only Android transition hosts to the settled-props drain guard', () => {
@@ -1055,14 +1332,15 @@ describe('mounted piece transition projection', () => {
         expect(canonicalArtwork).toHaveLength(layout.cells.length);
         for (const artwork of canonicalArtwork) {
           const testID: unknown = artwork.props['testID'];
-          if (typeof testID !== 'string' || artwork.parent === null) {
+          if (typeof testID !== 'string') {
             throw new Error('Expected one canonical full-board piece host.');
           }
+          const artworkHost = boardPieceHost(artwork);
           if (testID.endsWith(':static')) {
-            expect(attachedStyleDescriptor(artwork.parent)).toBeNull();
+            expect(attachedStyleDescriptor(artworkHost)).toBeNull();
           } else {
             expect(testID.endsWith(':transition')).toBe(true);
-            expect(attachedStyleDescriptor(artwork.parent)).not.toBeNull();
+            expect(attachedStyleDescriptor(artworkHost)).not.toBeNull();
           }
         }
       }
@@ -1091,10 +1369,7 @@ describe('mounted piece transition projection', () => {
       });
       expect(recoveredArtwork).toHaveLength(expectedBudget);
       for (const artwork of recoveredArtwork) {
-        if (artwork.parent === null) {
-          throw new Error('Expected one recovered animated piece host.');
-        }
-        expect(attachedStyleDescriptor(artwork.parent)).not.toBeNull();
+        expect(attachedStyleDescriptor(boardPieceHost(artwork))).not.toBeNull();
       }
       await result.unmount();
     } finally {
@@ -1154,10 +1429,7 @@ describe('mounted piece transition projection', () => {
       />,
     );
     const initialArtwork = requiredNode(rootOf(result), 'token:a1:static');
-    const aHost = initialArtwork.parent;
-    if (aHost === null) {
-      throw new Error('Expected the initial anonymous current host.');
-    }
+    const aHost = boardPieceHost(initialArtwork);
 
     await result.rerender(
       <PieceLayer
@@ -1172,10 +1444,7 @@ describe('mounted piece transition projection', () => {
     );
     expect(aHost.children).toEqual([]);
     const bArtwork = requiredNode(rootOf(result), 'token:b1:transition');
-    const bHost = bArtwork.parent;
-    if (bHost === null) {
-      throw new Error('Expected the B current host.');
-    }
+    const bHost = boardPieceHost(bArtwork);
     expect(retirement.frames).toHaveLength(1);
 
     await result.rerender(
@@ -1189,9 +1458,9 @@ describe('mounted piece transition projection', () => {
         transition={ba}
       />,
     );
-    expect(requiredNode(rootOf(result), 'token:a1:transition').parent).toBe(
-      aHost,
-    );
+    expect(
+      boardPieceHost(requiredNode(rootOf(result), 'token:a1:transition')),
+    ).toBe(aHost);
     expect(bHost.children).toEqual([]);
     expect(retirement.cancelSpy).toHaveBeenCalledTimes(1);
     expect(retirement.frames).toHaveLength(2);
@@ -1199,9 +1468,9 @@ describe('mounted piece transition projection', () => {
       retirement.runNext();
     });
     expect(retirement.frames).toHaveLength(1);
-    expect(requiredNode(rootOf(result), 'token:a1:transition').parent).toBe(
-      aHost,
-    );
+    expect(
+      boardPieceHost(requiredNode(rootOf(result), 'token:a1:transition')),
+    ).toBe(aHost);
 
     await result.unmount();
     expect(retirement.cancelSpy).toHaveBeenCalledTimes(2);
@@ -1240,10 +1509,7 @@ describe('mounted piece transition projection', () => {
     );
     const result = await render(tree(mounted));
     const initialArtwork = requiredNode(rootOf(result), 'gone:a1:transition');
-    const initialHost = initialArtwork.parent;
-    if (initialHost === null) {
-      throw new Error('Expected one detached animated piece host.');
-    }
+    const initialHost = boardPieceHost(initialArtwork);
     const activeDescriptor = attachedStyleDescriptor(initialHost);
     if (activeDescriptor === null) {
       throw new Error('Expected the detached host animated style.');
@@ -1267,15 +1533,15 @@ describe('mounted piece transition projection', () => {
       rootOf(result),
       'gone:a1:transition',
     );
-    expect(beforeFirstReplacement.parent).toBe(initialHost);
+    expect(boardPieceHost(beforeFirstReplacement)).toBe(initialHost);
     expect(retirement.cancelSpy).toHaveBeenCalledTimes(1);
     await act(() => {
       retirement.runNext();
     });
     expect(retirement.frames).toEqual([]);
-    expect(requiredNode(rootOf(result), 'gone:a1:transition').parent).toBe(
-      initialHost,
-    );
+    expect(
+      boardPieceHost(requiredNode(rootOf(result), 'gone:a1:transition')),
+    ).toBe(initialHost);
 
     await result.rerender(tree(null));
     await act(() => {
@@ -1286,9 +1552,9 @@ describe('mounted piece transition projection', () => {
 
     await result.rerender(tree(mounted));
     expect(retirement.cancelSpy).toHaveBeenCalledTimes(2);
-    expect(requiredNode(rootOf(result), 'gone:a1:transition').parent).toBe(
-      initialHost,
-    );
+    expect(
+      boardPieceHost(requiredNode(rootOf(result), 'gone:a1:transition')),
+    ).toBe(initialHost);
     await act(() => {
       retirement.runNext();
     });
@@ -1348,7 +1614,11 @@ describe('mounted piece transition projection', () => {
       (node) => node.props['testID'] === 'token:b1:transition',
     );
     expect(actors).toHaveLength(2);
-    expect(actors[0]?.parent).not.toBe(actors[1]?.parent);
+    const [beforeActor, afterActor] = actors;
+    if (beforeActor === undefined || afterActor === undefined) {
+      throw new Error('Expected two anonymous capture actors.');
+    }
+    expect(boardPieceHost(beforeActor)).not.toBe(boardPieceHost(afterActor));
   });
 
   it('retires pending handoff hosts without artwork and cancels the second frame on unmount', async () => {
@@ -1585,21 +1855,17 @@ describe('mounted piece transition projection', () => {
     const captured = requiredNode(root, 'captured:b1:transition');
     const runner = requiredNode(root, 'runner:b1:transition');
     const added = requiredNode(root, 'added:c1:transition');
-    if (
-      captured.parent === null ||
-      runner.parent === null ||
-      added.parent === null
-    ) {
-      throw new Error('Expected animated hosts.');
-    }
+    const capturedHost = boardPieceHost(captured);
+    const runnerHost = boardPieceHost(runner);
+    const addedHost = boardPieceHost(added);
 
-    expect(animatedStyle(captured.parent).opacity).toBe(0.8);
-    expect(animatedStyle(added.parent).opacity).toBe(0);
+    expect(animatedStyle(capturedHost).opacity).toBe(0.8);
+    expect(animatedStyle(addedHost).opacity).toBe(0);
     const visualChildren = root.children.filter(
       (child): child is TestInstance => typeof child !== 'string',
     );
-    expect(visualChildren.indexOf(captured.parent)).toBeLessThan(
-      visualChildren.indexOf(runner.parent),
+    expect(visualChildren.indexOf(capturedHost)).toBeLessThan(
+      visualChildren.indexOf(runnerHost),
     );
 
     const progressedResult = await render(
@@ -1617,17 +1883,12 @@ describe('mounted piece transition projection', () => {
       />,
     );
     const progressedRoot = rootOf(progressedResult);
-    const currentCaptured = requiredNode(
-      progressedRoot,
-      'captured:b1:transition',
-    ).parent;
-    const currentAdded = requiredNode(
-      progressedRoot,
-      'added:c1:transition',
-    ).parent;
-    if (currentCaptured === null || currentAdded === null) {
-      throw new Error('Expected updated animated hosts.');
-    }
+    const currentCaptured = boardPieceHost(
+      requiredNode(progressedRoot, 'captured:b1:transition'),
+    );
+    const currentAdded = boardPieceHost(
+      requiredNode(progressedRoot, 'added:c1:transition'),
+    );
     expect(animatedStyle(currentCaptured).opacity).toBeCloseTo(0.6);
     expect(animatedStyle(currentAdded).opacity).toBeCloseTo(0.2);
   });
@@ -1777,20 +2038,16 @@ describe('mounted piece transition projection', () => {
     const victim = requiredNode(root, 'victim:d1:transition');
     const before = requiredNode(root, 'pawn:c1:transition');
     const after = requiredNode(root, 'pawn:d1:transition');
-    if (
-      victim.parent === null ||
-      before.parent === null ||
-      after.parent === null
-    ) {
-      throw new Error('Expected capture and replacement transition hosts.');
-    }
-    expect(animatedStyle(before.parent)).toEqual(
+    const victimHost = boardPieceHost(victim);
+    const beforeHost = boardPieceHost(before);
+    const afterHost = boardPieceHost(after);
+    expect(animatedStyle(beforeHost)).toEqual(
       expect.objectContaining({
         opacity: 0.5,
         transform: [{ translateX: 50 }, { translateY: 0 }],
       }),
     );
-    expect(animatedStyle(after.parent)).toEqual(
+    expect(animatedStyle(afterHost)).toEqual(
       expect.objectContaining({
         opacity: 0.5,
         transform: [{ translateX: -50 }, { translateY: 0 }],
@@ -1799,11 +2056,11 @@ describe('mounted piece transition projection', () => {
     const visualChildren = root.children.filter(
       (child): child is TestInstance => typeof child !== 'string',
     );
-    expect(visualChildren.indexOf(victim.parent)).toBeLessThan(
-      visualChildren.indexOf(before.parent),
+    expect(visualChildren.indexOf(victimHost)).toBeLessThan(
+      visualChildren.indexOf(beforeHost),
     );
-    expect(visualChildren.indexOf(before.parent)).toBeLessThan(
-      visualChildren.indexOf(after.parent),
+    expect(visualChildren.indexOf(beforeHost)).toBeLessThan(
+      visualChildren.indexOf(afterHost),
     );
   });
 
@@ -1837,17 +2094,15 @@ describe('mounted piece transition projection', () => {
       />,
     );
     const gone = requiredNode(rootOf(result), 'gone:a1:transition');
-    if (gone.parent === null) {
-      throw new Error('Expected one transient host.');
-    }
-    expect(gone.parent).toHaveProp('accessible', false);
-    expect(gone.parent).toHaveProp('collapsable', false);
-    expect(gone.parent).toHaveProp(
+    const goneHost = boardPieceHost(gone);
+    expect(goneHost).toHaveProp('accessible', false);
+    expect(goneHost).toHaveProp('collapsable', false);
+    expect(goneHost).toHaveProp(
       'importantForAccessibility',
       'no-hide-descendants',
     );
-    expect(gone.parent).toHaveProp('pointerEvents', 'none');
-    const hostStyle = propsOf(gone.parent)['style'] as StyleProp<ViewStyle>;
+    expect(goneHost).toHaveProp('pointerEvents', 'none');
+    const hostStyle = propsOf(goneHost)['style'] as StyleProp<ViewStyle>;
     expect(StyleSheet.flatten<ViewStyle>(hostStyle)).toEqual(
       expect.objectContaining({ position: 'absolute' }),
     );

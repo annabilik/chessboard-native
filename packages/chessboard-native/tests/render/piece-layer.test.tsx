@@ -55,6 +55,10 @@ function nodeByTestId(root: TestInstance, testID: string): TestInstance | null {
   return root.queryAll((node) => node.props['testID'] === testID).at(0) ?? null;
 }
 
+function boardPieceHost(artwork: TestInstance): TestInstance | null {
+  return artwork.parent?.parent ?? null;
+}
+
 describe('measured piece projection', () => {
   it('centers pieces in fractional cells and preserves canonical identity across orientation', () => {
     const dimensions = { columns: 3, rows: 2 };
@@ -153,8 +157,9 @@ describe('piece renderer resolution and composition', () => {
 
     const dragArtwork = nodeByTestId(rootOf(result), 'transient-a1');
     const pendingArtwork = nodeByTestId(rootOf(result), 'transient-b1');
-    const dragHost = dragArtwork?.parent ?? null;
-    const pendingHost = pendingArtwork?.parent ?? null;
+    const dragHost = dragArtwork === null ? null : boardPieceHost(dragArtwork);
+    const pendingHost =
+      pendingArtwork === null ? null : boardPieceHost(pendingArtwork);
     if (dragHost === null || pendingHost === null) {
       throw new Error('Expected board-owned transient piece hosts.');
     }
@@ -288,7 +293,7 @@ describe('piece renderer resolution and composition', () => {
     if (custom === null) {
       throw new Error('Expected custom renderer output.');
     }
-    const pieceHost = custom.parent;
+    const pieceHost = boardPieceHost(custom);
     if (pieceHost === null) {
       throw new Error('Expected a board-owned piece host.');
     }

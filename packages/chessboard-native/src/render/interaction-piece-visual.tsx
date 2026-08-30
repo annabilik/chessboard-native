@@ -12,7 +12,7 @@ import type {
 import { PIECE_HOST_STRUCTURAL_RESET } from './piece-host-style';
 
 export type InteractionPieceVisualKind =
-  'drag-overlay' | 'source-ghost' | 'pending';
+  'canonical-drain' | 'drag-overlay' | 'source-ghost' | 'pending';
 
 type InteractionPieceVisualProps = {
   readonly boardId: string;
@@ -58,11 +58,21 @@ const PENDING_STATE: Readonly<PieceVisualState> = Object.freeze({
   isTransitioning: false,
 });
 
+const CANONICAL_DRAIN_STATE: Readonly<PieceVisualState> = Object.freeze({
+  isDragging: false,
+  isGhost: false,
+  isPending: false,
+  isPressed: false,
+  isTransitioning: false,
+});
+
 /** Frozen renderer state for one board-owned transient piece visual. */
 export function interactionPieceVisualState(
   kind: InteractionPieceVisualKind,
 ): Readonly<PieceVisualState> {
   switch (kind) {
+    case 'canonical-drain':
+      return CANONICAL_DRAIN_STATE;
     case 'drag-overlay':
       return DRAG_OVERLAY_STATE;
     case 'source-ghost':

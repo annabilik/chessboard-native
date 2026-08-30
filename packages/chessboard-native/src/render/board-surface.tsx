@@ -9,7 +9,12 @@ import {
   type ReactElement,
   type Ref,
 } from 'react';
-import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  type LayoutChangeEvent,
+  type ViewStyle,
+} from 'react-native';
 
 import { useAccessibilityAnnouncement } from '../accessibility/announcements';
 import { useReducedMotion } from '../accessibility/reduced-motion';
@@ -44,7 +49,12 @@ import type {
   MoveIntentLifecycle,
 } from '../internal/interaction-reducer';
 import { resetInteractionPresentationSharedValues } from '../internal/interaction-presentation';
-import { derivePendingCommitHandoff } from '../internal/pending-commit-handoff';
+import {
+  derivePendingCommitHandoff,
+  pendingCommitHandoffHasCanonicalSuccessor,
+  type PendingCommitHandoffDescriptor,
+  type PendingCommitTransitionAcknowledgement,
+} from '../internal/pending-commit-handoff';
 import {
   planSquareActivation,
   type SquareActivationInput,
@@ -55,7 +65,10 @@ import { useAnnotationOperation } from '../internal/use-annotation-operation';
 import { useAnnotationInputRuntime } from '../internal/use-annotation-input-runtime';
 import { useSquareActivation } from '../internal/use-square-activation';
 import type { PieceInteractionCallbacks } from '../internal/use-piece-interaction';
-import { usePositionTransitionRuntime } from '../internal/use-position-transition-runtime';
+import {
+  usePositionTransitionRuntime,
+  type PendingHandoffTransitionExitDisposition,
+} from '../internal/use-position-transition-runtime';
 import type { ProviderBoardRegistration } from '../internal/provider-board-registration';
 import type {
   CanStartProviderSpareDrag,
@@ -84,6 +97,7 @@ import type {
   OnSquarePressIn,
   OnSquarePressOut,
   PieceInteractionContext,
+  PieceRenderer,
   PieceRenderers,
   SquareActivationIntent,
   SquareId,
@@ -91,7 +105,10 @@ import type {
   SquareStyles,
   Revision,
 } from '../public-types';
-import { createBoardSurfaceLayout } from './board-layout';
+import {
+  createBoardSurfaceLayout,
+  type BoardSurfaceLayout,
+} from './board-layout';
 import { AnnotationLayer } from './annotation-layer';
 import { computeAnnotationGeometry } from './annotation-geometry';
 import {
@@ -102,11 +119,12 @@ import {
 import {
   BoardInteractionController,
   type TerminalBoardDragAcknowledgement,
+  type TerminalBoardDragLease,
 } from './board-interaction-controller';
 import type { BoardGestureGeometry } from './board-gesture-layer';
 import { BoardNotationLayer } from './board-notation-layer';
 import { PendingMoveLayer } from './pending-move-layer';
-import { PieceLayer } from './piece-layer';
+import { PieceLayer, resolvePieceRenderer } from './piece-layer';
 import { SquareLayer } from './square-layer';
 import {
   resolveBoardStyle,
@@ -177,6 +195,151 @@ interface ExternalMoveCommitSnapshot {
 interface TerminalBoardDragHandoff extends TerminalBoardDragAcknowledgement {
   readonly restoreSource: boolean;
   readonly stage: 'leased' | 'released';
+}
+
+interface PendingCommitPreparationBarrier {
+  readonly acknowledgement: Readonly<PendingCommitTransitionAcknowledgement> | null;
+  readonly drainBaseOpacity: number | null;
+  readonly drainGeometryEpoch: Revision | null;
+  readonly drainRenderer: PieceRenderer | null;
+  readonly handoff: Readonly<PendingCommitHandoffDescriptor>;
+  readonly key: string;
+  readonly mode: 'animated' | 'canonical-drain';
+  readonly preparation: Readonly<PendingCommitHandoffDescriptor>;
+  readonly stage: 'retained' | 'active' | 'running' | 'warming' | 'retired';
+}
+
+interface PendingCommitCanonicalDrainGeneration {
+  readonly baseOpacity: number;
+  readonly descriptor: Readonly<PendingCommitHandoffDescriptor>;
+  readonly geometryEpoch: Revision;
+  readonly renderer: PieceRenderer;
+}
+
+interface PendingCommitHostAcknowledgements {
+  readonly canonical: Readonly<PendingCommitTransitionAcknowledgement> | null;
+  readonly pending: Readonly<PendingCommitTransitionAcknowledgement> | null;
+}
+
+const EMPTY_PENDING_COMMIT_HOST_ACKNOWLEDGEMENTS: Readonly<PendingCommitHostAcknowledgements> =
+  Object.freeze({ canonical: null, pending: null });
+
+function pendingCommitAcknowledgementsMatch(
+  left: Readonly<PendingCommitTransitionAcknowledgement> | null,
+  right: Readonly<PendingCommitTransitionAcknowledgement> | null,
+): boolean {
+  return (
+    left !== null &&
+    right !== null &&
+    left.actorKey === right.actorKey &&
+    left.presentationEpoch === right.presentationEpoch
+  );
+}
+
+function pendingCommitPreparationKey(
+  handoff: Readonly<PendingCommitHandoffDescriptor>,
+): string {
+  return JSON.stringify([
+    handoff.boardId,
+    handoff.epoch,
+    handoff.intentId,
+    handoff.fromRevision,
+    handoff.toRevision,
+    handoff.source.kind,
+    handoff.source.kind === 'board'
+      ? handoff.source.square
+      : handoff.source.spareId,
+    handoff.targetSquare,
+    handoff.piece.id ?? null,
+    handoff.piece.pieceType,
+  ]);
+}
+
+function deriveCanonicalDrainPreparation(options: {
+  readonly allowAnonymousTargetDrain: boolean;
+  readonly handoff: Readonly<PendingCommitHandoffDescriptor>;
+  readonly layout: Readonly<BoardSurfaceLayout>;
+  readonly position: NonNullable<NormalizedBoardModel['position']>;
+}): Readonly<PendingCommitHandoffDescriptor> | null {
+  const { allowAnonymousTargetDrain, handoff, layout, position } = options;
+  let canonicalSquare: SquareId | null = null;
+  let canonicalPiece: (typeof position.value)[SquareId] | undefined;
+  if (handoff.piece.id === undefined) {
+    const targetSquare = handoff.targetSquare;
+    const targetPiece =
+      targetSquare === null ? undefined : position.value[targetSquare];
+    // Anonymous pieces are square-keyed. Before an exact handoff barrier is
+    // latched, a different target square mounts a fresh host. Once the barrier
+    // exists, however, that target host has been admitted by direct prep (or a
+    // mounted transition) and must be drained just like a stable-ID host.
+    if (
+      handoff.source.kind === 'board' &&
+      (targetSquare === handoff.source.square || allowAnonymousTargetDrain) &&
+      targetPiece?.id === undefined
+    ) {
+      canonicalSquare = targetSquare;
+      canonicalPiece = targetPiece;
+    }
+  } else {
+    for (const { square } of layout.cells) {
+      const candidate = position.value[square];
+      if (candidate?.id !== handoff.piece.id) {
+        continue;
+      }
+      if (canonicalSquare !== null) {
+        return null;
+      }
+      canonicalSquare = square;
+      canonicalPiece = candidate;
+    }
+  }
+  if (canonicalSquare === null || canonicalPiece === undefined) {
+    return null;
+  }
+  return Object.freeze({
+    boardId: handoff.boardId,
+    epoch: handoff.epoch,
+    fromRevision: position.revision,
+    intentId: `${handoff.intentId}:canonical-drain:${String(position.revision)}`,
+    piece: Object.freeze({
+      ...(canonicalPiece.id === undefined ? {} : { id: canonicalPiece.id }),
+      pieceType: canonicalPiece.pieceType,
+    }),
+    source: Object.freeze({
+      kind: 'board' as const,
+      square: canonicalSquare,
+    }),
+    targetSquare: canonicalSquare,
+    toRevision: position.revision,
+  });
+}
+
+function canonicalDrainBaseOpacity(options: {
+  readonly dragSourceSquare: SquareId | null;
+  readonly draggingPieceGhostStyle: Readonly<ViewStyle>;
+  readonly pieceStyle: Readonly<ViewStyle>;
+  readonly pendingSourceSquare: SquareId | null;
+  readonly targetSquare: SquareId;
+}): number {
+  const {
+    dragSourceSquare,
+    draggingPieceGhostStyle,
+    pendingSourceSquare,
+    pieceStyle,
+    targetSquare,
+  } = options;
+  const isDragSource = targetSquare === dragSourceSquare;
+  const resolvedStyle = isDragSource ? draggingPieceGhostStyle : pieceStyle;
+  const resolvedOpacity =
+    typeof resolvedStyle.opacity === 'number' ? resolvedStyle.opacity : 1;
+  const canonicalOpacity =
+    typeof pieceStyle.opacity === 'number' ? pieceStyle.opacity : 1;
+  if (targetSquare === pendingSourceSquare && !isDragSource) {
+    return 0.45;
+  }
+  return isDragSource && resolvedOpacity === 0
+    ? canonicalOpacity
+    : resolvedOpacity;
 }
 
 type PendingMoveLifecycle = Extract<
@@ -362,6 +525,86 @@ export function BoardSurface({
     annotationBoardPressEnabled;
   const [terminalBoardDragHandoff, setTerminalBoardDragHandoff] =
     useState<Readonly<TerminalBoardDragHandoff> | null>(null);
+  const [pendingCommitPreparationBarrier, setPendingCommitPreparationBarrier] =
+    useState<Readonly<PendingCommitPreparationBarrier> | null>(null);
+  const [
+    pendingCommitHostAcknowledgements,
+    setPendingCommitHostAcknowledgements,
+  ] = useState<Readonly<PendingCommitHostAcknowledgements>>(
+    EMPTY_PENDING_COMMIT_HOST_ACKNOWLEDGEMENTS,
+  );
+  const [
+    pendingCommitStartAcknowledgement,
+    setPendingCommitStartAcknowledgement,
+  ] = useState<Readonly<PendingCommitTransitionAcknowledgement> | null>(null);
+  const handlePendingHandoffExit = useCallback(
+    (
+      acknowledgement: Readonly<PendingCommitTransitionAcknowledgement>,
+      disposition: PendingHandoffTransitionExitDisposition,
+    ): void => {
+      setPendingCommitPreparationBarrier((current) => {
+        if (
+          current?.acknowledgement === null ||
+          current?.acknowledgement === undefined ||
+          !pendingCommitAcknowledgementsMatch(
+            current.acknowledgement,
+            acknowledgement,
+          ) ||
+          (current.stage !== 'active' && current.stage !== 'running')
+        ) {
+          return current;
+        }
+        return Object.freeze({
+          ...current,
+          stage:
+            disposition === 'aborted'
+              ? ('warming' as const)
+              : ('retired' as const),
+        });
+      });
+    },
+    [],
+  );
+  const handlePendingCommitCanonicalPrepared = useCallback(
+    (
+      acknowledgement: Readonly<PendingCommitTransitionAcknowledgement>,
+      prepared: boolean,
+    ): void => {
+      setPendingCommitHostAcknowledgements((current) =>
+        prepared
+          ? pendingCommitAcknowledgementsMatch(
+              current.canonical,
+              acknowledgement,
+            )
+            ? current
+            : Object.freeze({ ...current, canonical: acknowledgement })
+          : pendingCommitAcknowledgementsMatch(
+                current.canonical,
+                acknowledgement,
+              )
+            ? Object.freeze({ ...current, canonical: null })
+            : current,
+      );
+    },
+    [],
+  );
+  const handlePendingCommitActorPrepared = useCallback(
+    (
+      acknowledgement: Readonly<PendingCommitTransitionAcknowledgement>,
+      prepared: boolean,
+    ): void => {
+      setPendingCommitHostAcknowledgements((current) =>
+        prepared
+          ? pendingCommitAcknowledgementsMatch(current.pending, acknowledgement)
+            ? current
+            : Object.freeze({ ...current, pending: acknowledgement })
+          : pendingCommitAcknowledgementsMatch(current.pending, acknowledgement)
+            ? Object.freeze({ ...current, pending: null })
+            : current,
+      );
+    },
+    [],
+  );
   const activeProviderDrag = providerDragSnapshot.active;
   const restoresTerminalBoardDragSource =
     terminalBoardDragHandoff?.stage === 'leased' &&
@@ -1073,6 +1316,213 @@ export function BoardSurface({
     providerRegistration,
   ]);
   useChessboardActions(actionsRef, cancelMoveAction);
+  const pendingLifecycle = currentPendingLifecycle(
+    moveInteraction.lifecycle,
+    model,
+  );
+  const pendingSourceSquare = restoresTerminalBoardDragSource
+    ? null
+    : pendingLifecycle?.intent.source.kind !== 'board'
+      ? null
+      : pendingLifecycle.intent.source.square;
+  const currentPendingCommitHandoff = derivePendingCommitHandoff({
+    boardId: model.boardId,
+    lifecycle: moveInteraction.lifecycle,
+    position: model.position,
+  });
+  const pendingCommitBarrierHandoff =
+    currentPendingCommitHandoff ??
+    (pendingCommitPreparationBarrier?.stage === 'retired'
+      ? null
+      : (pendingCommitPreparationBarrier?.handoff ?? null));
+  const pendingCommitBarrierKey =
+    pendingCommitBarrierHandoff === null
+      ? null
+      : pendingCommitPreparationKey(pendingCommitBarrierHandoff);
+  const exactPendingCommitPreparationBarrier =
+    pendingCommitBarrierKey !== null &&
+    pendingCommitPreparationBarrier?.key === pendingCommitBarrierKey
+      ? pendingCommitPreparationBarrier
+      : null;
+  const pendingCommitTargetSquare =
+    pendingCommitBarrierHandoff?.targetSquare ?? null;
+  const pendingCommitTargetPiece =
+    pendingCommitTargetSquare === null
+      ? null
+      : (model.position?.value[pendingCommitTargetSquare] ?? null);
+  const correlatedPendingCommitHandoff =
+    pendingCommitBarrierHandoff !== null &&
+    pendingCommitTargetSquare !== null &&
+    pendingCommitTargetPiece !== null &&
+    model.position !== null &&
+    model.dimensions !== null &&
+    layout !== null &&
+    layout.cells.some(({ square }) => square === pendingCommitTargetSquare) &&
+    pendingCommitHandoffHasCanonicalSuccessor({
+      dimensions: model.dimensions,
+      handoff: pendingCommitBarrierHandoff,
+      position: model.position,
+    })
+      ? pendingCommitBarrierHandoff
+      : null;
+  const renderablePendingCommitHandoff =
+    correlatedPendingCommitHandoff !== null &&
+    pendingCommitTargetPiece !== null &&
+    resolvePieceRenderer(
+      pieceRenderers,
+      correlatedPendingCommitHandoff.piece.pieceType,
+    ) !== null &&
+    resolvePieceRenderer(pieceRenderers, pendingCommitTargetPiece.pieceType) !==
+      null
+      ? correlatedPendingCommitHandoff
+      : null;
+  const canonicalDrainDescriptor = useMemo(
+    () =>
+      model.position === null ||
+      layout === null ||
+      pendingCommitBarrierHandoff === null
+        ? null
+        : deriveCanonicalDrainPreparation({
+            allowAnonymousTargetDrain:
+              exactPendingCommitPreparationBarrier !== null,
+            handoff: pendingCommitBarrierHandoff,
+            layout,
+            position: model.position,
+          }),
+    [
+      exactPendingCommitPreparationBarrier,
+      layout,
+      model.position,
+      pendingCommitBarrierHandoff,
+    ],
+  );
+  const canonicalDrainRenderer =
+    canonicalDrainDescriptor === null
+      ? null
+      : resolvePieceRenderer(
+          pieceRenderers,
+          canonicalDrainDescriptor.piece.pieceType,
+        );
+  const canonicalDrainResolvedBaseOpacity =
+    canonicalDrainDescriptor?.targetSquare === null ||
+    canonicalDrainDescriptor?.targetSquare === undefined
+      ? null
+      : canonicalDrainBaseOpacity({
+          dragSourceSquare: activeDragSourceSquare,
+          draggingPieceGhostStyle,
+          pendingSourceSquare,
+          pieceStyle,
+          targetSquare: canonicalDrainDescriptor.targetSquare,
+        });
+  const canonicalDrainGeneration =
+    useMemo<Readonly<PendingCommitCanonicalDrainGeneration> | null>(
+      () =>
+        canonicalDrainDescriptor === null ||
+        canonicalDrainRenderer === null ||
+        canonicalDrainResolvedBaseOpacity === null ||
+        nextGeometryEpochMetadata.revision === null
+          ? null
+          : Object.freeze({
+              baseOpacity: canonicalDrainResolvedBaseOpacity,
+              descriptor: canonicalDrainDescriptor,
+              geometryEpoch: nextGeometryEpochMetadata.revision,
+              renderer: canonicalDrainRenderer,
+            }),
+      [
+        canonicalDrainDescriptor,
+        canonicalDrainRenderer,
+        canonicalDrainResolvedBaseOpacity,
+        nextGeometryEpochMetadata.revision,
+      ],
+    );
+  const pendingCommitAnimationEnabled =
+    transitionDurationMs > 0 && !reducedMotion;
+  const animatedPendingCommitHandoff = pendingCommitAnimationEnabled
+    ? renderablePendingCommitHandoff
+    : null;
+  const initialPendingCommitMode =
+    currentPendingCommitHandoff === null ||
+    exactPendingCommitPreparationBarrier !== null
+      ? null
+      : animatedPendingCommitHandoff !== null
+        ? ('animated' as const)
+        : canonicalDrainGeneration !== null
+          ? ('canonical-drain' as const)
+          : null;
+  const initialPendingCommitPreparation =
+    initialPendingCommitMode === 'animated'
+      ? animatedPendingCommitHandoff
+      : initialPendingCommitMode === 'canonical-drain'
+        ? (canonicalDrainGeneration?.descriptor ?? null)
+        : null;
+  const runtimePendingCommitHandoff =
+    exactPendingCommitPreparationBarrier?.stage === 'retired' ||
+    exactPendingCommitPreparationBarrier?.stage === 'warming' ||
+    exactPendingCommitPreparationBarrier?.mode === 'canonical-drain'
+      ? null
+      : animatedPendingCommitHandoff;
+  useLayoutEffect(() => {
+    if (
+      pendingCommitPreparationBarrier !== null &&
+      pendingCommitPreparationBarrier.key !== pendingCommitBarrierKey
+    ) {
+      setPendingCommitPreparationBarrier(null);
+    }
+  }, [pendingCommitBarrierKey, pendingCommitPreparationBarrier]);
+  useLayoutEffect(() => {
+    if (
+      currentPendingCommitHandoff === null ||
+      initialPendingCommitMode === null ||
+      initialPendingCommitPreparation === null ||
+      pendingCommitBarrierKey === null
+    ) {
+      return;
+    }
+    if (pendingCommitPreparationBarrier?.key !== pendingCommitBarrierKey) {
+      setPendingCommitHostAcknowledgements(
+        EMPTY_PENDING_COMMIT_HOST_ACKNOWLEDGEMENTS,
+      );
+      setPendingCommitStartAcknowledgement(null);
+    }
+    setPendingCommitPreparationBarrier((current) =>
+      current?.key === pendingCommitBarrierKey
+        ? current
+        : Object.freeze({
+            acknowledgement: null,
+            drainBaseOpacity:
+              initialPendingCommitMode === 'canonical-drain'
+                ? (canonicalDrainGeneration?.baseOpacity ?? null)
+                : null,
+            drainGeometryEpoch:
+              initialPendingCommitMode === 'canonical-drain'
+                ? (canonicalDrainGeneration?.geometryEpoch ?? null)
+                : null,
+            drainRenderer:
+              initialPendingCommitMode === 'canonical-drain'
+                ? (canonicalDrainGeneration?.renderer ?? null)
+                : null,
+            handoff: currentPendingCommitHandoff,
+            key: pendingCommitBarrierKey,
+            mode: initialPendingCommitMode,
+            preparation: initialPendingCommitPreparation,
+            stage: 'retained' as const,
+          }),
+    );
+  }, [
+    currentPendingCommitHandoff,
+    canonicalDrainGeneration,
+    initialPendingCommitMode,
+    initialPendingCommitPreparation,
+    pendingCommitBarrierKey,
+    pendingCommitPreparationBarrier?.key,
+  ]);
+  const combinedPendingHandoffAcknowledgement =
+    pendingCommitAcknowledgementsMatch(
+      pendingCommitHostAcknowledgements.canonical,
+      pendingCommitHostAcknowledgements.pending,
+    )
+      ? pendingCommitHostAcknowledgements.canonical
+      : null;
   const positionTransition = usePositionTransitionRuntime({
     development,
     dimensions: model.dimensions,
@@ -1082,14 +1532,303 @@ export function BoardSurface({
     ...(logTransitionWarning === undefined
       ? {}
       : { logWarning: logTransitionWarning }),
-    pendingHandoff: derivePendingCommitHandoff({
-      boardId: model.boardId,
-      lifecycle: moveInteraction.lifecycle,
-      position: model.position,
-    }),
+    onPendingHandoffExit: handlePendingHandoffExit,
+    pendingHandoff: runtimePendingCommitHandoff,
+    pendingHandoffAcknowledgement: pendingCommitStartAcknowledgement,
+    pendingHandoffRequired: currentPendingCommitHandoff !== null,
     position: model.position,
     reducedMotion,
   });
+  const activePendingHandoffActor =
+    positionTransition?.presentation.pending.find(
+      ({ kind }) => kind === 'pending-handoff',
+    ) ?? null;
+  const expectedPendingHandoffAcknowledgement = useMemo(
+    () =>
+      positionTransition === null || activePendingHandoffActor === null
+        ? null
+        : Object.freeze({
+            actorKey: activePendingHandoffActor.actorKey,
+            presentationEpoch: positionTransition.presentation.epoch,
+          }),
+    [
+      activePendingHandoffActor?.actorKey,
+      positionTransition?.presentation.epoch,
+    ],
+  );
+  const exactBarrierNeedsCanonicalDrain =
+    exactPendingCommitPreparationBarrier !== null &&
+    exactPendingCommitPreparationBarrier.stage !== 'retired' &&
+    (exactPendingCommitPreparationBarrier.mode === 'canonical-drain' ||
+      exactPendingCommitPreparationBarrier.stage === 'warming' ||
+      runtimePendingCommitHandoff === null ||
+      positionTransition === null);
+  const effectivePendingCommitMode =
+    exactPendingCommitPreparationBarrier?.stage === 'retired'
+      ? null
+      : exactBarrierNeedsCanonicalDrain
+        ? canonicalDrainGeneration === null
+          ? null
+          : ('canonical-drain' as const)
+        : exactPendingCommitPreparationBarrier !== null
+          ? ('animated' as const)
+          : initialPendingCommitMode;
+  const storedCanonicalDrainGenerationMatches =
+    effectivePendingCommitMode === 'canonical-drain' &&
+    canonicalDrainGeneration !== null &&
+    exactPendingCommitPreparationBarrier?.mode === 'canonical-drain' &&
+    exactPendingCommitPreparationBarrier.drainBaseOpacity ===
+      canonicalDrainGeneration.baseOpacity &&
+    exactPendingCommitPreparationBarrier.drainGeometryEpoch ===
+      canonicalDrainGeneration.geometryEpoch &&
+    exactPendingCommitPreparationBarrier.drainRenderer ===
+      canonicalDrainGeneration.renderer &&
+    pendingCommitPreparationKey(
+      exactPendingCommitPreparationBarrier.preparation,
+    ) === pendingCommitPreparationKey(canonicalDrainGeneration.descriptor);
+  const effectivePendingCommitPreparation =
+    effectivePendingCommitMode === 'canonical-drain'
+      ? storedCanonicalDrainGenerationMatches
+        ? exactPendingCommitPreparationBarrier.preparation
+        : (canonicalDrainGeneration?.descriptor ?? null)
+      : effectivePendingCommitMode === 'animated'
+        ? (exactPendingCommitPreparationBarrier?.preparation ??
+          initialPendingCommitPreparation)
+        : null;
+  const effectivePendingHandoffAcknowledgement =
+    effectivePendingCommitMode === 'animated'
+      ? expectedPendingHandoffAcknowledgement
+      : null;
+  useLayoutEffect(() => {
+    if (
+      effectivePendingCommitMode !== 'canonical-drain' ||
+      effectivePendingCommitPreparation === null ||
+      canonicalDrainGeneration === null ||
+      exactPendingCommitPreparationBarrier === null ||
+      exactPendingCommitPreparationBarrier.stage === 'retired' ||
+      (exactPendingCommitPreparationBarrier.mode === 'canonical-drain' &&
+        storedCanonicalDrainGenerationMatches)
+    ) {
+      return;
+    }
+    const exactKey = exactPendingCommitPreparationBarrier.key;
+    setPendingCommitPreparationBarrier((current) =>
+      current?.key === exactKey && current.stage !== 'retired'
+        ? Object.freeze({
+            ...current,
+            drainBaseOpacity: canonicalDrainGeneration.baseOpacity,
+            drainGeometryEpoch: canonicalDrainGeneration.geometryEpoch,
+            drainRenderer: canonicalDrainGeneration.renderer,
+            mode: 'canonical-drain' as const,
+            preparation: effectivePendingCommitPreparation,
+          })
+        : current,
+    );
+  }, [
+    canonicalDrainGeneration,
+    effectivePendingCommitMode,
+    effectivePendingCommitPreparation,
+    exactPendingCommitPreparationBarrier,
+    storedCanonicalDrainGenerationMatches,
+  ]);
+  useLayoutEffect(() => {
+    if (
+      !pendingCommitAcknowledgementsMatch(
+        combinedPendingHandoffAcknowledgement,
+        effectivePendingHandoffAcknowledgement,
+      )
+    ) {
+      setPendingCommitStartAcknowledgement((current) =>
+        current !== null &&
+        !pendingCommitAcknowledgementsMatch(
+          current,
+          effectivePendingHandoffAcknowledgement,
+        )
+          ? null
+          : current,
+      );
+      return;
+    }
+    if (
+      pendingCommitAcknowledgementsMatch(
+        pendingCommitStartAcknowledgement,
+        effectivePendingHandoffAcknowledgement,
+      )
+    ) {
+      return;
+    }
+    let mounted = true;
+    const frame = requestAnimationFrame(() => {
+      if (mounted) {
+        setPendingCommitStartAcknowledgement(
+          effectivePendingHandoffAcknowledgement,
+        );
+      }
+    });
+    return () => {
+      mounted = false;
+      cancelAnimationFrame(frame);
+    };
+  }, [
+    combinedPendingHandoffAcknowledgement,
+    effectivePendingHandoffAcknowledgement,
+    pendingCommitStartAcknowledgement,
+  ]);
+  useLayoutEffect(() => {
+    if (
+      effectivePendingHandoffAcknowledgement === null ||
+      pendingCommitBarrierKey === null ||
+      exactPendingCommitPreparationBarrier?.stage !== 'retained'
+    ) {
+      return;
+    }
+    setPendingCommitPreparationBarrier((current) =>
+      current?.key === pendingCommitBarrierKey && current.stage === 'retained'
+        ? Object.freeze({
+            ...current,
+            acknowledgement: effectivePendingHandoffAcknowledgement,
+            stage: 'active' as const,
+          })
+        : current,
+    );
+  }, [
+    exactPendingCommitPreparationBarrier?.stage,
+    effectivePendingHandoffAcknowledgement,
+    pendingCommitBarrierKey,
+  ]);
+  useLayoutEffect(() => {
+    if (
+      exactPendingCommitPreparationBarrier?.mode !== 'canonical-drain' ||
+      (exactPendingCommitPreparationBarrier.stage !== 'retained' &&
+        exactPendingCommitPreparationBarrier.stage !== 'warming') ||
+      positionTransition !== null ||
+      canonicalDrainGeneration === null ||
+      effectivePendingCommitPreparation === null ||
+      !storedCanonicalDrainGenerationMatches
+    ) {
+      return;
+    }
+    let mounted = true;
+    const exactKey = exactPendingCommitPreparationBarrier.key;
+    const exactPreparationKey = pendingCommitPreparationKey(
+      effectivePendingCommitPreparation,
+    );
+    const exactBaseOpacity = canonicalDrainGeneration.baseOpacity;
+    const exactGeometryEpoch = canonicalDrainGeneration.geometryEpoch;
+    const exactRenderer = canonicalDrainGeneration.renderer;
+    const frame = requestAnimationFrame(() => {
+      if (!mounted) {
+        return;
+      }
+      setPendingCommitPreparationBarrier((current) =>
+        current?.key === exactKey &&
+        current.mode === 'canonical-drain' &&
+        current.drainBaseOpacity === exactBaseOpacity &&
+        current.drainGeometryEpoch === exactGeometryEpoch &&
+        current.drainRenderer === exactRenderer &&
+        pendingCommitPreparationKey(current.preparation) ===
+          exactPreparationKey &&
+        (current.stage === 'retained' || current.stage === 'warming')
+          ? Object.freeze({ ...current, stage: 'retired' as const })
+          : current,
+      );
+    });
+    return () => {
+      mounted = false;
+      cancelAnimationFrame(frame);
+    };
+  }, [
+    canonicalDrainGeneration,
+    effectivePendingCommitPreparation,
+    exactPendingCommitPreparationBarrier,
+    positionTransition,
+    storedCanonicalDrainGenerationMatches,
+  ]);
+  useLayoutEffect(() => {
+    if (
+      exactPendingCommitPreparationBarrier?.stage !== 'active' ||
+      exactPendingCommitPreparationBarrier.acknowledgement === null ||
+      effectivePendingHandoffAcknowledgement === null ||
+      !pendingCommitAcknowledgementsMatch(
+        exactPendingCommitPreparationBarrier.acknowledgement,
+        effectivePendingHandoffAcknowledgement,
+      ) ||
+      !pendingCommitAcknowledgementsMatch(
+        pendingCommitStartAcknowledgement,
+        effectivePendingHandoffAcknowledgement,
+      )
+    ) {
+      return;
+    }
+    setPendingCommitPreparationBarrier((current) =>
+      current?.key === pendingCommitBarrierKey &&
+      current.stage === 'active' &&
+      pendingCommitAcknowledgementsMatch(
+        current.acknowledgement,
+        effectivePendingHandoffAcknowledgement,
+      )
+        ? Object.freeze({ ...current, stage: 'running' as const })
+        : current,
+    );
+  }, [
+    exactPendingCommitPreparationBarrier?.acknowledgement,
+    exactPendingCommitPreparationBarrier?.stage,
+    effectivePendingHandoffAcknowledgement,
+    pendingCommitStartAcknowledgement,
+    pendingCommitBarrierKey,
+  ]);
+  useLayoutEffect(() => {
+    if (
+      (exactPendingCommitPreparationBarrier?.stage !== 'active' &&
+        exactPendingCommitPreparationBarrier?.stage !== 'running') ||
+      positionTransition !== null
+    ) {
+      return;
+    }
+    // A preserved Offscreen/Suspense tree can tear down the runtime effect
+    // before its ref-backed exact exit callback runs. Normal completion and
+    // semantic supersession retire the barrier in the same callback batch as
+    // the runtime clear, so only an unreported interrupted lifetime reaches
+    // this committed fail-safe.
+    setPendingCommitPreparationBarrier((current) =>
+      current?.key === pendingCommitBarrierKey &&
+      (current.stage === 'active' || current.stage === 'running')
+        ? Object.freeze({ ...current, stage: 'warming' as const })
+        : current,
+    );
+  }, [
+    exactPendingCommitPreparationBarrier?.stage,
+    pendingCommitBarrierKey,
+    positionTransition,
+  ]);
+  const pendingCommitBarrierVisible =
+    effectivePendingCommitPreparation !== null &&
+    (exactPendingCommitPreparationBarrier === null
+      ? initialPendingCommitMode !== null
+      : exactPendingCommitPreparationBarrier.stage !== 'retired');
+  const pendingCommitTransitionIsReady =
+    effectivePendingHandoffAcknowledgement !== null &&
+    pendingCommitAcknowledgementsMatch(
+      pendingCommitStartAcknowledgement,
+      effectivePendingHandoffAcknowledgement,
+    );
+  // An animated handoff keeps the pending actor and canonical mask until both
+  // mappers have survived the guarded host-ready frame. A canonical drain is
+  // stronger: it immediately replaces any stale special actor with one static
+  // canonical duplicate and keeps the reused host masked through its own exact
+  // renderer/geometry generation's warm frame.
+  const directPendingCommitPreparation =
+    pendingCommitBarrierVisible &&
+    (effectivePendingCommitMode === 'canonical-drain' ||
+      !pendingCommitTransitionIsReady)
+      ? effectivePendingCommitPreparation
+      : null;
+  const pendingCommitPreparation = directPendingCommitPreparation;
+  const pendingMovePreparation = directPendingCommitPreparation;
+  const pendingMovePreparationKind =
+    effectivePendingCommitMode === 'canonical-drain'
+      ? ('canonical-drain' as const)
+      : ('pending' as const);
   const providerDropAvailable =
     layout !== null &&
     model.status === 'ready' &&
@@ -1199,10 +1938,6 @@ export function BoardSurface({
     }
   }, [invalidationSnapshot, moveInteraction.invalidate]);
 
-  const pendingLifecycle = currentPendingLifecycle(
-    moveInteraction.lifecycle,
-    model,
-  );
   useLayoutEffect(() => {
     if (pendingLifecycle === null) {
       return;
@@ -1239,6 +1974,34 @@ export function BoardSurface({
     moveInteraction.invalidate,
     pendingLifecycle,
   ]);
+
+  const handleTerminalDragCancellation = useCallback(
+    (lease: Readonly<TerminalBoardDragLease>): boolean => {
+      const active = providerRuntime.drag.getSnapshot().active;
+      if (
+        model.boardId === null ||
+        lease.boardId !== model.boardId ||
+        active?.boardId !== lease.boardId ||
+        active.gestureToken !== lease.gestureToken ||
+        active.owner !== lease.owner ||
+        active.presentation !== lease.presentation ||
+        active.source.kind !== 'board' ||
+        active.source.square !== lease.sourceSquare
+      ) {
+        return false;
+      }
+      setTerminalBoardDragHandoff(
+        Object.freeze({
+          ...lease,
+          mountedResetPermit: { current: false },
+          restoreSource: true,
+          stage: 'leased' as const,
+        }),
+      );
+      return true;
+    },
+    [model.boardId, providerRuntime.drag],
+  );
 
   const handleGestureCandidate = useCallback(
     (candidate: Readonly<BoardGestureIntentCandidate>): boolean => {
@@ -1418,11 +2181,6 @@ export function BoardSurface({
       current === handoff ? null : current,
     );
   }, [providerDragSnapshot, providerRuntime.drag, terminalBoardDragHandoff]);
-  const pendingSourceSquare = restoresTerminalBoardDragSource
-    ? null
-    : pendingLifecycle?.intent.source.kind !== 'board'
-      ? null
-      : pendingLifecycle.intent.source.square;
   const pendingTargetSquare = pendingLifecycle?.intent.targetSquare ?? null;
   const providerDropTargetSquare =
     providerRegistered &&
@@ -1502,6 +2260,11 @@ export function BoardSurface({
               dragSourceSquare={activeDragSourceSquare}
               draggingPieceGhostStyle={draggingPieceGhostStyle}
               layout={layout}
+              onPendingCommitCanonicalPrepared={
+                handlePendingCommitCanonicalPrepared
+              }
+              pendingCommitPreparation={pendingCommitPreparation}
+              pendingCommitTransitionReady={pendingCommitStartAcknowledgement}
               pendingSourceSquare={pendingSourceSquare}
               pieceRenderers={pieceRenderers}
               position={model.position}
@@ -1522,6 +2285,9 @@ export function BoardSurface({
             boardId={pendingLifecycle?.boardId ?? model.boardId ?? ''}
             layout={layout}
             lifecycle={pendingLifecycle}
+            onPendingCommitActorPrepared={handlePendingCommitActorPrepared}
+            pendingCommitPreparation={pendingMovePreparation}
+            pendingCommitPreparationKind={pendingMovePreparationKind}
             pieceRenderers={pieceRenderers}
             style={pieceStyle}
             transition={positionTransition}
@@ -1550,6 +2316,7 @@ export function BoardSurface({
               onPressedSquareChange={handlePressedSquareChange}
               {...(onSquarePressIn === undefined ? {} : { onSquarePressIn })}
               {...(onSquarePressOut === undefined ? {} : { onSquarePressOut })}
+              onTerminalDragCancellation={handleTerminalDragCancellation}
               pieceRenderers={pieceRenderers}
               pieceStyle={pieceStyle}
               position={model.position}

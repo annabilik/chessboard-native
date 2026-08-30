@@ -356,8 +356,9 @@ describe('board-level native gesture plane', () => {
     ]);
     expect(secondPanToken).not.toBe(firstPanToken);
     expect(mountedPresentation.phase.value).toBe(
-      INTERACTION_PRESENTATION_PHASE.IDLE,
+      INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL,
     );
+    expect(mountedPresentation.sourceSquare.value).toBe('a2');
 
     signals.length = 0;
     const fail = jest.fn();
@@ -480,6 +481,94 @@ describe('board-level native gesture plane', () => {
     expect(signals).toHaveLength(2);
     expect(signals[1]).toEqual(
       expect.objectContaining({ targetSquare: 'b1', type: 'drag-end' }),
+    );
+    expect(values.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL,
+    );
+  });
+
+  it('retains the last drag actor while ACTION_CANCEL waits in the RN queue', async () => {
+    const signals: Readonly<BoardGestureSignal>[] = [];
+    const queuedCancelSignals: (() => void)[] = [];
+    let delayCancelSignal = false;
+    const presentation: {
+      current: Readonly<InteractionPresentationSharedValues> | null;
+    } = { current: null };
+    await render(
+      <Harness
+        enabled
+        onPresentation={(current) => {
+          presentation.current = current;
+        }}
+        onSignal={(signal) => {
+          if (delayCancelSignal && signal.type === 'drag-cancel') {
+            queuedCancelSignals.push(() => {
+              signals.push(signal);
+            });
+            return;
+          }
+          signals.push(signal);
+        }}
+      />,
+    );
+    const pan = getByGestureTestId(getBoardGestureTestIds('gesture-board').pan);
+    const handlerTag = (pan as Readonly<{ handlerTag: number }>).handlerTag;
+    const callbacks = gestureCallbacks(pan);
+    await act(() => {
+      callbacks.onBegin?.({ handlerTag, x: 25, y: 25 });
+      callbacks.onStart?.({
+        absoluteX: 35,
+        absoluteY: 25,
+        handlerTag,
+        x: 35,
+        y: 25,
+      });
+      callbacks.onUpdate?.({
+        absoluteX: 145,
+        absoluteY: 145,
+        handlerTag,
+        x: 145,
+        y: 145,
+      });
+    });
+    expect(signals).toHaveLength(1);
+
+    delayCancelSignal = true;
+    await act(() => {
+      callbacks.onFinalize?.(
+        {
+          absoluteX: 145,
+          absoluteY: 145,
+          handlerTag,
+          x: 145,
+          y: 145,
+        },
+        false,
+      );
+    });
+
+    expect(queuedCancelSignals).toHaveLength(1);
+    expect(signals).toHaveLength(1);
+    const values = presentation.current;
+    if (values === null) {
+      throw new Error('Expected one mounted presentation.');
+    }
+    expect(values.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL,
+    );
+    expect(values.sourceSquare.value).toBe('a2');
+    expect(values.targetSquare.value).toBe('b1');
+    expect(values.pointerWindowX.value).toBe(145);
+    expect(values.pointerWindowY.value).toBe(145);
+
+    await act(() => {
+      queuedCancelSignals.shift()?.();
+    });
+    expect(signals[1]).toEqual(
+      expect.objectContaining({
+        sourceSquare: 'a2',
+        type: 'drag-cancel',
+      }),
     );
     expect(values.phase.value).toBe(
       INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL,

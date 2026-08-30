@@ -52,11 +52,12 @@ function requiredNode(root: TestInstance, testID: string): TestInstance {
   return node;
 }
 
-function requiredParent(node: TestInstance): TestInstance {
-  if (node.parent === null) {
+function requiredPieceHost(node: TestInstance): TestInstance {
+  const host = node.parent?.parent ?? null;
+  if (host === null) {
     throw new Error('Expected one animated piece host.');
   }
-  return node.parent;
+  return host;
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
@@ -136,7 +137,7 @@ describe('controlled mounted transitions', () => {
     expect(hasNode(root, 'capture:runner:b1:transition')).toBe(true);
     expect(hasNode(root, 'capture:captured:b1:transition')).toBe(true);
     const initialCapturedStyle = animatedStyle(
-      requiredParent(requiredNode(root, 'capture:captured:b1:transition')),
+      requiredPieceHost(requiredNode(root, 'capture:captured:b1:transition')),
     );
     expect(initialCapturedStyle.opacity).toBe(1);
 
@@ -144,7 +145,7 @@ describe('controlled mounted transitions', () => {
       jest.advanceTimersByTime(160);
     });
     const midCapturedStyle = animatedStyle(
-      requiredParent(requiredNode(root, 'capture:captured:b1:transition')),
+      requiredPieceHost(requiredNode(root, 'capture:captured:b1:transition')),
     );
     expect(midCapturedStyle.opacity).not.toBe(1);
     expect(midCapturedStyle.opacity).not.toBe(0);
@@ -400,10 +401,10 @@ describe('controlled mounted transitions', () => {
       jest.advanceTimersByTime(500);
     });
     const oldStyle = animatedStyle(
-      requiredParent(requiredNode(root, 'promotion:actor:a1:transition')),
+      requiredPieceHost(requiredNode(root, 'promotion:actor:a1:transition')),
     );
     const currentStyle = animatedStyle(
-      requiredParent(requiredNode(root, 'promotion:actor:b1:transition')),
+      requiredPieceHost(requiredNode(root, 'promotion:actor:b1:transition')),
     );
     expect(Number(oldStyle.opacity)).toBeCloseTo(Number(currentStyle.opacity));
     expect(oldStyle.transform).toEqual([{ translateX: 50 }, { translateY: 0 }]);
@@ -478,17 +479,17 @@ describe('controlled mounted transitions', () => {
     });
     expect(
       animatedStyle(
-        requiredParent(requiredNode(root, 'special:king:c1:transition')),
+        requiredPieceHost(requiredNode(root, 'special:king:c1:transition')),
       ).transform,
     ).toEqual([{ translateX: -100 }, { translateY: 0 }]);
     expect(
       animatedStyle(
-        requiredParent(requiredNode(root, 'special:rook:b1:transition')),
+        requiredPieceHost(requiredNode(root, 'special:rook:b1:transition')),
       ).transform,
     ).toEqual([{ translateX: 100 }, { translateY: 0 }]);
     expect(
       animatedStyle(
-        requiredParent(requiredNode(root, 'special:victim:b2:transition')),
+        requiredPieceHost(requiredNode(root, 'special:victim:b2:transition')),
       ).opacity,
     ).toBeCloseTo(0.5);
     await act(() => {

@@ -174,8 +174,34 @@ function nodesByTestId(root: TestInstance, testID: string): TestInstance[] {
   return root.queryAll((node) => node.props['testID'] === testID);
 }
 
-function containsInstance(root: TestInstance, target: TestInstance): boolean {
-  return root === target || root.queryAll((node) => node === target).length > 0;
+function canonicalDrainVisual(
+  root: TestInstance,
+  boardId: string,
+  square: string,
+): TestInstance {
+  const matches = nodesByTestId(
+    root,
+    `chessboard-native:${boardId}:canonical-drain:${square}`,
+  );
+  expect(matches).toHaveLength(1);
+  const match = matches[0];
+  if (match === undefined) {
+    throw new Error('Expected one canonical drain visual.');
+  }
+  return match;
+}
+
+function expectNoCanonicalDrain(
+  root: TestInstance,
+  boardId: string,
+  square: string,
+): void {
+  expect(
+    nodesByTestId(
+      root,
+      `chessboard-native:${boardId}:canonical-drain:${square}`,
+    ),
+  ).toEqual([]);
 }
 
 function hiddenNodesByTestId(
@@ -201,6 +227,22 @@ function nativeStyle(node: TestInstance): Readonly<ViewStyle> {
   return StyleSheet.flatten<ViewStyle>(
     node.props['style'] as StyleProp<ViewStyle>,
   );
+}
+
+function boardPieceHost(artwork: TestInstance): TestInstance {
+  const host = artwork.parent?.parent ?? null;
+  if (host === null) {
+    throw new Error('Expected a board-piece host and occlusion boundary.');
+  }
+  return host;
+}
+
+function boardPieceOcclusionBoundary(artwork: TestInstance): TestInstance {
+  const boundary = artwork.parent;
+  if (boundary === null) {
+    throw new Error('Expected a board-piece occlusion boundary.');
+  }
+  return boundary;
 }
 
 function expectOneVisual(
@@ -377,6 +419,353 @@ describe('public controlled move requests', () => {
       targetSquare: 'b8',
     });
     expect(intent).not.toHaveProperty('promotion');
+  });
+
+  it.each(['missing-target', 'missing-pending'] as const)(
+    'fails closed instead of preparing a promotion with a %s renderer',
+    async (missingRenderer) => {
+      const boardId = `promotion-${missingRenderer}`;
+      const acceptedIntent: { current: MoveIntent | null } = {
+        current: null,
+      };
+      function StateSensitiveQueen(props: PieceRendererProps): ReactElement {
+        return (
+          <View
+            style={{ opacity: props.state.isPending ? 0.2 : 1 }}
+            testID={`move-piece:${visualKind(props)}:${props.square ?? 'spare'}:${props.piece.pieceType}`}
+          />
+        );
+      }
+      const initialRenderers = {
+        wP: pieceProbe,
+        ...(missingRenderer === 'missing-pending'
+          ? { wQ: StateSensitiveQueen }
+          : {}),
+      } satisfies PieceRenderers;
+      const committedRenderers =
+        missingRenderer === 'missing-target'
+          ? initialRenderers
+          : ({ wQ: StateSensitiveQueen } satisfies PieceRenderers);
+      const onMoveRequest: OnMoveRequest = (intent) => {
+        acceptedIntent.current = intent;
+        return { status: 'accepted' };
+      };
+      const result = await render(
+        <ChessboardRuntime
+          boardId={boardId}
+          development={false}
+          dimensions={{ columns: 8, rows: 8 }}
+          onMoveRequest={onMoveRequest}
+          pieceRenderers={initialRenderers}
+          position={{
+            revision: 10,
+            value: { a7: { id: 'promote', pieceType: 'wP' } },
+          }}
+          reduceMotion="never"
+          transitionDurationMs={1_000}
+        />,
+      );
+      const board = rootOf(result);
+      await measure(board);
+      await dragFrom(boardId, { x: 12.5, y: 37.5 }, { x: 37.5, y: 12.5 });
+      const intent = acceptedIntent.current;
+      if (intent === null) {
+        throw new Error('Expected one accepted promotion candidate.');
+      }
+      expect(
+        nodesByTestId(board, 'move-piece:pending-target:b8:wP'),
+      ).toHaveLength(1);
+
+      const preparationFrames: ((timestamp: number) => void)[] = [];
+      const frameSpy =
+        missingRenderer === 'missing-pending'
+          ? jest
+              .spyOn(globalThis, 'requestAnimationFrame')
+              .mockImplementation((callback) => {
+                preparationFrames.push(callback);
+                return preparationFrames.length;
+              })
+          : null;
+      try {
+        await result.rerender(
+          <ChessboardRuntime
+            boardId={boardId}
+            development={false}
+            dimensions={{ columns: 8, rows: 8 }}
+            onMoveRequest={onMoveRequest}
+            pieceRenderers={committedRenderers}
+            position={{
+              committedIntentId: intent.intentId,
+              revision: 11,
+              value: { b8: { id: 'promote', pieceType: 'wQ' } },
+            }}
+            reduceMotion="never"
+            transitionDurationMs={1_000}
+          />,
+        );
+        expect(nodesByTestId(board, 'move-piece:pending-target:b8:wP')).toEqual(
+          [],
+        );
+        if (missingRenderer === 'missing-pending') {
+          const canonicalDrain = canonicalDrainVisual(board, boardId, 'b8');
+          expect(nodesByTestId(board, 'move-piece:static:b8:wQ')).toHaveLength(
+            2,
+          );
+          const drainQueen = nodesByTestId(
+            board,
+            'move-piece:static:b8:wQ',
+          ).find(({ parent }) => parent === canonicalDrain);
+          if (drainQueen === undefined) {
+            throw new Error('Expected the canonical-state drain renderer.');
+          }
+          expect(nativeStyle(drainQueen).opacity).toBe(1);
+          expect(
+            nodesByTestId(board, 'move-piece:pending-target:b8:wQ'),
+          ).toEqual([]);
+          const guardedQueen = nodesByTestId(
+            board,
+            'move-piece:static:b8:wQ',
+          )[0];
+          if (guardedQueen === undefined) {
+            throw new Error('Expected the guarded canonical promotion.');
+          }
+          expect(
+            nativeStyle(boardPieceOcclusionBoundary(guardedQueen)).opacity,
+          ).toBe(0);
+          await result.rerender(
+            <ChessboardRuntime
+              boardId={boardId}
+              development={false}
+              dimensions={{ columns: 8, rows: 8 }}
+              onMoveRequest={onMoveRequest}
+              pieceRenderers={{
+                wP: pieceProbe,
+                wQ: StateSensitiveQueen,
+              }}
+              position={{
+                committedIntentId: intent.intentId,
+                revision: 11,
+                value: { b8: { id: 'promote', pieceType: 'wQ' } },
+              }}
+              reduceMotion="never"
+              transitionDurationMs={1_000}
+            />,
+          );
+          canonicalDrainVisual(board, boardId, 'b8');
+          expect(
+            nodesByTestId(board, 'move-piece:pending-target:b8:wP'),
+          ).toEqual([]);
+          expect(preparationFrames.length).toBeGreaterThan(0);
+          for (let frameTurn = 0; frameTurn < 4; frameTurn += 1) {
+            const queuedFrames = preparationFrames.splice(0);
+            if (queuedFrames.length === 0) {
+              break;
+            }
+            await act(() => {
+              for (const frame of queuedFrames) {
+                frame(16 + frameTurn * 16);
+              }
+            });
+          }
+          expectNoCanonicalDrain(board, boardId, 'b8');
+          expect(nodesByTestId(board, 'move-piece:static:b8:wQ')).toHaveLength(
+            1,
+          );
+          const settledQueen = nodesByTestId(
+            board,
+            'move-piece:static:b8:wQ',
+          )[0];
+          if (settledQueen === undefined) {
+            throw new Error('Expected the settled canonical promotion.');
+          }
+          expect(
+            nativeStyle(boardPieceOcclusionBoundary(settledQueen)).opacity,
+          ).toBeUndefined();
+        }
+        await result.unmount();
+      } finally {
+        frameSpy?.mockRestore();
+      }
+    },
+  );
+
+  it('switches a running promotion handoff directly to canonical drain when its pending renderer disappears', async () => {
+    const boardId = 'running-promotion-renderer-loss';
+    let removePendingRenderer: (() => void) | undefined;
+    function Harness(): ReactElement {
+      const [pieceRenderers, setPieceRenderers] = useState<PieceRenderers>({
+        wP: pieceProbe,
+        wQ: pieceProbe,
+      });
+      const [position, setPosition] = useState<{
+        committedIntentId?: string;
+        revision: number;
+        transition?: {
+          from: 'a7';
+          fromRevision: number;
+          promotion: 'wQ';
+          to: 'b8';
+          toRevision: number;
+        };
+        value: PositionObject;
+      }>({
+        revision: 70,
+        value: { a7: { pieceType: 'wP' } },
+      });
+      removePendingRenderer = () => {
+        setPieceRenderers({ wQ: pieceProbe });
+      };
+      return (
+        <ChessboardProvider>
+          <ChessboardRuntime
+            boardId={boardId}
+            development={false}
+            dimensions={{ columns: 8, rows: 8 }}
+            onMoveRequest={(intent) => {
+              setPosition({
+                committedIntentId: intent.intentId,
+                revision: 71,
+                transition: {
+                  from: 'a7',
+                  fromRevision: 70,
+                  promotion: 'wQ',
+                  to: 'b8',
+                  toRevision: 71,
+                },
+                value: { b8: { pieceType: 'wQ' } },
+              });
+              return { status: 'accepted' };
+            }}
+            pieceRenderers={pieceRenderers}
+            position={position}
+            reduceMotion="never"
+            transitionDurationMs={1_000}
+          />
+        </ChessboardProvider>
+      );
+    }
+
+    const frames: ((timestamp: number) => void)[] = [];
+    const frameSpy = jest
+      .spyOn(globalThis, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        frames.push(callback);
+        return frames.length;
+      });
+    try {
+      const result = await render(<Harness />);
+      const board = rootOf(result);
+      await measure(board);
+      const pan = getByGestureTestId(getBoardGestureTestIds(boardId).pan);
+      const handlerTag = (pan as Readonly<{ handlerTag: number }>).handlerTag;
+      const callbacks = panCallbacks(pan);
+      await act(() => {
+        callbacks.onBegin?.({
+          absoluteX: 12.5,
+          absoluteY: 37.5,
+          handlerTag,
+          x: 12.5,
+          y: 37.5,
+        });
+        callbacks.onStart?.({
+          absoluteX: 37.5,
+          absoluteY: 12.5,
+          handlerTag,
+          x: 37.5,
+          y: 12.5,
+        });
+      });
+      await act(() => {
+        const terminal = {
+          absoluteX: 37.5,
+          absoluteY: 12.5,
+          handlerTag,
+          x: 37.5,
+          y: 12.5,
+        };
+        callbacks.onEnd?.(terminal, true);
+        callbacks.onFinalize?.(terminal, true);
+      });
+      expect(
+        nodesByTestId(board, 'move-piece:pending-target:b8:wP'),
+      ).toHaveLength(1);
+      jest.useFakeTimers();
+      expect(frames.length).toBeGreaterThan(0);
+      for (let frameTurn = 0; frameTurn < 4; frameTurn += 1) {
+        const hostReadyFrames = frames.splice(0);
+        if (hostReadyFrames.length === 0) {
+          break;
+        }
+        await act(() => {
+          for (const frame of hostReadyFrames) {
+            frame(16 + frameTurn * 16);
+          }
+        });
+      }
+      const admittedPendingArtwork = nodesByTestId(
+        board,
+        'move-piece:pending-target:b8:wP',
+      )[0];
+      if (admittedPendingArtwork?.parent?.parent == null) {
+        throw new Error('Expected the admitted pending native host.');
+      }
+      const admittedPendingHost = admittedPendingArtwork.parent.parent;
+      await act(() => {
+        jest.advanceTimersByTime(500);
+      });
+      const midpointQueen = nodesByTestId(board, 'move-piece:static:b8:wQ')[0];
+      if (midpointQueen === undefined) {
+        throw new Error('Expected the midpoint anonymous promotion target.');
+      }
+      const midpointOpacity = Number(
+        animatedStyle(boardPieceHost(midpointQueen))['opacity'],
+      );
+      expect(midpointOpacity).toBeGreaterThan(0);
+      expect(midpointOpacity).toBeLessThan(1);
+
+      const remove = removePendingRenderer;
+      if (remove === undefined) {
+        throw new Error('Expected the renderer-loss harness control.');
+      }
+      await act(() => {
+        remove();
+      });
+      await flushDecisions();
+
+      canonicalDrainVisual(board, boardId, 'b8');
+      expect(nodesByTestId(board, 'move-piece:pending-target:b8:wP')).toEqual(
+        [],
+      );
+      const guardedQueen = nodesByTestId(board, 'move-piece:static:b8:wQ')[0];
+      if (guardedQueen === undefined) {
+        throw new Error('Expected the renderer-loss canonical host.');
+      }
+      expect(
+        nativeStyle(boardPieceOcclusionBoundary(guardedQueen)).opacity,
+      ).toBe(0);
+      expect(board.queryAll((node) => node === admittedPendingHost)).toEqual([
+        admittedPendingHost,
+      ]);
+      expect(nativeStyle(admittedPendingHost).opacity).toBe(0);
+      expect(admittedPendingHost.children).toEqual([]);
+
+      for (let frameTurn = 0; frameTurn < 8; frameTurn += 1) {
+        const queuedFrames = frames.splice(0);
+        if (queuedFrames.length === 0) {
+          break;
+        }
+        await act(() => {
+          for (const frame of queuedFrames) {
+            frame(32 + frameTurn * 16);
+          }
+        });
+      }
+      expectNoCanonicalDrain(board, boardId, 'b8');
+      expect(nodesByTestId(board, 'move-piece:static:b8:wQ')).toHaveLength(1);
+      await result.unmount();
+    } finally {
+      frameSpy.mockRestore();
+    }
   });
 
   it('[PARITY-BEHAVIOR-B23] preserves a null target for an off-board drag through the public callback', async () => {
@@ -556,6 +945,15 @@ describe('public controlled move requests', () => {
     expectOneVisual(board, 'pending-source', 'a2');
     expectOneVisual(board, 'pending-target', 'b1');
     expectNoVisual(board, 'static', 'b1');
+    const pendingSourceArtwork = nodesByTestId(
+      board,
+      'move-piece:pending-source:a2:token',
+    )[0];
+    if (pendingSourceArtwork === undefined) {
+      throw new Error('Expected the admitted pending source actor.');
+    }
+    const pendingSourceHost = boardPieceHost(pendingSourceArtwork);
+    expect(animatedStyle(pendingSourceHost)['opacity']).toBe(0.45);
 
     expect(retirementFrames).toHaveLength(1);
     retirementFrameSpy.mockRestore();
@@ -600,19 +998,30 @@ describe('public controlled move requests', () => {
       'move-piece:pending-target:b1:token',
     )[0];
     if (
-      canonical?.parent === null ||
-      canonical?.parent === undefined ||
+      canonical === undefined ||
       pending?.parent?.parent === null ||
       pending?.parent?.parent === undefined
     ) {
-      throw new Error('Expected canonical and pending animated hosts.');
+      throw new Error('Expected canonical and paused pending hosts.');
     }
+    const canonicalHost = boardPieceHost(canonical);
+    const canonicalOcclusionBoundary = boardPieceOcclusionBoundary(canonical);
     const pendingHandoffHost = pending.parent.parent;
-    const canonicalStyle = animatedStyle(canonical.parent);
+    const canonicalStyle = animatedStyle(canonicalHost);
     const pendingStyle = animatedStyle(pendingHandoffHost);
+    expect(canonicalHost).toBe(pendingSourceHost);
     expect(canonicalStyle['transform']).toBeUndefined();
-    expect(pendingStyle['transform']).toBeUndefined();
+    // The native mapper can still expose its admitted source opacity until it
+    // consumes the preparation closure. The independent child boundary makes
+    // the effective canonical actor exactly zero for that guarded frame.
+    expect(canonicalStyle['opacity']).toBe(0.45);
+    expect(nativeStyle(canonicalOcclusionBoundary).opacity).toBe(0);
     expect(pendingStyle['opacity']).toBe(1);
+    expect(
+      Number(canonicalStyle['opacity']) *
+        Number(nativeStyle(canonicalOcclusionBoundary).opacity) +
+        Number(pendingStyle['opacity']),
+    ).toBe(1);
     expect(pendingHandoffHost).toHaveProp('accessible', false);
     expect(pendingHandoffHost).toHaveProp('pointerEvents', 'none');
 
@@ -662,22 +1071,29 @@ describe('public controlled move requests', () => {
       'move-piece:pending-target:b1:token',
     )[0];
     if (
-      startedCanonical?.parent === null ||
-      startedCanonical?.parent === undefined ||
+      startedCanonical === undefined ||
       startedPending?.parent?.parent === null ||
       startedPending?.parent?.parent === undefined
     ) {
       throw new Error('Expected both actors at the start of the crossfade.');
     }
+    expect(startedPending.parent.parent).toBe(pendingHandoffHost);
     expect(
-      Number(animatedStyle(startedCanonical.parent)['opacity']),
+      Number(animatedStyle(boardPieceHost(startedCanonical))['opacity']),
     ).toBeLessThan(0.05);
     expect(
       Number(animatedStyle(startedPending.parent.parent)['opacity']),
     ).toBeGreaterThan(0.95);
+    expect(
+      nativeStyle(boardPieceOcclusionBoundary(startedCanonical)).opacity,
+    ).toBeUndefined();
+    expect(
+      Number(animatedStyle(boardPieceHost(startedCanonical))['opacity']) +
+        Number(animatedStyle(startedPending.parent.parent)['opacity']),
+    ).toBeCloseTo(1);
 
     await act(() => {
-      jest.advanceTimersByTime(483);
+      jest.advanceTimersByTime(500);
     });
     const midpointCanonical = nodesByTestId(
       board,
@@ -688,49 +1104,89 @@ describe('public controlled move requests', () => {
       'move-piece:pending-target:b1:token',
     )[0];
     if (
-      midpointCanonical?.parent === null ||
-      midpointCanonical?.parent === undefined ||
+      midpointCanonical === undefined ||
       midpointPending?.parent?.parent === null ||
       midpointPending?.parent?.parent === undefined
     ) {
       throw new Error('Expected both actors throughout the crossfade.');
     }
-    expect(animatedStyle(midpointCanonical.parent)['opacity']).toBeCloseTo(0.5);
-    expect(animatedStyle(midpointPending.parent.parent)['opacity']).toBeCloseTo(
-      0.5,
+    const midpointCanonicalOpacity = Number(
+      animatedStyle(boardPieceHost(midpointCanonical))['opacity'],
     );
+    const midpointPendingOpacity = Number(
+      animatedStyle(midpointPending.parent.parent)['opacity'],
+    );
+    expect(midpointCanonicalOpacity).toBeCloseTo(0.5);
+    expect(midpointPendingOpacity).toBeCloseTo(0.5);
+    expect(midpointCanonicalOpacity + midpointPendingOpacity).toBeCloseTo(1);
 
-    await act(async () => {
-      // Cross the 1,000 ms deadline by a full mock animation frame. At the
-      // exact boundary Reanimated may publish the final value before its
-      // scheduleOnRN completion has cleared the mounted transition.
-      await jest.advanceTimersByTimeAsync(517);
-    });
-    await flushDecisions();
-    expectNoVisual(board, 'pending-target', 'b1');
-    expect(containsInstance(board, pendingHandoffHost)).toBe(true);
-    expect(pendingHandoffHost.children).toEqual([]);
-    expect(nativeStyle(pendingHandoffHost)).toEqual(
-      expect.objectContaining({ opacity: 0 }),
-    );
-    const settledCanonical = nodesByTestId(
-      board,
-      'move-piece:static:b1:token',
-    )[0];
-    if (
-      settledCanonical?.parent === null ||
-      settledCanonical?.parent === undefined
-    ) {
-      throw new Error('Expected the settled canonical actor.');
+    const abortFrames: ((timestamp: number) => void)[] = [];
+    const abortFrameSpy = jest
+      .spyOn(globalThis, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        abortFrames.push(callback);
+        return abortFrames.length;
+      });
+    try {
+      await fireEvent(board, 'layout', {
+        nativeEvent: {
+          layout: { height: BOARD_SIZE, width: BOARD_SIZE - 2, x: 0, y: 0 },
+        },
+      });
+      const warmingDrain = canonicalDrainVisual(board, boardId, 'b1');
+      expectNoVisual(board, 'pending-target', 'b1');
+      const warmingCanonical = nodesByTestId(
+        board,
+        'move-piece:static:b1:token',
+      )[0];
+      if (warmingCanonical === undefined) {
+        throw new Error('Expected both geometry-abort warming actors.');
+      }
+      const warmingOuterOpacity = Number(
+        animatedStyle(boardPieceHost(warmingCanonical))['opacity'],
+      );
+      const warmingMaskOpacity = Number(
+        nativeStyle(boardPieceOcclusionBoundary(warmingCanonical)).opacity,
+      );
+      // The Jest facade intentionally retains the sampled midpoint mapper.
+      // The full-opacity pending actor and hard child mask cover the guarded
+      // frame while the replacement base-one mapper installs.
+      expect(warmingOuterOpacity).toBeCloseTo(0.5);
+      expect(warmingMaskOpacity).toBe(0);
+      expect(nativeStyle(warmingDrain).opacity ?? 1).toBe(1);
+      expect(abortFrames.length).toBeGreaterThan(0);
+
+      let abortFrameCursor = 0;
+      for (let frameTurn = 0; frameTurn < 4; frameTurn += 1) {
+        const queuedFrames = abortFrames.slice(abortFrameCursor);
+        abortFrameCursor = abortFrames.length;
+        if (queuedFrames.length === 0) {
+          break;
+        }
+        await act(() => {
+          for (const frame of queuedFrames) {
+            frame(600 + frameTurn * 16);
+          }
+        });
+      }
+      expectNoCanonicalDrain(board, boardId, 'b1');
+      expectNoVisual(board, 'pending-target', 'b1');
+      const settledCanonical = nodesByTestId(
+        board,
+        'move-piece:static:b1:token',
+      )[0];
+      if (settledCanonical === undefined) {
+        throw new Error('Expected the geometry-abort canonical actor.');
+      }
+      expect(
+        Number(animatedStyle(boardPieceHost(settledCanonical))['opacity']),
+      ).toBeGreaterThanOrEqual(0);
+      expect(
+        nativeStyle(boardPieceOcclusionBoundary(settledCanonical)).opacity,
+      ).toBeUndefined();
+    } finally {
+      abortFrameSpy.mockRestore();
     }
-    const settledStyle = nativeStyle(settledCanonical.parent);
-    expect(settledStyle.opacity).toBe(1);
-    expect(settledStyle.transform).toBeUndefined();
-
-    await act(() => {
-      jest.advanceTimersByTime(34);
-    });
-    expect(containsInstance(board, pendingHandoffHost)).toBe(false);
     expect(onMoveRequest).toHaveBeenCalledTimes(1);
     expect(outcomes).toHaveLength(1);
   });
@@ -831,11 +1287,15 @@ describe('public controlled move requests', () => {
       activeToken: number | null;
       phase: number | null;
     }>[] = [];
+    const targetRenderRoles: string[] = [];
     function RuntimeProbe(): null {
       runtime.current = useChessboardProvider().runtime;
       return null;
     }
     function OrderingPieceProbe(props: PieceRendererProps): ReactElement {
+      if (props.square === 'b1') {
+        targetRenderRoles.push(visualKind(props));
+      }
       useLayoutEffect(() => {
         if (
           props.square !== 'b1' ||
@@ -886,6 +1346,9 @@ describe('public controlled move requests', () => {
             }}
             pieceRenderers={{ token: OrderingPieceProbe }}
             position={position}
+            reduceMotion="never"
+            styles={{ draggingPieceGhost: { opacity: 0 } }}
+            transitionDurationMs={100}
           />
         </ChessboardProvider>
       );
@@ -915,6 +1378,34 @@ describe('public controlled move requests', () => {
     if (terminal === null) {
       throw new Error('Expected an attached terminal provider lease.');
     }
+    const admittedDragSource = nodesByTestId(
+      board,
+      'move-piece:source-ghost:a2:token',
+    )[0];
+    if (admittedDragSource === undefined) {
+      throw new Error('Expected the admitted synchronous drag source.');
+    }
+    const admittedDragSourceHost = boardPieceHost(admittedDragSource);
+    // The admitted Reanimated descriptor is already attached, even though its
+    // passive mapper can still expose the preceding static opacity. The
+    // independent child mask makes that stale native value draw-safe.
+    const admittedNativeOpacity = Number(
+      animatedStyle(admittedDragSourceHost)['opacity'],
+    );
+    const admittedMaskOpacity = Number(
+      nativeStyle(boardPieceOcclusionBoundary(admittedDragSource)).opacity,
+    );
+    expect(admittedNativeOpacity).toBeGreaterThanOrEqual(0);
+    expect(admittedNativeOpacity).toBeLessThanOrEqual(1);
+    expect(admittedMaskOpacity).toBe(0);
+    expect(admittedNativeOpacity * admittedMaskOpacity).toBe(0);
+    const completionFrames: ((timestamp: number) => void)[] = [];
+    const completionFrameSpy = jest
+      .spyOn(globalThis, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        completionFrames.push(callback);
+        return completionFrames.length;
+      });
     await act(() => {
       const end = {
         absoluteX: BOTTOM_RIGHT.x,
@@ -936,8 +1427,1075 @@ describe('public controlled move requests', () => {
     );
     expectOneVisual(board, 'static', 'b1');
     expectNoVisual(board, 'static', 'a2');
+    const synchronousTarget = nodesByTestId(
+      board,
+      'move-piece:static:b1:token',
+    )[0];
+    if (synchronousTarget === undefined) {
+      throw new Error('Expected the synchronous controlled target.');
+    }
+    expect(boardPieceHost(synchronousTarget)).toBe(admittedDragSourceHost);
+    expect(completionFrames.length).toBeGreaterThan(0);
+    jest.useFakeTimers();
+    for (let frameTurn = 0; frameTurn < 16; frameTurn += 1) {
+      const queuedFrames = completionFrames.splice(0);
+      if (queuedFrames.length === 0) {
+        break;
+      }
+      await act(() => {
+        for (const frame of queuedFrames) {
+          frame(16 + frameTurn * 16);
+        }
+      });
+    }
+    completionFrameSpy.mockRestore();
+    targetRenderRoles.length = 0;
+    await act(() => {
+      jest.advanceTimersByTime(500);
+    });
+    await flushDecisions();
+    const completionPending = nodesByTestId(
+      board,
+      'move-piece:pending-target:b1:token',
+    )[0];
+    if (completionPending?.parent?.parent != null) {
+      expect(
+        Number(animatedStyle(completionPending.parent.parent)['opacity']),
+      ).toBeLessThan(0.05);
+    }
+    expect(targetRenderRoles).not.toContain('pending-target');
+    expectNoVisual(board, 'pending-target', 'b1');
+    const completedTarget = nodesByTestId(
+      board,
+      'move-piece:static:b1:token',
+    )[0];
+    if (completedTarget === undefined) {
+      throw new Error('Expected the completed synchronous controlled target.');
+    }
+    expect(
+      nativeStyle(boardPieceOcclusionBoundary(completedTarget)).opacity,
+    ).toBeUndefined();
     await result.unmount();
   });
+
+  it('warms and retires a preserved pending handoff after Suspense tears down its runtime effect', async () => {
+    const boardId = 'suspended-pending-handoff';
+    const never = new Promise<never>(() => undefined);
+    let setMode: ((mode: 'suspended' | 'visible') => void) | undefined;
+
+    function NeverCommits(): ReactElement {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- React Suspense hides the committed board by throwing a pending thenable.
+      throw never;
+    }
+
+    function Harness(): ReactElement {
+      const [mode, updateMode] = useState<'suspended' | 'visible'>('visible');
+      const [position, setPosition] = useState<{
+        committedIntentId?: string;
+        revision: number;
+        value: PositionObject;
+      }>({
+        revision: 42,
+        value: { a2: { id: 'suspended', pieceType: 'token' } },
+      });
+      setMode = updateMode;
+      return (
+        <Suspense fallback={<View testID="suspended-board-fallback" />}>
+          {mode === 'suspended' ? <NeverCommits /> : null}
+          <ChessboardProvider>
+            <ChessboardRuntime
+              boardId={boardId}
+              development={false}
+              dimensions={{ columns: 2, rows: 2 }}
+              onMoveRequest={(intent) => {
+                setPosition({
+                  committedIntentId: intent.intentId,
+                  revision: 43,
+                  value: { b1: { id: 'suspended', pieceType: 'token' } },
+                });
+                return { status: 'accepted' };
+              }}
+              pieceRenderers={PIECE_RENDERERS}
+              position={position}
+              reduceMotion="never"
+              transitionDurationMs={1_000}
+            />
+          </ChessboardProvider>
+        </Suspense>
+      );
+    }
+
+    const frames: ((timestamp: number) => void)[] = [];
+    const frameSpy = jest
+      .spyOn(globalThis, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        frames.push(callback);
+        return frames.length;
+      });
+    try {
+      const result = await render(<Harness />);
+      const board = rootOf(result);
+      await measure(board);
+      const pan = getByGestureTestId(getBoardGestureTestIds(boardId).pan);
+      const handlerTag = (pan as Readonly<{ handlerTag: number }>).handlerTag;
+      const callbacks = panCallbacks(pan);
+      await act(() => {
+        callbacks.onBegin?.({
+          absoluteX: START.x,
+          absoluteY: START.y,
+          handlerTag,
+          ...START,
+        });
+        callbacks.onStart?.({
+          absoluteX: BOTTOM_RIGHT.x,
+          absoluteY: BOTTOM_RIGHT.y,
+          handlerTag,
+          ...BOTTOM_RIGHT,
+        });
+      });
+      await act(() => {
+        const terminal = {
+          absoluteX: BOTTOM_RIGHT.x,
+          absoluteY: BOTTOM_RIGHT.y,
+          handlerTag,
+          ...BOTTOM_RIGHT,
+        };
+        callbacks.onEnd?.(terminal, true);
+        callbacks.onFinalize?.(terminal, true);
+      });
+      expectOneVisual(board, 'pending-target', 'b1');
+      jest.useFakeTimers();
+
+      const updateMode = setMode;
+      if (updateMode === undefined) {
+        throw new Error('Expected the Suspense harness mode setter.');
+      }
+      await act(() => {
+        updateMode('suspended');
+      });
+      expect(result.queryByTestId('suspended-board-fallback')).not.toBeNull();
+      await act(() => {
+        updateMode('visible');
+      });
+      await flushDecisions();
+
+      canonicalDrainVisual(board, boardId, 'b1');
+      expectNoVisual(board, 'pending-target', 'b1');
+      const warmingCanonical = nodesByTestId(
+        board,
+        'move-piece:static:b1:token',
+      )[0];
+      if (warmingCanonical === undefined) {
+        throw new Error('Expected the restored warming canonical actor.');
+      }
+      expect(
+        nativeStyle(boardPieceOcclusionBoundary(warmingCanonical)).opacity,
+      ).toBe(0);
+
+      for (let frameTurn = 0; frameTurn < 8; frameTurn += 1) {
+        const queuedFrames = frames.splice(0);
+        if (queuedFrames.length === 0) {
+          break;
+        }
+        await act(() => {
+          for (const frame of queuedFrames) {
+            frame(16 + frameTurn * 16);
+          }
+        });
+      }
+      expectNoCanonicalDrain(board, boardId, 'b1');
+      expectNoVisual(board, 'pending-target', 'b1');
+      const settledCanonical = nodesByTestId(
+        board,
+        'move-piece:static:b1:token',
+      )[0];
+      if (settledCanonical === undefined) {
+        throw new Error('Expected the settled Suspense target actor.');
+      }
+      expect(
+        nativeStyle(boardPieceOcclusionBoundary(settledCanonical)).opacity,
+      ).toBeUndefined();
+      await result.unmount();
+    } finally {
+      frameSpy.mockRestore();
+    }
+  });
+
+  it.each([
+    { label: 'reduced motion while paused', reducedMotion: true, start: false },
+    { label: 'zero duration while running', reducedMotion: false, start: true },
+  ])(
+    'warms an admitted pending handoff when $label disables its clock',
+    async ({ reducedMotion, start }) => {
+      const boardId = `disabled-active-handoff:${start ? 'running' : 'paused'}`;
+      let disableTransition: (() => void) | undefined;
+
+      function Harness(): ReactElement {
+        const [enabled, setEnabled] = useState(true);
+        const [position, setPosition] = useState<{
+          committedIntentId?: string;
+          revision: number;
+          value: PositionObject;
+        }>({
+          revision: 44,
+          value: { a2: { id: 'disabled', pieceType: 'token' } },
+        });
+        disableTransition = () => {
+          setEnabled(false);
+        };
+        return (
+          <ChessboardProvider>
+            <ChessboardRuntime
+              boardId={boardId}
+              development={false}
+              dimensions={{ columns: 2, rows: 2 }}
+              onMoveRequest={(intent) => {
+                setPosition({
+                  committedIntentId: intent.intentId,
+                  revision: 45,
+                  value: { b1: { id: 'disabled', pieceType: 'token' } },
+                });
+                return { status: 'accepted' };
+              }}
+              pieceRenderers={PIECE_RENDERERS}
+              position={position}
+              reduceMotion={
+                enabled || !reducedMotion ? 'never' : ('always' as const)
+              }
+              transitionDurationMs={enabled || reducedMotion ? 1_000 : 0}
+            />
+          </ChessboardProvider>
+        );
+      }
+
+      const frames: ((timestamp: number) => void)[] = [];
+      const frameSpy = jest
+        .spyOn(globalThis, 'requestAnimationFrame')
+        .mockImplementation((callback) => {
+          frames.push(callback);
+          return frames.length;
+        });
+      try {
+        const result = await render(<Harness />);
+        const board = rootOf(result);
+        await measure(board);
+        const pan = getByGestureTestId(getBoardGestureTestIds(boardId).pan);
+        const handlerTag = (pan as Readonly<{ handlerTag: number }>).handlerTag;
+        const callbacks = panCallbacks(pan);
+        await act(() => {
+          callbacks.onBegin?.({
+            absoluteX: START.x,
+            absoluteY: START.y,
+            handlerTag,
+            ...START,
+          });
+          callbacks.onStart?.({
+            absoluteX: BOTTOM_RIGHT.x,
+            absoluteY: BOTTOM_RIGHT.y,
+            handlerTag,
+            ...BOTTOM_RIGHT,
+          });
+        });
+        await act(() => {
+          const terminal = {
+            absoluteX: BOTTOM_RIGHT.x,
+            absoluteY: BOTTOM_RIGHT.y,
+            handlerTag,
+            ...BOTTOM_RIGHT,
+          };
+          callbacks.onEnd?.(terminal, true);
+          callbacks.onFinalize?.(terminal, true);
+        });
+        expectOneVisual(board, 'pending-target', 'b1');
+        jest.useFakeTimers();
+
+        if (start) {
+          const hostReadyFrames = frames.splice(0);
+          expect(hostReadyFrames.length).toBeGreaterThan(0);
+          await act(() => {
+            for (const frame of hostReadyFrames) {
+              frame(16);
+            }
+          });
+        }
+
+        const disable = disableTransition;
+        if (disable === undefined) {
+          throw new Error('Expected the transition configuration setter.');
+        }
+        await act(() => {
+          disable();
+        });
+        await flushDecisions();
+
+        canonicalDrainVisual(board, boardId, 'b1');
+        expectNoVisual(board, 'pending-target', 'b1');
+        const warmingCanonical = nodesByTestId(
+          board,
+          'move-piece:static:b1:token',
+        )[0];
+        if (warmingCanonical === undefined) {
+          throw new Error('Expected the disabled-clock warming canonical.');
+        }
+        expect(
+          nativeStyle(boardPieceOcclusionBoundary(warmingCanonical)).opacity,
+        ).toBe(0);
+
+        for (let frameTurn = 0; frameTurn < 12; frameTurn += 1) {
+          const queuedFrames = frames.splice(0);
+          if (queuedFrames.length === 0) {
+            break;
+          }
+          await act(() => {
+            for (const frame of queuedFrames) {
+              frame(32 + frameTurn * 16);
+            }
+          });
+        }
+        expectNoCanonicalDrain(board, boardId, 'b1');
+        expectNoVisual(board, 'pending-target', 'b1');
+        const settledCanonical = nodesByTestId(
+          board,
+          'move-piece:static:b1:token',
+        )[0];
+        if (settledCanonical === undefined) {
+          throw new Error('Expected the disabled-clock settled canonical.');
+        }
+        expect(
+          nativeStyle(boardPieceOcclusionBoundary(settledCanonical)).opacity,
+        ).toBeUndefined();
+        await result.unmount();
+      } finally {
+        frameSpy.mockRestore();
+      }
+    },
+  );
+
+  it.each([
+    {
+      durationMs: 1_000,
+      label: 'initial-reduced-motion',
+      reduceMotion: 'always' as const,
+    },
+    {
+      durationMs: 0,
+      label: 'initial-zero-duration',
+      reduceMotion: 'never' as const,
+    },
+  ])(
+    'drains a reused canonical host with $label although no clock can mount',
+    async ({ durationMs, label, reduceMotion }) => {
+      const boardId = `disabled-drain:${label}`;
+      let updatePieceOpacity: (opacity: number) => void = (): void => {
+        throw new Error('Expected the disabled-drain harness to mount.');
+      };
+      function Harness(): ReactElement {
+        const [pieceOpacity, setPieceOpacity] = useState(1);
+        const [position, setPosition] = useState<{
+          committedIntentId?: string;
+          revision: number;
+          value: PositionObject;
+        }>({
+          revision: 44,
+          value: { a2: { id: 'disabled-drain', pieceType: 'token' } },
+        });
+        updatePieceOpacity = setPieceOpacity;
+        return (
+          <ChessboardProvider>
+            <ChessboardRuntime
+              boardId={boardId}
+              development={false}
+              dimensions={{ columns: 2, rows: 2 }}
+              onMoveRequest={(intent) => {
+                setPosition({
+                  committedIntentId: intent.intentId,
+                  revision: 45,
+                  value: {
+                    b1: { id: 'disabled-drain', pieceType: 'token' },
+                  },
+                });
+                return { status: 'accepted' };
+              }}
+              pieceRenderers={PIECE_RENDERERS}
+              position={position}
+              reduceMotion={reduceMotion}
+              styles={{
+                draggingPieceGhost: { opacity: 0.5 },
+                piece: { opacity: pieceOpacity },
+              }}
+              transitionDurationMs={durationMs}
+            />
+          </ChessboardProvider>
+        );
+      }
+
+      const heldFrames: ((timestamp: number) => void)[] = [];
+      const frameSpy = jest
+        .spyOn(globalThis, 'requestAnimationFrame')
+        .mockImplementation((callback) => {
+          heldFrames.push(callback);
+          return heldFrames.length;
+        });
+      try {
+        const result = await render(<Harness />);
+        const board = rootOf(result);
+        await measure(board);
+        const pan = getByGestureTestId(getBoardGestureTestIds(boardId).pan);
+        const handlerTag = (pan as Readonly<{ handlerTag: number }>).handlerTag;
+        const callbacks = panCallbacks(pan);
+        await act(() => {
+          callbacks.onBegin?.({
+            absoluteX: START.x,
+            absoluteY: START.y,
+            handlerTag,
+            ...START,
+          });
+          callbacks.onStart?.({
+            absoluteX: BOTTOM_RIGHT.x,
+            absoluteY: BOTTOM_RIGHT.y,
+            handlerTag,
+            ...BOTTOM_RIGHT,
+          });
+        });
+        await act(() => {
+          const terminal = {
+            absoluteX: BOTTOM_RIGHT.x,
+            absoluteY: BOTTOM_RIGHT.y,
+            handlerTag,
+            ...BOTTOM_RIGHT,
+          };
+          callbacks.onEnd?.(terminal, true);
+          callbacks.onFinalize?.(terminal, true);
+        });
+
+        canonicalDrainVisual(board, boardId, 'b1');
+        expectNoVisual(board, 'pending-target', 'b1');
+        expect(nodesByTestId(board, 'move-piece:static:b1:token')).toHaveLength(
+          2,
+        );
+        const guardedCanonical = nodesByTestId(
+          board,
+          'move-piece:static:b1:token',
+        )[0];
+        if (guardedCanonical === undefined) {
+          throw new Error('Expected the disabled-motion canonical host.');
+        }
+        expect(
+          nativeStyle(boardPieceOcclusionBoundary(guardedCanonical)).opacity,
+        ).toBe(0);
+        expect(heldFrames.length).toBeGreaterThan(0);
+
+        const staleBaseOpacityFrames = [...heldFrames];
+        const replacementFrameStart = heldFrames.length;
+        await act(() => {
+          updatePieceOpacity(0.6);
+        });
+        const restyledCanonical = nodesByTestId(
+          board,
+          'move-piece:static:b1:token',
+        )[0];
+        if (restyledCanonical === undefined) {
+          throw new Error('Expected the restyled guarded canonical host.');
+        }
+        expect(nativeStyle(boardPieceHost(restyledCanonical)).opacity).toBe(
+          0.6,
+        );
+        expect(
+          nativeStyle(boardPieceOcclusionBoundary(restyledCanonical)).opacity,
+        ).toBe(0);
+        canonicalDrainVisual(board, boardId, 'b1');
+        expect(heldFrames.length).toBeGreaterThan(replacementFrameStart);
+        await act(() => {
+          for (const frame of staleBaseOpacityFrames) {
+            frame(12);
+          }
+        });
+        canonicalDrainVisual(board, boardId, 'b1');
+        expect(
+          nativeStyle(boardPieceOcclusionBoundary(restyledCanonical)).opacity,
+        ).toBe(0);
+
+        let frameCursor = replacementFrameStart;
+        for (let frameTurn = 0; frameTurn < 4; frameTurn += 1) {
+          const frames = heldFrames.slice(frameCursor);
+          frameCursor = heldFrames.length;
+          if (frames.length === 0) {
+            break;
+          }
+          await act(() => {
+            for (const frame of frames) {
+              frame(16 + frameTurn * 16);
+            }
+          });
+        }
+        expectNoCanonicalDrain(board, boardId, 'b1');
+        expectOneVisual(board, 'static', 'b1');
+        const settledCanonical = nodesByTestId(
+          board,
+          'move-piece:static:b1:token',
+        )[0];
+        if (settledCanonical === undefined) {
+          throw new Error('Expected the drained canonical host.');
+        }
+        expect(
+          nativeStyle(boardPieceOcclusionBoundary(settledCanonical)).opacity,
+        ).toBeUndefined();
+        await result.unmount();
+      } finally {
+        frameSpy.mockRestore();
+      }
+    },
+  );
+
+  it.each([
+    { label: 'paused', start: false },
+    { label: 'mid-transition', start: true },
+  ])(
+    'warms the canonical host when a $label exact handoff is superseded by a planner-null revision',
+    async ({ start }) => {
+      const boardId = `planner-null-successor:${start ? 'running' : 'paused'}`;
+      let publishSuccessor: ((revision: number) => void) | undefined;
+
+      function Harness(): ReactElement {
+        const [position, setPosition] = useState<{
+          committedIntentId?: string;
+          revision: number;
+          value: PositionObject;
+        }>({
+          revision: 46,
+          value: { a2: { id: 'successor', pieceType: 'token' } },
+        });
+        publishSuccessor = (revision) => {
+          setPosition({
+            revision,
+            value: { b1: { id: 'successor', pieceType: 'token' } },
+          });
+        };
+        return (
+          <ChessboardProvider>
+            <ChessboardRuntime
+              boardId={boardId}
+              development={false}
+              dimensions={{ columns: 2, rows: 2 }}
+              onMoveRequest={(intent) => {
+                setPosition({
+                  committedIntentId: intent.intentId,
+                  revision: 47,
+                  value: { b1: { id: 'successor', pieceType: 'token' } },
+                });
+                return { status: 'accepted' };
+              }}
+              pieceRenderers={PIECE_RENDERERS}
+              position={position}
+              reduceMotion="never"
+              transitionDurationMs={1_000}
+            />
+          </ChessboardProvider>
+        );
+      }
+
+      const frames: ((timestamp: number) => void)[] = [];
+      const frameSpy = jest
+        .spyOn(globalThis, 'requestAnimationFrame')
+        .mockImplementation((callback) => {
+          frames.push(callback);
+          return frames.length;
+        });
+      try {
+        const result = await render(<Harness />);
+        const board = rootOf(result);
+        await measure(board);
+        const pan = getByGestureTestId(getBoardGestureTestIds(boardId).pan);
+        const handlerTag = (pan as Readonly<{ handlerTag: number }>).handlerTag;
+        const callbacks = panCallbacks(pan);
+        await act(() => {
+          callbacks.onBegin?.({
+            absoluteX: START.x,
+            absoluteY: START.y,
+            handlerTag,
+            ...START,
+          });
+          callbacks.onStart?.({
+            absoluteX: BOTTOM_RIGHT.x,
+            absoluteY: BOTTOM_RIGHT.y,
+            handlerTag,
+            ...BOTTOM_RIGHT,
+          });
+        });
+        await act(() => {
+          const terminal = {
+            absoluteX: BOTTOM_RIGHT.x,
+            absoluteY: BOTTOM_RIGHT.y,
+            handlerTag,
+            ...BOTTOM_RIGHT,
+          };
+          callbacks.onEnd?.(terminal, true);
+          callbacks.onFinalize?.(terminal, true);
+        });
+        expectOneVisual(board, 'pending-target', 'b1');
+        jest.useFakeTimers();
+
+        if (start) {
+          for (let frameTurn = 0; frameTurn < 4; frameTurn += 1) {
+            const queuedFrames = frames.splice(0);
+            if (queuedFrames.length === 0) {
+              break;
+            }
+            await act(() => {
+              for (const frame of queuedFrames) {
+                frame(16 + frameTurn * 16);
+              }
+            });
+          }
+          const runningPending = nodesByTestId(
+            board,
+            'move-piece:pending-target:b1:token',
+          )[0];
+          if (runningPending?.parent?.parent == null) {
+            throw new Error('Expected the running pending handoff host.');
+          }
+          const opacity = Number(
+            animatedStyle(runningPending.parent.parent)['opacity'],
+          );
+          expect(opacity).toBeGreaterThan(0);
+          expect(opacity).toBeLessThan(1);
+        }
+
+        const staleHandoffFrames = frames.splice(0);
+        const publish = publishSuccessor;
+        if (publish === undefined) {
+          throw new Error('Expected the planner-null successor setter.');
+        }
+        await act(() => {
+          publish(48);
+        });
+        await flushDecisions();
+
+        canonicalDrainVisual(board, boardId, 'b1');
+        expectNoVisual(board, 'pending-target', 'b1');
+        const guardedCanonical = nodesByTestId(
+          board,
+          'move-piece:static:b1:token',
+        )[0];
+        if (guardedCanonical === undefined) {
+          throw new Error('Expected the planner-null guarded canonical host.');
+        }
+        expect(
+          nativeStyle(boardPieceOcclusionBoundary(guardedCanonical)).opacity,
+        ).toBe(0);
+
+        const staleFirstDrainFrames = frames.splice(0);
+        expect(staleFirstDrainFrames.length).toBeGreaterThan(0);
+        await act(() => {
+          publish(49);
+        });
+        await flushDecisions();
+        canonicalDrainVisual(board, boardId, 'b1');
+        await act(() => {
+          for (const frame of staleFirstDrainFrames) {
+            frame(80);
+          }
+        });
+        canonicalDrainVisual(board, boardId, 'b1');
+        const replacementGuardedCanonical = nodesByTestId(
+          board,
+          'move-piece:static:b1:token',
+        )[0];
+        if (replacementGuardedCanonical === undefined) {
+          throw new Error('Expected the replacement drain canonical host.');
+        }
+        expect(
+          nativeStyle(boardPieceOcclusionBoundary(replacementGuardedCanonical))
+            .opacity,
+        ).toBe(0);
+
+        for (let frameTurn = 0; frameTurn < 16; frameTurn += 1) {
+          const queuedFrames = frames.splice(0);
+          if (queuedFrames.length === 0) {
+            break;
+          }
+          await act(() => {
+            for (const frame of queuedFrames) {
+              frame(96 + frameTurn * 16);
+            }
+          });
+        }
+        expectNoCanonicalDrain(board, boardId, 'b1');
+        expectNoVisual(board, 'pending-target', 'b1');
+        const settledCanonical = nodesByTestId(
+          board,
+          'move-piece:static:b1:token',
+        )[0];
+        if (settledCanonical === undefined) {
+          throw new Error('Expected the planner-null settled canonical host.');
+        }
+        expect(
+          nativeStyle(boardPieceOcclusionBoundary(settledCanonical)).opacity,
+        ).toBeUndefined();
+        await act(() => {
+          for (const frame of staleHandoffFrames) {
+            frame(400);
+          }
+        });
+        expectNoCanonicalDrain(board, boardId, 'b1');
+        expectNoVisual(board, 'pending-target', 'b1');
+        await result.unmount();
+      } finally {
+        frameSpy.mockRestore();
+      }
+    },
+  );
+
+  it.each([
+    {
+      after: Object.freeze({
+        b1: Object.freeze({ id: 'timeout', pieceType: 'token' }),
+      }),
+      initial: Object.freeze({
+        a2: Object.freeze({ id: 'timeout', pieceType: 'token' }),
+      }),
+      label: 'stable-ID',
+      renderers: PIECE_RENDERERS,
+    },
+    {
+      after: Object.freeze({
+        b1: Object.freeze({ pieceType: 'token' }),
+      }),
+      initial: Object.freeze({
+        a2: Object.freeze({ pieceType: 'token' }),
+        b1: Object.freeze({ pieceType: 'victim' }),
+      }),
+      label: 'anonymous-capture',
+      renderers: Object.freeze({ token: pieceProbe, victim: pieceProbe }),
+    },
+  ])(
+    'snaps a $label paused handoff atomically when its host-ready frame never ACKs',
+    async ({ after, initial, label, renderers }) => {
+      const boardId = `paused-handoff-timeout:${label}`;
+      function Harness(): ReactElement {
+        const [position, setPosition] = useState<{
+          committedIntentId?: string;
+          revision: number;
+          value: PositionObject;
+        }>({
+          revision: 50,
+          value: initial,
+        });
+        return (
+          <ChessboardProvider>
+            <ChessboardRuntime
+              boardId={boardId}
+              development={false}
+              dimensions={{ columns: 2, rows: 2 }}
+              onMoveRequest={(intent) => {
+                setPosition({
+                  committedIntentId: intent.intentId,
+                  revision: 51,
+                  value: after,
+                });
+                return { status: 'accepted' };
+              }}
+              pieceRenderers={renderers}
+              position={position}
+              reduceMotion="never"
+              transitionDurationMs={1_000}
+            />
+          </ChessboardProvider>
+        );
+      }
+
+      const heldFrames: ((timestamp: number) => void)[] = [];
+      const frameSpy = jest
+        .spyOn(globalThis, 'requestAnimationFrame')
+        .mockImplementation((callback) => {
+          heldFrames.push(callback);
+          return heldFrames.length;
+        });
+      try {
+        const result = await render(<Harness />);
+        const board = rootOf(result);
+        await measure(board);
+        const pan = getByGestureTestId(getBoardGestureTestIds(boardId).pan);
+        const handlerTag = (pan as Readonly<{ handlerTag: number }>).handlerTag;
+        const callbacks = panCallbacks(pan);
+        await act(() => {
+          callbacks.onBegin?.({
+            absoluteX: START.x,
+            absoluteY: START.y,
+            handlerTag,
+            ...START,
+          });
+          callbacks.onStart?.({
+            absoluteX: BOTTOM_RIGHT.x,
+            absoluteY: BOTTOM_RIGHT.y,
+            handlerTag,
+            ...BOTTOM_RIGHT,
+          });
+        });
+        await act(() => {
+          const end = {
+            absoluteX: BOTTOM_RIGHT.x,
+            absoluteY: BOTTOM_RIGHT.y,
+            handlerTag,
+            ...BOTTOM_RIGHT,
+          };
+          callbacks.onEnd?.(end, true);
+          callbacks.onFinalize?.(end, true);
+        });
+
+        expectOneVisual(board, 'static', 'b1');
+        expectOneVisual(board, 'pending-target', 'b1');
+        const pausedCanonical = nodesByTestId(
+          board,
+          'move-piece:static:b1:token',
+        )[0];
+        if (pausedCanonical === undefined) {
+          throw new Error('Expected the paused canonical target.');
+        }
+        expect(
+          nativeStyle(boardPieceOcclusionBoundary(pausedCanonical)).opacity,
+        ).toBe(0);
+
+        await act(
+          () =>
+            new Promise<void>((resolve) => {
+              setTimeout(resolve, 70);
+            }),
+        );
+        canonicalDrainVisual(board, boardId, 'b1');
+        expect(nodesByTestId(board, 'move-piece:static:b1:token')).toHaveLength(
+          2,
+        );
+        expectNoVisual(board, 'pending-target', 'b1');
+        const warmingCanonical = nodesByTestId(
+          board,
+          'move-piece:static:b1:token',
+        )[0];
+        if (warmingCanonical === undefined) {
+          throw new Error('Expected the warming canonical target.');
+        }
+        expect(
+          nativeStyle(boardPieceOcclusionBoundary(warmingCanonical)).opacity,
+        ).toBe(0);
+
+        const staleFrames = [...heldFrames];
+        let frameCursor = 0;
+        for (let frameTurn = 0; frameTurn < 4; frameTurn += 1) {
+          const queuedFrames = heldFrames.slice(frameCursor);
+          frameCursor = heldFrames.length;
+          if (queuedFrames.length === 0) {
+            break;
+          }
+          await act(() => {
+            for (const frame of queuedFrames) {
+              frame(80 + frameTurn * 16);
+            }
+          });
+        }
+        expectNoCanonicalDrain(board, boardId, 'b1');
+        expectOneVisual(board, 'static', 'b1');
+        expectNoVisual(board, 'pending-target', 'b1');
+        const snappedCanonical = nodesByTestId(
+          board,
+          'move-piece:static:b1:token',
+        )[0];
+        if (snappedCanonical === undefined) {
+          throw new Error('Expected the snapped canonical target.');
+        }
+        expect(animatedStyle(boardPieceHost(snappedCanonical))['opacity']).toBe(
+          1,
+        );
+        expect(
+          nativeStyle(boardPieceOcclusionBoundary(snappedCanonical)).opacity,
+        ).toBeUndefined();
+        await act(() => {
+          for (const frame of staleFrames) {
+            frame(96);
+          }
+        });
+        expectNoVisual(board, 'pending-target', 'b1');
+        await result.unmount();
+      } finally {
+        frameSpy.mockRestore();
+      }
+    },
+  );
+
+  it.each([
+    Object.freeze({
+      after: Object.freeze({
+        a2: Object.freeze({ id: 'same-square', pieceType: 'token' }),
+      }),
+      initial: Object.freeze({
+        a2: Object.freeze({ id: 'same-square', pieceType: 'token' }),
+      }),
+      scenario: 'planner-null',
+      target: START,
+      targetSquare: 'a2',
+      ghostOpacity: 0.5,
+    }),
+    Object.freeze({
+      after: Object.freeze({
+        a1: Object.freeze({ pieceType: 'token' }),
+        b1: Object.freeze({ pieceType: 'token' }),
+      }),
+      initial: Object.freeze({
+        a2: Object.freeze({ pieceType: 'token' }),
+        b2: Object.freeze({ pieceType: 'token' }),
+      }),
+      scenario: 'missing-pending-actor',
+      target: BOTTOM_RIGHT,
+      targetSquare: 'b1',
+      ghostOpacity: 0,
+    }),
+  ] as const)(
+    'retires one direct preparation commit atomically when the special $scenario path cannot mount',
+    async ({
+      after,
+      ghostOpacity,
+      initial,
+      scenario,
+      target,
+      targetSquare,
+    }) => {
+      const boardId = `handoff-${scenario}`;
+      let pendingTargetCommitCount = 0;
+      function PreparationProbe(props: PieceRendererProps): ReactElement {
+        useLayoutEffect(() => {
+          if (props.square === targetSquare && props.state.isPending) {
+            pendingTargetCommitCount += 1;
+          }
+        }, [props.square, props.state.isPending, targetSquare]);
+        return (
+          <View
+            testID={`move-piece:${visualKind(props)}:${props.square ?? 'spare'}:${props.piece.pieceType}`}
+          />
+        );
+      }
+      function Harness(): ReactElement {
+        const [position, setPosition] = useState<{
+          committedIntentId?: string;
+          revision: number;
+          value: PositionObject;
+        }>({ revision: 60, value: initial });
+        return (
+          <ChessboardProvider>
+            <ChessboardRuntime
+              boardId={boardId}
+              development={false}
+              dimensions={{ columns: 2, rows: 2 }}
+              onMoveRequest={(intent) => {
+                setPosition({
+                  committedIntentId: intent.intentId,
+                  revision: 61,
+                  value: after,
+                });
+                return { status: 'accepted' };
+              }}
+              pieceRenderers={{ token: PreparationProbe }}
+              position={position}
+              reduceMotion="never"
+              styles={{ draggingPieceGhost: { opacity: ghostOpacity } }}
+              transitionDurationMs={1_000}
+            />
+          </ChessboardProvider>
+        );
+      }
+
+      const heldFrames: ((timestamp: number) => void)[] = [];
+      const frameSpy = jest
+        .spyOn(globalThis, 'requestAnimationFrame')
+        .mockImplementation((callback) => {
+          heldFrames.push(callback);
+          return heldFrames.length;
+        });
+      try {
+        const result = await render(<Harness />);
+        const board = rootOf(result);
+        await measure(board);
+        const pan = getByGestureTestId(getBoardGestureTestIds(boardId).pan);
+        const handlerTag = (pan as Readonly<{ handlerTag: number }>).handlerTag;
+        const callbacks = panCallbacks(pan);
+        await act(() => {
+          callbacks.onBegin?.({
+            absoluteX: START.x,
+            absoluteY: START.y,
+            handlerTag,
+            ...START,
+          });
+          callbacks.onStart?.({
+            absoluteX: BOTTOM_RIGHT.x,
+            absoluteY: BOTTOM_RIGHT.y,
+            handlerTag,
+            ...BOTTOM_RIGHT,
+          });
+        });
+        await act(() => {
+          const end = {
+            absoluteX: target.x,
+            absoluteY: target.y,
+            handlerTag,
+            ...target,
+          };
+          callbacks.onEnd?.(end, true);
+          callbacks.onFinalize?.(end, true);
+        });
+
+        expect(pendingTargetCommitCount).toBeGreaterThan(0);
+        const warmingDrain = canonicalDrainVisual(board, boardId, targetSquare);
+        expectNoVisual(board, 'pending-target', targetSquare);
+        const warmingCanonical = nodesByTestId(
+          board,
+          `move-piece:static:${targetSquare}:token`,
+        )[0];
+        if (warmingCanonical === undefined) {
+          throw new Error('Expected both fail-closed warming actors.');
+        }
+        const warmingCanonicalHost = boardPieceHost(warmingCanonical);
+        const warmingOuterOpacity = Number(
+          animatedStyle(warmingCanonicalHost)['opacity'],
+        );
+        expect(warmingOuterOpacity).toBeGreaterThanOrEqual(0);
+        expect(warmingOuterOpacity).toBeLessThanOrEqual(1);
+        expect(
+          nativeStyle(boardPieceOcclusionBoundary(warmingCanonical)).opacity,
+        ).toBe(0);
+        expect(nativeStyle(warmingDrain).opacity ?? 1).toBe(1);
+        expect(heldFrames.length).toBeGreaterThan(0);
+
+        const staleFrames = [...heldFrames];
+        await act(() => {
+          for (const frame of staleFrames) {
+            frame(80);
+          }
+        });
+
+        expectNoCanonicalDrain(board, boardId, targetSquare);
+        expectNoVisual(board, 'pending-target', targetSquare);
+        const canonicalTarget = nodesByTestId(
+          board,
+          `move-piece:static:${targetSquare}:token`,
+        )[0];
+        if (canonicalTarget === undefined) {
+          throw new Error('Expected the fail-closed canonical target.');
+        }
+        expect(animatedStyle(boardPieceHost(canonicalTarget))['opacity']).toBe(
+          1,
+        );
+        expect(
+          nativeStyle(boardPieceOcclusionBoundary(canonicalTarget)).opacity,
+        ).toBeUndefined();
+        await result.unmount();
+        await act(() => {
+          for (const frame of staleFrames) {
+            frame(96);
+          }
+        });
+      } finally {
+        frameSpy.mockRestore();
+      }
+    },
+  );
 
   it.each([
     'admission-reject',
@@ -1069,6 +2627,143 @@ describe('public controlled move requests', () => {
       await result.unmount();
     },
   );
+
+  it('restores the canonical source before retiring an ACTION_CANCEL terminal lease', async () => {
+    const boardId = 'terminal-native-cancel';
+    const runtime: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    const sourceCommitSnapshots: Readonly<{
+      activeToken: number | null;
+      phase: number | null;
+    }>[] = [];
+    let terminalStarted = false;
+    function RuntimeProbe(): null {
+      runtime.current = useChessboardProvider().runtime;
+      return null;
+    }
+    function CancelBarrierPieceProbe(props: PieceRendererProps): ReactElement {
+      useLayoutEffect(() => {
+        if (
+          !terminalStarted ||
+          props.square !== 'a2' ||
+          props.state.isDragging ||
+          props.state.isGhost ||
+          props.state.isPending
+        ) {
+          return;
+        }
+        const active = runtime.current?.drag.getSnapshot().active ?? null;
+        sourceCommitSnapshots.push(
+          Object.freeze({
+            activeToken: active?.gestureToken ?? null,
+            phase: active?.presentation.phase.value ?? null,
+          }),
+        );
+      }, [props.square, props.state]);
+      return (
+        <View
+          testID={`move-piece:${visualKind(props)}:${props.square ?? 'spare'}:${props.piece.pieceType}`}
+        />
+      );
+    }
+    const onMoveRequest = jest.fn<
+      ReturnType<OnMoveRequest>,
+      Parameters<OnMoveRequest>
+    >(() => ({ status: 'accepted' }));
+    const result = await render(
+      <ChessboardProvider>
+        <RuntimeProbe />
+        <ChessboardRuntime
+          boardId={boardId}
+          development={false}
+          dimensions={{ columns: 2, rows: 2 }}
+          onMoveRequest={onMoveRequest}
+          pieceRenderers={{ token: CancelBarrierPieceProbe }}
+          position={{
+            revision: 44,
+            value: { a2: { id: 'cancelled', pieceType: 'token' } },
+          }}
+          styles={{ draggingPieceGhost: { opacity: 0 } }}
+        />
+      </ChessboardProvider>,
+    );
+    const board = rootOf(result);
+    await measure(board);
+    const pan = getByGestureTestId(getBoardGestureTestIds(boardId).pan);
+    const handlerTag = (pan as Readonly<{ handlerTag: number }>).handlerTag;
+    const callbacks = panCallbacks(pan);
+    await act(() => {
+      callbacks.onBegin?.({
+        absoluteX: START.x,
+        absoluteY: START.y,
+        handlerTag,
+        ...START,
+      });
+      callbacks.onStart?.({
+        absoluteX: START.x + 10,
+        absoluteY: START.y,
+        handlerTag,
+        x: START.x + 10,
+        y: START.y,
+      });
+    });
+    const terminal = runtime.current?.drag.getSnapshot().active ?? null;
+    if (terminal === null) {
+      throw new Error('Expected an attached provider lease before cancel.');
+    }
+    const cancelledSourceGhost = nodesByTestId(
+      board,
+      'move-piece:source-ghost:a2:token',
+    )[0];
+    if (cancelledSourceGhost === undefined) {
+      throw new Error('Expected the exact-zero source ghost before cancel.');
+    }
+    const cancelledSourceHost = boardPieceHost(cancelledSourceGhost);
+    expect(animatedStyle(cancelledSourceHost)['opacity']).toBe(1);
+    expect(
+      nativeStyle(boardPieceOcclusionBoundary(cancelledSourceGhost)).opacity,
+    ).toBe(0);
+
+    terminalStarted = true;
+    await act(() => {
+      callbacks.onFinalize?.(
+        {
+          absoluteX: START.x + 10,
+          absoluteY: START.y,
+          handlerTag,
+          x: START.x + 10,
+          y: START.y,
+        },
+        false,
+      );
+    });
+
+    expect(sourceCommitSnapshots[0]).toEqual({
+      activeToken: terminal.gestureToken,
+      phase: INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL,
+    });
+    expect(onMoveRequest).not.toHaveBeenCalled();
+    expect(runtime.current?.drag.getSnapshot().active).toBeNull();
+    expect(terminal.presentation.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.IDLE,
+    );
+    expectOneVisual(board, 'static', 'a2');
+    expectNoVisual(board, 'source-ghost', 'a2');
+    const restoredSource = nodesByTestId(
+      board,
+      'move-piece:static:a2:token',
+    )[0];
+    if (restoredSource === undefined) {
+      throw new Error('Expected the restored exact-zero source.');
+    }
+    expect(boardPieceHost(restoredSource)).toBe(cancelledSourceHost);
+    expect(animatedStyle(cancelledSourceHost)['opacity']).toBe(1);
+    expect(
+      nativeStyle(boardPieceOcclusionBoundary(restoredSource)).opacity,
+    ).toBeUndefined();
+    await result.unmount();
+  });
 
   it.each(['admission-reject', 'null-target-reject'] as const)(
     'keeps a successor drag source ghosted when it replaces a stale terminal %s before the restore barrier',

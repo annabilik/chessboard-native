@@ -441,7 +441,13 @@ function createBoardGestures(options: {
       if (wasActive) {
         panActive.value = 0;
       }
-      if (wasActive && sourceSquare !== null && gestureToken !== null) {
+      const hasCorrelatedTerminal =
+        wasActive && sourceSquare !== null && gestureToken !== null;
+      if (hasCorrelatedTerminal) {
+        // ACTION_CANCEL has the same visual continuity requirement as a
+        // rejected drop: retain the last UI-owned actor until RN restores the
+        // canonical source and acknowledges this exact provider lease.
+        presentation.phase.value = INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL;
         scheduleOnRN(onSignal, {
           allowDragOffBoard: panAllowDragOffBoard.value,
           allowDragOffBoardGeneration: panAllowDragOffBoardGeneration.value,
@@ -457,7 +463,7 @@ function createBoardGestures(options: {
       panGestureToken.value = null;
       panSourceSquare.value = null;
       panCancelReason.value = 0;
-      if (wasActive) {
+      if (wasActive && !hasCorrelatedTerminal) {
         resetInteractionPresentationSharedValues(presentation);
       }
     });

@@ -10,7 +10,10 @@ import { scheduleOnRN } from 'react-native-worklets';
 import type { ValidatedBoardDimensions } from '../core/dimensions';
 import type { Revision } from '../public-types';
 import type { BoardSurfaceLayout } from '../render/board-layout';
-import type { PendingCommitHandoffDescriptor } from './pending-commit-handoff';
+import type {
+  PendingCommitHandoffDescriptor,
+  PendingCommitTransitionAcknowledgement,
+} from './pending-commit-handoff';
 import { positionComparisonToken } from './position-domain';
 import type { NormalizedPositionValue } from './position-domain';
 import {
@@ -35,12 +38,16 @@ export interface MountedPositionTransition {
 }
 
 interface ActivePositionTransition extends MountedPositionTransition {
+  readonly pendingHandoffAcknowledgement: Readonly<PendingCommitTransitionAcknowledgement> | null;
   readonly deadlineMs: number;
   readonly geometryEpoch: Revision;
   readonly targetKey: string;
 }
 
-type UnmountedPositionTransition = Omit<ActivePositionTransition, 'progress'>;
+type UnmountedPositionTransition = Omit<
+  ActivePositionTransition,
+  'pendingHandoffAcknowledgement' | 'progress'
+>;
 
 interface CommittedTransitionInput {
   readonly dimensions: ValidatedBoardDimensions | null;
@@ -69,10 +76,20 @@ interface UsePositionTransitionRuntimeOptions {
   readonly geometryEpoch: Revision | null;
   readonly layout: Readonly<BoardSurfaceLayout> | null;
   readonly logWarning?: (message: string) => void;
+  readonly onPendingHandoffExit?: (
+    acknowledgement: Readonly<PendingCommitTransitionAcknowledgement>,
+    disposition: PendingHandoffTransitionExitDisposition,
+  ) => void;
   readonly pendingHandoff?: Readonly<PendingCommitHandoffDescriptor> | null;
+  readonly pendingHandoffAcknowledgement?: Readonly<PendingCommitTransitionAcknowledgement> | null;
+  /** A correlated request must not silently degrade into an ordinary fade. */
+  readonly pendingHandoffRequired?: boolean;
   readonly position: NormalizedPositionValue | null;
   readonly reducedMotion: boolean;
 }
+
+export type PendingHandoffTransitionExitDisposition =
+  'aborted' | 'completed' | 'superseded';
 
 function defaultWarningLogger(message: string): void {
   console.warn(`[chessboard-native] ${message}`);
@@ -148,6 +165,34 @@ function presentationHasActors(
   );
 }
 
+function pendingHandoffAcknowledgementFor(
+  presentation: Readonly<TransitionPresentation>,
+): Readonly<PendingCommitTransitionAcknowledgement> | null {
+  const pendingHandoffActors = presentation.pending.filter(
+    ({ kind }) => kind === 'pending-handoff',
+  );
+  const actor =
+    pendingHandoffActors.length === 1 ? pendingHandoffActors[0] : null;
+  return actor === null || actor === undefined
+    ? null
+    : Object.freeze({
+        actorKey: actor.actorKey,
+        presentationEpoch: presentation.epoch,
+      });
+}
+
+function acknowledgementsMatch(
+  left: Readonly<PendingCommitTransitionAcknowledgement> | null,
+  right: Readonly<PendingCommitTransitionAcknowledgement> | null,
+): boolean {
+  return (
+    left !== null &&
+    right !== null &&
+    left.actorKey === right.actorKey &&
+    left.presentationEpoch === right.presentationEpoch
+  );
+}
+
 /**
  * Mount pure transition plans without ever rendering the retained comparison
  * snapshot. The latest controlled position is always projected independently.
@@ -159,13 +204,19 @@ export function usePositionTransitionRuntime({
   geometryEpoch,
   layout,
   logWarning = defaultWarningLogger,
+  onPendingHandoffExit,
   pendingHandoff = null,
+  pendingHandoffAcknowledgement = null,
+  pendingHandoffRequired = false,
   position,
   reducedMotion,
 }: UsePositionTransitionRuntimeOptions): Readonly<MountedPositionTransition> | null {
   const [active, setActive] =
     useState<Readonly<ActivePositionTransition> | null>(null);
   const activeRef = useRef<Readonly<ActivePositionTransition> | null>(null);
+  const startedActiveRef = useRef<Readonly<ActivePositionTransition> | null>(
+    null,
+  );
   const committedRef = useRef<Readonly<CommittedTransitionInput>>(
     Object.freeze({
       dimensions,
@@ -181,10 +232,19 @@ export function usePositionTransitionRuntime({
   const reportedWarningsRef = useRef(new Set<string>());
   const currentKey = positionKey(position);
 
-  const clearActive = useCallback((): void => {
-    activeRef.current = null;
-    setActive((current) => (current === null ? current : null));
-  }, []);
+  const clearActive = useCallback(
+    (disposition?: PendingHandoffTransitionExitDisposition): void => {
+      const current = activeRef.current;
+      const acknowledgement = current?.pendingHandoffAcknowledgement ?? null;
+      if (disposition !== undefined && acknowledgement !== null) {
+        onPendingHandoffExit?.(acknowledgement, disposition);
+      }
+      startedActiveRef.current = null;
+      activeRef.current = null;
+      setActive((mounted) => (mounted === null ? mounted : null));
+    },
+    [onPendingHandoffExit],
+  );
 
   const finishActive = useCallback(
     (epoch: number, targetKey: string): void => {
@@ -195,9 +255,38 @@ export function usePositionTransitionRuntime({
       if (current.targetKey !== targetKey) {
         return;
       }
-      clearActive();
+      clearActive('completed');
     },
     [clearActive],
+  );
+
+  const startActive = useCallback(
+    (candidate: Readonly<ActivePositionTransition>): boolean => {
+      if (
+        activeRef.current !== candidate ||
+        startedActiveRef.current === candidate
+      ) {
+        return false;
+      }
+      const started: Readonly<ActivePositionTransition> = Object.freeze({
+        ...candidate,
+        deadlineMs: Date.now() + candidate.durationMs,
+      });
+      activeRef.current = started;
+      startedActiveRef.current = started;
+      setActive(started);
+      const presentationEpoch = started.presentation.epoch;
+      const targetKey = started.targetKey;
+      started.progress.set(
+        withTiming(1, { duration: started.durationMs }, (finished): void => {
+          if (finished) {
+            scheduleOnRN(finishActive, presentationEpoch, targetKey);
+          }
+        }),
+      );
+      return true;
+    },
+    [finishActive],
   );
 
   useLayoutEffect(() => {
@@ -214,7 +303,7 @@ export function usePositionTransitionRuntime({
     const previous = committedRef.current;
     if (sameCommittedInput(previous, current)) {
       if (active !== null && activeRef.current !== active) {
-        clearActive();
+        clearActive('aborted');
       }
       return;
     }
@@ -252,19 +341,18 @@ export function usePositionTransitionRuntime({
       const progress = makeMutable(0);
       const nextActive: Readonly<ActivePositionTransition> = Object.freeze({
         ...nextTransition,
+        deadlineMs: Number.POSITIVE_INFINITY,
+        durationMs: animationDurationMs,
+        pendingHandoffAcknowledgement: pendingHandoffAcknowledgementFor(
+          nextTransition.presentation,
+        ),
         progress,
       });
       activeRef.current = nextActive;
       setActive(nextActive);
-      const presentationEpoch = nextActive.presentation.epoch;
-      const targetKey = nextActive.targetKey;
-      progress.set(
-        withTiming(1, { duration: animationDurationMs }, (finished): void => {
-          if (finished) {
-            scheduleOnRN(finishActive, presentationEpoch, targetKey);
-          }
-        }),
-      );
+      if (nextActive.pendingHandoffAcknowledgement === null) {
+        startActive(nextActive);
+      }
     };
 
     if (!semanticChanged) {
@@ -281,10 +369,15 @@ export function usePositionTransitionRuntime({
         current.layout === null
       ) {
         cancelAnimation(mounted.progress);
-        clearActive();
+        clearActive('aborted');
         return;
       }
       if (!geometryChanged) {
+        return;
+      }
+      if (mounted.pendingHandoffAcknowledgement !== null) {
+        cancelAnimation(mounted.progress);
+        clearActive('aborted');
         return;
       }
 
@@ -329,9 +422,9 @@ export function usePositionTransitionRuntime({
     if (mounted !== null) {
       cancelAnimation(mounted.progress);
     }
-    clearActive();
 
     if (current.snapshot === null || dimensions === null || dimensionsChanged) {
+      clearActive('aborted');
       return;
     }
 
@@ -351,6 +444,7 @@ export function usePositionTransitionRuntime({
 
     if (
       planning.plan === null ||
+      (pendingHandoffRequired && pendingHandoff === null) ||
       reducedMotion ||
       durationMs === 0 ||
       current.key === null ||
@@ -358,6 +452,7 @@ export function usePositionTransitionRuntime({
       current.layout === null ||
       previous.layout === null
     ) {
+      clearActive('aborted');
       return;
     }
 
@@ -368,7 +463,15 @@ export function usePositionTransitionRuntime({
       previousLayout: previous.layout,
       prior,
     });
+    if (
+      pendingHandoff !== null &&
+      pendingHandoffAcknowledgementFor(presentation) === null
+    ) {
+      clearActive('aborted');
+      return;
+    }
     if (!presentationHasActors(presentation)) {
+      clearActive('aborted');
       return;
     }
 
@@ -380,6 +483,7 @@ export function usePositionTransitionRuntime({
       presentation,
       targetKey: current.key,
     });
+    clearActive('superseded');
     mount(nextActive, durationMs);
   }, [
     active,
@@ -388,14 +492,54 @@ export function usePositionTransitionRuntime({
     development,
     dimensions,
     durationMs,
-    finishActive,
     geometryEpoch,
     layout,
     logWarning,
     pendingHandoff,
+    pendingHandoffRequired,
     position,
     reducedMotion,
+    startActive,
   ]);
+
+  useLayoutEffect(() => {
+    if (
+      active === null ||
+      activeRef.current !== active ||
+      active.pendingHandoffAcknowledgement === null
+    ) {
+      return;
+    }
+    const acknowledged = acknowledgementsMatch(
+      active.pendingHandoffAcknowledgement,
+      pendingHandoffAcknowledgement,
+    );
+    if (startedActiveRef.current === active) {
+      if (!acknowledged) {
+        cancelAnimation(active.progress);
+        clearActive('aborted');
+      }
+      return;
+    }
+    if (acknowledged) {
+      startActive(active);
+      return;
+    }
+    let mounted = true;
+    const fallbackTimer = setTimeout(() => {
+      if (
+        mounted &&
+        activeRef.current === active &&
+        startedActiveRef.current !== active
+      ) {
+        clearActive('aborted');
+      }
+    }, 64);
+    return () => {
+      mounted = false;
+      clearTimeout(fallbackTimer);
+    };
+  }, [active, clearActive, pendingHandoffAcknowledgement, startActive]);
 
   useLayoutEffect(
     () => () => {
@@ -403,6 +547,7 @@ export function usePositionTransitionRuntime({
       if (mounted !== null) {
         cancelAnimation(mounted.progress);
       }
+      startedActiveRef.current = null;
       activeRef.current = null;
     },
     [],

@@ -1,4 +1,4 @@
-import { memo, useMemo, type ReactElement } from 'react';
+import { memo, useLayoutEffect, useMemo, type ReactElement } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -6,6 +6,10 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import type { NormalizedControlledValue } from '../internal/controlled-domain';
+import type {
+  PendingCommitHandoffDescriptor,
+  PendingCommitTransitionAcknowledgement,
+} from '../internal/pending-commit-handoff';
 import {
   MAX_TRANSITION_PRESENTATION_RESIDUALS,
   projectTransitionPresentationActor,
@@ -40,6 +44,13 @@ interface PieceLayerProps {
   readonly dragSourceSquare?: SquareId | null;
   readonly draggingPieceGhostStyle: Readonly<ViewStyle>;
   readonly layout: Readonly<BoardSurfaceLayout>;
+  /** Exact pending actor retained while its controlled target is prepared. */
+  readonly pendingCommitPreparation?: Readonly<PendingCommitHandoffDescriptor> | null;
+  readonly onPendingCommitCanonicalPrepared?: (
+    acknowledgement: Readonly<PendingCommitTransitionAcknowledgement>,
+    prepared: boolean,
+  ) => void;
+  readonly pendingCommitTransitionReady?: Readonly<PendingCommitTransitionAcknowledgement> | null;
   readonly pieceRenderers: PieceRenderers;
   readonly pendingSourceSquare?: SquareId | null;
   readonly position: NormalizedControlledValue<PositionObject> | null;
@@ -302,6 +313,11 @@ function pieceLayerPropsAreEqual(
     previous.dragSourceSquare === next.dragSourceSquare &&
     previous.draggingPieceGhostStyle === next.draggingPieceGhostStyle &&
     previous.layout === next.layout &&
+    previous.pendingCommitPreparation === next.pendingCommitPreparation &&
+    previous.onPendingCommitCanonicalPrepared ===
+      next.onPendingCommitCanonicalPrepared &&
+    previous.pendingCommitTransitionReady ===
+      next.pendingCommitTransitionReady &&
     previous.pieceRenderers === next.pieceRenderers &&
     previous.pendingSourceSquare === next.pendingSourceSquare &&
     previous.style === next.style &&
@@ -374,10 +390,13 @@ interface BoardPieceHostProps {
   readonly boardId: string;
   readonly draggingPieceGhostStyle: Readonly<ViewStyle>;
   readonly isDragSource: boolean;
+  readonly isPendingCommitTarget: boolean;
   readonly isPendingSource: boolean;
   readonly layout: Readonly<BoardPieceLayout>;
   readonly progress: SharedValue<number> | null;
   readonly quiescent: boolean;
+  /** This mounted native lifetime has owned Reanimated props. */
+  readonly nativeDrain: boolean;
   readonly renderer: PieceRenderer;
   readonly style: Readonly<ViewStyle>;
   readonly transition: Readonly<PieceTransitionVisual> | null;
@@ -398,21 +417,28 @@ function BoardPieceHost({
   boardId,
   draggingPieceGhostStyle,
   isDragSource,
+  isPendingCommitTarget,
   isPendingSource,
   layout,
   progress,
   quiescent,
+  nativeDrain,
   renderer: Renderer,
   style,
   transition,
 }: BoardPieceHostProps): ReactElement {
   const resolvedStyle = isDragSource ? draggingPieceGhostStyle : style;
+  const resolvedOpacity =
+    typeof resolvedStyle.opacity === 'number' ? resolvedStyle.opacity : 1;
+  const canonicalOpacity =
+    typeof style.opacity === 'number' ? style.opacity : 1;
+  const dragSourceIsHardOccluded = isDragSource && resolvedOpacity === 0;
   const baseOpacity =
     isPendingSource && !isDragSource
       ? 0.45
-      : typeof resolvedStyle.opacity === 'number'
-        ? resolvedStyle.opacity
-        : 1;
+      : dragSourceIsHardOccluded
+        ? canonicalOpacity
+        : resolvedOpacity;
   const animatedStyle = useAnimatedStyle(
     () =>
       resolvePieceTransitionAnimatedStyle(
@@ -448,12 +474,24 @@ function BoardPieceHost({
         boardPieceHostLayoutStyle(layout),
         quiescent
           ? styles.quiescent
-          : transition === null || progress === null
-            ? { opacity: baseOpacity }
-            : animatedStyle,
+          : nativeDrain
+            ? animatedStyle
+            : { opacity: baseOpacity },
       ]}
     >
-      {quiescent ? null : <Renderer {...rendererProps} />}
+      {quiescent ? null : (
+        <View
+          collapsable={false}
+          style={[
+            styles.pieceContent,
+            isPendingCommitTarget || dragSourceIsHardOccluded
+              ? styles.hardOcclusion
+              : null,
+          ]}
+        >
+          <Renderer {...rendererProps} />
+        </View>
+      )}
     </Animated.View>
   );
 }
@@ -461,6 +499,8 @@ function BoardPieceHost({
 interface BoardPieceHostDescriptor {
   readonly canonical: boolean;
   readonly isDragSource: boolean;
+  readonly isPendingCommitPreparationTarget: boolean;
+  readonly isPendingCommitTarget: boolean;
   readonly isPendingSource: boolean;
   readonly key: string;
   readonly layout: Readonly<BoardPieceLayout>;
@@ -486,6 +526,9 @@ export const PieceLayer = memo(function PieceLayer({
   dragSourceSquare = null,
   draggingPieceGhostStyle,
   layout,
+  pendingCommitPreparation = null,
+  onPendingCommitCanonicalPrepared,
+  pendingCommitTransitionReady = null,
   pieceRenderers,
   pendingSourceSquare = null,
   position,
@@ -500,6 +543,27 @@ export const PieceLayer = memo(function PieceLayer({
     () => createPieceTransitionProjection(layout, transition),
     [layout, transition],
   );
+  const directPendingCommitTargetSquare =
+    pendingCommitPreparation !== null &&
+    pendingCommitPreparation.boardId === boardId &&
+    pendingCommitPreparation.targetSquare !== null &&
+    position?.revision === pendingCommitPreparation.toRevision
+      ? pendingCommitPreparation.targetSquare
+      : null;
+  const pendingTransitionActor = transition?.presentation.pending.find(
+    ({ kind }) => kind === 'pending-handoff',
+  );
+  const pendingTransitionIsReady =
+    pendingTransitionActor !== undefined &&
+    transition !== null &&
+    pendingCommitTransitionReady?.actorKey ===
+      pendingTransitionActor.actorKey &&
+    pendingCommitTransitionReady.presentationEpoch ===
+      transition.presentation.epoch;
+  const transitionPendingCommitTargetSquare =
+    pendingTransitionActor !== undefined && !pendingTransitionIsReady
+      ? pendingTransitionActor.rendererSquare
+      : null;
   const liveHosts = useMemo(() => {
     const hosts: Readonly<BoardPieceHostDescriptor>[] = [];
     const appendDetached = (
@@ -517,6 +581,8 @@ export const PieceLayer = memo(function PieceLayer({
         Object.freeze({
           canonical: false,
           isDragSource: false,
+          isPendingCommitPreparationTarget: false,
+          isPendingCommitTarget: false,
           isPendingSource: false,
           key: `${role}:${pieceLayout.key}`,
           layout: pieceLayout,
@@ -544,18 +610,32 @@ export const PieceLayer = memo(function PieceLayer({
       if (renderer === null) {
         continue;
       }
+      const isDragSource = pieceLayout.square === dragSourceSquare;
+      const isPendingSource = pieceLayout.square === pendingSourceSquare;
+      const isPendingCommitPreparationTarget =
+        pieceLayout.square === directPendingCommitTargetSquare;
+      const isPendingCommitTarget =
+        isPendingCommitPreparationTarget ||
+        pieceLayout.square === transitionPendingCommitTargetSquare;
       hosts.push(
         Object.freeze({
           canonical: true,
-          isDragSource: pieceLayout.square === dragSourceSquare,
-          isPendingSource: pieceLayout.square === pendingSourceSquare,
+          isDragSource,
+          isPendingCommitPreparationTarget,
+          isPendingCommitTarget,
+          isPendingSource,
           key: `current:${pieceLayout.key}`,
           layout: pieceLayout,
           nativeDrainToken:
             transitionProjection.current.has(pieceLayout.square) &&
             transition !== null
               ? `transition:${String(transition.presentation.epoch)}`
-              : null,
+              : isPendingCommitPreparationTarget &&
+                  pendingCommitPreparation !== null
+                ? `pending-commit:${String(pendingCommitPreparation.epoch)}:${pendingCommitPreparation.intentId}`
+                : (isDragSource || isPendingSource) && position !== null
+                  ? `interaction-source:${String(position.revision)}:${pieceLayout.square}`
+                  : null,
           progress: transition?.progress ?? null,
           renderer,
           transition:
@@ -566,16 +646,52 @@ export const PieceLayer = memo(function PieceLayer({
     return Object.freeze(hosts);
   }, [
     dragSourceSquare,
+    directPendingCommitTargetSquare,
+    pendingCommitPreparation,
     pendingSourceSquare,
     pieceRenderers,
     pieces,
+    position,
     transition?.progress,
+    transitionPendingCommitTargetSquare,
     transitionProjection,
   ]);
   const displayedHosts = useTransitionHostRetirement(
     liveHosts,
     pieceLayerNativeDrainHostBudget(layout.cells.length),
   );
+  const pendingCanonicalHostPrepared =
+    pendingTransitionActor !== undefined &&
+    displayedHosts.some(
+      ({ descriptor, nativeDrain, quiescent }) =>
+        nativeDrain &&
+        !quiescent &&
+        descriptor.canonical &&
+        descriptor.layout.square === pendingTransitionActor.rendererSquare &&
+        transitionProjection.current.has(descriptor.layout.square),
+    );
+  useLayoutEffect(() => {
+    if (
+      !pendingCanonicalHostPrepared ||
+      transition === null ||
+      onPendingCommitCanonicalPrepared === undefined
+    ) {
+      return;
+    }
+    const acknowledgement = Object.freeze({
+      actorKey: pendingTransitionActor.actorKey,
+      presentationEpoch: transition.presentation.epoch,
+    });
+    onPendingCommitCanonicalPrepared(acknowledgement, true);
+    return () => {
+      onPendingCommitCanonicalPrepared(acknowledgement, false);
+    };
+  }, [
+    onPendingCommitCanonicalPrepared,
+    pendingCanonicalHostPrepared,
+    pendingTransitionActor?.actorKey,
+    transition?.presentation.epoch,
+  ]);
 
   return (
     <View
@@ -591,11 +707,13 @@ export const PieceLayer = memo(function PieceLayer({
             boardId={boardId}
             draggingPieceGhostStyle={draggingPieceGhostStyle}
             isDragSource={descriptor.isDragSource}
+            isPendingCommitTarget={descriptor.isPendingCommitTarget}
             isPendingSource={descriptor.isPendingSource}
             key={descriptor.key}
             layout={descriptor.layout}
             progress={nativeDrain ? descriptor.progress : null}
             quiescent={quiescent}
+            nativeDrain={nativeDrain}
             renderer={descriptor.renderer}
             style={style}
             transition={nativeDrain ? descriptor.transition : null}
@@ -617,5 +735,12 @@ const styles = StyleSheet.create({
   },
   quiescent: {
     opacity: 0,
+  },
+  hardOcclusion: {
+    opacity: 0,
+  },
+  pieceContent: {
+    height: '100%',
+    width: '100%',
   },
 });

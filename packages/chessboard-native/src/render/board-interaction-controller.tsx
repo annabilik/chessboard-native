@@ -83,6 +83,10 @@ interface BoardInteractionControllerProps {
   readonly onPressedSquareChange?: (square: SquareId | null) => void;
   readonly onSquarePressIn?: OnSquarePressIn;
   readonly onSquarePressOut?: OnSquarePressOut;
+  /** Board-private source-restoration acknowledgement for native cancel. */
+  readonly onTerminalDragCancellation?: (
+    lease: Readonly<TerminalBoardDragLease>,
+  ) => boolean;
   readonly pieceRenderers: PieceRenderers;
   readonly pieceStyle: Readonly<ViewStyle>;
   readonly position: NormalizedControlledValue<PositionObject>;
@@ -299,6 +303,7 @@ function BoardInteractionControllerContent({
   onPressedSquareChange,
   onSquarePressIn,
   onSquarePressOut,
+  onTerminalDragCancellation,
   pieceRenderers,
   pieceStyle,
   position,
@@ -421,6 +426,7 @@ function BoardInteractionControllerContent({
   const onPressedSquareChangeAtCommit = useRef(onPressedSquareChange);
   const onSquarePressInAtCommit = useRef(onSquarePressIn);
   const onSquarePressOutAtCommit = useRef(onSquarePressOut);
+  const onTerminalDragCancellationAtCommit = useRef(onTerminalDragCancellation);
   const snapshotAtCommit = useRef(snapshot);
   const pieceSize = Math.min(
     geometry.width / geometry.columns,
@@ -621,6 +627,23 @@ function BoardInteractionControllerContent({
     [providerRuntime.drag, queueTerminalPresentationReset],
   );
 
+  const handoffCancelledTerminalDrag = useCallback(
+    (lease: Readonly<TerminalBoardDragLease>): void => {
+      retainedTerminalDrag.current = lease;
+      let acknowledged = false;
+      try {
+        acknowledged =
+          onTerminalDragCancellationAtCommit.current?.(lease) === true;
+      } catch {
+        // A parent failure falls back to exact release/quiescent reset.
+      }
+      if (!acknowledged) {
+        retireTerminalDrag(lease);
+      }
+    },
+    [retireTerminalDrag],
+  );
+
   const cancelAnnotation = useCallback((): void => {
     annotationRuntimeAtCommit.current?.cancel();
   }, []);
@@ -684,7 +707,7 @@ function BoardInteractionControllerContent({
   const cleanRejectedTerminalSignal = useCallback(
     (signal: Readonly<BoardGestureSignal>): void => {
       if (
-        signal.type !== 'drag-end' ||
+        (signal.type !== 'drag-end' && signal.type !== 'drag-cancel') ||
         !acceptingSignals.current ||
         terminalDragLeaseMatches(retainedTerminalDrag.current, {
           boardId: signal.boardId,
@@ -696,17 +719,33 @@ function BoardInteractionControllerContent({
       ) {
         return;
       }
-      retireTerminalDrag(
-        Object.freeze({
-          boardId: signal.boardId,
-          gestureToken: signal.gestureToken,
-          owner: providerOwner.current,
-          presentation,
-          sourceSquare: signal.sourceSquare,
-        }),
-      );
+      const lease: Readonly<TerminalBoardDragLease> = Object.freeze({
+        boardId: signal.boardId,
+        gestureToken: signal.gestureToken,
+        owner: providerOwner.current,
+        presentation,
+        sourceSquare: signal.sourceSquare,
+      });
+      if (signal.type === 'drag-cancel') {
+        if (signalMatchesActive(adapter.current, signal)) {
+          const correlation = adapter.current.active?.correlation;
+          if (correlation !== undefined) {
+            adapter.current = reduceBoardGestureAdapter(adapter.current, {
+              correlation,
+              reason: signal.reason,
+              type: 'cancel',
+            }).state;
+          }
+        }
+        // A stale JS generation can still own the exact native overlay. Give
+        // BoardSurface the same source-restoration barrier as an ordinary
+        // cancel; exact identity checks decide whether it may acknowledge.
+        handoffCancelledTerminalDrag(lease);
+        return;
+      }
+      retireTerminalDrag(lease);
     },
-    [presentation, retireTerminalDrag],
+    [handoffCancelledTerminalDrag, presentation, retireTerminalDrag],
   );
 
   const handleSignal = useCallback(
@@ -846,19 +885,43 @@ function BoardInteractionControllerContent({
         }
         case 'drag-cancel': {
           if (!signalMatchesActive(adapter.current, signal)) {
+            cleanRejectedTerminalSignal(signal);
             return;
           }
           const correlation = adapter.current.active?.correlation;
           if (correlation === undefined) {
+            cleanRejectedTerminalSignal(signal);
             return;
           }
-          applyReduction(
-            reduceBoardGestureAdapter(adapter.current, {
-              correlation,
-              reason: signal.reason,
-              type: 'cancel',
-            }),
-          );
+          const reduction = reduceBoardGestureAdapter(adapter.current, {
+            correlation,
+            reason: signal.reason,
+            type: 'cancel',
+          });
+          const active = providerRuntime.drag.getSnapshot().active;
+          const terminalLease: Readonly<TerminalBoardDragLease> | null =
+            active?.boardId === boardId &&
+            active.gestureToken === signal.gestureToken &&
+            active.owner === providerOwner.current &&
+            active.presentation === presentation &&
+            active.source.kind === 'board' &&
+            active.source.square === signal.sourceSquare
+              ? Object.freeze({
+                  boardId,
+                  gestureToken: signal.gestureToken,
+                  owner: providerOwner.current,
+                  presentation,
+                  sourceSquare: signal.sourceSquare,
+                })
+              : null;
+          if (terminalLease === null) {
+            applyReduction(reduction);
+            return;
+          }
+          // As with drag-end, advance semantics and retain exact ownership
+          // before a parent callback can synchronously replace or unmount us.
+          adapter.current = reduction.state;
+          handoffCancelledTerminalDrag(terminalLease);
           return;
         }
         case 'tap': {
@@ -1034,6 +1097,7 @@ function BoardInteractionControllerContent({
       signalGeneration,
       finishNativePress,
       geometry.visualSquares,
+      handoffCancelledTerminalDrag,
       presentation,
       trackPress,
     ],
@@ -1047,6 +1111,7 @@ function BoardInteractionControllerContent({
     onPressedSquareChangeAtCommit.current = onPressedSquareChange;
     onSquarePressInAtCommit.current = onSquarePressIn;
     onSquarePressOutAtCommit.current = onSquarePressOut;
+    onTerminalDragCancellationAtCommit.current = onTerminalDragCancellation;
   }, [
     annotationRuntime,
     cancelFromProvider,
@@ -1055,6 +1120,7 @@ function BoardInteractionControllerContent({
     onPressedSquareChange,
     onSquarePressIn,
     onSquarePressOut,
+    onTerminalDragCancellation,
   ]);
 
   useLayoutEffect(() => {
