@@ -99,9 +99,11 @@ canonical settle without requiring a timing-racy post-`ACTION_UP` overlay
 frame.
 The shared gate runner requires a physical device, zero official
 Fabric/Reanimated scanner findings, and exactly one schema-valid
-`CHESSBOARD_DRAG_HANDOFF` record emitted only after all native assertions. The
-validated summary is embedded in `result.json`; a missing, duplicate,
-malformed, or violating record fails the gate even when Gradle exits zero.
+`CHESSBOARD_DRAG_HANDOFF` record. The test emits that record after collecting
+all five sessions and before enforcing their visual assertions, so an expected
+negative control remains machine-readable. A validated passing summary is
+embedded in `result.json`; a missing, duplicate, malformed, or violating record
+fails the gate even when Gradle exits zero.
 Class-only and wrong-method filters for the terminal-handoff test also require
 that record, so a zero-test filter mismatch cannot pass closed-loop evidence.
 Evidence is written under

@@ -129,7 +129,6 @@ class ChessboardTerminalDragHandoffTest {
             )
             drawProbe.awaitVisibleRole(ActorRole.PENDING_TARGET)
             commitPendingMove()
-            drawProbe.awaitVisibleRole(ActorRole.CANONICAL_TRANSITION)
             awaitState(
                 abortCount = 0,
                 callbackCount = 1,
@@ -145,7 +144,7 @@ class ChessboardTerminalDragHandoffTest {
             )
             onView(isRoot()).perform(waitForAtLeast(TRANSITION_SETTLE_MS))
             drawProbe.awaitSettledCanonicalAtTarget()
-            reports += drawProbe.finishSession().also(::assertBlockedAcceptedReport)
+            reports += drawProbe.finishSession()
 
             // Synchronous rejection restores d5 without changing the
             // consumer-owned position.
@@ -179,7 +178,7 @@ class ChessboardTerminalDragHandoffTest {
                 positionRevision = INITIAL_POSITION_REVISION + 1,
             )
             drawProbe.awaitSettledCanonicalAtSource()
-            reports += drawProbe.finishSession().also(::assertRecoveredSourceReport)
+            reports += drawProbe.finishSession()
 
             // Preserve a raw out-of-bounds pointer through the same callback.
             val offBoardTarget = geometry.aboveBoard(file = 3)
@@ -217,7 +216,7 @@ class ChessboardTerminalDragHandoffTest {
                 positionRevision = INITIAL_POSITION_REVISION + 1,
             )
             drawProbe.awaitSettledCanonicalAtSource()
-            reports += drawProbe.finishSession().also(::assertRecoveredSourceReport)
+            reports += drawProbe.finishSession()
 
             // Native cancellation must emit no move request and must leave the
             // same surface reusable.
@@ -251,7 +250,7 @@ class ChessboardTerminalDragHandoffTest {
                 positionRevision = INITIAL_POSITION_REVISION + 1,
             )
             drawProbe.awaitSettledCanonicalAtSource()
-            reports += drawProbe.finishSession().also(::assertRecoveredSourceReport)
+            reports += drawProbe.finishSession()
 
             // A second accepted drag after rejection, off-board release, and
             // cancellation proves terminal state and provider ownership reuse.
@@ -286,7 +285,6 @@ class ChessboardTerminalDragHandoffTest {
             )
             drawProbe.awaitVisibleRole(ActorRole.PENDING_TARGET)
             commitPendingMove()
-            drawProbe.awaitVisibleRole(ActorRole.CANONICAL_TRANSITION)
             awaitState(
                 abortCount = 0,
                 callbackCount = 4,
@@ -302,7 +300,7 @@ class ChessboardTerminalDragHandoffTest {
             )
             onView(isRoot()).perform(waitForAtLeast(TRANSITION_SETTLE_MS))
             drawProbe.awaitSettledCanonicalAtTarget()
-            reports += drawProbe.finishSession().also(::assertAcceptedReport)
+            reports += drawProbe.finishSession()
         } finally {
             activeTouch?.let { touch ->
                 bestEffortFinishTouch(uiAutomation, touch, MotionEvent.ACTION_CANCEL)
@@ -319,6 +317,14 @@ class ChessboardTerminalDragHandoffTest {
             reports = reports,
             startPid = startPid,
         )
+        // Emit the complete session telemetry before enforcing its visual
+        // invariants. This keeps an expected negative-control failure
+        // machine-readable while the positive gate remains fail-closed.
+        assertBlockedAcceptedReport(reports[0])
+        assertRecoveredSourceReport(reports[1])
+        assertRecoveredSourceReport(reports[2])
+        assertRecoveredSourceReport(reports[3])
+        assertAcceptedReport(reports[4])
     }
 
     private fun blockJsQueue(): JsQueueBlocker {
