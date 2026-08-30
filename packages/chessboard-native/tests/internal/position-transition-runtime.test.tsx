@@ -12,7 +12,11 @@ import {
   type ReactElement,
 } from 'react';
 import { View } from 'react-native';
-import type { SharedValue } from 'react-native-reanimated';
+import {
+  ReduceMotion,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
 
 import {
   STANDARD_BOARD_DIMENSIONS,
@@ -36,6 +40,20 @@ import {
   createBoardSurfaceLayout,
   type BoardSurfaceLayout,
 } from '../../src/render/board-layout';
+
+jest.mock('react-native-reanimated', () => {
+  const actual = jest.requireActual<typeof import('react-native-reanimated')>(
+    'react-native-reanimated',
+  );
+  return {
+    ...actual,
+    withTiming: jest.fn((...args: Parameters<typeof actual.withTiming>) =>
+      actual.withTiming(...args),
+    ),
+  };
+});
+
+const mockWithTiming = jest.mocked(withTiming);
 
 const STANDARD_LAYOUT = createBoardSurfaceLayout(
   { height: 800, width: 800 },
@@ -250,6 +268,56 @@ describe('mounted controlled-position transition runtime', () => {
       jest.advanceTimersByTime(160);
     });
     expect(hook.result.current).toBeNull();
+  });
+
+  it('forces an elected timing animation to ignore the system scale while the runtime reduced-motion gate still snaps', async () => {
+    const a = position(1, {
+      a1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    const b = position(2, {
+      b1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    mockWithTiming.mockClear();
+    const animated = await renderHook(useHarness, {
+      initialProps: {
+        durationMs: 200,
+        position: a,
+        reducedMotion: false,
+      },
+    });
+    await animated.rerender({
+      durationMs: 200,
+      position: b,
+      reducedMotion: false,
+    });
+
+    expect(mockWithTiming).toHaveBeenCalledWith(
+      1,
+      {
+        duration: 200,
+        reduceMotion: ReduceMotion.Never,
+      },
+      expect.any(Function),
+    );
+    await animated.unmount();
+
+    mockWithTiming.mockClear();
+    const reduced = await renderHook(useHarness, {
+      initialProps: {
+        durationMs: 200,
+        position: a,
+        reducedMotion: true,
+      },
+    });
+    await reduced.rerender({
+      durationMs: 200,
+      position: b,
+      reducedMotion: true,
+    });
+
+    expect(reduced.result.current).toBeNull();
+    expect(mockWithTiming).not.toHaveBeenCalled();
+    await reduced.unmount();
   });
 
   it('mounts an exact pending handoff paused, starts a fresh full clock only after ACK, and snaps on ACK revocation', async () => {

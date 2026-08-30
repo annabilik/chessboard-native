@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import {
   cancelAnimation,
   makeMutable,
+  ReduceMotion,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
@@ -278,11 +279,18 @@ export function usePositionTransitionRuntime({
       const presentationEpoch = started.presentation.epoch;
       const targetKey = started.targetKey;
       started.progress.set(
-        withTiming(1, { duration: started.durationMs }, (finished): void => {
-          if (finished) {
-            scheduleOnRN(finishActive, presentationEpoch, targetKey);
-          }
-        }),
+        withTiming(
+          1,
+          {
+            duration: started.durationMs,
+            reduceMotion: ReduceMotion.Never,
+          },
+          (finished): void => {
+            if (finished) {
+              scheduleOnRN(finishActive, presentationEpoch, targetKey);
+            }
+          },
+        ),
       );
       return true;
     },
