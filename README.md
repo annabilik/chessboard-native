@@ -148,13 +148,13 @@ replacement.
 
 ## Versions
 
-| Version        | Status             | Notable surface                                                                       |
-| -------------- | ------------------ | ------------------------------------------------------------------------------------- |
-| `0.1.0`        | prepared on `main` | First stable-channel release; publishes to npm `latest`                               |
-| `0.1.0-next.3` | published          | Bundled Cburnett default piece renderers (CC BY-SA 3.0)                               |
-| `0.1.0`        | published          | `react-chessboard-compat` entry point; frozen public API and complete parity evidence |
-| `0.1.0-next.1` | published          | npm trusted-publishing (OIDC) proof release                                           |
-| `0.1.0-next.0` | published          | Bootstrap release                                                                     |
+| Version        | Status    | Notable surface                                                                       |
+| -------------- | --------- | ------------------------------------------------------------------------------------- |
+| `0.1.1`        | prepared  | Stable release of the `0.1.1` prerelease line; publication to npm `latest` is pending |
+| `0.1.0-next.3` | published | Bundled Cburnett default piece renderers (CC BY-SA 3.0)                               |
+| `0.1.0`        | published | `react-chessboard-compat` entry point; frozen public API and complete parity evidence |
+| `0.1.0-next.1` | published | npm trusted-publishing (OIDC) proof release                                           |
+| `0.1.0-next.0` | published | Bootstrap release                                                                     |
 
 Versions before `0.1.0-next.3` ship interim geometric placeholder pieces, and
 versions before `0.1.0` lack the compatibility entry point. `0.1.0` is
@@ -162,7 +162,8 @@ the first stable version intentionally published to the `latest` channel;
 `next` continues to track prereleases and may therefore resolve older than
 `latest` between cycles.
 
-`0.1.0` is a 0.x release. The API is frozen and the parity ledger is closed,
+The prepared `0.1.1` is a 0.x release. The API is frozen and the parity ledger
+is closed,
 but the physical-device gates listed in the
 [support matrix](docs/support-matrix.md#release-validation-still-pending) —
 TalkBack, VoiceOver, visual baselines, gesture and lifecycle matrix,

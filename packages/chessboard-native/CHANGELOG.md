@@ -1,5 +1,51 @@
 # @vibechess/chessboard-native
 
+## 0.1.1
+
+> **Validation boundary:** Physical TalkBack and VoiceOver validation remains
+> incomplete and was explicitly waived only for this stable `0.1.1`
+> publication. This release does not claim physical screen-reader or
+> production-readiness certification.
+
+### Patch Changes
+
+- 9dccb5a: <!-- markdownlint-disable MD041 -->
+
+  Make Android drag-overlay release and provider teardown safe under Fabric while
+  preserving exactly-once controlled move commits, custom piece-renderer
+  continuity, reduced-motion behavior, iOS drag presentation, and bounded
+  low-end Android pickup and sustained-frame performance.
+
+- d9f2ad8: <!-- markdownlint-disable MD041 -->
+
+  Isolate every controlled-position transition epoch on its own Reanimated
+  progress clock so rapid 200 ms transitions cannot write through retained
+  descriptors from an interrupted epoch, while keeping retirement shells as
+  non-collapsible native hosts until their guarded removal.
+
+  Keep pending-target visual handoff drag-only so correlated tap, keyboard, and
+  accessibility commits retain their ordinary configured transition.
+
+- 9f6698a: <!-- markdownlint-disable MD041 -->
+
+  Prevent interrupted controlled-position animations from updating removed
+  Fabric hosts by quiescing disappearing piece and pending-handoff hosts through
+  a two-frame retirement window and avoiding terminal progress writes during
+  transition teardown.
+
+- 6f6a868: <!-- markdownlint-disable MD041 -->
+
+  Keep admitted controlled-transition hosts mounted through Reanimated 4.5's
+  Android settled-props cleanup window before guarded removal. Admission is
+  bounded across live and retiring hosts to `2 * cells + 64` for pieces and 65
+  for pending handoffs; overflow current pieces settle statically without an
+  animated descriptor, while hidden detached and pending actors are omitted.
+  Other platforms and overflow actors retain the two-frame removal barrier.
+
+  This protection applies to ordinary updates while the layer stays mounted.
+  Whole-board or provider teardown still removes descendants immediately and
+  remains covered by a mandatory physical Android lifecycle gate.
+
 ## 0.1.1-next.3
 
 ### Patch Changes
