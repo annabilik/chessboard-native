@@ -15,16 +15,13 @@ const defaultChecklistPath = path.join(
 );
 const defaultEvidencePath = path.join(
   repositoryRoot,
-  'docs/release-evidence/accessibility-0.1.0.json',
+  'docs/release-evidence/accessibility-0.1.1-next.3.json',
 );
 const defaultSchemaPath = path.join(
   repositoryRoot,
   'fixtures/accessibility/physical-results.schema.json',
 );
-const defaultEvidenceSummaryPath = path.join(
-  repositoryRoot,
-  'docs/release-evidence/accessibility-0.1.0.md',
-);
+const defaultEvidenceSummaryPath = evidenceSummaryPathFor(defaultEvidencePath);
 const documentationPath = path.join(repositoryRoot, 'docs/accessibility.md');
 const supportMatrixPath = path.join(repositoryRoot, 'docs/support-matrix.md');
 const galleryCatalogPath = path.join(
@@ -43,11 +40,11 @@ const expectedAssistiveTechnology = Object.freeze({
 });
 const canonicalPackageIdentity = Object.freeze({
   archiveSha256:
-    '7457c0f66774c03ca18a3bc05496471d1bf58f4163069f5e15245b64aeb8ea67',
+    '573cde3c9c9d137453a8ddae31011f5d4a9c723dc0a2688ddff78776634bacf6',
   publicationRun:
-    'https://github.com/annabilik/chessboard-native/actions/runs/30806201340',
-  sourceCommit: 'f8aa4653e9d75d3141dfcbae52a1223a327f6945',
-  version: '0.1.0',
+    'https://github.com/annabilik/chessboard-native/actions/runs/33224004537',
+  sourceCommit: '3d8aa5b0df5b95f2e9b0d711dcb00947b693c538',
+  version: '0.1.1-next.3',
 });
 const physicalValidationFixturePaths = Object.freeze([
   'apps/example',
@@ -69,6 +66,11 @@ function usage() {
     '  --expected-archive-sha256 <sha256>',
     '  --expected-publication-run <url>',
   ].join('\n');
+}
+
+function evidenceSummaryPathFor(evidencePath) {
+  const parsed = path.parse(evidencePath);
+  return path.join(parsed.dir, `${parsed.name}.md`);
 }
 
 function parseArguments(argumentsList) {
@@ -367,6 +369,19 @@ export function validateEvidenceDocumentation({
   supportMatrix,
   evidence,
 }) {
+  for (const [value, label] of [
+    [`${evidence.package.name}@${evidence.package.version}`, 'package'],
+    [evidence.package.sourceCommit, 'source commit'],
+    [evidence.package.archiveSha256, 'archive SHA-256'],
+    [evidence.package.publicationRun, 'publication run'],
+  ]) {
+    if (!evidenceSummary.includes(value)) {
+      throw new Error(
+        `accessibility evidence summary must identify ${label}: ${value}`,
+      );
+    }
+  }
+
   const complete = evidence.sessions.every((session) =>
     session.results.every((result) => result.status === 'passed'),
   );
@@ -556,6 +571,12 @@ function validateRepositoryGalleryBinding(galleryCommit) {
 }
 
 export async function checkRepositoryAccessibilityEvidence(options = {}) {
+  const evidencePath = options.evidencePath ?? defaultEvidencePath;
+  const evidenceSummaryPath =
+    options.evidenceSummaryPath ??
+    (evidencePath === defaultEvidencePath
+      ? defaultEvidenceSummaryPath
+      : evidenceSummaryPathFor(evidencePath));
   const [
     checklist,
     evidence,
@@ -566,11 +587,11 @@ export async function checkRepositoryAccessibilityEvidence(options = {}) {
     supportMatrix,
   ] = await Promise.all([
     readJson(defaultChecklistPath),
-    readJson(options.evidencePath ?? defaultEvidencePath),
+    readJson(evidencePath),
     readJson(defaultSchemaPath),
     readFile(documentationPath, 'utf8'),
     readFile(galleryCatalogPath, 'utf8'),
-    readFile(defaultEvidenceSummaryPath, 'utf8'),
+    readFile(evidenceSummaryPath, 'utf8'),
     readFile(supportMatrixPath, 'utf8'),
   ]);
 

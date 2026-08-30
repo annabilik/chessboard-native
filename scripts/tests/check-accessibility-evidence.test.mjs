@@ -38,7 +38,7 @@ const [
   supportMatrix,
 ] = await Promise.all([
   readJson('fixtures/accessibility/manual-checks.json'),
-  readJson('docs/release-evidence/accessibility-0.1.0.json'),
+  readJson('docs/release-evidence/accessibility-0.1.1-next.3.json'),
   readJson('fixtures/accessibility/physical-results.schema.json'),
   readFile(path.join(repositoryRoot, 'docs/accessibility.md'), 'utf8'),
   readFile(
@@ -46,7 +46,10 @@ const [
     'utf8',
   ),
   readFile(
-    path.join(repositoryRoot, 'docs/release-evidence/accessibility-0.1.0.md'),
+    path.join(
+      repositoryRoot,
+      'docs/release-evidence/accessibility-0.1.1-next.3.md',
+    ),
     'utf8',
   ),
   readFile(path.join(repositoryRoot, 'docs/support-matrix.md'), 'utf8'),
@@ -274,7 +277,7 @@ test('rejects platform, schema, and exact-package mismatches', () => {
         evidence,
         expectedVersion: '0.1.0-next.999',
       }),
-    /version is 0\.1\.0, expected 0\.1\.0-next\.999/,
+    /version is 0\.1\.1-next\.3, expected 0\.1\.0-next\.999/,
   );
 
   for (const [field, option, label] of [
@@ -350,6 +353,23 @@ test('keeps derived Markdown status aligned with evidence state', () => {
       }),
     /Android evidence summary row must be Pending/,
   );
+
+  for (const [value, label] of [
+    [`${evidence.package.name}@${evidence.package.version}`, 'package'],
+    [evidence.package.sourceCommit, 'source commit'],
+    [evidence.package.archiveSha256, 'archive SHA-256'],
+    [evidence.package.publicationRun, 'publication run'],
+  ]) {
+    assert.throws(
+      () =>
+        validateEvidenceDocumentation({
+          evidenceSummary: evidenceSummary.replace(value, 'mismatch'),
+          supportMatrix,
+          evidence,
+        }),
+      new RegExp(`must identify ${label}`),
+    );
+  }
 });
 
 test('requires completed human-readable commit, device, and artifact details', () => {
