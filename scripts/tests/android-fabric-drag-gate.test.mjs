@@ -54,6 +54,7 @@ function validTerminalHandoffSummary() {
     finalActiveOverlayHosts: 0,
     finalRetiringOverlayHosts: 0,
     gestureCount: 5,
+    invalidFrameWitnesses: [],
     invalidPrimaryCompositionFrames: 0,
     offBoardCount: 1,
     overOpacityFrames: 0,
@@ -69,7 +70,7 @@ function validTerminalHandoffSummary() {
     recoveryUnexpectedLocationFrames: 0,
     rejectedCount: 1,
     reusePassed: true,
-    schemaVersion: 3,
+    schemaVersion: 4,
     singlePrimaryFrames: 46,
     sourceVisibleWithOverlayFrames: 0,
     spatialDuplicateFrames: 0,
@@ -83,6 +84,35 @@ function validTerminalHandoffSummary() {
 
 function terminalHandoffLog(summary) {
   return `08-30 I ChessboardDragHandoff: CHESSBOARD_DRAG_HANDOFF ${JSON.stringify(summary)}\n`;
+}
+
+function invalidFrameWitness() {
+  return {
+    activeOverlayHosts: 0,
+    actors: [
+      {
+        alpha: 1,
+        centerX: 320.5,
+        centerY: 970.5,
+        role: 'pending-target',
+      },
+      {
+        alpha: 0.45,
+        centerX: 320.5,
+        centerY: 970.5,
+        role: 'canonical-transition',
+      },
+    ],
+    frameAfterArmMs: 142.5,
+    frameAfterInjectionMs: 130,
+    frameTimeNs: 123_456_789,
+    jsQueueBlocked: false,
+    opacityMass: 1.45,
+    outcome: 'accepted',
+    postInjection: true,
+    retiringOverlayHosts: 0,
+    sessionIndex: 0,
+  };
 }
 
 function validPerformanceSummary() {
@@ -319,7 +349,7 @@ test('fails closed for missing, duplicate, malformed, or schema-drifted handoff 
   delete missingField.reusePassed;
   assert.throws(
     () => parseAndroidTerminalDragHandoff(terminalHandoffLog(missingField)),
-    /exactly the schemaVersion 3 fields/u,
+    /exactly the schemaVersion 4 fields/u,
   );
   assert.throws(
     () =>
@@ -329,13 +359,54 @@ test('fails closed for missing, duplicate, malformed, or schema-drifted handoff 
           unexpected: 1,
         }),
       ),
-    /exactly the schemaVersion 3 fields/u,
+    /exactly the schemaVersion 4 fields/u,
+  );
+});
+
+test('validates bounded invalid-frame witnesses before enforcing continuity', () => {
+  const witness = invalidFrameWitness();
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog({
+          ...validTerminalHandoffSummary(),
+          invalidFrameWitnesses: [witness],
+          invalidPrimaryCompositionFrames: 1,
+          overOpacityFrames: 1,
+        }),
+      ),
+    /invalidPrimaryCompositionFrames must equal 0/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog({
+          ...validTerminalHandoffSummary(),
+          invalidFrameWitnesses: [witness],
+        }),
+      ),
+    /invalidFrameWitnesses must be empty/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog({
+          ...validTerminalHandoffSummary(),
+          invalidFrameWitnesses: [
+            {
+              ...witness,
+              actors: [{ ...witness.actors[0], alpha: 1.5 }],
+            },
+          ],
+        }),
+      ),
+    /alpha must be between 0 and 1/u,
   );
 });
 
 test('rejects invalid terminal outcome, continuity, PID, blocker, and cleanup evidence', () => {
   const invalidCases = [
-    ['schemaVersion', 2, /schemaVersion must equal 3/u],
+    ['schemaVersion', 3, /schemaVersion must equal 4/u],
     ['processStable', false, /processStable must be true/u],
     [
       'blockedJsQueueReleaseConfirmed',

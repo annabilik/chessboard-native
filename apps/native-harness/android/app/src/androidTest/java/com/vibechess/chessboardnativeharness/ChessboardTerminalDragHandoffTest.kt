@@ -704,7 +704,7 @@ class ChessboardTerminalDragHandoffTest {
             }
         val json =
             JSONObject()
-                .put("schemaVersion", 3)
+                .put("schemaVersion", 4)
                 .put("startPid", startPid)
                 .put("endPid", endPid)
                 .put("processStable", startPid == endPid)
