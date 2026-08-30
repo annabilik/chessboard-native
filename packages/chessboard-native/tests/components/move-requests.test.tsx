@@ -950,10 +950,10 @@ describe('public controlled move requests', () => {
       'move-piece:pending-source:a2:token',
     )[0];
     if (pendingSourceArtwork === undefined) {
-      throw new Error('Expected the admitted pending source actor.');
+      throw new Error('Expected the static pending source actor.');
     }
     const pendingSourceHost = boardPieceHost(pendingSourceArtwork);
-    expect(animatedStyle(pendingSourceHost)['opacity']).toBe(0.45);
+    expect(nativeStyle(pendingSourceHost).opacity).toBe(0.45);
 
     expect(retirementFrames).toHaveLength(1);
     retirementFrameSpy.mockRestore();
@@ -1011,14 +1011,17 @@ describe('public controlled move requests', () => {
     const pendingStyle = animatedStyle(pendingHandoffHost);
     expect(canonicalHost).toBe(pendingSourceHost);
     expect(canonicalStyle['transform']).toBeUndefined();
-    // The native mapper can still expose its admitted source opacity until it
-    // consumes the preparation closure. The independent child boundary makes
-    // the effective canonical actor exactly zero for that guarded frame.
-    expect(canonicalStyle['opacity']).toBe(0.45);
+    // Exact preparation first admits this otherwise-static pending-source
+    // host. Its unattached source worklet can still expose .45, or the
+    // replacement base-one mapper can already have evaluated. The independent
+    // child boundary makes either ordering draw-safe.
+    const preparedOuterOpacity = Number(canonicalStyle['opacity']);
+    expect(preparedOuterOpacity).toBeGreaterThanOrEqual(0.45);
+    expect(preparedOuterOpacity).toBeLessThanOrEqual(1);
     expect(nativeStyle(canonicalOcclusionBoundary).opacity).toBe(0);
     expect(pendingStyle['opacity']).toBe(1);
     expect(
-      Number(canonicalStyle['opacity']) *
+      preparedOuterOpacity *
         Number(nativeStyle(canonicalOcclusionBoundary).opacity) +
         Number(pendingStyle['opacity']),
     ).toBe(1);
@@ -1378,27 +1381,24 @@ describe('public controlled move requests', () => {
     if (terminal === null) {
       throw new Error('Expected an attached terminal provider lease.');
     }
-    const admittedDragSource = nodesByTestId(
+    const freshDragSource = nodesByTestId(
       board,
       'move-piece:source-ghost:a2:token',
     )[0];
-    if (admittedDragSource === undefined) {
-      throw new Error('Expected the admitted synchronous drag source.');
+    if (freshDragSource === undefined) {
+      throw new Error('Expected the synchronous drag source.');
     }
-    const admittedDragSourceHost = boardPieceHost(admittedDragSource);
-    // The admitted Reanimated descriptor is already attached, even though its
-    // passive mapper can still expose the preceding static opacity. The
-    // independent child mask makes that stale native value draw-safe.
-    const admittedNativeOpacity = Number(
-      animatedStyle(admittedDragSourceHost)['opacity'],
+    const freshDragSourceHost = boardPieceHost(freshDragSource);
+    // Fresh interaction-only hosts stay on explicit static opacity. The child
+    // mask hides the exact-zero ghost until exact preparation admits this same
+    // stable-ID host behind its controlled-target barrier.
+    const freshSourceOpacity = Number(nativeStyle(freshDragSourceHost).opacity);
+    const freshMaskOpacity = Number(
+      nativeStyle(boardPieceOcclusionBoundary(freshDragSource)).opacity,
     );
-    const admittedMaskOpacity = Number(
-      nativeStyle(boardPieceOcclusionBoundary(admittedDragSource)).opacity,
-    );
-    expect(admittedNativeOpacity).toBeGreaterThanOrEqual(0);
-    expect(admittedNativeOpacity).toBeLessThanOrEqual(1);
-    expect(admittedMaskOpacity).toBe(0);
-    expect(admittedNativeOpacity * admittedMaskOpacity).toBe(0);
+    expect(freshSourceOpacity).toBe(1);
+    expect(freshMaskOpacity).toBe(0);
+    expect(freshSourceOpacity * freshMaskOpacity).toBe(0);
     const completionFrames: ((timestamp: number) => void)[] = [];
     const completionFrameSpy = jest
       .spyOn(globalThis, 'requestAnimationFrame')
@@ -1434,7 +1434,7 @@ describe('public controlled move requests', () => {
     if (synchronousTarget === undefined) {
       throw new Error('Expected the synchronous controlled target.');
     }
-    expect(boardPieceHost(synchronousTarget)).toBe(admittedDragSourceHost);
+    expect(boardPieceHost(synchronousTarget)).toBe(freshDragSourceHost);
     expect(completionFrames.length).toBeGreaterThan(0);
     jest.useFakeTimers();
     for (let frameTurn = 0; frameTurn < 16; frameTurn += 1) {
@@ -2720,7 +2720,7 @@ describe('public controlled move requests', () => {
       throw new Error('Expected the exact-zero source ghost before cancel.');
     }
     const cancelledSourceHost = boardPieceHost(cancelledSourceGhost);
-    expect(animatedStyle(cancelledSourceHost)['opacity']).toBe(1);
+    expect(nativeStyle(cancelledSourceHost).opacity).toBe(1);
     expect(
       nativeStyle(boardPieceOcclusionBoundary(cancelledSourceGhost)).opacity,
     ).toBe(0);
@@ -2758,7 +2758,7 @@ describe('public controlled move requests', () => {
       throw new Error('Expected the restored exact-zero source.');
     }
     expect(boardPieceHost(restoredSource)).toBe(cancelledSourceHost);
-    expect(animatedStyle(cancelledSourceHost)['opacity']).toBe(1);
+    expect(nativeStyle(cancelledSourceHost).opacity).toBe(1);
     expect(
       nativeStyle(boardPieceOcclusionBoundary(restoredSource)).opacity,
     ).toBeUndefined();

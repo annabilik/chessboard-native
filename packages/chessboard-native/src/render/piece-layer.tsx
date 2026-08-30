@@ -633,9 +633,7 @@ export const PieceLayer = memo(function PieceLayer({
               : isPendingCommitPreparationTarget &&
                   pendingCommitPreparation !== null
                 ? `pending-commit:${String(pendingCommitPreparation.epoch)}:${pendingCommitPreparation.intentId}`
-                : (isDragSource || isPendingSource) && position !== null
-                  ? `interaction-source:${String(position.revision)}:${pieceLayout.square}`
-                  : null,
+                : null,
           progress: transition?.progress ?? null,
           renderer,
           transition:
@@ -651,7 +649,6 @@ export const PieceLayer = memo(function PieceLayer({
     pendingSourceSquare,
     pieceRenderers,
     pieces,
-    position,
     transition?.progress,
     transitionPendingCommitTargetSquare,
     transitionProjection,

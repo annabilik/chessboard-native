@@ -640,6 +640,96 @@ describe('mounted piece transition projection', () => {
     ]);
   });
 
+  it('keeps fresh drag and pending sources descriptor-free through restoration and owner unmount', async () => {
+    const layout = createBoardSurfaceLayout(
+      { height: 100, width: 200 },
+      { columns: 2, rows: 1 },
+      'white',
+    );
+    const current = currentPosition(
+      {
+        a1: Object.freeze({ id: 'drag', pieceType: 'token' }),
+        b1: Object.freeze({ id: 'pending', pieceType: 'token' }),
+      },
+      7,
+    );
+    const tree = (
+      dragSourceSquare: 'a1' | null,
+      pendingSourceSquare: 'b1' | null,
+      ghostOpacity: number,
+    ): ReactElement => (
+      <PieceLayer
+        boardId="fresh-interaction"
+        dragSourceSquare={dragSourceSquare}
+        draggingPieceGhostStyle={{ opacity: ghostOpacity }}
+        layout={layout}
+        pendingSourceSquare={pendingSourceSquare}
+        pieceRenderers={{ token: Probe }}
+        position={current}
+        style={EMPTY_STYLE}
+      />
+    );
+    const result = await render(tree(null, null, 0.5));
+    const initialDragArtwork = requiredNode(rootOf(result), 'drag:a1:static');
+    const initialPendingArtwork = requiredNode(
+      rootOf(result),
+      'pending:b1:static',
+    );
+    const dragHost = boardPieceHost(initialDragArtwork);
+    const pendingHost = boardPieceHost(initialPendingArtwork);
+    expect(attachedStyleDescriptor(dragHost)).toBeNull();
+    expect(attachedStyleDescriptor(pendingHost)).toBeNull();
+
+    await result.rerender(tree('a1', 'b1', 0.5));
+    const activeDragArtwork = requiredNode(rootOf(result), 'drag:a1:static');
+    const activePendingArtwork = requiredNode(
+      rootOf(result),
+      'pending:b1:static',
+    );
+    expect(boardPieceHost(activeDragArtwork)).toBe(dragHost);
+    expect(boardPieceHost(activePendingArtwork)).toBe(pendingHost);
+    expect(attachedStyleDescriptor(dragHost)).toBeNull();
+    expect(attachedStyleDescriptor(pendingHost)).toBeNull();
+    expect(nativeStyle(dragHost).opacity).toBe(0.5);
+    expect(
+      nativeStyle(boardPieceOcclusionBoundary(activeDragArtwork)).opacity,
+    ).toBeUndefined();
+    expect(nativeStyle(pendingHost).opacity).toBe(0.45);
+    expect(
+      nativeStyle(boardPieceOcclusionBoundary(activePendingArtwork)).opacity,
+    ).toBeUndefined();
+
+    await result.rerender(tree('a1', 'b1', 0));
+    const zeroGhostArtwork = requiredNode(rootOf(result), 'drag:a1:static');
+    expect(boardPieceHost(zeroGhostArtwork)).toBe(dragHost);
+    expect(attachedStyleDescriptor(dragHost)).toBeNull();
+    expect(nativeStyle(dragHost).opacity).toBe(1);
+    expect(
+      nativeStyle(boardPieceOcclusionBoundary(zeroGhostArtwork)).opacity,
+    ).toBe(0);
+
+    await result.rerender(tree(null, null, 0));
+    const restoredDragArtwork = requiredNode(rootOf(result), 'drag:a1:static');
+    const restoredPendingArtwork = requiredNode(
+      rootOf(result),
+      'pending:b1:static',
+    );
+    expect(boardPieceHost(restoredDragArtwork)).toBe(dragHost);
+    expect(boardPieceHost(restoredPendingArtwork)).toBe(pendingHost);
+    expect(attachedStyleDescriptor(dragHost)).toBeNull();
+    expect(attachedStyleDescriptor(pendingHost)).toBeNull();
+    expect(nativeStyle(dragHost).opacity).toBe(1);
+    expect(nativeStyle(pendingHost).opacity).toBe(1);
+    expect(
+      nativeStyle(boardPieceOcclusionBoundary(restoredDragArtwork)).opacity,
+    ).toBeUndefined();
+    expect(
+      nativeStyle(boardPieceOcclusionBoundary(restoredPendingArtwork)).opacity,
+    ).toBeUndefined();
+
+    await result.unmount();
+  });
+
   it('preserves a stateful canonical renderer and native host while entering and settling a controlled transition', async () => {
     let mounts = 0;
     function StatefulProbe(props: PieceRendererProps): ReactElement {
@@ -879,11 +969,8 @@ describe('mounted piece transition projection', () => {
       'prepared:pending-source:a1:token',
     );
     const sourceHost = boardPieceHost(sourceArtwork);
-    const descriptor = attachedStyleDescriptor(sourceHost);
-    if (descriptor === null) {
-      throw new Error('Expected pending source native-style admission.');
-    }
-    expect(animatedStyle(sourceHost).opacity).toBe(0.45);
+    expect(attachedStyleDescriptor(sourceHost)).toBeNull();
+    expect(nativeStyle(sourceHost).opacity).toBe(0.45);
 
     await result.rerender(tree('prepared'));
     const preparedCanonicalArtwork = requiredNode(
@@ -899,10 +986,14 @@ describe('mounted piece transition projection', () => {
       throw new Error('Expected both prepared commit actors.');
     }
     expect(preparedCanonicalHost).toBe(sourceHost);
+    const descriptor = attachedStyleDescriptor(preparedCanonicalHost);
+    if (descriptor === null) {
+      throw new Error('Expected exact preparation native-style admission.');
+    }
     expect(attachedStyleDescriptor(preparedCanonicalHost)).toBe(descriptor);
-    // The retained source mapper may still expose its old pending opacity, or
-    // the replacement base-one mapper may already have evaluated. The child
-    // mask keeps either ordering draw-safe while the canonical mapper drains.
+    // Exact preparation first admits this otherwise-static host behind the
+    // independent child mask. Its unattached pending-source worklet may still
+    // expose .45 until the replacement base-one mapper evaluates.
     const preparedOuterOpacity = Number(
       animatedStyle(preparedCanonicalHost).opacity,
     );
