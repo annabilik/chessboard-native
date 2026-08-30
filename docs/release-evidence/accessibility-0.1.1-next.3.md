@@ -13,7 +13,7 @@
 
 The publication workflow verified provenance, exact registry bytes, clean Expo
 Android and iOS exports, and a clean bare React Native type check. The same
-The package source lineage passed the source-bound Android Fabric transition
+package source lineage passed the source-bound Android Fabric transition
 gates, and this exact archive passed the app Gate C qualification recorded
 elsewhere. Those results do not establish physical screen-reader behavior.
 
@@ -30,3 +30,10 @@ strict complete gate before changing either row to passed.
 Until both rows pass, the physical screen-reader gate remains open. This
 candidate must not be called production-ready or stable-release-ready on the
 strength of automated audits alone.
+
+Release decision: on 2026-08-30, the maintainer explicitly waived this open
+gate only for publication of stable `0.1.1`. The waiver is not test evidence:
+it does not convert any `not-run` result to `passed`, close the gate, or support
+physical TalkBack or VoiceOver certification. Publishing to npm's stable
+channel must not be described as an accessibility or production-readiness
+certification.

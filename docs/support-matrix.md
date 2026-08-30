@@ -7,13 +7,12 @@ physical-device, assistive-technology, performance, or release-candidate gate
 has finished.
 
 > [!IMPORTANT]
-> The matrices describe the source package prepared as `0.1.0` unless a
-> row explicitly says “published.” Merging does not publish that version.
-> Published `0.1.0`, from commit `addc0cb`, includes the compatibility
-> export but ships interim geometric pieces; npm `0.1.0-next.1`, published from
-> commit `8d3c419`, is an older immutable archive without the compatibility
-> export. Verify the exact registry version before treating a prepared package
-> as available from npm.
+> The matrices describe the source package prepared as `0.1.1` unless a row
+> explicitly says “published.” Merging release preparation does not publish
+> that version. npm `latest` remains published `0.1.0`, from commit `f8aa465`,
+> while npm `next` remains `0.1.1-next.3`, from commit `3d8aa5b`, until the
+> stable workflow succeeds. Verify the exact registry version before treating
+> a prepared package as available from npm.
 
 ## Status vocabulary
 
@@ -200,18 +199,18 @@ normal CI run:
 
 <!-- markdownlint-disable MD013 -->
 
-| Release evidence             | Status         | What remains                                                                                                                                                                                                   |
-| ---------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Physical TalkBack            | Manual pending | The exact-package [record](./release-evidence/accessibility-0.1.1-next.3.md) awaits spoken output, gesture behavior, announcement delivery, and focus retention on real Android hardware.                      |
-| Physical VoiceOver           | Manual pending | The exact-package [record](./release-evidence/accessibility-0.1.1-next.3.md) awaits rotor and custom-action discoverability/execution, spoken output, announcements, and focus retention on real iOS hardware. |
-| Visual baselines             | Manual pending | Approved baselines across the release device and appearance matrix.                                                                                                                                            |
-| Gesture and lifecycle matrix | Manual pending | Physical-device scrolling, clipping, cancellation, orientation, backgrounding, and reuse checks.                                                                                                               |
-| Compatibility matrix         | Manual pending | Recorded results for the chosen OS, device, Expo, React Native, and native toolchain combinations.                                                                                                             |
-| Performance budgets          | Manual pending | Physical JS/UI frame, render-count, memory, and large-board measurements.                                                                                                                                      |
-| Parity closure               | Complete       | All 131 ledger rows have one passing executable contract; the ten intentional drops are tested exclusions.                                                                                                     |
-| API freeze                   | Complete       | Three reviewed TypeScript entry-point reports plus the exact package resolver map are required in normal CI.                                                                                                   |
-| Release candidate            | Not published  | Fresh clean-install, native, accessibility, performance, and burn-in gates must precede an RC claim.                                                                                                           |
-| 1.0 production support       | Not declared   | The current package remains a 0.x evaluation surface.                                                                                                                                                          |
+| Release evidence             | Status         | What remains                                                                                                                                                                                       |
+| ---------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Physical TalkBack            | Manual pending | The exact-package [record](./release-evidence/accessibility-0.1.1-next.3.md) remains pending. Stable `0.1.1` publication has a one-release waiver; no physical TalkBack certification is claimed.  |
+| Physical VoiceOver           | Manual pending | The exact-package [record](./release-evidence/accessibility-0.1.1-next.3.md) remains pending. Stable `0.1.1` publication has a one-release waiver; no physical VoiceOver certification is claimed. |
+| Visual baselines             | Manual pending | Approved baselines across the release device and appearance matrix.                                                                                                                                |
+| Gesture and lifecycle matrix | Manual pending | Physical-device scrolling, clipping, cancellation, orientation, backgrounding, and reuse checks.                                                                                                   |
+| Compatibility matrix         | Manual pending | Recorded results for the chosen OS, device, Expo, React Native, and native toolchain combinations.                                                                                                 |
+| Performance budgets          | Manual pending | Physical JS/UI frame, render-count, memory, and large-board measurements.                                                                                                                          |
+| Parity closure               | Complete       | All 131 ledger rows have one passing executable contract; the ten intentional drops are tested exclusions.                                                                                         |
+| API freeze                   | Complete       | Three reviewed TypeScript entry-point reports plus the exact package resolver map are required in normal CI.                                                                                       |
+| Stable `0.1.1`               | Not published  | Prepared under the documented one-release screen-reader waiver; publication does not claim accessibility or production readiness.                                                                  |
+| 1.0 production support       | Not declared   | The current package remains a 0.x evaluation surface.                                                                                                                                              |
 
 <!-- markdownlint-enable MD013 -->
 
