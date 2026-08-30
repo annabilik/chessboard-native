@@ -14,6 +14,8 @@ export const INTERACTION_PRESENTATION_PHASE = Object.freeze({
   DRAG: 2,
   DECIDING: 3,
   AWAITING_COMMIT: 4,
+  /** Final pointer frame retained until React commits the move handoff. */
+  DRAG_TERMINAL: 5,
 } as const);
 
 export type InteractionPresentationPhase =

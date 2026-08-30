@@ -124,6 +124,7 @@ interface BoardGestureLayerProps {
   readonly presentation: InteractionPresentationSharedValues;
   readonly resetKey: string;
   readonly selectionRevision: Revision | null;
+  readonly shouldResetPresentation?: () => boolean;
   readonly trackDragTarget?: boolean;
   readonly trackPress?: boolean;
 }
@@ -414,6 +415,10 @@ function createBoardGestures(options: {
       updatePointer(event.x, event.y, event.absoluteX, event.absoluteY);
       presentation.targetSquare.value = targetSquare;
       panActive.value = 0;
+      // Keep the exact terminal pointer frame visible while this RN callback
+      // waits in the scheduleOnRN queue. The controller and BoardSurface own
+      // the later, commit-ordered retirement handshake.
+      presentation.phase.value = INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL;
       scheduleOnRN(onSignal, {
         allowDragOffBoard: panAllowDragOffBoard.value,
         allowDragOffBoardGeneration: panAllowDragOffBoardGeneration.value,
@@ -427,7 +432,6 @@ function createBoardGestures(options: {
         targetSquare,
         type: 'drag-end',
       });
-      resetInteractionPresentationSharedValues(presentation);
     })
     .onFinalize(() => {
       'worklet';
@@ -943,6 +947,7 @@ export function BoardGestureLayer({
   presentation,
   resetKey,
   selectionRevision,
+  shouldResetPresentation,
   tapEnabled = false,
   trackDragTarget = false,
   trackPress = false,
@@ -1144,7 +1149,16 @@ export function BoardGestureLayer({
     twoFingerRevision.value = null;
     twoFingerSourceSquare.value = null;
     twoFingerTargetSquare.value = null;
-    resetInteractionPresentationSharedValues(presentation);
+    // A successful onEnd marks the final frame terminal before scheduling RN.
+    // Controlled-position and permission props may synchronously change while
+    // that callback runs; only BoardSurface's exact lease ACK may retire it.
+    if (
+      presentation.phase.value !==
+        INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL &&
+      (shouldResetPresentation?.() ?? true)
+    ) {
+      resetInteractionPresentationSharedValues(presentation);
+    }
     return () => {
       longPressActive.value = 0;
       longPressCancelReason.value = 0;
@@ -1188,6 +1202,7 @@ export function BoardGestureLayer({
     panSourceSquare,
     positionRevision,
     presentation,
+    shouldResetPresentation,
     tapAnnotationRevision,
     tapEnabled,
     tapGestureToken,

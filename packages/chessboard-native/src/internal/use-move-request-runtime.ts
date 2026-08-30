@@ -38,6 +38,8 @@ export interface MoveRequestInteraction {
   readonly cancel: (
     reason?: Extract<InteractionInvalidationReason, 'accessibility' | 'user'>,
   ) => boolean;
+  /** Commit-current lifecycle for synchronous request/handoff ordering. */
+  readonly getCurrentLifecycle: () => Readonly<MoveIntentLifecycle> | null;
   readonly invalidate: (reason: InteractionInvalidationReason) => boolean;
   readonly lifecycle: Readonly<MoveIntentLifecycle> | null;
   readonly request: (draft: Readonly<MoveIntentRequest>) => boolean;
@@ -177,7 +179,14 @@ export function useMoveRequestRuntime({
   );
 
   return useMemo(
-    () => Object.freeze({ cancel, invalidate, lifecycle, request }),
-    [cancel, invalidate, lifecycle, request],
+    () =>
+      Object.freeze({
+        cancel,
+        getCurrentLifecycle: getSnapshot,
+        invalidate,
+        lifecycle,
+        request,
+      }),
+    [cancel, getSnapshot, invalidate, lifecycle, request],
   );
 }

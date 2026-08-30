@@ -43,6 +43,7 @@ import type {
   InteractionInvalidationReason,
   MoveIntentLifecycle,
 } from '../internal/interaction-reducer';
+import { resetInteractionPresentationSharedValues } from '../internal/interaction-presentation';
 import { derivePendingCommitHandoff } from '../internal/pending-commit-handoff';
 import {
   planSquareActivation,
@@ -82,6 +83,7 @@ import type {
   OnSquareActivate,
   OnSquarePressIn,
   OnSquarePressOut,
+  PieceInteractionContext,
   PieceRenderers,
   SquareActivationIntent,
   SquareId,
@@ -97,7 +99,10 @@ import {
   reconcileBoardGeometryEpoch,
   type BoardGeometryEpochMapping,
 } from './board-geometry-epoch';
-import { BoardInteractionController } from './board-interaction-controller';
+import {
+  BoardInteractionController,
+  type TerminalBoardDragAcknowledgement,
+} from './board-interaction-controller';
 import type { BoardGestureGeometry } from './board-gesture-layer';
 import { BoardNotationLayer } from './board-notation-layer';
 import { PendingMoveLayer } from './pending-move-layer';
@@ -167,6 +172,11 @@ interface ExternalMoveCommitSnapshot {
   readonly dragEnabled: boolean;
   readonly positionRevision: Revision;
   readonly request: (draft: Readonly<Omit<MoveIntent, 'intentId'>>) => boolean;
+}
+
+interface TerminalBoardDragHandoff extends TerminalBoardDragAcknowledgement {
+  readonly restoreSource: boolean;
+  readonly stage: 'leased' | 'released';
 }
 
 type PendingMoveLifecycle = Extract<
@@ -310,6 +320,13 @@ export function BoardSurface({
     model.status === 'ready' &&
     model.boardId !== null &&
     model.position !== null;
+  const providerActiveDragSourceSquare =
+    providerRegistered &&
+    model.boardId !== null &&
+    providerDragSnapshot.active?.boardId === model.boardId &&
+    providerDragSnapshot.active.source.kind === 'board'
+      ? providerDragSnapshot.active.source.square
+      : null;
   const normalizedAnnotationTool = useMemo(
     () => normalizeAnnotationTool(annotationTool),
     [annotationTool],
@@ -343,9 +360,21 @@ export function BoardSurface({
     squareActivationEnabled ||
     currentPiecePressEnabled ||
     annotationBoardPressEnabled;
-  const [activeDragSourceSquare, setActiveDragSourceSquare] = useState<
-    string | null
-  >(null);
+  const [terminalBoardDragHandoff, setTerminalBoardDragHandoff] =
+    useState<Readonly<TerminalBoardDragHandoff> | null>(null);
+  const activeProviderDrag = providerDragSnapshot.active;
+  const restoresTerminalBoardDragSource =
+    terminalBoardDragHandoff?.stage === 'leased' &&
+    terminalBoardDragHandoff.restoreSource &&
+    activeProviderDrag?.boardId === terminalBoardDragHandoff.boardId &&
+    activeProviderDrag.gestureToken === terminalBoardDragHandoff.gestureToken &&
+    activeProviderDrag.owner === terminalBoardDragHandoff.owner &&
+    activeProviderDrag.presentation === terminalBoardDragHandoff.presentation &&
+    activeProviderDrag.source.kind === 'board' &&
+    activeProviderDrag.source.square === terminalBoardDragHandoff.sourceSquare;
+  const activeDragSourceSquare = restoresTerminalBoardDragSource
+    ? null
+    : providerActiveDragSourceSquare;
   const [pressedSquare, setPressedSquare] = useState<SquareId | null>(null);
   const handlePressedSquareChange = useCallback(
     (square: SquareId | null): void => {
@@ -586,17 +615,16 @@ export function BoardSurface({
       squareActivationEnabled,
     ],
   );
-  const handleDragSourceChange = useCallback(
-    (sourceSquare: string | null): void => {
-      setActiveDragSourceSquare((current) =>
-        current === sourceSquare ? current : sourceSquare,
-      );
-      if (sourceSquare !== null) {
-        setAccessibilitySourceResetRevision((current) => current + 1);
-        moveInteraction.invalidate('user');
-      }
+  const handlePieceDragStart = useCallback(
+    (context: Readonly<PieceInteractionContext>): boolean => {
+      // Run lifecycle cleanup at the accepted RN start boundary, before a
+      // same-batch terminal signal can establish the replacement request.
+      // Visual source state still comes only from the provider snapshot.
+      setAccessibilitySourceResetRevision((current) => current + 1);
+      moveInteraction.invalidate('user');
+      return pieceInteraction.dragStart(context);
     },
-    [moveInteraction.invalidate],
+    [moveInteraction.invalidate, pieceInteraction.dragStart],
   );
   const accessibilityMoveInteraction = useMemo<
     Readonly<BoardAccessibilityMoveInteraction>
@@ -1213,7 +1241,7 @@ export function BoardSurface({
   ]);
 
   const handleGestureCandidate = useCallback(
-    (candidate: Readonly<BoardGestureIntentCandidate>): void => {
+    (candidate: Readonly<BoardGestureIntentCandidate>): boolean => {
       const boardId = model.boardId;
       const position = model.position;
       const geometry = gestureGeometry;
@@ -1230,66 +1258,98 @@ export function BoardSurface({
             (model.selection?.revision ?? null) ||
           !geometry.visualSquares.includes(candidate.square)
         ) {
-          return;
+          return false;
         }
         if (selectedSpare !== null) {
           const targetDisabled =
             model.selection?.value.disabledSquares?.includes(
               candidate.square,
             ) ?? false;
-          if (pendingLifecycle === null && !targetDisabled) {
-            placeSelectedSpare(candidate.square, 'tap', selectedSpare);
-          }
-          return;
+          return pendingLifecycle === null && !targetDisabled
+            ? placeSelectedSpare(candidate.square, 'tap', selectedSpare)
+            : false;
         }
+        let handled = false;
         if (annotationBoardPressEnabled) {
-          annotationOperation.emit({
-            annotationIdsAtBase: Object.freeze(
-              model.annotations.value.map(({ id }) => id),
-            ),
-            baseAnnotationRevision: model.annotations.revision,
-            input: 'touch',
-            reason: 'board-press',
-            type: 'clear',
-          });
+          handled =
+            annotationOperation.emit({
+              annotationIdsAtBase: Object.freeze(
+                model.annotations.value.map(({ id }) => id),
+              ),
+              baseAnnotationRevision: model.annotations.revision,
+              input: 'touch',
+              reason: 'board-press',
+              type: 'clear',
+            }) !== null;
         }
         if (squareActivationEnabled || currentPiecePressEnabled) {
-          dispatchSquareActivation(candidate.square, 'touch');
+          handled =
+            dispatchSquareActivation(candidate.square, 'touch') || handled;
         }
-        return;
+        return handled;
       }
+      const active = providerRuntime.drag.getSnapshot().active;
       if (
-        !dragEnabled ||
-        boardId === null ||
-        position === null ||
-        geometry === null ||
-        candidate.boardId !== boardId ||
-        candidate.geometryEpoch !== geometry.revision ||
-        candidate.basePositionRevision !== position.revision ||
-        !geometry.visualSquares.includes(candidate.source.square) ||
-        (candidate.targetSquare !== null &&
-          !geometry.visualSquares.includes(candidate.targetSquare))
+        active?.boardId !== candidate.boardId ||
+        active.gestureToken !== candidate.token ||
+        active.source.kind !== 'board' ||
+        active.source.square !== candidate.source.square
       ) {
-        return;
+        return false;
       }
-      const currentPiece = position.value[candidate.source.square] ?? null;
-      const context = {
-        basePositionRevision: position.revision,
-        boardId,
-        piece: candidate.piece,
-        source: candidate.source,
-      } as const;
+      let pendingSuccessorEstablished = false;
       if (
-        !piecesMatch(currentPiece, candidate.piece) ||
-        !canDragCurrentPiece(canDragPiece, context)
+        dragEnabled &&
+        boardId !== null &&
+        position !== null &&
+        geometry !== null &&
+        candidate.boardId === boardId &&
+        candidate.geometryEpoch === geometry.revision &&
+        candidate.basePositionRevision === position.revision &&
+        geometry.visualSquares.includes(candidate.source.square) &&
+        (candidate.targetSquare === null ||
+          geometry.visualSquares.includes(candidate.targetSquare))
       ) {
-        return;
+        const currentPiece = position.value[candidate.source.square] ?? null;
+        const context = {
+          basePositionRevision: position.revision,
+          boardId,
+          piece: candidate.piece,
+          source: candidate.source,
+        } as const;
+        if (
+          piecesMatch(currentPiece, candidate.piece) &&
+          canDragCurrentPiece(canDragPiece, context)
+        ) {
+          const requested = moveInteraction.request({
+            ...context,
+            input: 'drag',
+            targetSquare: candidate.targetSquare,
+          });
+          const currentMoveLifecycle = moveInteraction.getCurrentLifecycle();
+          pendingSuccessorEstablished =
+            requested &&
+            currentMoveLifecycle !== null &&
+            currentMoveLifecycle.phase !== 'idle';
+        }
       }
-      moveInteraction.request({
-        ...context,
-        input: 'drag',
-        targetSquare: candidate.targetSquare,
-      });
+      // Even an admission failure needs a React source-restoration commit
+      // before the exact provider artwork can retire. Returning true means
+      // BoardSurface owns this visual handoff, not that the move was accepted.
+      setTerminalBoardDragHandoff(
+        Object.freeze({
+          boardId: candidate.boardId,
+          gestureToken: candidate.token,
+          mountedResetPermit: { current: false },
+          owner: active.owner,
+          presentation: active.presentation,
+          restoreSource:
+            !pendingSuccessorEstablished || candidate.targetSquare === null,
+          sourceSquare: candidate.source.square,
+          stage: 'leased',
+        }),
+      );
+      return true;
     },
     [
       canDragPiece,
@@ -1303,17 +1363,64 @@ export function BoardSurface({
       model.position,
       model.selection?.revision,
       model.selection?.value.disabledSquares,
+      moveInteraction.getCurrentLifecycle,
       moveInteraction.request,
       pendingLifecycle,
       placeSelectedSpare,
+      providerRuntime.drag,
       selectedSpare,
       currentPiecePressEnabled,
       squareActivationEnabled,
       tapEnabled,
     ],
   );
-  const pendingSourceSquare =
-    pendingLifecycle?.intent.source.kind !== 'board'
+  useLayoutEffect(() => {
+    const handoff = terminalBoardDragHandoff;
+    if (handoff === null) {
+      return;
+    }
+    // Read the coordinator again at the layout barrier. A child layout effect
+    // or synchronous consumer may have replaced the render-time snapshot.
+    const active = providerRuntime.drag.getSnapshot().active;
+    if (handoff.stage === 'leased') {
+      if (
+        active?.boardId === handoff.boardId &&
+        active.gestureToken === handoff.gestureToken &&
+        active.owner === handoff.owner &&
+        active.presentation === handoff.presentation &&
+        active.source.kind === 'board' &&
+        active.source.square === handoff.sourceSquare
+      ) {
+        // This effect runs only after the latest pending/canonical target (or
+        // rejected source restore) has committed. Publish the provider release
+        // first so overlay and source ghost retire from one store snapshot.
+        providerRuntime.drag.release(handoff.owner, handoff.gestureToken);
+      }
+      setTerminalBoardDragHandoff((current) =>
+        current === handoff
+          ? Object.freeze({ ...handoff, stage: 'released' as const })
+          : current,
+      );
+      return;
+    }
+
+    // The release-triggered commit has now detached the animated style and
+    // child from the retained provider host. Clear its shared values only at
+    // this mounted quiescent barrier, never while a replacement gesture uses
+    // the same board-local presentation object.
+    if (
+      handoff.mountedResetPermit.current &&
+      active?.presentation !== handoff.presentation
+    ) {
+      resetInteractionPresentationSharedValues(handoff.presentation);
+    }
+    setTerminalBoardDragHandoff((current) =>
+      current === handoff ? null : current,
+    );
+  }, [providerDragSnapshot, providerRuntime.drag, terminalBoardDragHandoff]);
+  const pendingSourceSquare = restoresTerminalBoardDragSource
+    ? null
+    : pendingLifecycle?.intent.source.kind !== 'board'
       ? null
       : pendingLifecycle.intent.source.square;
   const pendingTargetSquare = pendingLifecycle?.intent.targetSquare ?? null;
@@ -1439,8 +1546,7 @@ export function BoardSurface({
               draggingPieceStyle={draggingPieceStyle}
               geometry={gestureGeometry}
               onCandidate={handleGestureCandidate}
-              onDragSourceChange={handleDragSourceChange}
-              onPieceDragStart={pieceInteraction.dragStart}
+              onPieceDragStart={handlePieceDragStart}
               onPressedSquareChange={handlePressedSquareChange}
               {...(onSquarePressIn === undefined ? {} : { onSquarePressIn })}
               {...(onSquarePressOut === undefined ? {} : { onSquarePressOut })}
@@ -1452,6 +1558,11 @@ export function BoardSurface({
                 selectedSpare === null ? 0 : spareSelectionSnapshot.revision
               }
               tapEnabled={tapEnabled}
+              terminalDragAcknowledgement={
+                terminalBoardDragHandoff?.stage === 'released'
+                  ? terminalBoardDragHandoff
+                  : null
+              }
               trackPress={trackSquarePress}
             />
           )}

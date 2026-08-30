@@ -470,6 +470,19 @@ describe('interaction presentation foundation', () => {
     ]);
     expect(harnessRenderCount).toBe(1);
     expect(rendererCalls).toHaveLength(1);
+
+    await act(() => {
+      values.phase.value = INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL;
+    });
+    expect(resolveDragOverlayAnimatedStyle(values, 48, false)).toEqual({
+      opacity: 1,
+      transform: [
+        { translateX: 179 },
+        { translateY: 127 },
+        { scale: DRAG_OVERLAY_LIFT_SCALE },
+      ],
+    });
+    expect(harnessRenderCount).toBe(1);
   });
 
   it('composes the resolved dragging-piece transform after pointer translation without changing hit data', () => {

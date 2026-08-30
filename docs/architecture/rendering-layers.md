@@ -324,19 +324,28 @@ that source host and into the provider-level sibling, so a palette child may
 use `overflow: 'hidden'` without cropping artwork that travels to a board
 elsewhere in the same provider. The provider overlay is not a native window
 portal; clipping an ancestor of the full provider scope can still crop it. The
-overlay stays mounted during asynchronous release measurement. Every terminal
-verified, rejected, cancelled, or stale path clears the active lease
-immediately, detaches the animated style in a hidden pointerless retirement
-commit, retains that shell through one full native-update drain frame, and
-removes it on the next. A replacement path reuses the host and makes both
-obsolete retirement callbacks inert. This protocol applies while the provider
-remains mounted. Whole-provider teardown cannot retain a descendant shell, so
-its cleanup only revokes semantic ownership and never resets orphaned
-presentation shared values. On Android, residual native terminal frames use
-only the shadow-tree `left`/`top` path rather than synchronous props on a
-removed host. Resting board-piece hosts preserve native and custom-renderer
-identity while omitting their Reanimated style descriptor; only actors in a
-controlled transition attach one.
+overlay stays mounted during asynchronous release measurement. A valid
+on-board terminal freezes its final UI-thread frame until `BoardSurface`
+commits the pending, canonical, or restored successor actor. The captured
+owner, token, presentation, and board source must still match before that lease
+is released, so overlay and source ghost retire in one snapshot without
+touching an ABA replacement. A following quiescent commit resets the old shared
+values only after the animated style and renderer child are detached, the exact
+controller acknowledges that it remains mounted, and no replacement uses that
+presentation. Null-target, invalid, stale, throwing, and
+rejected-before-request terminals use the same barrier with the restored
+controlled source as their successor actor. A cancellation that produces no
+terminal candidate clears its exact active lease directly. Every retirement
+retains its hidden pointerless shell through one full native-update drain frame
+and removes it on the next. A replacement path reuses the host and makes both
+obsolete retirement callbacks and shared-value cleanup inert. This protocol
+applies while the provider remains mounted. Whole-provider teardown cannot
+retain a descendant shell, so its cleanup only revokes semantic ownership and
+never resets orphaned presentation shared values. On Android, residual native
+terminal frames use only the shadow-tree `left`/`top` path rather than
+synchronous props on a removed host. Resting board-piece hosts preserve native
+and custom-renderer identity while omitting their Reanimated style descriptor;
+only actors in a controlled transition attach one.
 
 P1.5 promotes only the stable outer host to one adjustable accessibility
 control. It uses `pointerEvents="box-none"` so ordinary touch remains available

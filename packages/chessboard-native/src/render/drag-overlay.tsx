@@ -87,8 +87,10 @@ export function resolveDragOverlayAnimatedStyle(
   useLayoutPosition = false,
 ): Readonly<ViewStyle> {
   'worklet';
+  const phase = presentation.phase.value;
   const dragging =
-    presentation.phase.value === INTERACTION_PRESENTATION_PHASE.DRAG;
+    phase === INTERACTION_PRESENTATION_PHASE.DRAG ||
+    phase === INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL;
   const center = resolveDragOverlayCenter(presentation, bounds);
   const left = center.x - windowOriginX - size / 2;
   const top = center.y - windowOriginY - size / 2;

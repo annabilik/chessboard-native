@@ -51,6 +51,8 @@ interface HarnessProps {
   ) => void;
   readonly onRender?: () => void;
   readonly onSignal: (signal: Readonly<BoardGestureSignal>) => void;
+  readonly positionRevision?: number;
+  readonly resetKey?: string;
   readonly selectionRevision?: number | null;
   readonly trackDragTarget?: boolean;
   readonly trackPress?: boolean;
@@ -69,6 +71,8 @@ function Harness({
   onPresentation,
   onRender,
   onSignal,
+  positionRevision = 7,
+  resetKey = 'test-reset',
   selectionRevision = 11,
   trackDragTarget = false,
   trackPress = false,
@@ -91,9 +95,9 @@ function Harness({
         draggableSquares={occupiedSquares}
         geometry={geometry}
         onSignal={onSignal}
-        positionRevision={7}
+        positionRevision={positionRevision}
         presentation={presentation}
-        resetKey="test-reset"
+        resetKey={resetKey}
         selectionRevision={selectionRevision}
         tapEnabled={enabled ?? false}
         trackDragTarget={trackDragTarget}
@@ -324,12 +328,12 @@ describe('board-level native gesture plane', () => {
       throw new Error('Expected mounted interaction presentation values.');
     }
     expect(mountedPresentation.phase.value).toBe(
-      INTERACTION_PRESENTATION_PHASE.IDLE,
+      INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL,
     );
-    expect(mountedPresentation.sourceSquare.value).toBeNull();
-    expect(mountedPresentation.targetSquare.value).toBeNull();
-    expect(mountedPresentation.pointerX.value).toBe(0);
-    expect(mountedPresentation.pointerY.value).toBe(0);
+    expect(mountedPresentation.sourceSquare.value).toBe('a2');
+    expect(mountedPresentation.targetSquare.value).toBe('b1');
+    expect(mountedPresentation.pointerX.value).toBe(145);
+    expect(mountedPresentation.pointerY.value).toBe(145);
 
     signals.length = 0;
     await act(() => {
@@ -399,6 +403,155 @@ describe('board-level native gesture plane', () => {
       expect.objectContaining({ type: 'drag-start' }),
       expect.objectContaining({ targetSquare: 'b1', type: 'drag-end' }),
     ]);
+  });
+
+  it('retains the terminal pointer presentation while drag-end waits in the RN queue', async () => {
+    const signals: Readonly<BoardGestureSignal>[] = [];
+    const queuedTerminalSignals: (() => void)[] = [];
+    let delayTerminalSignal = false;
+    const presentation: {
+      current: Readonly<InteractionPresentationSharedValues> | null;
+    } = { current: null };
+    await render(
+      <Harness
+        enabled
+        onPresentation={(current) => {
+          presentation.current = current;
+        }}
+        onSignal={(signal) => {
+          if (delayTerminalSignal && signal.type === 'drag-end') {
+            queuedTerminalSignals.push(() => {
+              signals.push(signal);
+            });
+            return;
+          }
+          signals.push(signal);
+        }}
+      />,
+    );
+    const pan = getByGestureTestId(getBoardGestureTestIds('gesture-board').pan);
+    const handlerTag = (pan as Readonly<{ handlerTag: number }>).handlerTag;
+    const callbacks = gestureCallbacks(pan);
+    await act(() => {
+      callbacks.onBegin?.({ handlerTag, x: 25, y: 25 });
+      callbacks.onStart?.({
+        absoluteX: 35,
+        absoluteY: 25,
+        handlerTag,
+        x: 35,
+        y: 25,
+      });
+    });
+    expect(signals).toHaveLength(1);
+
+    // The callback wrapper models a delayed scheduleOnRN delivery without
+    // changing the global Worklets Jest mock used by unrelated gestures.
+    delayTerminalSignal = true;
+    await act(() => {
+      const terminal = {
+        absoluteX: 145,
+        absoluteY: 145,
+        handlerTag,
+        x: 145,
+        y: 145,
+      };
+      callbacks.onEnd?.(terminal, true);
+      callbacks.onFinalize?.(terminal, true);
+    });
+
+    expect(queuedTerminalSignals).toHaveLength(1);
+    expect(signals).toHaveLength(1);
+    const values = presentation.current;
+    if (values === null) {
+      throw new Error('Expected one mounted presentation.');
+    }
+    expect(values.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL,
+    );
+    expect(values.sourceSquare.value).toBe('a2');
+    expect(values.targetSquare.value).toBe('b1');
+    expect(values.pointerWindowX.value).toBe(145);
+    expect(values.pointerWindowY.value).toBe(145);
+
+    await act(() => {
+      queuedTerminalSignals.shift()?.();
+    });
+    delayTerminalSignal = false;
+    expect(signals).toHaveLength(2);
+    expect(signals[1]).toEqual(
+      expect.objectContaining({ targetSquare: 'b1', type: 'drag-end' }),
+    );
+    expect(values.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL,
+    );
+  });
+
+  it('does not reset a terminal frame when a synchronous controlled commit rebuilds the gesture plane', async () => {
+    const mountedPresentation: {
+      current: Readonly<InteractionPresentationSharedValues> | null;
+    } = { current: null };
+    const onSignal = jest.fn();
+    const result = await render(
+      <Harness
+        enabled
+        onPresentation={(presentation) => {
+          mountedPresentation.current = presentation;
+        }}
+        onSignal={onSignal}
+        positionRevision={7}
+        resetKey="position:7"
+      />,
+    );
+    const pan = getByGestureTestId(getBoardGestureTestIds('gesture-board').pan);
+    const handlerTag = (pan as Readonly<{ handlerTag: number }>).handlerTag;
+    const callbacks = gestureCallbacks(pan);
+    await act(() => {
+      callbacks.onBegin?.({ handlerTag, x: 25, y: 25 });
+      callbacks.onStart?.({
+        absoluteX: 35,
+        absoluteY: 25,
+        handlerTag,
+        x: 35,
+        y: 25,
+      });
+      const terminal = {
+        absoluteX: 145,
+        absoluteY: 145,
+        handlerTag,
+        x: 145,
+        y: 145,
+      };
+      callbacks.onEnd?.(terminal, true);
+      callbacks.onFinalize?.(terminal, true);
+    });
+    const retained = mountedPresentation.current;
+    if (retained === null) {
+      throw new Error('Expected one mounted presentation.');
+    }
+    expect(retained.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL,
+    );
+
+    await result.rerender(
+      <Harness
+        enabled
+        onPresentation={(presentation) => {
+          mountedPresentation.current = presentation;
+        }}
+        onSignal={onSignal}
+        positionRevision={8}
+        resetKey="position:8"
+      />,
+    );
+
+    expect(mountedPresentation.current).toBe(retained);
+    expect(retained.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL,
+    );
+    expect(retained.sourceSquare.value).toBe('a2');
+    expect(retained.targetSquare.value).toBe('b1');
+    expect(retained.pointerX.value).toBe(145);
+    expect(retained.pointerY.value).toBe(145);
   });
 
   it('keeps 100 continuous pan updates on shared values without per-update JS signals or React renders', async () => {

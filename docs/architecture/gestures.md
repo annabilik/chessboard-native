@@ -77,18 +77,34 @@ wrapping or reflowing provider children. The provider-level sibling escapes a
 clipping palette child. It is not a native window portal, so an ancestor that
 clips the entire provider scope can still crop it.
 
-Terminal release clears the semantic lease immediately. The same native
-overlay host then remains through one full quiescent frame with its animated
+A board release freezes its exact final UI-thread pointer frame while the
+terminal signal waits for the React Native runtime. The controller advances its
+gesture adapter and retains the exact provider lease before invoking the
+current consumer. `BoardSurface` first commits the latest pending target,
+correlated controlled target, or restored controlled source. The restored
+source barrier also covers a null target, stale or invalid candidate, immediate
+request rejection, and a throwing consumer. An
+owner/token/presentation/source-guarded layout barrier then releases only that
+captured lease, so the provider overlay and board-local source ghost retire
+from the same provider snapshot. Only the following quiescent commit resets the
+retained shared values, after the overlay has detached its animated style and
+renderer child, the exact controller has acknowledged that it remains mounted,
+and no replacement descriptor uses that presentation.
+
+A gesture cancellation that never produces a terminal candidate releases its
+exact lease directly. The same native overlay host then remains through one
+full quiescent frame with its animated
 style detached, static opacity zero, no renderer child, and no pointer or
 accessibility surface. The first generation-guarded frame lets Reanimated's
 native update registry drain; a second frame removes the transient host. A
-replacement gesture cancels both stages. This two-frame native-drain barrier
-retires the Fabric view descriptor and queued native props before host removal
-without making the provider a permanent layout or semantic owner. It governs
-ordinary retirement while the provider remains mounted; an ancestor deleting
-the entire provider cannot wait for a descendant retirement frame, so unmount
-cleanup does not publish presentation shared-value writes. On Android, any
-residual native pan/finalize frame can update only `left`/`top` through the
+replacement gesture cancels both stages and its token/presentation guard keeps
+the old cleanup from resetting the new drag. This two-frame native-drain
+barrier retires the Fabric view descriptor and queued native props before host
+removal without making the provider a permanent layout or semantic owner. It
+governs ordinary retirement while the provider remains mounted; an ancestor
+deleting the entire provider cannot wait for a descendant retirement frame, so
+unmount cleanup does not publish presentation shared-value writes. On Android,
+any residual native pan/finalize frame can update only `left`/`top` through the
 shadow-tree commit path, never synchronous transform/opacity props on a removed
 host.
 
@@ -346,12 +362,14 @@ release, and cancellation, and leaves the shared presentation active through
 fresh drop verification. Continuous pointer frames remain on the UI thread.
 Replacing or cancelling the active epoch revokes the prior overlay lease
 without retaining a position snapshot; its nonsemantic native shell follows
-the two-frame native-drain rule above. Pending decision and commit
-phases are reducer presentation only. Public drag-overlay and source-ghost
-styles now resolve from the named target board; pressed and pending remain
-renderer state rather than separate style slots. Controlled destination,
-selected, and disabled square styles remain derived directly from the current
-selection prop, while current hover supplies the visual-only drop-target slot.
+the two-frame native-drain rule above. A valid board terminal keeps that shell
+and its source ghost until the pending/canonical successor commit, preventing a
+zero-actor frame across the UI-to-RN handoff. Pending decision and commit phases
+are reducer presentation only. Public drag-overlay and source-ghost styles now
+resolve from the named target board; pressed and pending remain renderer state
+rather than separate style slots. Controlled destination, selected, and
+disabled square styles remain derived directly from the current selection
+prop, while current hover supplies the visual-only drop-target slot.
 
 The public `ChessboardActions.cancelMove()` boundary routes through the same
 board-scoped cancellation paths. It revokes an active provider lease, including

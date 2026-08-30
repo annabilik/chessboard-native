@@ -101,6 +101,7 @@ describe('board interaction controller', () => {
           geometry={GEOMETRY}
           onCandidate={(candidate) => {
             candidates.push(candidate);
+            return false;
           }}
           pieceRenderers={{}}
           pieceStyle={{}}
@@ -171,9 +172,9 @@ describe('board interaction controller', () => {
 
   it('emits a current-revision activation candidate for an empty-square tap', async () => {
     const onCandidate = jest.fn<
-      undefined,
+      boolean,
       [Readonly<BoardGestureIntentCandidate>]
-    >();
+    >(() => false);
     await render(
       <GestureHandlerRootView>
         <BoardInteractionController

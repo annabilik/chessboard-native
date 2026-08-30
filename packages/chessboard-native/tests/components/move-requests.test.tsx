@@ -3,7 +3,9 @@ import {
   startTransition,
   StrictMode,
   Suspense,
+  useLayoutEffect,
   useState,
+  useSyncExternalStore,
   type ReactElement,
 } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
@@ -14,7 +16,17 @@ import {
 } from 'react-native-gesture-handler/jest-utils';
 import type { TestInstance } from 'test-renderer';
 
+import { ChessboardProvider } from '../../src';
 import { ChessboardRuntime } from '../../src/Chessboard';
+import {
+  useChessboardProvider,
+  type ChessboardProviderRuntime,
+} from '../../src/internal/provider-context';
+import {
+  INTERACTION_PRESENTATION_PHASE,
+  useInteractionPresentationSharedValues,
+  type InteractionPresentationSharedValues,
+} from '../../src/internal/interaction-presentation';
 import type {
   CanDragPiece,
   MoveDecision,
@@ -400,6 +412,13 @@ describe('public controlled move requests', () => {
         targetSquare: null,
       }),
     );
+    expect(
+      result.queryAllByTestId(/:provider-drag-(?:retiring-)?overlay$/, {
+        includeHiddenElements: true,
+      }),
+    ).toEqual([]);
+    expectOneVisual(rootOf(result), 'static', 'a2');
+    expectNoVisual(rootOf(result), 'pending-target', 'a2');
   });
 
   it('[PARITY-BEHAVIOR-B11] never mutates position optimistically and hands a matching controlled commit off at the pending target', async () => {
@@ -715,6 +734,697 @@ describe('public controlled move requests', () => {
     expect(onMoveRequest).toHaveBeenCalledTimes(1);
     expect(outcomes).toHaveLength(1);
   });
+
+  it('[CBN-CONTRACT-005-VISUAL-NONCANONICAL] commits the pending target before retiring the exact terminal overlay and source ghost', async () => {
+    const boardId = 'terminal-presentation-barrier';
+    const runtime: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    const pendingRenderTokens: (number | null)[] = [];
+    function RuntimeProbe(): null {
+      runtime.current = useChessboardProvider().runtime;
+      return null;
+    }
+    function barrierPieceProbe(props: PieceRendererProps): ReactElement {
+      useLayoutEffect(() => {
+        if (props.state.isPending && !props.state.isGhost) {
+          pendingRenderTokens.push(
+            runtime.current?.drag.getSnapshot().active?.gestureToken ?? null,
+          );
+        }
+      }, [props.state.isGhost, props.state.isPending]);
+      return (
+        <View
+          testID={`move-piece:${visualKind(props)}:${props.square ?? 'spare'}:${props.piece.pieceType}`}
+        />
+      );
+    }
+
+    const result = await render(
+      <ChessboardProvider>
+        <RuntimeProbe />
+        <ChessboardRuntime
+          boardId={boardId}
+          development={false}
+          dimensions={{ columns: 2, rows: 2 }}
+          moveRequestTimeouts={{ commitMs: 60_000, decisionMs: 60_000 }}
+          onMoveRequest={() => new Promise(() => undefined)}
+          pieceRenderers={{ token: barrierPieceProbe }}
+          position={{
+            revision: 30,
+            value: { a2: { id: 'barrier', pieceType: 'token' } },
+          }}
+        />
+      </ChessboardProvider>,
+    );
+    const board = rootOf(result);
+    await measure(board);
+    const pan = getByGestureTestId(getBoardGestureTestIds(boardId).pan);
+    const handlerTag = (pan as Readonly<{ handlerTag: number }>).handlerTag;
+    const callbacks = panCallbacks(pan);
+    await act(() => {
+      callbacks.onBegin?.({
+        absoluteX: START.x,
+        absoluteY: START.y,
+        handlerTag,
+        ...START,
+      });
+      callbacks.onStart?.({
+        absoluteX: BOTTOM_RIGHT.x,
+        absoluteY: BOTTOM_RIGHT.y,
+        handlerTag,
+        ...BOTTOM_RIGHT,
+      });
+    });
+    const terminalToken =
+      runtime.current?.drag.getSnapshot().active?.gestureToken;
+    expect(terminalToken).toEqual(expect.any(Number));
+    expectOneVisual(board, 'source-ghost', 'a2');
+    expectNoVisual(board, 'static', 'a2');
+
+    await act(() => {
+      const terminal = {
+        absoluteX: BOTTOM_RIGHT.x,
+        absoluteY: BOTTOM_RIGHT.y,
+        handlerTag,
+        ...BOTTOM_RIGHT,
+      };
+      callbacks.onEnd?.(terminal, true);
+      callbacks.onFinalize?.(terminal, true);
+    });
+
+    expect(pendingRenderTokens).toContain(terminalToken);
+    expect(runtime.current?.drag.getSnapshot().active).toBeNull();
+    expectOneVisual(board, 'pending-source', 'a2');
+    expectOneVisual(board, 'pending-target', 'b1');
+    expectNoVisual(board, 'source-ghost', 'a2');
+    expectNoVisual(board, 'static', 'a2');
+    await flushRetirementFrames();
+  });
+
+  it('commits a synchronous controlled target while the terminal overlay is still attached, then resets after detach', async () => {
+    const boardId = 'synchronous-terminal-commit';
+    const runtime: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    const targetCommitSnapshots: Readonly<{
+      activeToken: number | null;
+      phase: number | null;
+    }>[] = [];
+    function RuntimeProbe(): null {
+      runtime.current = useChessboardProvider().runtime;
+      return null;
+    }
+    function OrderingPieceProbe(props: PieceRendererProps): ReactElement {
+      useLayoutEffect(() => {
+        if (
+          props.square !== 'b1' ||
+          props.state.isDragging ||
+          props.state.isGhost ||
+          props.state.isPending
+        ) {
+          return;
+        }
+        const active = runtime.current?.drag.getSnapshot().active ?? null;
+        targetCommitSnapshots.push(
+          Object.freeze({
+            activeToken: active?.gestureToken ?? null,
+            phase: active?.presentation.phase.value ?? null,
+          }),
+        );
+      }, [props.square, props.state]);
+      return (
+        <View
+          testID={`move-piece:${visualKind(props)}:${props.square ?? 'spare'}:${props.piece.pieceType}`}
+        />
+      );
+    }
+    function Harness(): ReactElement {
+      const [position, setPosition] = useState<{
+        committedIntentId?: string;
+        revision: number;
+        value: PositionObject;
+      }>({
+        revision: 40,
+        value: { a2: { id: 'sync', pieceType: 'token' } },
+      });
+      return (
+        <ChessboardProvider>
+          <RuntimeProbe />
+          <ChessboardRuntime
+            boardId={boardId}
+            development={false}
+            dimensions={{ columns: 2, rows: 2 }}
+            moveRequestTimeouts={{ commitMs: 60_000, decisionMs: 60_000 }}
+            onMoveRequest={(intent) => {
+              setPosition({
+                committedIntentId: intent.intentId,
+                revision: 41,
+                value: { b1: { id: 'sync', pieceType: 'token' } },
+              });
+              return { status: 'accepted' };
+            }}
+            pieceRenderers={{ token: OrderingPieceProbe }}
+            position={position}
+          />
+        </ChessboardProvider>
+      );
+    }
+
+    const result = await render(<Harness />);
+    const board = rootOf(result);
+    await measure(board);
+    const pan = getByGestureTestId(getBoardGestureTestIds(boardId).pan);
+    const handlerTag = (pan as Readonly<{ handlerTag: number }>).handlerTag;
+    const callbacks = panCallbacks(pan);
+    await act(() => {
+      callbacks.onBegin?.({
+        absoluteX: START.x,
+        absoluteY: START.y,
+        handlerTag,
+        ...START,
+      });
+      callbacks.onStart?.({
+        absoluteX: BOTTOM_RIGHT.x,
+        absoluteY: BOTTOM_RIGHT.y,
+        handlerTag,
+        ...BOTTOM_RIGHT,
+      });
+    });
+    const terminal = runtime.current?.drag.getSnapshot().active ?? null;
+    if (terminal === null) {
+      throw new Error('Expected an attached terminal provider lease.');
+    }
+    await act(() => {
+      const end = {
+        absoluteX: BOTTOM_RIGHT.x,
+        absoluteY: BOTTOM_RIGHT.y,
+        handlerTag,
+        ...BOTTOM_RIGHT,
+      };
+      callbacks.onEnd?.(end, true);
+      callbacks.onFinalize?.(end, true);
+    });
+
+    expect(targetCommitSnapshots[0]).toEqual({
+      activeToken: terminal.gestureToken,
+      phase: INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL,
+    });
+    expect(runtime.current?.drag.getSnapshot().active).toBeNull();
+    expect(terminal.presentation.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.IDLE,
+    );
+    expectOneVisual(board, 'static', 'b1');
+    expectNoVisual(board, 'static', 'a2');
+    await result.unmount();
+  });
+
+  it.each([
+    'admission-reject',
+    'null-target-reject',
+    'throwing-consumer',
+  ] as const)(
+    'commits the restored source before retiring a terminal %s',
+    async (fixture) => {
+      const boardId = `terminal-${fixture}`;
+      const runtime: { current: ChessboardProviderRuntime | null } = {
+        current: null,
+      };
+      const sourceCommitSnapshots: Readonly<{
+        activeToken: number | null;
+        phase: number | null;
+      }>[] = [];
+      const intents: MoveIntent[] = [];
+      let allowDrag = true;
+      let terminalStarted = false;
+      function RuntimeProbe(): null {
+        runtime.current = useChessboardProvider().runtime;
+        return null;
+      }
+      function SourceBarrierPieceProbe(
+        props: PieceRendererProps,
+      ): ReactElement {
+        useLayoutEffect(() => {
+          if (
+            !terminalStarted ||
+            props.square !== 'a2' ||
+            props.state.isDragging ||
+            props.state.isGhost ||
+            props.state.isPending
+          ) {
+            return;
+          }
+          const active = runtime.current?.drag.getSnapshot().active ?? null;
+          sourceCommitSnapshots.push(
+            Object.freeze({
+              activeToken: active?.gestureToken ?? null,
+              phase: active?.presentation.phase.value ?? null,
+            }),
+          );
+        }, [props.square, props.state]);
+        return (
+          <View
+            testID={`move-piece:${visualKind(props)}:${props.square ?? 'spare'}:${props.piece.pieceType}`}
+          />
+        );
+      }
+
+      const result = await render(
+        <ChessboardProvider>
+          <RuntimeProbe />
+          <ChessboardRuntime
+            boardId={boardId}
+            canDragPiece={() => allowDrag}
+            development={false}
+            dimensions={{ columns: 2, rows: 2 }}
+            onMoveRequest={(intent) => {
+              intents.push(intent);
+              if (fixture === 'throwing-consumer') {
+                throw new Error('synchronous consumer failure');
+              }
+              return { status: 'rejected' };
+            }}
+            pieceRenderers={{ token: SourceBarrierPieceProbe }}
+            position={{
+              revision: 42,
+              value: { a2: { id: fixture, pieceType: 'token' } },
+            }}
+          />
+        </ChessboardProvider>,
+      );
+      const board = rootOf(result);
+      await measure(board);
+      const pan = getByGestureTestId(getBoardGestureTestIds(boardId).pan);
+      const handlerTag = (pan as Readonly<{ handlerTag: number }>).handlerTag;
+      const callbacks = panCallbacks(pan);
+      await act(() => {
+        callbacks.onBegin?.({
+          absoluteX: START.x,
+          absoluteY: START.y,
+          handlerTag,
+          ...START,
+        });
+        callbacks.onStart?.({
+          absoluteX: START.x + 10,
+          absoluteY: START.y,
+          handlerTag,
+          x: START.x + 10,
+          y: START.y,
+        });
+      });
+      const terminal = runtime.current?.drag.getSnapshot().active ?? null;
+      if (terminal === null) {
+        throw new Error('Expected an attached terminal provider lease.');
+      }
+      if (fixture === 'admission-reject') {
+        allowDrag = false;
+      }
+      terminalStarted = true;
+      const target =
+        fixture === 'null-target-reject' ? OFF_BOARD : BOTTOM_RIGHT;
+      await act(() => {
+        const end = {
+          absoluteX: target.x,
+          absoluteY: target.y,
+          handlerTag,
+          ...target,
+        };
+        callbacks.onEnd?.(end, true);
+        callbacks.onFinalize?.(end, true);
+      });
+
+      expect(sourceCommitSnapshots[0]).toEqual({
+        activeToken: terminal.gestureToken,
+        phase: INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL,
+      });
+      expect(intents).toHaveLength(fixture === 'admission-reject' ? 0 : 1);
+      if (fixture === 'null-target-reject') {
+        expect(intents[0]?.targetSquare).toBeNull();
+      }
+      expect(runtime.current?.drag.getSnapshot().active).toBeNull();
+      expect(terminal.presentation.phase.value).toBe(
+        INTERACTION_PRESENTATION_PHASE.IDLE,
+      );
+      expectOneVisual(board, 'static', 'a2');
+      await result.unmount();
+    },
+  );
+
+  it.each(['admission-reject', 'null-target-reject'] as const)(
+    'keeps a successor drag source ghosted when it replaces a stale terminal %s before the restore barrier',
+    async (fixture) => {
+      const boardId = `terminal-successor-${fixture}`;
+      const runtime: { current: ChessboardProviderRuntime | null } = {
+        current: null,
+      };
+      const successorCommitSnapshots: Readonly<{
+        activeToken: number | null;
+        phase: number | null;
+        visual: string;
+      }>[] = [];
+      const boardRoot: { current: TestInstance | null } = { current: null };
+      let allowDrag = true;
+      let successorStarted = false;
+
+      function RuntimeProbe(): null {
+        const provider = useChessboardProvider().runtime;
+        const snapshot = useSyncExternalStore(
+          provider.drag.subscribe,
+          provider.drag.getSnapshot,
+          provider.drag.getSnapshot,
+        );
+        runtime.current = provider;
+        useLayoutEffect(() => {
+          if (!successorStarted || boardRoot.current === null) {
+            return;
+          }
+          const sourceGhost = nodesByTestId(
+            boardRoot.current,
+            'move-piece:source-ghost:a2:token',
+          );
+          const staticSource = nodesByTestId(
+            boardRoot.current,
+            'move-piece:static:a2:token',
+          );
+          successorCommitSnapshots.push(
+            Object.freeze({
+              activeToken: snapshot.active?.gestureToken ?? null,
+              phase: snapshot.active?.presentation.phase.value ?? null,
+              visual:
+                sourceGhost.length > 0
+                  ? 'source-ghost'
+                  : staticSource.length > 0
+                    ? 'static'
+                    : 'missing',
+            }),
+          );
+        }, [snapshot]);
+        return null;
+      }
+
+      const result = await render(
+        <ChessboardProvider>
+          <RuntimeProbe />
+          <ChessboardRuntime
+            boardId={boardId}
+            canDragPiece={() => allowDrag}
+            development={false}
+            dimensions={{ columns: 2, rows: 2 }}
+            onMoveRequest={() => ({ status: 'rejected' })}
+            pieceRenderers={PIECE_RENDERERS}
+            position={{
+              revision: 43,
+              value: { a2: { id: fixture, pieceType: 'token' } },
+            }}
+          />
+        </ChessboardProvider>,
+      );
+      const board = rootOf(result);
+      boardRoot.current = board;
+      await measure(board);
+      const pan = getByGestureTestId(getBoardGestureTestIds(boardId).pan);
+      const handlerTag = (pan as Readonly<{ handlerTag: number }>).handlerTag;
+      const callbacks = panCallbacks(pan);
+      await act(() => {
+        callbacks.onBegin?.({
+          absoluteX: START.x,
+          absoluteY: START.y,
+          handlerTag,
+          ...START,
+        });
+        callbacks.onStart?.({
+          absoluteX: START.x + 10,
+          absoluteY: START.y,
+          handlerTag,
+          x: START.x + 10,
+          y: START.y,
+        });
+      });
+      const rejectedTerminal =
+        runtime.current?.drag.getSnapshot().active ?? null;
+      if (rejectedTerminal === null) {
+        throw new Error('Expected an attached terminal provider lease.');
+      }
+      if (fixture === 'admission-reject') {
+        allowDrag = false;
+      }
+      const target =
+        fixture === 'null-target-reject' ? OFF_BOARD : BOTTOM_RIGHT;
+
+      await act(() => {
+        const terminal = {
+          absoluteX: target.x,
+          absoluteY: target.y,
+          handlerTag,
+          ...target,
+        };
+        callbacks.onEnd?.(terminal, true);
+        callbacks.onFinalize?.(terminal, true);
+        allowDrag = true;
+        successorStarted = true;
+        callbacks.onBegin?.({
+          absoluteX: START.x,
+          absoluteY: START.y,
+          handlerTag,
+          ...START,
+        });
+        callbacks.onStart?.({
+          absoluteX: START.x + 10,
+          absoluteY: START.y,
+          handlerTag,
+          x: START.x + 10,
+          y: START.y,
+        });
+      });
+
+      const successor = runtime.current?.drag.getSnapshot().active ?? null;
+      expect(successor?.gestureToken).not.toBe(rejectedTerminal.gestureToken);
+      expect(successor).toEqual(
+        expect.objectContaining({
+          boardId,
+          source: { kind: 'board', square: 'a2' },
+        }),
+      );
+      expect(successor?.presentation).toBe(rejectedTerminal.presentation);
+      expect(successorCommitSnapshots[0]).toEqual({
+        activeToken: successor?.gestureToken,
+        phase: INTERACTION_PRESENTATION_PHASE.DRAG,
+        visual: 'source-ghost',
+      });
+      expectNoVisual(board, 'static', 'a2');
+      expectOneVisual(board, 'source-ghost', 'a2');
+
+      await act(() => {
+        callbacks.onFinalize?.(
+          {
+            absoluteX: START.x + 10,
+            absoluteY: START.y,
+            handlerTag,
+            x: START.x + 10,
+            y: START.y,
+          },
+          false,
+        );
+      });
+      await result.unmount();
+    },
+  );
+
+  it.each([
+    Object.freeze({ replaceOwner: true, replacePresentation: false }),
+    Object.freeze({ replaceOwner: false, replacePresentation: true }),
+    Object.freeze({ replaceOwner: false, replacePresentation: false }),
+  ])(
+    'does not retire a same-board same-token spare replacement (owner=$replaceOwner, presentation=$replacePresentation)',
+    async ({ replaceOwner, replacePresentation }) => {
+      const boardId = `terminal-aba-${replaceOwner ? 'owner' : replacePresentation ? 'presentation' : 'source'}`;
+      const runtime: { current: ChessboardProviderRuntime | null } = {
+        current: null,
+      };
+      const foreignPresentation: {
+        current: Readonly<InteractionPresentationSharedValues> | null;
+      } = { current: null };
+      const foreignOwner = Object.freeze({});
+      const originalLease: {
+        owner: object | null;
+        presentation: Readonly<InteractionPresentationSharedValues> | null;
+      } = { owner: null, presentation: null };
+      let replacementEstablished = false;
+
+      function RuntimeProbe(): null {
+        runtime.current = useChessboardProvider().runtime;
+        foreignPresentation.current = useInteractionPresentationSharedValues();
+        return null;
+      }
+      function ReplacingPieceProbe(props: PieceRendererProps): ReactElement {
+        useLayoutEffect(() => {
+          if (
+            replacementEstablished ||
+            !props.state.isPending ||
+            props.state.isGhost
+          ) {
+            return;
+          }
+          const provider = runtime.current;
+          const active = provider?.drag.getSnapshot().active ?? null;
+          const alternatePresentation = foreignPresentation.current;
+          if (
+            provider === null ||
+            active === null ||
+            alternatePresentation === null
+          ) {
+            return;
+          }
+          replacementEstablished = true;
+          originalLease.owner = active.owner;
+          originalLease.presentation = active.presentation;
+          alternatePresentation.phase.value =
+            INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL;
+          alternatePresentation.pointerX.value = 77;
+          alternatePresentation.pointerY.value = 88;
+          provider.drag.claim(
+            Object.freeze({
+              ...active,
+              onCancel: jest.fn(),
+              owner: replaceOwner ? foreignOwner : active.owner,
+              presentation: replacePresentation
+                ? alternatePresentation
+                : active.presentation,
+              source: Object.freeze({
+                kind: 'spare' as const,
+                spareId: 'foreign-spare',
+              }),
+              square: null,
+            }),
+          );
+        }, [props.state.isGhost, props.state.isPending]);
+        return (
+          <View
+            testID={`move-piece:${visualKind(props)}:${props.square ?? 'spare'}:${props.piece.pieceType}`}
+          />
+        );
+      }
+
+      const result = await render(
+        <ChessboardProvider>
+          <RuntimeProbe />
+          <ChessboardRuntime
+            boardId={boardId}
+            development={false}
+            dimensions={{ columns: 2, rows: 2 }}
+            moveRequestTimeouts={{ commitMs: 60_000, decisionMs: 60_000 }}
+            onMoveRequest={() => new Promise(() => undefined)}
+            pieceRenderers={{ token: ReplacingPieceProbe }}
+            position={{
+              revision: 31,
+              value: { a2: { id: 'aba', pieceType: 'token' } },
+            }}
+          />
+        </ChessboardProvider>,
+      );
+      const board = rootOf(result);
+      await measure(board);
+      const pan = getByGestureTestId(getBoardGestureTestIds(boardId).pan);
+      const handlerTag = (pan as Readonly<{ handlerTag: number }>).handlerTag;
+      const callbacks = panCallbacks(pan);
+      await act(() => {
+        callbacks.onBegin?.({
+          absoluteX: START.x,
+          absoluteY: START.y,
+          handlerTag,
+          ...START,
+        });
+        callbacks.onStart?.({
+          absoluteX: BOTTOM_RIGHT.x,
+          absoluteY: BOTTOM_RIGHT.y,
+          handlerTag,
+          ...BOTTOM_RIGHT,
+        });
+        const terminal = {
+          absoluteX: BOTTOM_RIGHT.x,
+          absoluteY: BOTTOM_RIGHT.y,
+          handlerTag,
+          ...BOTTOM_RIGHT,
+        };
+        callbacks.onEnd?.(terminal, true);
+        callbacks.onFinalize?.(terminal, true);
+      });
+
+      const foreign = runtime.current?.drag.getSnapshot().active ?? null;
+      expect(replacementEstablished).toBe(true);
+      expect(foreign).toEqual(
+        expect.objectContaining({
+          boardId,
+          source: { kind: 'spare', spareId: 'foreign-spare' },
+        }),
+      );
+      expect(typeof foreign?.gestureToken).toBe('number');
+      expect(foreign?.owner).toBe(
+        replaceOwner ? foreignOwner : originalLease.owner,
+      );
+      const expectedPresentation = replacePresentation
+        ? foreignPresentation.current
+        : originalLease.presentation;
+      expect(foreign?.presentation).toBe(expectedPresentation);
+      if (replacePresentation) {
+        expect(expectedPresentation?.phase.value).toBe(
+          INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL,
+        );
+        expect(expectedPresentation?.pointerX.value).toBe(77);
+        expect(expectedPresentation?.pointerY.value).toBe(88);
+        expect(originalLease.presentation?.phase.value).toBe(
+          INTERACTION_PRESENTATION_PHASE.IDLE,
+        );
+      } else {
+        expect(expectedPresentation?.phase.value).not.toBe(
+          INTERACTION_PRESENTATION_PHASE.IDLE,
+        );
+      }
+
+      const foreignPhase = expectedPresentation?.phase.value;
+      const foreignPointerX = expectedPresentation?.pointerX.value;
+      const foreignPointerY = expectedPresentation?.pointerY.value;
+      await result.rerender(
+        <ChessboardProvider>
+          <RuntimeProbe />
+          <ChessboardRuntime
+            boardId={boardId}
+            development={false}
+            dimensions={{ columns: 2, rows: 2 }}
+            moveRequestTimeouts={{ commitMs: 60_000, decisionMs: 60_000 }}
+            onMoveRequest={() => new Promise(() => undefined)}
+            pieceRenderers={{ token: ReplacingPieceProbe }}
+            position={{
+              revision: 32,
+              value: { a2: { id: 'aba', pieceType: 'token' } },
+            }}
+          />
+        </ChessboardProvider>,
+      );
+
+      const afterControlledSync =
+        runtime.current?.drag.getSnapshot().active ?? null;
+      expect(afterControlledSync).toEqual(
+        expect.objectContaining({
+          boardId,
+          source: { kind: 'spare', spareId: 'foreign-spare' },
+        }),
+      );
+      expect(afterControlledSync?.gestureToken).toBe(foreign?.gestureToken);
+      expect(afterControlledSync?.owner).toBe(foreign?.owner);
+      expect(afterControlledSync?.presentation).toBe(expectedPresentation);
+      expect(expectedPresentation?.phase.value).toBe(foreignPhase);
+      expect(expectedPresentation?.pointerX.value).toBe(foreignPointerX);
+      expect(expectedPresentation?.pointerY.value).toBe(foreignPointerY);
+
+      if (foreign !== null) {
+        await act(() => {
+          runtime.current?.drag.release(foreign.owner, foreign.gestureToken);
+        });
+      }
+      await result.unmount();
+    },
+  );
 
   it('cancels pending work when a second drag starts and renders one active source ghost plus overlay', async () => {
     const boardId = 'second-drag-replaces';
