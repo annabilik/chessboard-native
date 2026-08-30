@@ -136,3 +136,22 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+def releaseMetroSourceMap = layout.buildDirectory.file(
+    "intermediates/sourcemaps/react/release/index.android.bundle.packager.map"
+)
+def verifyReleaseMetroRuntime = tasks.register("verifyReleaseMetroRuntime", Exec) {
+    inputs.file(releaseMetroSourceMap)
+    commandLine(
+        "node",
+        file("../../scripts/check-metro-runtime-sourcemap.mjs").absolutePath,
+        "--sourcemap",
+        releaseMetroSourceMap.get().asFile.absolutePath
+    )
+}
+
+tasks.configureEach { task ->
+    if (task.name == "createBundleReleaseJsAndAssets") {
+        task.finalizedBy(verifyReleaseMetroRuntime)
+    }
+}
