@@ -6,6 +6,7 @@ import android.content.Intent
 import android.graphics.Rect
 import android.os.Process
 import android.os.SystemClock
+import android.util.Base64
 import android.util.Log
 import android.view.Choreographer
 import android.view.InputDevice
@@ -35,6 +36,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.security.MessageDigest
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -679,16 +681,24 @@ class ChessboardTerminalDragHandoffTest {
                                             .put("role", actor.role.wireValue)
                                             .put("alpha", actor.alpha.toDouble())
                                             .put("centerX", actor.center.x.toDouble())
-                                            .put("centerY", actor.center.y.toDouble()),
+                                            .put("centerY", actor.center.y.toDouble())
+                                            .put("visible", actor.visible),
                                     )
                                 }
+                            }
+                        val violations =
+                            JSONArray().also { values ->
+                                witness.violations.forEach(values::put)
                             }
                         witnesses.put(
                             JSONObject()
                                 .put("sessionIndex", witness.sessionIndex)
                                 .put("outcome", witness.outcome.name.lowercase())
                                 .put("frameTimeNs", witness.frameTimeNs)
-                                .put("frameAfterArmMs", witness.frameAfterArmMs)
+                                .put(
+                                    "frameAfterArmMs",
+                                    witness.frameAfterArmMs ?: JSONObject.NULL,
+                                )
                                 .put(
                                     "frameAfterInjectionMs",
                                     witness.frameAfterInjectionMs ?: JSONObject.NULL,
@@ -698,13 +708,20 @@ class ChessboardTerminalDragHandoffTest {
                                 .put("activeOverlayHosts", witness.activeOverlayHosts)
                                 .put("retiringOverlayHosts", witness.retiringOverlayHosts)
                                 .put("opacityMass", witness.opacityMass)
-                                .put("actors", actors),
+                                .put("sourceX", witness.source.x.toDouble())
+                                .put("sourceY", witness.source.y.toDouble())
+                                .put("targetX", witness.target.x.toDouble())
+                                .put("targetY", witness.target.y.toDouble())
+                                .put("observedActorCount", witness.observedActorCount)
+                                .put("droppedActorCount", witness.droppedActorCount)
+                                .put("actors", actors)
+                                .put("violations", violations),
                         )
                     }
             }
         val json =
             JSONObject()
-                .put("schemaVersion", 4)
+                .put("schemaVersion", 5)
                 .put("startPid", startPid)
                 .put("endPid", endPid)
                 .put("processStable", startPid == endPid)
@@ -756,6 +773,11 @@ class ChessboardTerminalDragHandoffTest {
                 .put(
                     "invalidPrimaryCompositionFrames",
                     reports.sumOf { it.invalidPrimaryCompositionFrames },
+                )
+                .put("invalidFrameCount", reports.sumOf { it.invalidFrameCount })
+                .put(
+                    "droppedInvalidFrameWitnessCount",
+                    reports.sumOf { it.droppedInvalidFrameWitnessCount },
                 )
                 .put("invalidFrameWitnesses", invalidFrameWitnesses)
                 .put(
@@ -823,7 +845,44 @@ class ChessboardTerminalDragHandoffTest {
                 .put("offBoardCount", reports.count { it.outcome == TerminalOutcome.OFF_BOARD })
                 .put("cancelCount", reports.count { it.outcome == TerminalOutcome.CANCELLED })
                 .put("reusePassed", true)
-        Log.i(LOG_TAG, "$HANDOFF_LOG_PREFIX${json}")
+        logHandoffRecord(json.toString())
+    }
+
+    private fun logHandoffRecord(json: String) {
+        val jsonBytes = json.toByteArray(Charsets.UTF_8)
+        check(jsonBytes.size <= MAXIMUM_HANDOFF_RECORD_BYTES) {
+            "terminal handoff evidence must not exceed $MAXIMUM_HANDOFF_RECORD_BYTES bytes"
+        }
+        val checksum =
+            MessageDigest
+                .getInstance(HANDOFF_LOG_CHECKSUM_ALGORITHM)
+                .digest(jsonBytes)
+                .joinToString(separator = "") { byte ->
+                    val value = byte.toInt() and 0xff
+                    "${HEX_DIGITS[value ushr 4]}${HEX_DIGITS[value and 0x0f]}"
+                }
+        val recordId = checksum.take(HANDOFF_LOG_RECORD_ID_LENGTH)
+        val chunks =
+            Base64
+                .encodeToString(jsonBytes, Base64.NO_WRAP)
+                .chunked(HANDOFF_LOG_CHUNK_PAYLOAD_CHARACTERS)
+
+        check(chunks.isNotEmpty()) { "terminal handoff log record must not be empty" }
+        check(chunks.size <= MAXIMUM_HANDOFF_LOG_CHUNKS) {
+            "terminal handoff evidence must not exceed $MAXIMUM_HANDOFF_LOG_CHUNKS chunks"
+        }
+        chunks.forEachIndexed { index, chunk ->
+            Log.i(
+                LOG_TAG,
+                "$HANDOFF_LOG_CHUNK_PREFIX" +
+                    "v=$HANDOFF_LOG_TRANSPORT_VERSION " +
+                    "id=$recordId " +
+                    "sha256=$checksum " +
+                    "part=${index + 1}/${chunks.size} " +
+                    "bytes=${jsonBytes.size} " +
+                    "data=$chunk",
+            )
+        }
     }
 
     private class JsQueueBlocker(
@@ -939,15 +998,20 @@ class ChessboardTerminalDragHandoffTest {
     private data class InvalidFrameWitness(
         val activeOverlayHosts: Int,
         val actors: List<ActorObservation>,
-        val frameAfterArmMs: Double,
+        val droppedActorCount: Int,
+        val frameAfterArmMs: Double?,
         val frameAfterInjectionMs: Double?,
         val frameTimeNs: Long,
         val jsQueueBlocked: Boolean,
+        val observedActorCount: Int,
         val opacityMass: Double,
         val outcome: TerminalOutcome,
         val postInjection: Boolean,
         val retiringOverlayHosts: Int,
         val sessionIndex: Int,
+        val source: Point,
+        val target: Point,
+        val violations: List<String>,
     )
 
     private data class HandoffSessionReport(
@@ -961,6 +1025,8 @@ class ChessboardTerminalDragHandoffTest {
         val finalCanonicalAtSource: Boolean,
         val finalCanonicalAtTarget: Boolean,
         val finalRetiringOverlayHosts: Int,
+        val droppedInvalidFrameWitnessCount: Int,
+        val invalidFrameCount: Int,
         val invalidFrameWitnesses: List<InvalidFrameWitness>,
         val invalidPrimaryCompositionFrames: Int,
         val offTargetFrames: Int,
@@ -996,6 +1062,8 @@ class ChessboardTerminalDragHandoffTest {
         var blockedTerminalOverlayFrames = 0
         var canonicalFrames = 0
         var canonicalTransitionFrames = 0
+        var droppedInvalidFrameWitnessCount = 0
+        var invalidFrameCount = 0
         val invalidFrameWitnesses = mutableListOf<InvalidFrameWitness>()
         var invalidPrimaryCompositionFrames = 0
         var jsQueueBlocked = false
@@ -1030,6 +1098,7 @@ class ChessboardTerminalDragHandoffTest {
         private val lock = Any()
         private var attached = false
         private var currentFrameTimeNs = -1L
+        private var invalidFrameWitnessCount = 0
         private var latestSnapshot: DrawSnapshot? = null
         private var nextSessionIndex = 0
         private var session: MutableSession? = null
@@ -1181,6 +1250,9 @@ class ChessboardTerminalDragHandoffTest {
                     finalCanonicalAtSource = exactCanonicalPrimaryAt(snapshot, current.source),
                     finalCanonicalAtTarget = exactCanonicalPrimaryAt(snapshot, current.target),
                     finalRetiringOverlayHosts = snapshot.retiringOverlayHosts,
+                    droppedInvalidFrameWitnessCount =
+                        current.droppedInvalidFrameWitnessCount,
+                    invalidFrameCount = current.invalidFrameCount,
                     invalidFrameWitnesses = current.invalidFrameWitnesses.toList(),
                     invalidPrimaryCompositionFrames = current.invalidPrimaryCompositionFrames,
                     offTargetFrames = current.offTargetFrames,
@@ -1261,6 +1333,7 @@ class ChessboardTerminalDragHandoffTest {
             current: MutableSession,
             snapshot: DrawSnapshot,
         ) {
+            val violations = linkedSetOf<String>()
             val visibleOverlays =
                 snapshot.actors.filter { actor ->
                     actor.role == ActorRole.OVERLAY && actor.visible
@@ -1269,12 +1342,20 @@ class ChessboardTerminalDragHandoffTest {
                 current.activeOverlayFrames += 1
                 if (sourceAlpha(snapshot, current.source) > VISIBILITY_EPSILON) {
                     current.sourceVisibleWithOverlayFrames += 1
+                    violations += "source-visible-with-overlay"
                 }
             }
             if (
                 !current.terminalArmed ||
                 snapshot.frameTimeNs <= current.terminalArmFrameTimeNs
             ) {
+                if (violations.isNotEmpty()) {
+                    val opacityMass =
+                        snapshot.actors
+                            .filter { actor -> actor.visible && actor.role.primary }
+                            .sumOf { actor -> actor.alpha.toDouble() }
+                    recordInvalidFrameWitness(current, snapshot, opacityMass, violations)
+                }
                 return
             }
 
@@ -1310,40 +1391,33 @@ class ChessboardTerminalDragHandoffTest {
             }
 
             val primary = visibleActors.filter { actor -> actor.role.primary }
+            val opacityMass = primary.sumOf { actor -> actor.alpha.toDouble() }
             if (primary.isEmpty()) {
                 current.zeroPrimaryFrames += 1
                 current.invalidPrimaryCompositionFrames += 1
-                recordInvalidFrameWitness(current, snapshot, visibleActors, 0.0)
-                return
-            }
-            val opacityMass = primary.sumOf { actor -> actor.alpha.toDouble() }
-            if (opacityMass < MINIMUM_PRIMARY_OPACITY) {
-                current.underOpacityFrames += 1
-            }
-            if (opacityMass > MAXIMUM_PRIMARY_OPACITY) {
-                current.overOpacityFrames += 1
-            }
-            val validComposition =
+                violations += "zero-primary"
+                violations += "invalid-composition"
+            } else {
+                if (opacityMass < MINIMUM_PRIMARY_OPACITY) {
+                    current.underOpacityFrames += 1
+                    violations += "under-opacity"
+                }
+                if (opacityMass > MAXIMUM_PRIMARY_OPACITY) {
+                    current.overOpacityFrames += 1
+                    violations += "over-opacity"
+                }
                 when {
-                primary.size == 1 && fullOpacity(primary.single().alpha) -> {
-                    current.singlePrimaryFrames += 1
-                    true
+                    primary.size == 1 && fullOpacity(primary.single().alpha) -> {
+                        current.singlePrimaryFrames += 1
+                    }
+                    current.acceptedContinuity && allowedPendingCanonicalCrossfade(primary) -> {
+                        current.pendingCanonicalCrossfadeFrames += 1
+                    }
+                    else -> {
+                        current.invalidPrimaryCompositionFrames += 1
+                        violations += "invalid-composition"
+                    }
                 }
-                current.acceptedContinuity && allowedPendingCanonicalCrossfade(primary) -> {
-                    current.pendingCanonicalCrossfadeFrames += 1
-                    true
-                }
-                else -> {
-                    current.invalidPrimaryCompositionFrames += 1
-                    false
-                }
-            }
-            if (
-                !validComposition ||
-                opacityMass < MINIMUM_PRIMARY_OPACITY ||
-                opacityMass > MAXIMUM_PRIMARY_OPACITY
-            ) {
-                recordInvalidFrameWitness(current, snapshot, visibleActors, opacityMass)
             }
             val sourceVisible = primary.any { actor -> near(actor.center, current.source) }
             val targetVisible = primary.any { actor -> near(actor.center, current.target) }
@@ -1356,9 +1430,11 @@ class ChessboardTerminalDragHandoffTest {
             if (current.acceptedContinuity) {
                 if (sourceVisible) {
                     current.sourceSnapbackFrames += 1
+                    violations += "source-snapback"
                 }
                 if (primary.any { actor -> !near(actor.center, current.target) }) {
                     current.offTargetFrames += 1
+                    violations += "off-target"
                 }
             } else if (
                 primary.any { actor ->
@@ -1366,6 +1442,7 @@ class ChessboardTerminalDragHandoffTest {
                 }
             ) {
                 current.unexpectedLocationFrames += 1
+                violations += "unexpected-location"
             }
             if (
                 primary.indices.any { leftIndex ->
@@ -1377,26 +1454,52 @@ class ChessboardTerminalDragHandoffTest {
                 }
             ) {
                 current.spatialDuplicateFrames += 1
+                violations += "spatial-duplicate"
+            }
+            if (violations.isNotEmpty()) {
+                recordInvalidFrameWitness(current, snapshot, opacityMass, violations)
             }
         }
 
         private fun recordInvalidFrameWitness(
             current: MutableSession,
             snapshot: DrawSnapshot,
-            visibleActors: List<ActorObservation>,
             opacityMass: Double,
+            violations: Set<String>,
         ) {
-            if (current.invalidFrameWitnesses.size >= MAXIMUM_INVALID_FRAME_WITNESSES_PER_SESSION) {
+            current.invalidFrameCount += 1
+            if (invalidFrameWitnessCount >= MAXIMUM_INVALID_FRAME_WITNESSES) {
+                current.droppedInvalidFrameWitnessCount += 1
                 return
             }
+            invalidFrameWitnessCount += 1
+            val actors =
+                snapshot.actors
+                    .sortedWith(
+                        compareByDescending<ActorObservation> { actor -> actor.role.primary }
+                            .thenByDescending(ActorObservation::visible)
+                            .thenBy { actor -> actor.role.wireValue },
+                    ).take(MAXIMUM_ACTORS_PER_INVALID_FRAME_WITNESS)
             current.invalidFrameWitnesses +=
                 InvalidFrameWitness(
                     activeOverlayHosts = snapshot.activeOverlayHosts,
-                    actors = visibleActors.toList(),
+                    actors = actors,
+                    droppedActorCount = snapshot.actors.size - actors.size,
                     frameAfterArmMs =
-                        (snapshot.frameTimeNs - current.terminalArmFrameTimeNs) / NANOS_PER_MILLISECOND,
+                        if (
+                            current.terminalArmed &&
+                            snapshot.frameTimeNs > current.terminalArmFrameTimeNs
+                        ) {
+                            (snapshot.frameTimeNs - current.terminalArmFrameTimeNs) /
+                                NANOS_PER_MILLISECOND
+                        } else {
+                            null
+                        },
                     frameAfterInjectionMs =
-                        if (current.postInjection) {
+                        if (
+                            current.postInjection &&
+                            snapshot.frameTimeNs > current.postInjectionFrameTimeNs
+                        ) {
                             (snapshot.frameTimeNs - current.postInjectionFrameTimeNs) /
                                 NANOS_PER_MILLISECOND
                         } else {
@@ -1404,11 +1507,17 @@ class ChessboardTerminalDragHandoffTest {
                         },
                     frameTimeNs = snapshot.frameTimeNs,
                     jsQueueBlocked = current.jsQueueBlocked,
+                    observedActorCount = snapshot.actors.size,
                     opacityMass = opacityMass,
                     outcome = current.outcome,
-                    postInjection = current.postInjection,
+                    postInjection =
+                        current.postInjection &&
+                            snapshot.frameTimeNs > current.postInjectionFrameTimeNs,
                     retiringOverlayHosts = snapshot.retiringOverlayHosts,
                     sessionIndex = current.sessionIndex,
+                    source = current.source,
+                    target = current.target,
+                    violations = violations.sorted(),
                 )
         }
 
@@ -1443,7 +1552,9 @@ class ChessboardTerminalDragHandoffTest {
             fun sourceAlpha(snapshot: DrawSnapshot, source: Point): Float =
                 snapshot.actors
                     .filter { actor ->
-                        actor.role != ActorRole.OVERLAY && near(actor.center, source)
+                        actor.visible &&
+                            actor.role != ActorRole.OVERLAY &&
+                            near(actor.center, source)
                     }.maxOfOrNull(ActorObservation::alpha) ?: 0f
 
             fun allowedPendingCanonicalCrossfade(primary: List<ActorObservation>): Boolean {
@@ -1493,7 +1604,11 @@ class ChessboardTerminalDragHandoffTest {
         const val CENTER_TOLERANCE_PX = 14.0
         const val COMMIT_ACTION_LABEL = "Commit terminal handoff pending move"
         const val DRAG_READY_SETTLE_MS = 1_000L
-        const val HANDOFF_LOG_PREFIX = "CHESSBOARD_DRAG_HANDOFF "
+        const val HANDOFF_LOG_CHECKSUM_ALGORITHM = "SHA-256"
+        const val HANDOFF_LOG_CHUNK_PAYLOAD_CHARACTERS = 2_000
+        const val HANDOFF_LOG_CHUNK_PREFIX = "CHESSBOARD_DRAG_HANDOFF_CHUNK "
+        const val HANDOFF_LOG_RECORD_ID_LENGTH = 16
+        const val HANDOFF_LOG_TRANSPORT_VERSION = 1
         const val INITIAL_POSITION_REVISION = 41
         const val INPUT_PRECONDITION_SETTLE_MS = 50L
         const val INTERACTION_TIMEOUT_MS = 30_000L
@@ -1501,7 +1616,10 @@ class ChessboardTerminalDragHandoffTest {
         const val JS_QUEUE_ENTRY_TIMEOUT_MS = 5_000L
         const val JS_QUEUE_EXIT_TIMEOUT_MS = 2_000L
         const val LOG_TAG = "ChessboardDragHandoff"
-        const val MAXIMUM_INVALID_FRAME_WITNESSES_PER_SESSION = 4
+        const val MAXIMUM_ACTORS_PER_INVALID_FRAME_WITNESS = 6
+        const val MAXIMUM_HANDOFF_LOG_CHUNKS = 6
+        const val MAXIMUM_HANDOFF_RECORD_BYTES = 8_192
+        const val MAXIMUM_INVALID_FRAME_WITNESSES = 2
         const val MAXIMUM_PRIMARY_OPACITY = 1.05
         const val MINIMUM_BLOCKED_TERMINAL_FRAMES = 8
         const val MINIMUM_BLOCKED_TERMINAL_SPAN_MS = 100.0
@@ -1513,6 +1631,8 @@ class ChessboardTerminalDragHandoffTest {
         const val TOUCH_STEP_MS = 32L
         const val TRANSITION_SETTLE_MS = 500L
         const val VISIBILITY_EPSILON = 1f / 255f
+
+        const val HEX_DIGITS = "0123456789abcdef"
 
         val ACTOR_TEST_ID_PATTERN =
             Regex("^terminal-handoff:actor:([a-z-]+):([a-z][0-9]+|none)$")

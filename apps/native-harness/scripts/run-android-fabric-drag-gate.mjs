@@ -49,9 +49,16 @@ export const androidDragPerformanceTest =
 const dragPerformanceLogPrefix = 'CHESSBOARD_DRAG_PERF ';
 const dragPerformanceChunkLogPrefix = 'CHESSBOARD_DRAG_PERF_CHUNK ';
 const terminalDragHandoffLogPrefix = 'CHESSBOARD_DRAG_HANDOFF ';
+const terminalDragHandoffChunkLogPrefix = 'CHESSBOARD_DRAG_HANDOFF_CHUNK ';
 const dragPerformanceChunkEnvelopePattern =
   /^v=(\d+) id=([a-f0-9]{16}) sha256=([a-f0-9]{64}) part=(\d+)\/(\d+) bytes=(\d+) data=([A-Za-z0-9+/]+={0,2})$/u;
 const dragPerformanceLogTransportVersion = 1;
+const terminalDragHandoffChunkEnvelopePattern =
+  /^v=(\d+) id=([a-f0-9]{16}) sha256=([a-f0-9]{64}) part=(\d+)\/(\d+) bytes=(\d+) data=([A-Za-z0-9+/]+={0,2})$/u;
+const terminalDragHandoffLogTransportVersion = 1;
+const terminalDragHandoffMaximumChunkCount = 6;
+const terminalDragHandoffMaximumChunkPayloadCharacters = 2_000;
+const terminalDragHandoffMaximumRecordBytes = 8_192;
 const dragPerformanceThresholds = Object.freeze({
   expectedFrameDurationToleranceMs: 0.01,
   jankHeuristicMultiplier: 2,
@@ -87,10 +94,12 @@ const terminalDragHandoffSchemaKeys = Object.freeze([
   'cancelCount',
   'canonicalFrames',
   'canonicalTransitionFrames',
+  'droppedInvalidFrameWitnessCount',
   'endPid',
   'finalActiveOverlayHosts',
   'finalRetiringOverlayHosts',
   'gestureCount',
+  'invalidFrameCount',
   'invalidFrameWitnesses',
   'invalidPrimaryCompositionFrames',
   'offBoardCount',
@@ -301,22 +310,182 @@ export function scanAndroidFabricFailures(logcat) {
   return findings;
 }
 
+function parseTerminalHandoffPositiveSafeInteger(value, label) {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error(
+      `Android terminal drag handoff chunk ${label} must be a positive safe integer.`,
+    );
+  }
+  return parsed;
+}
+
+function reassembleAndroidTerminalDragHandoffChunks(chunkPayloads) {
+  if (chunkPayloads.length > terminalDragHandoffMaximumChunkCount) {
+    throw new Error(
+      `Android terminal drag handoff chunk count must not exceed ${String(terminalDragHandoffMaximumChunkCount)}.`,
+    );
+  }
+  const chunks = chunkPayloads.map((payload, index) => {
+    const match = terminalDragHandoffChunkEnvelopePattern.exec(payload);
+    if (match === null) {
+      throw new Error(
+        `Android terminal drag handoff chunk ${String(index + 1)} has a malformed envelope.`,
+      );
+    }
+    const [
+      ,
+      versionText,
+      recordId,
+      checksum,
+      partText,
+      countText,
+      bytesText,
+      data,
+    ] = match;
+    if (data.length > terminalDragHandoffMaximumChunkPayloadCharacters) {
+      throw new Error(
+        `Android terminal drag handoff chunk ${String(index + 1)} data must not exceed ${String(terminalDragHandoffMaximumChunkPayloadCharacters)} characters.`,
+      );
+    }
+    return {
+      byteLength: parseTerminalHandoffPositiveSafeInteger(
+        bytesText,
+        'byte length',
+      ),
+      checksum,
+      count: parseTerminalHandoffPositiveSafeInteger(countText, 'count'),
+      data,
+      part: parseTerminalHandoffPositiveSafeInteger(partText, 'part'),
+      recordId,
+      version: parseTerminalHandoffPositiveSafeInteger(versionText, 'version'),
+    };
+  });
+  const first = chunks[0];
+  if (first.version !== terminalDragHandoffLogTransportVersion) {
+    throw new Error(
+      `Android terminal drag handoff chunk transport version must equal ${String(terminalDragHandoffLogTransportVersion)}.`,
+    );
+  }
+  if (first.recordId !== first.checksum.slice(0, first.recordId.length)) {
+    throw new Error(
+      'Android terminal drag handoff chunk record id is inconsistent with its checksum.',
+    );
+  }
+  if (first.count > terminalDragHandoffMaximumChunkCount) {
+    throw new Error(
+      `Android terminal drag handoff chunk count must not exceed ${String(terminalDragHandoffMaximumChunkCount)}.`,
+    );
+  }
+  if (chunks.length !== first.count) {
+    throw new Error(
+      `Android terminal drag handoff chunk count is incomplete or duplicated; expected ${String(first.count)}, found ${String(chunks.length)}.`,
+    );
+  }
+  if (first.byteLength > terminalDragHandoffMaximumRecordBytes) {
+    throw new Error(
+      `Android terminal drag handoff record must not exceed ${String(terminalDragHandoffMaximumRecordBytes)} bytes.`,
+    );
+  }
+  const expectedEncodedLength = 4 * Math.ceil(first.byteLength / 3);
+  const expectedChunkCount = Math.ceil(
+    expectedEncodedLength / terminalDragHandoffMaximumChunkPayloadCharacters,
+  );
+  if (first.count !== expectedChunkCount) {
+    throw new Error(
+      `Android terminal drag handoff chunk count must be canonical for the declared byte length; expected ${String(expectedChunkCount)}, found ${String(first.count)}.`,
+    );
+  }
+
+  for (const [index, chunk] of chunks.entries()) {
+    if (
+      chunk.version !== first.version ||
+      chunk.recordId !== first.recordId ||
+      chunk.checksum !== first.checksum ||
+      chunk.count !== first.count ||
+      chunk.byteLength !== first.byteLength
+    ) {
+      throw new Error(
+        `Android terminal drag handoff chunk ${String(index + 1)} does not belong to the same logical record.`,
+      );
+    }
+    if (chunk.part !== index + 1) {
+      throw new Error(
+        `Android terminal drag handoff chunks are out of order at chunk ${String(index + 1)}; found part ${String(chunk.part)}.`,
+      );
+    }
+    const expectedLength = Math.min(
+      terminalDragHandoffMaximumChunkPayloadCharacters,
+      expectedEncodedLength -
+        index * terminalDragHandoffMaximumChunkPayloadCharacters,
+    );
+    if (chunk.data.length !== expectedLength) {
+      throw new Error(
+        `Android terminal drag handoff chunk ${String(index + 1)} is not canonically sized.`,
+      );
+    }
+  }
+
+  const encodedPayload = chunks.map((chunk) => chunk.data).join('');
+  const decodedPayload = Buffer.from(encodedPayload, 'base64');
+  if (decodedPayload.toString('base64') !== encodedPayload) {
+    throw new Error(
+      'Android terminal drag handoff chunk payload is not canonical Base64.',
+    );
+  }
+  if (decodedPayload.length !== first.byteLength) {
+    throw new Error(
+      `Android terminal drag handoff chunk byte length mismatch; expected ${String(first.byteLength)}, found ${String(decodedPayload.length)}.`,
+    );
+  }
+  const actualChecksum = createHash('sha256')
+    .update(decodedPayload)
+    .digest('hex');
+  if (actualChecksum !== first.checksum) {
+    throw new Error('Android terminal drag handoff chunk checksum mismatch.');
+  }
+  const payload = decodedPayload.toString('utf8');
+  if (!Buffer.from(payload, 'utf8').equals(decodedPayload)) {
+    throw new Error(
+      'Android terminal drag handoff chunk payload is not valid UTF-8.',
+    );
+  }
+  return payload;
+}
+
 function extractAndroidTerminalDragHandoffPayload(logcat) {
-  const payloads = [];
+  const directPayloads = [];
+  const chunkPayloads = [];
   for (const line of logcat.split(/\r?\n/u)) {
+    const chunkMarkerIndex = line.indexOf(terminalDragHandoffChunkLogPrefix);
+    if (chunkMarkerIndex >= 0) {
+      chunkPayloads.push(
+        line
+          .slice(chunkMarkerIndex + terminalDragHandoffChunkLogPrefix.length)
+          .trim(),
+      );
+      continue;
+    }
     const markerIndex = line.indexOf(terminalDragHandoffLogPrefix);
     if (markerIndex >= 0) {
-      payloads.push(
+      directPayloads.push(
         line.slice(markerIndex + terminalDragHandoffLogPrefix.length).trim(),
       );
     }
   }
-  if (payloads.length !== 1) {
+  if (directPayloads.length > 0) {
     throw new Error(
-      `Expected exactly one ${terminalDragHandoffLogPrefix.trim()} record; found ${String(payloads.length)}.`,
+      chunkPayloads.length > 0
+        ? 'Expected exactly one CHESSBOARD_DRAG_HANDOFF logical record; found both direct and chunked records.'
+        : 'Android terminal drag handoff schemaVersion 5 records must use checksummed chunk transport.',
     );
   }
-  return payloads[0];
+  if (chunkPayloads.length === 0) {
+    throw new Error(
+      `Expected exactly one ${terminalDragHandoffChunkLogPrefix.trim()} logical record; found 0.`,
+    );
+  }
+  return reassembleAndroidTerminalDragHandoffChunks(chunkPayloads);
 }
 
 function requireTerminalHandoffBoolean(summary, field) {
@@ -377,28 +546,193 @@ function requireTerminalHandoffObjectKeys(value, expectedKeys, label) {
   return value;
 }
 
+const terminalHandoffPrimaryRoles = new Set([
+  'canonical',
+  'canonical-transition',
+  'overlay',
+  'pending-target',
+]);
+const terminalHandoffCenterTolerancePx = 14;
+const terminalHandoffMinimumPrimaryOpacity = 0.95;
+const terminalHandoffMaximumPrimaryOpacity = 1.05;
+const terminalHandoffVisibilityEpsilon = Math.fround(1 / 255);
+
+function terminalHandoffNear(leftX, leftY, rightX, rightY) {
+  return (
+    Math.hypot(Math.fround(leftX - rightX), Math.fround(leftY - rightY)) <=
+    terminalHandoffCenterTolerancePx
+  );
+}
+
+function expectedTerminalHandoffWitnessViolations(witness) {
+  const violations = new Set();
+  const visibleActors = witness.actors.filter((actor) => actor.visible);
+  const visibleOverlays = visibleActors.filter(
+    (actor) => actor.role === 'overlay',
+  );
+  if (
+    visibleOverlays.length > 0 &&
+    visibleActors.some(
+      (actor) =>
+        actor.role !== 'overlay' &&
+        terminalHandoffNear(
+          actor.centerX,
+          actor.centerY,
+          witness.sourceX,
+          witness.sourceY,
+        ),
+    )
+  ) {
+    violations.add('source-visible-with-overlay');
+  }
+
+  if (witness.frameAfterArmMs === null) {
+    return [...violations].sort();
+  }
+
+  const primary = visibleActors.filter((actor) =>
+    terminalHandoffPrimaryRoles.has(actor.role),
+  );
+  const opacityMass = primary.reduce((total, actor) => total + actor.alpha, 0);
+  if (primary.length === 0) {
+    violations.add('zero-primary');
+    violations.add('invalid-composition');
+  } else {
+    if (opacityMass < terminalHandoffMinimumPrimaryOpacity) {
+      violations.add('under-opacity');
+    }
+    if (opacityMass > terminalHandoffMaximumPrimaryOpacity) {
+      violations.add('over-opacity');
+    }
+    const singleFullOpacity =
+      primary.length === 1 &&
+      primary[0].alpha >= terminalHandoffMinimumPrimaryOpacity &&
+      primary[0].alpha <= terminalHandoffMaximumPrimaryOpacity;
+    let allowedAcceptedCrossfade = false;
+    if (witness.outcome === 'accepted' && primary.length === 2) {
+      const pending = primary.filter(
+        (actor) => actor.role === 'pending-target',
+      );
+      const canonical = primary.filter(
+        (actor) =>
+          actor.role === 'canonical' || actor.role === 'canonical-transition',
+      );
+      allowedAcceptedCrossfade =
+        pending.length === 1 &&
+        canonical.length === 1 &&
+        terminalHandoffNear(
+          pending[0].centerX,
+          pending[0].centerY,
+          canonical[0].centerX,
+          canonical[0].centerY,
+        ) &&
+        Math.fround(pending[0].alpha + canonical[0].alpha) >=
+          terminalHandoffMinimumPrimaryOpacity &&
+        Math.fround(pending[0].alpha + canonical[0].alpha) <=
+          terminalHandoffMaximumPrimaryOpacity;
+    }
+    if (!singleFullOpacity && !allowedAcceptedCrossfade) {
+      violations.add('invalid-composition');
+    }
+  }
+
+  const sourceVisible = primary.some((actor) =>
+    terminalHandoffNear(
+      actor.centerX,
+      actor.centerY,
+      witness.sourceX,
+      witness.sourceY,
+    ),
+  );
+  if (witness.outcome === 'accepted') {
+    if (sourceVisible) {
+      violations.add('source-snapback');
+    }
+    if (
+      primary.some(
+        (actor) =>
+          !terminalHandoffNear(
+            actor.centerX,
+            actor.centerY,
+            witness.targetX,
+            witness.targetY,
+          ),
+      )
+    ) {
+      violations.add('off-target');
+    }
+  } else if (
+    primary.some(
+      (actor) =>
+        !terminalHandoffNear(
+          actor.centerX,
+          actor.centerY,
+          witness.sourceX,
+          witness.sourceY,
+        ) &&
+        !terminalHandoffNear(
+          actor.centerX,
+          actor.centerY,
+          witness.targetX,
+          witness.targetY,
+        ),
+    )
+  ) {
+    violations.add('unexpected-location');
+  }
+  if (
+    primary.some((left, leftIndex) =>
+      primary.some(
+        (right, rightIndex) =>
+          rightIndex > leftIndex &&
+          Math.hypot(
+            Math.fround(left.centerX - right.centerX),
+            Math.fround(left.centerY - right.centerY),
+          ) > terminalHandoffCenterTolerancePx,
+      ),
+    )
+  ) {
+    violations.add('spatial-duplicate');
+  }
+  return [...violations].sort();
+}
+
 function requireTerminalHandoffInvalidFrameWitnesses(summary) {
   const witnesses = summary.invalidFrameWitnesses;
-  if (!Array.isArray(witnesses) || witnesses.length > 20) {
+  if (!Array.isArray(witnesses) || witnesses.length > 2) {
     throw new Error(
-      'Android terminal drag handoff invalidFrameWitnesses must be an array with at most 20 entries.',
+      'Android terminal drag handoff invalidFrameWitnesses must be an array with at most 2 entries.',
     );
   }
   const witnessKeys = [
     'activeOverlayHosts',
     'actors',
+    'droppedActorCount',
     'frameAfterArmMs',
     'frameAfterInjectionMs',
     'frameTimeNs',
     'jsQueueBlocked',
+    'observedActorCount',
     'opacityMass',
     'outcome',
     'postInjection',
     'retiringOverlayHosts',
     'sessionIndex',
+    'sourceX',
+    'sourceY',
+    'targetX',
+    'targetY',
+    'violations',
   ];
-  const actorKeys = ['alpha', 'centerX', 'centerY', 'role'];
+  const actorKeys = ['alpha', 'centerX', 'centerY', 'role', 'visible'];
   const outcomes = new Set(['accepted', 'cancelled', 'off_board', 'rejected']);
+  const expectedOutcomeBySession = [
+    'accepted',
+    'rejected',
+    'off_board',
+    'cancelled',
+    'accepted',
+  ];
   const roles = new Set([
     'canonical',
     'canonical-transition',
@@ -407,7 +741,20 @@ function requireTerminalHandoffInvalidFrameWitnesses(summary) {
     'pending-target',
     'source-ghost',
   ]);
+  const allowedViolations = new Set([
+    'invalid-composition',
+    'off-target',
+    'over-opacity',
+    'source-snapback',
+    'source-visible-with-overlay',
+    'spatial-duplicate',
+    'under-opacity',
+    'unexpected-location',
+    'zero-primary',
+  ]);
 
+  let previousSessionIndex = -1;
+  let previousFrameTimeNs = -1;
   for (const [witnessIndex, candidate] of witnesses.entries()) {
     const label = `invalidFrameWitnesses[${String(witnessIndex)}]`;
     const witness = requireTerminalHandoffObjectKeys(
@@ -426,26 +773,54 @@ function requireTerminalHandoffInvalidFrameWitnesses(summary) {
         `Android terminal drag handoff ${label}.outcome is invalid.`,
       );
     }
+    if (witness.outcome !== expectedOutcomeBySession[sessionIndex]) {
+      throw new Error(
+        `Android terminal drag handoff ${label}.outcome must match its sessionIndex.`,
+      );
+    }
     for (const field of [
       'activeOverlayHosts',
+      'droppedActorCount',
+      'observedActorCount',
       'retiringOverlayHosts',
       'frameTimeNs',
     ]) {
       requireTerminalHandoffInteger(witness, field);
     }
-    for (const field of ['frameAfterArmMs', 'opacityMass']) {
-      if (requireTerminalHandoffNumber(witness, field) < 0) {
-        throw new Error(
-          `Android terminal drag handoff ${label}.${field} must be non-negative.`,
-        );
-      }
+    if (witness.frameTimeNs <= 0) {
+      throw new Error(
+        `Android terminal drag handoff ${label}.frameTimeNs must be positive.`,
+      );
+    }
+    if (
+      sessionIndex < previousSessionIndex ||
+      witness.frameTimeNs <= previousFrameTimeNs
+    ) {
+      throw new Error(
+        'Android terminal drag handoff invalidFrameWitnesses must be unique and chronological.',
+      );
+    }
+    previousSessionIndex = sessionIndex;
+    previousFrameTimeNs = witness.frameTimeNs;
+    if (requireTerminalHandoffNumber(witness, 'opacityMass') < 0) {
+      throw new Error(
+        `Android terminal drag handoff ${label}.opacityMass must be non-negative.`,
+      );
+    }
+    if (
+      witness.frameAfterArmMs !== null &&
+      requireTerminalHandoffNumber(witness, 'frameAfterArmMs') <= 0
+    ) {
+      throw new Error(
+        `Android terminal drag handoff ${label}.frameAfterArmMs must be null or positive.`,
+      );
     }
     if (
       witness.frameAfterInjectionMs !== null &&
-      requireTerminalHandoffNumber(witness, 'frameAfterInjectionMs') < 0
+      requireTerminalHandoffNumber(witness, 'frameAfterInjectionMs') <= 0
     ) {
       throw new Error(
-        `Android terminal drag handoff ${label}.frameAfterInjectionMs must be null or non-negative.`,
+        `Android terminal drag handoff ${label}.frameAfterInjectionMs must be null or positive.`,
       );
     }
     requireTerminalHandoffBoolean(witness, 'postInjection');
@@ -455,9 +830,55 @@ function requireTerminalHandoffInvalidFrameWitnesses(summary) {
         `Android terminal drag handoff ${label} post-injection fields must agree.`,
       );
     }
-    if (!Array.isArray(witness.actors) || witness.actors.length > 16) {
+    if (witness.postInjection && witness.frameAfterArmMs === null) {
       throw new Error(
-        `Android terminal drag handoff ${label}.actors must be an array with at most 16 entries.`,
+        `Android terminal drag handoff ${label}.frameAfterArmMs is required after injection.`,
+      );
+    }
+    if (
+      witness.frameAfterInjectionMs !== null &&
+      witness.frameAfterInjectionMs - witness.frameAfterArmMs > 1e-6
+    ) {
+      throw new Error(
+        `Android terminal drag handoff ${label}.frameAfterInjectionMs cannot exceed frameAfterArmMs.`,
+      );
+    }
+    if (
+      !Array.isArray(witness.violations) ||
+      witness.violations.length === 0 ||
+      witness.violations.length > allowedViolations.size ||
+      new Set(witness.violations).size !== witness.violations.length ||
+      witness.violations.some(
+        (violation) =>
+          typeof violation !== 'string' || !allowedViolations.has(violation),
+      )
+    ) {
+      throw new Error(
+        `Android terminal drag handoff ${label}.violations must be unique known violation strings.`,
+      );
+    }
+    if (
+      witness.violations.some(
+        (violation, index) =>
+          violation !== [...witness.violations].sort()[index],
+      )
+    ) {
+      throw new Error(
+        `Android terminal drag handoff ${label}.violations must be sorted.`,
+      );
+    }
+    if (!Array.isArray(witness.actors) || witness.actors.length > 6) {
+      throw new Error(
+        `Android terminal drag handoff ${label}.actors must be an array with at most 6 entries.`,
+      );
+    }
+    if (
+      witness.actors.length !== Math.min(witness.observedActorCount, 6) ||
+      witness.droppedActorCount !==
+        witness.observedActorCount - witness.actors.length
+    ) {
+      throw new Error(
+        `Android terminal drag handoff ${label} actor counts are inconsistent.`,
       );
     }
     for (const [actorIndex, candidateActor] of witness.actors.entries()) {
@@ -472,6 +893,7 @@ function requireTerminalHandoffInvalidFrameWitnesses(summary) {
           `Android terminal drag handoff ${actorLabel}.role is invalid.`,
         );
       }
+      requireTerminalHandoffBoolean(actor, 'visible');
       for (const field of ['alpha', 'centerX', 'centerY']) {
         requireTerminalHandoffNumber(actor, field);
       }
@@ -480,6 +902,47 @@ function requireTerminalHandoffInvalidFrameWitnesses(summary) {
           `Android terminal drag handoff ${actorLabel}.alpha must be between 0 and 1.`,
         );
       }
+      if (actor.visible && actor.alpha <= terminalHandoffVisibilityEpsilon) {
+        throw new Error(
+          `Android terminal drag handoff ${actorLabel}.visible requires alpha above the visibility epsilon.`,
+        );
+      }
+    }
+    for (const field of ['sourceX', 'sourceY', 'targetX', 'targetY']) {
+      requireTerminalHandoffNumber(witness, field);
+    }
+    if (witness.droppedActorCount === 0) {
+      const primaryOpacityMass = witness.actors
+        .filter(
+          (actor) =>
+            actor.visible && terminalHandoffPrimaryRoles.has(actor.role),
+        )
+        .reduce((total, actor) => total + actor.alpha, 0);
+      if (Math.abs(primaryOpacityMass - witness.opacityMass) > 1e-6) {
+        throw new Error(
+          `Android terminal drag handoff ${label}.opacityMass is inconsistent with its visible primary actors.`,
+        );
+      }
+      const expectedViolations =
+        expectedTerminalHandoffWitnessViolations(witness);
+      if (
+        expectedViolations.length !== witness.violations.length ||
+        expectedViolations.some(
+          (violation, index) => violation !== witness.violations[index],
+        )
+      ) {
+        throw new Error(
+          `Android terminal drag handoff ${label}.violations are inconsistent with its actors and phase.`,
+        );
+      }
+    } else if (
+      witness.frameAfterArmMs === null &&
+      (witness.violations.length !== 1 ||
+        witness.violations[0] !== 'source-visible-with-overlay')
+    ) {
+      throw new Error(
+        `Android terminal drag handoff ${label} pre-arm violations are inconsistent.`,
+      );
     }
   }
   return witnesses;
@@ -495,7 +958,19 @@ function requireTerminalHandoffMinimum(summary, field, minimum) {
   return value;
 }
 
-export function parseAndroidTerminalDragHandoff(logcat) {
+const terminalHandoffVisualViolationCounterByLabel = new Map([
+  ['invalid-composition', 'invalidPrimaryCompositionFrames'],
+  ['off-target', 'acceptedOffTargetFrames'],
+  ['over-opacity', 'overOpacityFrames'],
+  ['source-snapback', 'acceptedSourceSnapbackFrames'],
+  ['source-visible-with-overlay', 'sourceVisibleWithOverlayFrames'],
+  ['spatial-duplicate', 'spatialDuplicateFrames'],
+  ['under-opacity', 'underOpacityFrames'],
+  ['unexpected-location', 'recoveryUnexpectedLocationFrames'],
+  ['zero-primary', 'zeroPrimaryFrames'],
+]);
+
+function decodeAndroidTerminalDragHandoff(logcat) {
   const payload = extractAndroidTerminalDragHandoffPayload(logcat);
   let summary;
   try {
@@ -522,13 +997,111 @@ export function parseAndroidTerminalDragHandoff(logcat) {
     )
   ) {
     throw new Error(
-      'Android terminal drag handoff record must contain exactly the schemaVersion 4 fields.',
+      'Android terminal drag handoff record must contain exactly the schemaVersion 5 fields.',
     );
   }
-  requireTerminalHandoffExact(summary, 'schemaVersion', 4);
+  requireTerminalHandoffExact(summary, 'schemaVersion', 5);
   const invalidFrameWitnesses =
     requireTerminalHandoffInvalidFrameWitnesses(summary);
 
+  for (const field of [
+    'blockedJsQueueReleaseConfirmed',
+    'processStable',
+    'reusePassed',
+  ]) {
+    requireTerminalHandoffBoolean(summary, field);
+  }
+  requireTerminalHandoffNumber(summary, 'blockedTerminalSpanMs');
+  for (const field of terminalDragHandoffSchemaKeys) {
+    if (
+      field === 'blockedJsQueueReleaseConfirmed' ||
+      field === 'blockedTerminalSpanMs' ||
+      field === 'invalidFrameWitnesses' ||
+      field === 'processStable' ||
+      field === 'reusePassed'
+    ) {
+      continue;
+    }
+    requireTerminalHandoffInteger(summary, field);
+  }
+
+  const startPid = requireTerminalHandoffMinimum(summary, 'startPid', 1);
+  const endPid = requireTerminalHandoffMinimum(summary, 'endPid', 1);
+  if (summary.processStable !== (startPid === endPid)) {
+    throw new Error(
+      'Android terminal drag handoff processStable is inconsistent with its PIDs.',
+    );
+  }
+
+  const invalidFrameCount = requireTerminalHandoffInteger(
+    summary,
+    'invalidFrameCount',
+  );
+  const droppedInvalidFrameWitnessCount = requireTerminalHandoffInteger(
+    summary,
+    'droppedInvalidFrameWitnessCount',
+  );
+  if (
+    invalidFrameWitnesses.length !== Math.min(invalidFrameCount, 2) ||
+    droppedInvalidFrameWitnessCount !==
+      invalidFrameCount - invalidFrameWitnesses.length
+  ) {
+    throw new Error(
+      'Android terminal drag handoff invalid-frame witness counts are inconsistent.',
+    );
+  }
+
+  const reasonWitnessCounts = new Map(
+    [...terminalHandoffVisualViolationCounterByLabel.keys()].map((label) => [
+      label,
+      0,
+    ]),
+  );
+  for (const witness of invalidFrameWitnesses) {
+    for (const violation of witness.violations) {
+      reasonWitnessCounts.set(
+        violation,
+        reasonWitnessCounts.get(violation) + 1,
+      );
+    }
+  }
+  const aggregateViolationCounts = [
+    ...terminalHandoffVisualViolationCounterByLabel.entries(),
+  ].map(([label, field]) => {
+    const aggregateCount = requireTerminalHandoffInteger(summary, field);
+    const witnessedCount = reasonWitnessCounts.get(label);
+    if (
+      witnessedCount > aggregateCount ||
+      (droppedInvalidFrameWitnessCount === 0 &&
+        witnessedCount !== aggregateCount)
+    ) {
+      throw new Error(
+        `Android terminal drag handoff ${field} is inconsistent with invalidFrameWitnesses.`,
+      );
+    }
+    return aggregateCount;
+  });
+  const aggregateViolationCount = aggregateViolationCounts.reduce(
+    (total, count) => total + count,
+    0,
+  );
+  const maximumAggregateViolationCount = Math.max(
+    0,
+    ...aggregateViolationCounts,
+  );
+  if (
+    maximumAggregateViolationCount > invalidFrameCount ||
+    invalidFrameCount > aggregateViolationCount
+  ) {
+    throw new Error(
+      'Android terminal drag handoff invalidFrameCount is inconsistent with its visual violation counters.',
+    );
+  }
+
+  return summary;
+}
+
+function validateAndroidTerminalDragHandoffContinuity(summary) {
   const startPid = requireTerminalHandoffMinimum(summary, 'startPid', 1);
   const endPid = requireTerminalHandoffMinimum(summary, 'endPid', 1);
   if (startPid !== endPid) {
@@ -584,7 +1157,6 @@ export function parseAndroidTerminalDragHandoff(logcat) {
     'activeOverlayFrames',
     gestureCount,
   );
-  requireTerminalHandoffExact(summary, 'sourceVisibleWithOverlayFrames', 0);
   const blockedTerminalFrames = requireTerminalHandoffMinimum(
     summary,
     'blockedTerminalFrames',
@@ -674,17 +1246,15 @@ export function parseAndroidTerminalDragHandoff(logcat) {
     'invalidPrimaryCompositionFrames',
     'overOpacityFrames',
     'recoveryUnexpectedLocationFrames',
+    'sourceVisibleWithOverlayFrames',
     'spatialDuplicateFrames',
     'underOpacityFrames',
     'zeroPrimaryFrames',
   ]) {
     requireTerminalHandoffExact(summary, field, 0);
   }
-  if (invalidFrameWitnesses.length !== 0) {
-    throw new Error(
-      'Android terminal drag handoff invalidFrameWitnesses must be empty when all composition counters pass.',
-    );
-  }
+  requireTerminalHandoffExact(summary, 'invalidFrameCount', 0);
+  requireTerminalHandoffExact(summary, 'droppedInvalidFrameWitnessCount', 0);
   requireTerminalHandoffExact(summary, 'recoveryFinalCanonicalSourceCount', 3);
   requireTerminalHandoffExact(
     summary,
@@ -759,18 +1329,30 @@ export function parseAndroidTerminalDragHandoff(logcat) {
   return summary;
 }
 
+export function parseAndroidTerminalDragHandoff(logcat) {
+  const summary = decodeAndroidTerminalDragHandoff(logcat);
+  return validateAndroidTerminalDragHandoffContinuity(summary);
+}
+
 export function buildAndroidTerminalDragHandoffEvidence(logcat) {
+  let summary;
   try {
-    return {
-      error: null,
-      required: true,
-      summary: parseAndroidTerminalDragHandoff(logcat),
-    };
+    summary = decodeAndroidTerminalDragHandoff(logcat);
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : String(error),
       required: true,
       summary: null,
+    };
+  }
+  try {
+    validateAndroidTerminalDragHandoffContinuity(summary);
+    return { error: null, required: true, summary };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : String(error),
+      required: true,
+      summary,
     };
   }
 }

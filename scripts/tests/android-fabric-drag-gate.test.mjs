@@ -54,6 +54,8 @@ function validTerminalHandoffSummary() {
     finalActiveOverlayHosts: 0,
     finalRetiringOverlayHosts: 0,
     gestureCount: 5,
+    droppedInvalidFrameWitnessCount: 0,
+    invalidFrameCount: 0,
     invalidFrameWitnesses: [],
     invalidPrimaryCompositionFrames: 0,
     offBoardCount: 1,
@@ -70,7 +72,7 @@ function validTerminalHandoffSummary() {
     recoveryUnexpectedLocationFrames: 0,
     rejectedCount: 1,
     reusePassed: true,
-    schemaVersion: 4,
+    schemaVersion: 5,
     singlePrimaryFrames: 46,
     sourceVisibleWithOverlayFrames: 0,
     spatialDuplicateFrames: 0,
@@ -82,8 +84,23 @@ function validTerminalHandoffSummary() {
   };
 }
 
+function chunkedTerminalHandoffPayload(payload, chunkSize = 2_000) {
+  const bytes = Buffer.from(payload, 'utf8');
+  const checksum = createHash('sha256').update(bytes).digest('hex');
+  const recordId = checksum.slice(0, 16);
+  const encoded = bytes.toString('base64');
+  const chunks = [];
+  for (let offset = 0; offset < encoded.length; offset += chunkSize) {
+    chunks.push(encoded.slice(offset, offset + chunkSize));
+  }
+  return chunks.map(
+    (data, index) =>
+      `08-30 I ChessboardDragHandoff: CHESSBOARD_DRAG_HANDOFF_CHUNK v=1 id=${recordId} sha256=${checksum} part=${String(index + 1)}/${String(chunks.length)} bytes=${String(bytes.length)} data=${data}`,
+  );
+}
+
 function terminalHandoffLog(summary) {
-  return `08-30 I ChessboardDragHandoff: CHESSBOARD_DRAG_HANDOFF ${JSON.stringify(summary)}\n`;
+  return `${chunkedTerminalHandoffPayload(JSON.stringify(summary)).join('\n')}\n`;
 }
 
 function invalidFrameWitness() {
@@ -95,23 +112,46 @@ function invalidFrameWitness() {
         centerX: 320.5,
         centerY: 970.5,
         role: 'pending-target',
+        visible: true,
       },
       {
         alpha: 0.45,
         centerX: 320.5,
         centerY: 970.5,
         role: 'canonical-transition',
+        visible: true,
       },
     ],
+    droppedActorCount: 0,
     frameAfterArmMs: 142.5,
     frameAfterInjectionMs: 130,
     frameTimeNs: 123_456_789,
     jsQueueBlocked: false,
+    observedActorCount: 2,
     opacityMass: 1.45,
     outcome: 'accepted',
     postInjection: true,
     retiringOverlayHosts: 0,
     sessionIndex: 0,
+    sourceX: 256.5,
+    sourceY: 970.5,
+    targetX: 320.5,
+    targetY: 970.5,
+    violations: ['invalid-composition', 'over-opacity'],
+  };
+}
+
+function terminalHandoffSummaryWithWitnesses(
+  witnesses,
+  overrides = {},
+  droppedInvalidFrameWitnessCount = 0,
+) {
+  return {
+    ...validTerminalHandoffSummary(),
+    ...overrides,
+    droppedInvalidFrameWitnessCount,
+    invalidFrameCount: witnesses.length + droppedInvalidFrameWitnessCount,
+    invalidFrameWitnesses: witnesses,
   };
 }
 
@@ -331,25 +371,32 @@ test('fails closed for missing, duplicate, malformed, or schema-drifted handoff 
   const validLog = terminalHandoffLog(validTerminalHandoffSummary());
   assert.throws(
     () => parseAndroidTerminalDragHandoff(''),
-    /Expected exactly one CHESSBOARD_DRAG_HANDOFF record; found 0/u,
+    /Expected exactly one CHESSBOARD_DRAG_HANDOFF_CHUNK logical record; found 0/u,
   );
   assert.throws(
     () => parseAndroidTerminalDragHandoff(`${validLog}${validLog}`),
-    /Expected exactly one CHESSBOARD_DRAG_HANDOFF record; found 2/u,
+    /chunk count is incomplete or duplicated/u,
   );
   assert.throws(
     () =>
       parseAndroidTerminalDragHandoff(
-        'I ChessboardDragHandoff: CHESSBOARD_DRAG_HANDOFF {bad json}\n',
+        chunkedTerminalHandoffPayload('{bad json}').join('\n'),
       ),
     /malformed JSON/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        `I ChessboardDragHandoff: CHESSBOARD_DRAG_HANDOFF ${JSON.stringify(validTerminalHandoffSummary())}`,
+      ),
+    /must use checksummed chunk transport/u,
   );
 
   const missingField = validTerminalHandoffSummary();
   delete missingField.reusePassed;
   assert.throws(
     () => parseAndroidTerminalDragHandoff(terminalHandoffLog(missingField)),
-    /exactly the schemaVersion 4 fields/u,
+    /exactly the schemaVersion 5 fields/u,
   );
   assert.throws(
     () =>
@@ -359,7 +406,156 @@ test('fails closed for missing, duplicate, malformed, or schema-drifted handoff 
           unexpected: 1,
         }),
       ),
-    /exactly the schemaVersion 4 fields/u,
+    /exactly the schemaVersion 5 fields/u,
+  );
+});
+
+test('reassembles bounded checksummed terminal handoff chunks at the 8192-byte limit', () => {
+  const expected = validTerminalHandoffSummary();
+  const json = JSON.stringify(expected);
+  const payload = `${json}${' '.repeat(8_192 - Buffer.byteLength(json, 'utf8'))}`;
+  const chunks = chunkedTerminalHandoffPayload(payload);
+
+  assert.equal(Buffer.byteLength(payload, 'utf8'), 8_192);
+  assert.equal(chunks.length, 6);
+  assert.deepEqual(
+    parseAndroidTerminalDragHandoff(chunks.join('\n')),
+    expected,
+  );
+
+  const oversized = chunkedTerminalHandoffPayload(`${payload} `);
+  assert.equal(oversized.length, 6);
+  assert.throws(
+    () => parseAndroidTerminalDragHandoff(oversized.join('\n')),
+    /must not exceed 8192 bytes/u,
+  );
+
+  const sevenChunks = chunkedTerminalHandoffPayload(
+    `${json}${' '.repeat(9_001 - Buffer.byteLength(json, 'utf8'))}`,
+  );
+  assert.equal(sevenChunks.length, 7);
+  assert.throws(
+    () => parseAndroidTerminalDragHandoff(sevenChunks.join('\n')),
+    /chunk count must not exceed 6/u,
+  );
+});
+
+test('fails closed for incomplete, duplicate, reordered, or noncanonical handoff chunks', () => {
+  const json = JSON.stringify(validTerminalHandoffSummary());
+  const payload = `${json}${' '.repeat(2_500 - Buffer.byteLength(json, 'utf8'))}`;
+  const chunks = chunkedTerminalHandoffPayload(payload);
+  assert.equal(chunks.length, 2);
+
+  assert.throws(
+    () => parseAndroidTerminalDragHandoff(chunks.slice(0, -1).join('\n')),
+    /chunk count is incomplete or duplicated/u,
+  );
+  const corruptEvidence = buildAndroidTerminalDragHandoffEvidence(
+    chunks.slice(0, -1).join('\n'),
+  );
+  assert.equal(corruptEvidence.summary, null);
+  assert.match(
+    corruptEvidence.error,
+    /chunk count is incomplete or duplicated/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        [chunks[0], chunks[0], chunks[1]].join('\n'),
+      ),
+    /chunk count is incomplete or duplicated/u,
+  );
+  assert.throws(
+    () => parseAndroidTerminalDragHandoff([chunks[1], chunks[0]].join('\n')),
+    /chunks are out of order/u,
+  );
+
+  const firstData = chunks[0].match(/ data=([^\s]+)$/u)[1];
+  const secondData = chunks[1].match(/ data=([^\s]+)$/u)[1];
+  const noncanonical = [
+    chunks[0].replace(/ data=[^\s]+$/u, ` data=${firstData.slice(0, -1)}`),
+    chunks[1].replace(
+      / data=[^\s]+$/u,
+      ` data=${firstData.at(-1)}${secondData}`,
+    ),
+  ];
+  assert.throws(
+    () => parseAndroidTerminalDragHandoff(noncanonical.join('\n')),
+    /not canonically sized/u,
+  );
+});
+
+test('fails closed for inconsistent or corrupt terminal handoff chunk envelopes', () => {
+  const chunks = chunkedTerminalHandoffPayload(
+    JSON.stringify(validTerminalHandoffSummary()),
+  );
+  const twoChunkPayload = chunkedTerminalHandoffPayload(
+    `${JSON.stringify(validTerminalHandoffSummary())}${' '.repeat(1_000)}`,
+  );
+  assert.equal(chunks.length, 1);
+  assert.equal(twoChunkPayload.length, 2);
+
+  const wrongVersion = [chunks[0].replace(' v=1 ', ' v=2 ')];
+  const wrongId = [
+    chunks[0].replace(/ id=[a-f0-9]{16} /u, ' id=0000000000000000 '),
+  ];
+  const inconsistentId = [...twoChunkPayload];
+  inconsistentId[1] = inconsistentId[1].replace(
+    / id=[a-f0-9]{16} /u,
+    ' id=0000000000000000 ',
+  );
+  const inconsistentBytes = [...twoChunkPayload];
+  inconsistentBytes[1] = inconsistentBytes[1].replace(
+    / bytes=(\d+) /u,
+    (_match, bytes) => ` bytes=${String(Number(bytes) + 1)} `,
+  );
+  const badChecksum = [
+    chunks[0].replace(
+      / data=([A-Za-z0-9+/])/u,
+      (_match, character) => ` data=${character === 'A' ? 'B' : 'A'}`,
+    ),
+  ];
+
+  assert.throws(
+    () => parseAndroidTerminalDragHandoff(wrongVersion.join('\n')),
+    /transport version must equal 1/u,
+  );
+  assert.throws(
+    () => parseAndroidTerminalDragHandoff(wrongId.join('\n')),
+    /record id is inconsistent/u,
+  );
+  assert.throws(
+    () => parseAndroidTerminalDragHandoff(inconsistentId.join('\n')),
+    /same logical record/u,
+  );
+  assert.throws(
+    () => parseAndroidTerminalDragHandoff(inconsistentBytes.join('\n')),
+    /same logical record/u,
+  );
+  assert.throws(
+    () => parseAndroidTerminalDragHandoff(badChecksum.join('\n')),
+    /checksum mismatch/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        `${chunks.join('\n')}\nI ChessboardDragHandoff: CHESSBOARD_DRAG_HANDOFF ${JSON.stringify(validTerminalHandoffSummary())}`,
+      ),
+    /both direct and chunked records/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        `${chunks.join('\n')}\n${chunkedTerminalHandoffPayload(JSON.stringify(validTerminalHandoffSummary())).join('\n')}`,
+      ),
+    /chunk count is incomplete or duplicated/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        chunks[0].replace(/ data=.*$/u, ' malformed'),
+      ),
+    /malformed envelope/u,
   );
 });
 
@@ -368,46 +564,271 @@ test('validates bounded invalid-frame witnesses before enforcing continuity', ()
   assert.throws(
     () =>
       parseAndroidTerminalDragHandoff(
-        terminalHandoffLog({
-          ...validTerminalHandoffSummary(),
-          invalidFrameWitnesses: [witness],
-          invalidPrimaryCompositionFrames: 1,
-          overOpacityFrames: 1,
-        }),
+        terminalHandoffLog(
+          terminalHandoffSummaryWithWitnesses([witness], {
+            invalidPrimaryCompositionFrames: 1,
+            overOpacityFrames: 1,
+          }),
+        ),
       ),
     /invalidPrimaryCompositionFrames must equal 0/u,
   );
   assert.throws(
     () =>
       parseAndroidTerminalDragHandoff(
-        terminalHandoffLog({
-          ...validTerminalHandoffSummary(),
-          invalidFrameWitnesses: [witness],
-        }),
+        terminalHandoffLog(
+          terminalHandoffSummaryWithWitnesses([witness], {
+            invalidPrimaryCompositionFrames: 1,
+          }),
+        ),
       ),
-    /invalidFrameWitnesses must be empty/u,
+    /overOpacityFrames is inconsistent with invalidFrameWitnesses/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog(
+          terminalHandoffSummaryWithWitnesses(
+            [
+              {
+                ...witness,
+                actors: [
+                  { ...witness.actors[0], alpha: 1.5 },
+                  witness.actors[1],
+                ],
+              },
+            ],
+            {
+              invalidPrimaryCompositionFrames: 1,
+              overOpacityFrames: 1,
+            },
+          ),
+        ),
+      ),
+    /alpha must be between 0 and 1/u,
   );
   assert.throws(
     () =>
       parseAndroidTerminalDragHandoff(
         terminalHandoffLog({
           ...validTerminalHandoffSummary(),
-          invalidFrameWitnesses: [
-            {
-              ...witness,
-              actors: [{ ...witness.actors[0], alpha: 1.5 }],
-            },
-          ],
+          invalidFrameCount: 1,
+          invalidPrimaryCompositionFrames: 1,
         }),
       ),
-    /alpha must be between 0 and 1/u,
+    /invalid-frame witness counts are inconsistent/u,
+  );
+
+  const hiddenZeroPrimaryWitness = {
+    ...witness,
+    actors: [{ ...witness.actors[0], alpha: 0, visible: false }],
+    observedActorCount: 1,
+    opacityMass: 0,
+    violations: ['invalid-composition', 'zero-primary'],
+  };
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog(
+          terminalHandoffSummaryWithWitnesses([hiddenZeroPrimaryWitness], {
+            invalidPrimaryCompositionFrames: 1,
+            zeroPrimaryFrames: 1,
+          }),
+        ),
+      ),
+    /invalidPrimaryCompositionFrames must equal 0/u,
+  );
+
+  const preArmSourceOverlapWitness = {
+    ...witness,
+    actors: [
+      {
+        ...witness.actors[0],
+        centerX: witness.sourceX,
+        centerY: witness.sourceY,
+        role: 'canonical',
+      },
+      {
+        ...witness.actors[1],
+        alpha: 1,
+        centerX: witness.targetX,
+        centerY: witness.targetY,
+        role: 'overlay',
+      },
+    ],
+    frameAfterArmMs: null,
+    frameAfterInjectionMs: null,
+    opacityMass: 2,
+    postInjection: false,
+    violations: ['source-visible-with-overlay'],
+  };
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog(
+          terminalHandoffSummaryWithWitnesses([preArmSourceOverlapWitness], {
+            sourceVisibleWithOverlayFrames: 1,
+          }),
+        ),
+      ),
+    /sourceVisibleWithOverlayFrames must equal 0/u,
+  );
+});
+
+test('cross-validates terminal witness location, ordering, and truncation counts', () => {
+  const witness = invalidFrameWitness();
+  const offTargetWitness = {
+    ...witness,
+    actors: [
+      {
+        ...witness.actors[0],
+        centerX: witness.targetX + 64,
+        role: 'canonical',
+      },
+    ],
+    observedActorCount: 1,
+    opacityMass: 1,
+    violations: ['off-target'],
+  };
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog(
+          terminalHandoffSummaryWithWitnesses([offTargetWitness], {
+            acceptedOffTargetFrames: 1,
+          }),
+        ),
+      ),
+    /acceptedOffTargetFrames must equal 0/u,
+  );
+
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog(
+          terminalHandoffSummaryWithWitnesses(
+            [{ ...witness, opacityMass: 1 }],
+            {
+              invalidPrimaryCompositionFrames: 1,
+              overOpacityFrames: 1,
+            },
+          ),
+        ),
+      ),
+    /opacityMass is inconsistent/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog(
+          terminalHandoffSummaryWithWitnesses(
+            [{ ...witness, violations: ['over-opacity'] }],
+            { overOpacityFrames: 1 },
+          ),
+        ),
+      ),
+    /violations are inconsistent with its actors and phase/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog(
+          terminalHandoffSummaryWithWitnesses(
+            [{ ...witness, outcome: 'rejected' }],
+            {
+              invalidPrimaryCompositionFrames: 1,
+              overOpacityFrames: 1,
+            },
+          ),
+        ),
+      ),
+    /outcome must match its sessionIndex/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog(
+          terminalHandoffSummaryWithWitnesses(
+            [{ ...witness, observedActorCount: 3 }],
+            {
+              invalidPrimaryCompositionFrames: 1,
+              overOpacityFrames: 1,
+            },
+          ),
+        ),
+      ),
+    /actor counts are inconsistent/u,
+  );
+
+  const secondWitness = {
+    ...witness,
+    frameTimeNs: witness.frameTimeNs + 1,
+    outcome: 'rejected',
+    sessionIndex: 1,
+  };
+  const boundedRedSummary = terminalHandoffSummaryWithWitnesses(
+    [witness, secondWitness],
+    {
+      invalidPrimaryCompositionFrames: 2,
+      overOpacityFrames: 2,
+    },
+    1,
+  );
+  const retained = buildAndroidTerminalDragHandoffEvidence(
+    terminalHandoffLog(boundedRedSummary),
+  );
+  assert.deepEqual(retained.summary, boundedRedSummary);
+  assert.match(retained.error, /invalidPrimaryCompositionFrames must equal 0/u);
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog({
+          ...boundedRedSummary,
+          droppedInvalidFrameWitnessCount: 0,
+        }),
+      ),
+    /invalid-frame witness counts are inconsistent/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog({
+          ...boundedRedSummary,
+          invalidFrameWitnesses: [secondWitness, witness],
+        }),
+      ),
+    /must be unique and chronological/u,
+  );
+
+  const retainedActors = Array.from({ length: 6 }, (_, index) => ({
+    ...witness.actors[index % witness.actors.length],
+    centerX: witness.targetX + index,
+  }));
+  const truncatedActorWitness = {
+    ...witness,
+    actors: retainedActors,
+    droppedActorCount: 1,
+    observedActorCount: 7,
+  };
+  const actorTruncatedSummary = terminalHandoffSummaryWithWitnesses(
+    [truncatedActorWitness],
+    {
+      invalidPrimaryCompositionFrames: 1,
+      overOpacityFrames: 1,
+    },
+  );
+  assert.deepEqual(
+    buildAndroidTerminalDragHandoffEvidence(
+      terminalHandoffLog(actorTruncatedSummary),
+    ).summary,
+    actorTruncatedSummary,
   );
 });
 
 test('rejects invalid terminal outcome, continuity, PID, blocker, and cleanup evidence', () => {
   const invalidCases = [
-    ['schemaVersion', 3, /schemaVersion must equal 4/u],
-    ['processStable', false, /processStable must be true/u],
+    ['schemaVersion', 4, /schemaVersion must equal 5/u],
+    ['processStable', false, /processStable is inconsistent with its PIDs/u],
     [
       'blockedJsQueueReleaseConfirmed',
       false,
@@ -459,14 +880,43 @@ test('rejects invalid terminal outcome, continuity, PID, blocker, and cleanup ev
     ['reusePassed', false, /reusePassed must be true/u],
   ];
 
+  const witnessViolationByField = {
+    acceptedOffTargetFrames: 'off-target',
+    acceptedSourceSnapbackFrames: 'source-snapback',
+    invalidPrimaryCompositionFrames: 'invalid-composition',
+    overOpacityFrames: 'over-opacity',
+    recoveryUnexpectedLocationFrames: 'unexpected-location',
+    sourceVisibleWithOverlayFrames: 'source-visible-with-overlay',
+    spatialDuplicateFrames: 'spatial-duplicate',
+    underOpacityFrames: 'under-opacity',
+    zeroPrimaryFrames: 'zero-primary',
+  };
+
   for (const [field, value, pattern] of invalidCases) {
+    const violation = witnessViolationByField[field];
+    const witness =
+      violation === undefined
+        ? null
+        : {
+            ...invalidFrameWitness(),
+            actors: Array.from({ length: 6 }, (_, index) => ({
+              ...invalidFrameWitness().actors[index % 2],
+              centerX: 320.5 + index,
+            })),
+            droppedActorCount: 1,
+            observedActorCount: 7,
+            violations: [violation],
+          };
     assert.throws(
       () =>
         parseAndroidTerminalDragHandoff(
-          terminalHandoffLog({
-            ...validTerminalHandoffSummary(),
-            [field]: value,
-          }),
+          terminalHandoffLog(
+            witness === null
+              ? { ...validTerminalHandoffSummary(), [field]: value }
+              : terminalHandoffSummaryWithWitnesses([witness], {
+                  [field]: value,
+                }),
+          ),
         ),
       pattern,
     );
@@ -478,19 +928,27 @@ test('rejects invalid terminal outcome, continuity, PID, blocker, and cleanup ev
         terminalHandoffLog({
           ...validTerminalHandoffSummary(),
           endPid: 4322,
+          processStable: false,
         }),
       ),
     /PIDs must match/u,
   );
+  const retainedRedSummary = terminalHandoffSummaryWithWitnesses(
+    [invalidFrameWitness()],
+    {
+      invalidPrimaryCompositionFrames: 1,
+      overOpacityFrames: 1,
+    },
+  );
   const invalidEvidence = buildAndroidTerminalDragHandoffEvidence(
-    terminalHandoffLog({
-      ...validTerminalHandoffSummary(),
-      zeroPrimaryFrames: 1,
-    }),
+    terminalHandoffLog(retainedRedSummary),
   );
   assert.equal(invalidEvidence.required, true);
-  assert.equal(invalidEvidence.summary, null);
-  assert.match(invalidEvidence.error, /zeroPrimaryFrames must equal 0/u);
+  assert.deepEqual(invalidEvidence.summary, retainedRedSummary);
+  assert.match(
+    invalidEvidence.error,
+    /invalidPrimaryCompositionFrames must equal 0/u,
+  );
 
   assert.throws(
     () =>

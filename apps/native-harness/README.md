@@ -98,15 +98,21 @@ drag. The unblocked final reuse proves continuous primary coverage and
 canonical settle without requiring a timing-racy post-`ACTION_UP` overlay
 frame.
 The shared gate runner requires a physical device, zero official
-Fabric/Reanimated scanner findings, and exactly one schema-valid
-`CHESSBOARD_DRAG_HANDOFF` record. The test emits that record after collecting
+Fabric/Reanimated scanner findings, and exactly one schema-valid terminal
+handoff logical record. The test emits that record after collecting
 all five sessions and before enforcing their visual assertions, so an expected
-negative control remains machine-readable. The record includes a bounded
-role/alpha/center witness for every invalid composition it samples, so a red
-run preserves the exact native-view overlap or gap instead of only its count.
-A validated passing summary is
-embedded in `result.json`; a missing, duplicate, malformed, or violating record
-fails the gate even when Gradle exits zero.
+negative control remains machine-readable. The logical record includes at most
+two visual-invalid frame witnesses, with explicit total/dropped-frame counts.
+Each witness preserves its violation labels, source and target centers,
+arm/injection-relative timing, and up to six actor role/alpha/center/visibility
+observations with explicit observed/dropped-actor counts. Hidden zero-alpha
+hosts therefore remain diagnosable without silently claiming a complete actor
+set. The record is capped at 8,192 UTF-8 bytes and uses at most six checksummed
+Base64 logcat chunks of 2,000 payload characters each. Structurally valid red
+summaries and their witnesses remain embedded in `result.json` alongside the
+continuity error; corrupt transport or schema evidence retains no summary. A
+missing, duplicate, malformed, or violating logical record fails the gate even
+when Gradle exits zero.
 Class-only and wrong-method filters for the terminal-handoff test also require
 that record, so a zero-test filter mismatch cannot pass closed-loop evidence.
 Evidence is written under
