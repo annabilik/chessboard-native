@@ -21,6 +21,7 @@ import {
   PlainFenTransitionInterrupt200Fixture,
   PlainFenTransitionInterruptFixture,
 } from './PlainFenTransitionInterruptFixture';
+import { TerminalDragHandoffFixture } from './TerminalDragHandoffFixture';
 import { TransitionProviderUnmountFixture } from './TransitionProviderUnmountFixture';
 
 const AUDIT_BOARD_LABEL = 'Accessibility audit board, white orientation';
@@ -59,6 +60,7 @@ interface AppProps {
     | 'interaction-plain-fen-transition-interrupt'
     | 'interaction-plain-fen-transition-interrupt-200ms'
     | 'interaction-provider-unmount'
+    | 'interaction-terminal-handoff'
     | 'interaction-transition-provider-unmount';
 }
 
@@ -720,6 +722,8 @@ export default function App({ fixture = 'accessibility' }: AppProps) {
         <AcceptedInteractionFixture />
       ) : fixture === 'interaction-provider-unmount' ? (
         <ProviderUnmountInteractionFixture />
+      ) : fixture === 'interaction-terminal-handoff' ? (
+        <TerminalDragHandoffFixture />
       ) : fixture === 'interaction-plain-fen-transition-interrupt' ? (
         <PlainFenTransitionInterruptFixture />
       ) : fixture === 'interaction-plain-fen-transition-interrupt-200ms' ? (

@@ -12,9 +12,13 @@ import {
   androidPlainFenTransitionInterrupt200Test,
   androidPlainFenTransitionInterruptTest,
   androidProviderUnmountDragTest,
+  androidTerminalDragHandoffTest,
+  androidTerminalDragHandoffTestClass,
   androidTransitionProviderUnmountDragTest,
   androidTransitionProviderWholeUnmountTest,
   buildAndroidDragPerformanceEvidence,
+  buildAndroidTerminalDragHandoffEvidence,
+  buildAndroidTerminalDragHandoffGateEvidence,
   buildSourceEvidence,
   buildGradleArguments,
   classifyAndroidDeviceKind,
@@ -23,12 +27,63 @@ import {
   didSourceEvidenceChange,
   evaluateAndroidDragPerformance,
   parseAndroidDragPerformance,
+  parseAndroidTerminalDragHandoff,
   parseAdbDevices,
   resolveAndroidInstrumentationTest,
   requirePhysicalAndroidDevice,
   scanAndroidFabricFailures,
   selectAndroidDevice,
+  targetsAndroidTerminalDragHandoffTest,
 } from '../../apps/native-harness/scripts/run-android-fabric-drag-gate.mjs';
+
+function validTerminalHandoffSummary() {
+  return {
+    acceptedCount: 2,
+    acceptedFinalCanonicalTargetCount: 2,
+    acceptedOffTargetFrames: 0,
+    acceptedSourceSnapbackFrames: 0,
+    activeOverlayFrames: 30,
+    blockedJsQueueReleaseConfirmed: true,
+    blockedTerminalFrames: 8,
+    blockedTerminalOverlayFrames: 8,
+    blockedTerminalSpanMs: 116.67,
+    cancelCount: 1,
+    canonicalFrames: 20,
+    canonicalTransitionFrames: 12,
+    endPid: 4321,
+    finalActiveOverlayHosts: 0,
+    finalRetiringOverlayHosts: 0,
+    gestureCount: 5,
+    invalidPrimaryCompositionFrames: 0,
+    offBoardCount: 1,
+    overOpacityFrames: 0,
+    pendingCanonicalCrossfadeFrames: 4,
+    pendingSourceGhostFrames: 4,
+    pendingTargetFrames: 6,
+    postTerminalFrames: 50,
+    processStable: true,
+    recoveryFinalCanonicalSourceCount: 3,
+    recoveryPostTerminalFrames: 20,
+    recoverySourceLocationFrames: 15,
+    recoveryTerminalLocationFrames: 5,
+    recoveryUnexpectedLocationFrames: 0,
+    rejectedCount: 1,
+    reusePassed: true,
+    schemaVersion: 3,
+    singlePrimaryFrames: 46,
+    sourceVisibleWithOverlayFrames: 0,
+    spatialDuplicateFrames: 0,
+    startPid: 4321,
+    terminalOutcomeWitnessCount: 5,
+    terminalOverlayFrames: 10,
+    underOpacityFrames: 0,
+    zeroPrimaryFrames: 0,
+  };
+}
+
+function terminalHandoffLog(summary) {
+  return `08-30 I ChessboardDragHandoff: CHESSBOARD_DRAG_HANDOFF ${JSON.stringify(summary)}\n`;
+}
 
 function validPerformanceSummary() {
   const displayRefreshHz = 60;
@@ -162,9 +217,253 @@ test('fails closed when logcat exits before instrumentation completes', () => {
   assert.equal(
     didAndroidFabricGatePass({
       ...base,
+      handoffError: 'missing terminal handoff evidence',
+    }),
+    false,
+  );
+  assert.equal(
+    didAndroidFabricGatePass({
+      ...base,
       performanceError: 'missing performance evidence',
     }),
     false,
+  );
+});
+
+test('parses one complete terminal drag handoff record', () => {
+  const expected = validTerminalHandoffSummary();
+  const logcat = terminalHandoffLog(expected);
+
+  assert.deepEqual(parseAndroidTerminalDragHandoff(logcat), expected);
+  assert.deepEqual(buildAndroidTerminalDragHandoffEvidence(logcat), {
+    error: null,
+    required: true,
+    summary: expected,
+  });
+});
+
+test('fails closed for terminal-class zero-test and method-filter mismatch runs', () => {
+  const expected = validTerminalHandoffSummary();
+  assert.deepEqual(
+    buildAndroidTerminalDragHandoffGateEvidence(
+      androidTerminalDragHandoffTest,
+      terminalHandoffLog(expected),
+    ),
+    {
+      error: null,
+      required: true,
+      summary: expected,
+    },
+  );
+  assert.match(
+    buildAndroidTerminalDragHandoffGateEvidence(
+      androidTerminalDragHandoffTest,
+      '',
+    ).error,
+    /found 0/u,
+  );
+  for (const testClass of [
+    androidTerminalDragHandoffTestClass,
+    `${androidTerminalDragHandoffTestClass}#`,
+    `${androidTerminalDragHandoffTestClass}#missingMethod`,
+  ]) {
+    assert.equal(targetsAndroidTerminalDragHandoffTest(testClass), true);
+    const zeroTestEvidence = buildAndroidTerminalDragHandoffGateEvidence(
+      testClass,
+      '',
+    );
+    assert.equal(zeroTestEvidence.required, true);
+    assert.equal(zeroTestEvidence.summary, null);
+    assert.match(zeroTestEvidence.error, /found 0/u);
+  }
+  assert.throws(
+    () => buildGradleArguments(`${androidTerminalDragHandoffTestClass}#`),
+    /Invalid Android instrumentation class/u,
+  );
+  assert.equal(
+    targetsAndroidTerminalDragHandoffTest(defaultAndroidAcceptedDragTest),
+    false,
+  );
+  assert.deepEqual(
+    buildAndroidTerminalDragHandoffGateEvidence(
+      defaultAndroidAcceptedDragTest,
+      '',
+    ),
+    {
+      error: null,
+      required: false,
+      summary: null,
+    },
+  );
+});
+
+test('fails closed for missing, duplicate, malformed, or schema-drifted handoff records', () => {
+  const validLog = terminalHandoffLog(validTerminalHandoffSummary());
+  assert.throws(
+    () => parseAndroidTerminalDragHandoff(''),
+    /Expected exactly one CHESSBOARD_DRAG_HANDOFF record; found 0/u,
+  );
+  assert.throws(
+    () => parseAndroidTerminalDragHandoff(`${validLog}${validLog}`),
+    /Expected exactly one CHESSBOARD_DRAG_HANDOFF record; found 2/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        'I ChessboardDragHandoff: CHESSBOARD_DRAG_HANDOFF {bad json}\n',
+      ),
+    /malformed JSON/u,
+  );
+
+  const missingField = validTerminalHandoffSummary();
+  delete missingField.reusePassed;
+  assert.throws(
+    () => parseAndroidTerminalDragHandoff(terminalHandoffLog(missingField)),
+    /exactly the schemaVersion 3 fields/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog({
+          ...validTerminalHandoffSummary(),
+          unexpected: 1,
+        }),
+      ),
+    /exactly the schemaVersion 3 fields/u,
+  );
+});
+
+test('rejects invalid terminal outcome, continuity, PID, blocker, and cleanup evidence', () => {
+  const invalidCases = [
+    ['schemaVersion', 2, /schemaVersion must equal 3/u],
+    ['processStable', false, /processStable must be true/u],
+    [
+      'blockedJsQueueReleaseConfirmed',
+      false,
+      /blockedJsQueueReleaseConfirmed must be true/u,
+    ],
+    ['gestureCount', 4, /gestureCount must equal 5/u],
+    ['blockedTerminalFrames', 7, /blockedTerminalFrames must be at least 8/u],
+    [
+      'blockedTerminalSpanMs',
+      99.99,
+      /blockedTerminalSpanMs must be at least 100/u,
+    ],
+    [
+      'terminalOutcomeWitnessCount',
+      4,
+      /terminalOutcomeWitnessCount must equal 5/u,
+    ],
+    ['zeroPrimaryFrames', 1, /zeroPrimaryFrames must equal 0/u],
+    ['underOpacityFrames', 1, /underOpacityFrames must equal 0/u],
+    ['overOpacityFrames', 1, /overOpacityFrames must equal 0/u],
+    [
+      'invalidPrimaryCompositionFrames',
+      1,
+      /invalidPrimaryCompositionFrames must equal 0/u,
+    ],
+    ['spatialDuplicateFrames', 1, /spatialDuplicateFrames must equal 0/u],
+    [
+      'recoveryUnexpectedLocationFrames',
+      1,
+      /recoveryUnexpectedLocationFrames must equal 0/u,
+    ],
+    [
+      'sourceVisibleWithOverlayFrames',
+      1,
+      /sourceVisibleWithOverlayFrames must equal 0/u,
+    ],
+    ['finalActiveOverlayHosts', 1, /finalActiveOverlayHosts must equal 0/u],
+    ['finalRetiringOverlayHosts', 1, /finalRetiringOverlayHosts must equal 0/u],
+    [
+      'recoveryFinalCanonicalSourceCount',
+      2,
+      /recoveryFinalCanonicalSourceCount must equal 3/u,
+    ],
+    [
+      'acceptedFinalCanonicalTargetCount',
+      1,
+      /acceptedFinalCanonicalTargetCount must equal 2/u,
+    ],
+    ['reusePassed', false, /reusePassed must be true/u],
+  ];
+
+  for (const [field, value, pattern] of invalidCases) {
+    assert.throws(
+      () =>
+        parseAndroidTerminalDragHandoff(
+          terminalHandoffLog({
+            ...validTerminalHandoffSummary(),
+            [field]: value,
+          }),
+        ),
+      pattern,
+    );
+  }
+
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog({
+          ...validTerminalHandoffSummary(),
+          endPid: 4322,
+        }),
+      ),
+    /PIDs must match/u,
+  );
+  const invalidEvidence = buildAndroidTerminalDragHandoffEvidence(
+    terminalHandoffLog({
+      ...validTerminalHandoffSummary(),
+      zeroPrimaryFrames: 1,
+    }),
+  );
+  assert.equal(invalidEvidence.required, true);
+  assert.equal(invalidEvidence.summary, null);
+  assert.match(invalidEvidence.error, /zeroPrimaryFrames must equal 0/u);
+
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog({
+          ...validTerminalHandoffSummary(),
+          blockedTerminalOverlayFrames: 7,
+        }),
+      ),
+    /every blocked post-UP frame must retain the terminal overlay/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog({
+          ...validTerminalHandoffSummary(),
+          postTerminalFrames: 21,
+          pendingCanonicalCrossfadeFrames: 1,
+          recoveryPostTerminalFrames: 20,
+          singlePrimaryFrames: 20,
+        }),
+      ),
+    /accepted outcomes must each contribute a post-terminal frame/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog({
+          ...validTerminalHandoffSummary(),
+          singlePrimaryFrames: 45,
+        }),
+      ),
+    /exact primary compositions must cover every post-terminal frame/u,
+  );
+  assert.throws(
+    () =>
+      parseAndroidTerminalDragHandoff(
+        terminalHandoffLog({
+          ...validTerminalHandoffSummary(),
+          pendingCanonicalCrossfadeFrames: 31,
+          singlePrimaryFrames: 19,
+        }),
+      ),
+    /pending\/canonical crossfades must be confined to accepted outcomes/u,
   );
 });
 
@@ -966,6 +1265,20 @@ test('keeps accepted drag as the default and allows the provider-unmount lifecyc
   ]);
 });
 
+test('allows the terminal drag handoff visual-continuity target', () => {
+  assert.equal(
+    resolveAndroidInstrumentationTest({
+      ANDROID_TEST_CLASS: ` ${androidTerminalDragHandoffTest} `,
+    }),
+    androidTerminalDragHandoffTest,
+  );
+  assert.deepEqual(buildGradleArguments(androidTerminalDragHandoffTest), [
+    ':app:connectedReleaseAndroidTest',
+    '--no-daemon',
+    `-Pandroid.testInstrumentationRunnerArguments.class=${androidTerminalDragHandoffTest}`,
+  ]);
+});
+
 test('allows the transition/provider overlap lifecycle target', () => {
   assert.equal(
     resolveAndroidInstrumentationTest({
@@ -1074,6 +1387,27 @@ test('publishes root and harness commands for the physical drag gate', async () 
   assert.equal(
     harnessPackage.scripts['android:drag:lifecycle:gate'],
     `ANDROID_TEST_CLASS=${androidProviderUnmountDragTest} ANDROID_FABRIC_DRAG_EVIDENCE_DIR=android/app/build/reports/fabric-drag-provider-unmount-gate node scripts/run-android-fabric-drag-gate.mjs`,
+  );
+});
+
+test('publishes a separate terminal drag handoff gate and evidence directory', async () => {
+  const [rootPackage, harnessPackage] = await Promise.all([
+    readFile(path.join(repositoryRoot, 'package.json'), 'utf8').then(
+      JSON.parse,
+    ),
+    readFile(
+      path.join(repositoryRoot, 'apps/native-harness/package.json'),
+      'utf8',
+    ).then(JSON.parse),
+  ]);
+
+  assert.equal(
+    rootPackage.scripts['native:android:drag:terminal-handoff:gate'],
+    'pnpm --filter @vibechess/chessboard-native-harness android:drag:terminal-handoff:gate',
+  );
+  assert.equal(
+    harnessPackage.scripts['android:drag:terminal-handoff:gate'],
+    `ANDROID_TEST_CLASS=${androidTerminalDragHandoffTest} ANDROID_FABRIC_DRAG_EVIDENCE_DIR=android/app/build/reports/fabric-drag-terminal-handoff-gate node scripts/run-android-fabric-drag-gate.mjs`,
   );
 });
 

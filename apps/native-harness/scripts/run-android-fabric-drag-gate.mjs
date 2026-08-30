@@ -32,6 +32,9 @@ export const defaultAndroidAcceptedDragTest =
   'com.vibechess.chessboardnativeharness.ChessboardAcceptedDragTest#acceptedDragsPublishCorrelatedControlledCommitsExactlyOnce';
 export const androidProviderUnmountDragTest =
   'com.vibechess.chessboardnativeharness.ChessboardProviderUnmountDragTest#unmountingProviderDuringActiveDragDoesNotUpdateRemovedFabricHosts';
+export const androidTerminalDragHandoffTestClass =
+  'com.vibechess.chessboardnativeharness.ChessboardTerminalDragHandoffTest';
+export const androidTerminalDragHandoffTest = `${androidTerminalDragHandoffTestClass}#terminalHandoffIsPaintContinuousAndAllOutcomesRemainReusable`;
 export const androidTransitionProviderUnmountDragTest =
   'com.vibechess.chessboardnativeharness.ChessboardTransitionProviderUnmountDragTest#providerReplacementWhileTransitionAndDragOverlapLeavesStateReusable';
 export const androidTransitionProviderWholeUnmountTest =
@@ -45,6 +48,7 @@ export const androidDragPerformanceTest =
 
 const dragPerformanceLogPrefix = 'CHESSBOARD_DRAG_PERF ';
 const dragPerformanceChunkLogPrefix = 'CHESSBOARD_DRAG_PERF_CHUNK ';
+const terminalDragHandoffLogPrefix = 'CHESSBOARD_DRAG_HANDOFF ';
 const dragPerformanceChunkEnvelopePattern =
   /^v=(\d+) id=([a-f0-9]{16}) sha256=([a-f0-9]{64}) part=(\d+)\/(\d+) bytes=(\d+) data=([A-Za-z0-9+/]+={0,2})$/u;
 const dragPerformanceLogTransportVersion = 1;
@@ -70,6 +74,48 @@ const dragPerformanceThresholds = Object.freeze({
   minimumMeasurementSpanMs: 3_950,
   minimumRefreshRateHz: 59.5,
 });
+const terminalDragHandoffSchemaKeys = Object.freeze([
+  'acceptedCount',
+  'acceptedFinalCanonicalTargetCount',
+  'acceptedOffTargetFrames',
+  'acceptedSourceSnapbackFrames',
+  'activeOverlayFrames',
+  'blockedJsQueueReleaseConfirmed',
+  'blockedTerminalFrames',
+  'blockedTerminalOverlayFrames',
+  'blockedTerminalSpanMs',
+  'cancelCount',
+  'canonicalFrames',
+  'canonicalTransitionFrames',
+  'endPid',
+  'finalActiveOverlayHosts',
+  'finalRetiringOverlayHosts',
+  'gestureCount',
+  'invalidPrimaryCompositionFrames',
+  'offBoardCount',
+  'overOpacityFrames',
+  'pendingCanonicalCrossfadeFrames',
+  'pendingSourceGhostFrames',
+  'pendingTargetFrames',
+  'postTerminalFrames',
+  'processStable',
+  'recoveryFinalCanonicalSourceCount',
+  'recoveryPostTerminalFrames',
+  'recoverySourceLocationFrames',
+  'recoveryTerminalLocationFrames',
+  'recoveryUnexpectedLocationFrames',
+  'rejectedCount',
+  'reusePassed',
+  'schemaVersion',
+  'singlePrimaryFrames',
+  'sourceVisibleWithOverlayFrames',
+  'spatialDuplicateFrames',
+  'startPid',
+  'terminalOutcomeWitnessCount',
+  'terminalOverlayFrames',
+  'underOpacityFrames',
+  'zeroPrimaryFrames',
+]);
 
 const failureSignatures = Object.freeze([
   {
@@ -252,6 +298,362 @@ export function scanAndroidFabricFailures(logcat) {
   }
 
   return findings;
+}
+
+function extractAndroidTerminalDragHandoffPayload(logcat) {
+  const payloads = [];
+  for (const line of logcat.split(/\r?\n/u)) {
+    const markerIndex = line.indexOf(terminalDragHandoffLogPrefix);
+    if (markerIndex >= 0) {
+      payloads.push(
+        line.slice(markerIndex + terminalDragHandoffLogPrefix.length).trim(),
+      );
+    }
+  }
+  if (payloads.length !== 1) {
+    throw new Error(
+      `Expected exactly one ${terminalDragHandoffLogPrefix.trim()} record; found ${String(payloads.length)}.`,
+    );
+  }
+  return payloads[0];
+}
+
+function requireTerminalHandoffBoolean(summary, field) {
+  const value = summary[field];
+  if (typeof value !== 'boolean') {
+    throw new Error(
+      `Android terminal drag handoff ${field} must be a boolean.`,
+    );
+  }
+  return value;
+}
+
+function requireTerminalHandoffNumber(summary, field) {
+  const value = summary[field];
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(
+      `Android terminal drag handoff ${field} must be a finite number.`,
+    );
+  }
+  return value;
+}
+
+function requireTerminalHandoffInteger(summary, field) {
+  const value = requireTerminalHandoffNumber(summary, field);
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(
+      `Android terminal drag handoff ${field} must be a non-negative safe integer.`,
+    );
+  }
+  return value;
+}
+
+function requireTerminalHandoffExact(summary, field, expected) {
+  const value = requireTerminalHandoffInteger(summary, field);
+  if (value !== expected) {
+    throw new Error(
+      `Android terminal drag handoff ${field} must equal ${String(expected)}; found ${String(value)}.`,
+    );
+  }
+  return value;
+}
+
+function requireTerminalHandoffMinimum(summary, field, minimum) {
+  const value = requireTerminalHandoffInteger(summary, field);
+  if (value < minimum) {
+    throw new Error(
+      `Android terminal drag handoff ${field} must be at least ${String(minimum)}; found ${String(value)}.`,
+    );
+  }
+  return value;
+}
+
+export function parseAndroidTerminalDragHandoff(logcat) {
+  const payload = extractAndroidTerminalDragHandoffPayload(logcat);
+  let summary;
+  try {
+    summary = JSON.parse(payload);
+  } catch (error) {
+    throw new Error(
+      `Android terminal drag handoff record is malformed JSON: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+  if (
+    summary === null ||
+    typeof summary !== 'object' ||
+    Array.isArray(summary)
+  ) {
+    throw new Error('Android terminal drag handoff record must be an object.');
+  }
+
+  const actualKeys = Object.keys(summary).sort();
+  if (
+    actualKeys.length !== terminalDragHandoffSchemaKeys.length ||
+    actualKeys.some(
+      (key, index) => key !== terminalDragHandoffSchemaKeys[index],
+    )
+  ) {
+    throw new Error(
+      'Android terminal drag handoff record must contain exactly the schemaVersion 3 fields.',
+    );
+  }
+  requireTerminalHandoffExact(summary, 'schemaVersion', 3);
+
+  const startPid = requireTerminalHandoffMinimum(summary, 'startPid', 1);
+  const endPid = requireTerminalHandoffMinimum(summary, 'endPid', 1);
+  if (startPid !== endPid) {
+    throw new Error(
+      `Android terminal drag handoff PIDs must match; start=${String(startPid)}, end=${String(endPid)}.`,
+    );
+  }
+  if (!requireTerminalHandoffBoolean(summary, 'processStable')) {
+    throw new Error(
+      'Android terminal drag handoff processStable must be true.',
+    );
+  }
+  if (
+    !requireTerminalHandoffBoolean(summary, 'blockedJsQueueReleaseConfirmed')
+  ) {
+    throw new Error(
+      'Android terminal drag handoff blockedJsQueueReleaseConfirmed must be true.',
+    );
+  }
+  if (!requireTerminalHandoffBoolean(summary, 'reusePassed')) {
+    throw new Error('Android terminal drag handoff reusePassed must be true.');
+  }
+
+  const gestureCount = requireTerminalHandoffExact(summary, 'gestureCount', 5);
+  const acceptedCount = requireTerminalHandoffExact(
+    summary,
+    'acceptedCount',
+    2,
+  );
+  const rejectedCount = requireTerminalHandoffExact(
+    summary,
+    'rejectedCount',
+    1,
+  );
+  const offBoardCount = requireTerminalHandoffExact(
+    summary,
+    'offBoardCount',
+    1,
+  );
+  const cancelCount = requireTerminalHandoffExact(summary, 'cancelCount', 1);
+  const recoveryCount = rejectedCount + offBoardCount + cancelCount;
+  if (
+    acceptedCount + rejectedCount + offBoardCount + cancelCount !==
+    gestureCount
+  ) {
+    throw new Error(
+      'Android terminal drag handoff outcome counts must sum to gestureCount.',
+    );
+  }
+
+  const activeOverlayFrames = requireTerminalHandoffMinimum(
+    summary,
+    'activeOverlayFrames',
+    gestureCount,
+  );
+  requireTerminalHandoffExact(summary, 'sourceVisibleWithOverlayFrames', 0);
+  const blockedTerminalFrames = requireTerminalHandoffMinimum(
+    summary,
+    'blockedTerminalFrames',
+    8,
+  );
+  const blockedTerminalOverlayFrames = requireTerminalHandoffInteger(
+    summary,
+    'blockedTerminalOverlayFrames',
+  );
+  if (blockedTerminalOverlayFrames !== blockedTerminalFrames) {
+    throw new Error(
+      'Android terminal drag handoff every blocked post-UP frame must retain the terminal overlay.',
+    );
+  }
+  const blockedTerminalSpanMs = requireTerminalHandoffNumber(
+    summary,
+    'blockedTerminalSpanMs',
+  );
+  if (blockedTerminalSpanMs < 100) {
+    throw new Error(
+      `Android terminal drag handoff blockedTerminalSpanMs must be at least 100; found ${String(blockedTerminalSpanMs)}.`,
+    );
+  }
+
+  const postTerminalFrames = requireTerminalHandoffMinimum(
+    summary,
+    'postTerminalFrames',
+    gestureCount,
+  );
+  requireTerminalHandoffExact(
+    summary,
+    'terminalOutcomeWitnessCount',
+    gestureCount,
+  );
+  const recoveryPostTerminalFrames = requireTerminalHandoffMinimum(
+    summary,
+    'recoveryPostTerminalFrames',
+    3,
+  );
+  const terminalOverlayFrames = requireTerminalHandoffMinimum(
+    summary,
+    'terminalOverlayFrames',
+    1,
+  );
+  const pendingSourceGhostFrames = requireTerminalHandoffInteger(
+    summary,
+    'pendingSourceGhostFrames',
+  );
+  const pendingCanonicalCrossfadeFrames = requireTerminalHandoffInteger(
+    summary,
+    'pendingCanonicalCrossfadeFrames',
+  );
+  const singlePrimaryFrames = requireTerminalHandoffInteger(
+    summary,
+    'singlePrimaryFrames',
+  );
+  const pendingTargetFrames = requireTerminalHandoffMinimum(
+    summary,
+    'pendingTargetFrames',
+    acceptedCount,
+  );
+  const canonicalTransitionFrames = requireTerminalHandoffMinimum(
+    summary,
+    'canonicalTransitionFrames',
+    acceptedCount,
+  );
+  const canonicalFrames = requireTerminalHandoffMinimum(
+    summary,
+    'canonicalFrames',
+    gestureCount,
+  );
+  const recoveryTerminalLocationFrames = requireTerminalHandoffInteger(
+    summary,
+    'recoveryTerminalLocationFrames',
+  );
+  const recoverySourceLocationFrames = requireTerminalHandoffMinimum(
+    summary,
+    'recoverySourceLocationFrames',
+    recoveryCount,
+  );
+
+  for (const field of [
+    'acceptedOffTargetFrames',
+    'acceptedSourceSnapbackFrames',
+    'finalActiveOverlayHosts',
+    'finalRetiringOverlayHosts',
+    'invalidPrimaryCompositionFrames',
+    'overOpacityFrames',
+    'recoveryUnexpectedLocationFrames',
+    'spatialDuplicateFrames',
+    'underOpacityFrames',
+    'zeroPrimaryFrames',
+  ]) {
+    requireTerminalHandoffExact(summary, field, 0);
+  }
+  requireTerminalHandoffExact(summary, 'recoveryFinalCanonicalSourceCount', 3);
+  requireTerminalHandoffExact(
+    summary,
+    'acceptedFinalCanonicalTargetCount',
+    acceptedCount,
+  );
+
+  for (const [field, value] of [
+    ['blockedTerminalFrames', blockedTerminalFrames],
+    ['canonicalFrames', canonicalFrames],
+    ['canonicalTransitionFrames', canonicalTransitionFrames],
+    ['pendingSourceGhostFrames', pendingSourceGhostFrames],
+    ['pendingCanonicalCrossfadeFrames', pendingCanonicalCrossfadeFrames],
+    ['pendingTargetFrames', pendingTargetFrames],
+    ['recoveryPostTerminalFrames', recoveryPostTerminalFrames],
+    ['singlePrimaryFrames', singlePrimaryFrames],
+    ['terminalOverlayFrames', terminalOverlayFrames],
+  ]) {
+    if (value > postTerminalFrames) {
+      throw new Error(
+        `Android terminal drag handoff ${field} cannot exceed postTerminalFrames.`,
+      );
+    }
+  }
+  if (
+    recoverySourceLocationFrames > recoveryPostTerminalFrames ||
+    recoveryTerminalLocationFrames > recoveryPostTerminalFrames
+  ) {
+    throw new Error(
+      'Android terminal drag handoff recovery location counts cannot exceed recoveryPostTerminalFrames.',
+    );
+  }
+  if (
+    recoverySourceLocationFrames + recoveryTerminalLocationFrames !==
+    recoveryPostTerminalFrames
+  ) {
+    throw new Error(
+      'Android terminal drag handoff source and terminal location counts must cover recoveryPostTerminalFrames.',
+    );
+  }
+  if (postTerminalFrames - recoveryPostTerminalFrames < acceptedCount) {
+    throw new Error(
+      'Android terminal drag handoff accepted outcomes must each contribute a post-terminal frame.',
+    );
+  }
+  const acceptedPostTerminalFrames =
+    postTerminalFrames - recoveryPostTerminalFrames;
+  if (pendingCanonicalCrossfadeFrames > acceptedPostTerminalFrames) {
+    throw new Error(
+      'Android terminal drag handoff pending/canonical crossfades must be confined to accepted outcomes.',
+    );
+  }
+  if (
+    singlePrimaryFrames + pendingCanonicalCrossfadeFrames !==
+    postTerminalFrames
+  ) {
+    throw new Error(
+      'Android terminal drag handoff exact primary compositions must cover every post-terminal frame.',
+    );
+  }
+  if (activeOverlayFrames < terminalOverlayFrames) {
+    throw new Error(
+      'Android terminal drag handoff terminalOverlayFrames cannot exceed activeOverlayFrames.',
+    );
+  }
+  if (terminalOverlayFrames < blockedTerminalOverlayFrames) {
+    throw new Error(
+      'Android terminal drag handoff blockedTerminalOverlayFrames cannot exceed terminalOverlayFrames.',
+    );
+  }
+
+  return summary;
+}
+
+export function buildAndroidTerminalDragHandoffEvidence(logcat) {
+  try {
+    return {
+      error: null,
+      required: true,
+      summary: parseAndroidTerminalDragHandoff(logcat),
+    };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : String(error),
+      required: true,
+      summary: null,
+    };
+  }
+}
+
+export function targetsAndroidTerminalDragHandoffTest(testClass) {
+  const [className] = testClass.trim().split('#', 1);
+  return className === androidTerminalDragHandoffTestClass;
+}
+
+export function buildAndroidTerminalDragHandoffGateEvidence(testClass, logcat) {
+  return targetsAndroidTerminalDragHandoffTest(testClass)
+    ? buildAndroidTerminalDragHandoffEvidence(logcat)
+    : {
+        error: null,
+        required: false,
+        summary: null,
+      };
 }
 
 function requireFiniteNumber(value, label) {
@@ -1192,6 +1594,7 @@ export function didAndroidFabricGatePass({
   findings,
   gradleError,
   gradleExitCode,
+  handoffError = null,
   logcatPrematureExit,
   performanceError = null,
   sourceChangedDuringRun = false,
@@ -1201,6 +1604,7 @@ export function didAndroidFabricGatePass({
     gradleExitCode === 0 &&
     findings.length === 0 &&
     logcatPrematureExit === null &&
+    handoffError === null &&
     performanceError === null &&
     !sourceChangedDuringRun
   );
@@ -1303,16 +1707,22 @@ export async function main(environment = process.env) {
         violations: [],
       };
   const performanceError = performance.error;
+  const terminalHandoff = buildAndroidTerminalDragHandoffGateEvidence(
+    testClass,
+    logcat,
+  );
+  const handoffError = terminalHandoff.error;
   const passed = didAndroidFabricGatePass({
     findings,
     gradleError,
     gradleExitCode,
+    handoffError,
     logcatPrematureExit,
     performanceError,
     sourceChangedDuringRun,
   });
   const result = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     status: passed ? 'passed' : 'failed',
     source,
     sourceAtFinish,
@@ -1326,6 +1736,7 @@ export async function main(environment = process.env) {
       task: gradleArguments[0],
       testClass,
     },
+    terminalHandoff,
     performance,
     logcat: {
       capturePrematureExit: logcatPrematureExit,
@@ -1369,6 +1780,7 @@ export async function main(environment = process.env) {
         findings.length > 0
           ? 'Android Fabric/Reanimated logcat gate failed.'
           : null,
+        handoffError,
         performanceError,
         `Inspect ${logPath} and ${resultPath}.`,
       ]
