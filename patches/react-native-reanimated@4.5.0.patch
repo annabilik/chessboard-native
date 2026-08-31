@@ -1,0 +1,19 @@
+diff --git a/android/src/main/java/com/swmansion/reanimated/NativeProxy.kt b/android/src/main/java/com/swmansion/reanimated/NativeProxy.kt
+index 48e37714232d5ccf74d99d61cb2fac56314087aa..dc4a263ba28f029036968eb968ded5c6fb4c6d10 100644
+--- a/android/src/main/java/com/swmansion/reanimated/NativeProxy.kt
++++ b/android/src/main/java/com/swmansion/reanimated/NativeProxy.kt
+@@ -247,0 +248,6 @@ open class NativeProxy {
++
++    private val getViewExistsMethod by lazy {
++        mountingManager.javaClass.methods
++            .first { it.name == "getViewExists" && it.parameterTypes.size == 1 }
++            .apply { isAccessible = true }
++    }
+@@ -256 +262,3 @@ open class NativeProxy {
+-                    updatePropsSynchronouslyMethod.invoke(mountingManager, viewTag, props)
++                    if (getViewExistsMethod.invoke(mountingManager, viewTag) == true) {
++                        updatePropsSynchronouslyMethod.invoke(mountingManager, viewTag, props)
++                    }
+@@ -258 +266 @@ open class NativeProxy {
+-                    Log.w("Reanimated", "synchronouslyUpdateUIProps failed for tag $viewTag", e)
++                    Log.w("Reanimated", "synchronouslyUpdateUIProps failed for tag $viewTag: ${e.cause ?: e}")

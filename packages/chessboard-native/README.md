@@ -37,6 +37,24 @@ npm install \
 | `react-native-svg`             | `15.15.x`      |
 | `react-native-worklets`        | `0.10.x`       |
 
+### Temporary Android Reanimated patch
+
+Reanimated 4.5.x can replay a queued synchronous animated-props update after a
+Fabric view has unmounted on React Native 0.86. Until
+[Reanimated PR #10435](https://github.com/software-mansion/react-native-reanimated/pull/10435)
+ships in a release, Android consumers that can remove an animated board or
+provider must apply that PR's mounted-view guard to their own exact Reanimated
+installation. See
+[Reanimated issue #10434](https://github.com/software-mansion/react-native-reanimated/issues/10434)
+for the upstream failure.
+
+The repository's example and native harness pin that exact guard for their
+Reanimated versions. The published chessboard package intentionally keeps
+Reanimated as a host-owned peer dependency, so the workaround does not install
+transitively. Remove the consumer patch only after upgrading to an upstream
+Reanimated release that contains the fix and rerunning the Android lifecycle
+gates.
+
 Expo SDK 57 with React Native 0.86 is the supported managed-app boundary.
 Bare React Native consumers must also use React Native 0.86. Other Expo SDK or
 React Native lines have not been validated and are outside the current support

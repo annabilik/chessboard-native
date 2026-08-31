@@ -319,7 +319,13 @@ could otherwise outlive descendant hosts. Whole-layer, board, or provider
 teardown cannot retain descendant shells: hook cleanup only cancels timers and
 frame callbacks. Active-transition removal, a real native touch while absent,
 and a real touch after prompt remount remain a mandatory physical Android
-lifecycle gate. The exact-handoff host-ready acknowledgement is a UI-runtime
+lifecycle gate. Reanimated 4.5.x also requires the native mounted-view fence
+tracked in
+[upstream PR #10435](https://github.com/software-mansion/react-native-reanimated/pull/10435):
+without it, a queued synchronous-props batch can be replayed after the provider
+has removed the Fabric view. The repository pins that guard in its host
+applications; the public library cannot carry it through a peer dependency.
+The exact-handoff host-ready acknowledgement is a UI-runtime
 mapper barrier: it is causally ordered after the opacity-zero native update
 queue flush, but does not by itself prove that a corresponding frame was drawn
 to the screen. The canonical-drain warm frame remains a JavaScript

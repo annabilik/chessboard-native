@@ -127,6 +127,17 @@ Fabric/Reanimated log scanner. The gate requires a physical Android device by
 default; set `ANDROID_SERIAL` to select the release Galaxy when multiple devices
 are connected. Evidence is written under
 `apps/native-harness/android/app/build/reports/fabric-plain-fen-transition-interrupt-gate/`.
+
+The workspace applies the mounted-view guard from
+[Reanimated PR #10435](https://github.com/software-mansion/react-native-reanimated/pull/10435)
+to the harness's exact Reanimated 4.5.0 and the Expo example's exact 4.5.1 via
+pnpm `patchedDependencies`. Both patch files are generated from PR head
+`58bb2e750d12ccf1a78bbb6a36756215497d275f` and are checked against every exact
+workspace Reanimated resolution. The package itself remains peer-only, so this
+is native-consumer infrastructure rather than published library code. Remove
+the patches only after a fixed upstream release passes the same physical
+lifecycle gates.
+
 A clean-source Samsung `SM-A075F` run passed this gate and the corrected 200 ms,
 whole-provider-unmount, and transition/provider-overlap gates. See the
 [final commit-bound evidence record](../../docs/release-evidence/fabric-transition-retirement-bf151bd.md).
