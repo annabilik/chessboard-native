@@ -18,11 +18,23 @@ const workspacePnpmStore = path.resolve(
   'node_modules',
   '.pnpm',
 );
+const appNodeModules = path.join(appRoot, 'node_modules');
+const workspacePnpmModules = path.join(workspacePnpmStore, 'node_modules');
+const runtimePackages = [
+  'react',
+  'react-native',
+  'react-native-gesture-handler',
+  'react-native-reanimated',
+  'react-native-svg',
+  'react-native-worklets',
+];
 
 /**
  * A packed install lives inside this app and needs only Metro's defaults. A
  * workspace install points outside the app, so watch that package and pnpm's
- * dependency store while resolving peers from the harness. Never add the whole
+ * dependency store while resolving the native runtime exclusively from the
+ * harness. The pnpm virtual modules directory remains a fallback for transitive
+ * dependencies that the harness does not declare directly. Never add the whole
  * workspace as a watch folder: the packed smoke must not see source-repository
  * files, and this branch is not used for a packed install.
  *
@@ -32,7 +44,14 @@ const config = isWorkspaceLink
   ? {
       watchFolders: [packageRoot, workspacePnpmStore],
       resolver: {
-        nodeModulesPaths: [path.join(appRoot, 'node_modules')],
+        disableHierarchicalLookup: true,
+        nodeModulesPaths: [appNodeModules, workspacePnpmModules],
+        extraNodeModules: Object.fromEntries(
+          runtimePackages.map((packageName) => [
+            packageName,
+            path.join(appNodeModules, ...packageName.split('/')),
+          ]),
+        ),
       },
     }
   : {};

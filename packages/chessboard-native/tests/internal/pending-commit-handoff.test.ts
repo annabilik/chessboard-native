@@ -5,8 +5,10 @@ import {
 } from '../../src/internal/interaction-reducer';
 import {
   derivePendingCommitHandoff,
+  pendingCommitHandoffHasCanonicalSuccessor,
   type DerivePendingCommitHandoffOptions,
 } from '../../src/internal/pending-commit-handoff';
+import { STANDARD_BOARD_DIMENSIONS } from '../../src/core/dimensions';
 import type { NormalizedPositionValue } from '../../src/internal/position-domain';
 import type { MoveIntent, PositionObject } from '../../src/public-types';
 
@@ -234,5 +236,118 @@ describe('pending controlled-commit handoff derivation', () => {
         toRevision: BASE_REVISION + 1,
       }),
     );
+  });
+
+  it('separately validates regular, capture, and promotion successors before visual preparation', () => {
+    const regular = derivePendingCommitHandoff(options());
+    if (regular === null) {
+      throw new Error('Expected a regular pending handoff.');
+    }
+    expect(
+      pendingCommitHandoffHasCanonicalSuccessor({
+        dimensions: STANDARD_BOARD_DIMENSIONS,
+        handoff: regular,
+        position: Object.freeze({
+          committedIntentId: INTENT_ID,
+          revision: BASE_REVISION + 1,
+          tier: 'envelope' as const,
+          value: Object.freeze({
+            b1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+            c1: Object.freeze({ id: 'other', pieceType: 'wN' }),
+          }),
+        }),
+      }),
+    ).toBe(true);
+
+    const promotionIntent = intent({
+      piece: Object.freeze({ id: 'pawn', pieceType: 'wP' }),
+      source: Object.freeze({ kind: 'board' as const, square: 'a7' }),
+      targetSquare: 'a8',
+    });
+    const promotion = derivePendingCommitHandoff(
+      options({ lifecycle: awaitingCommit(promotionIntent) }),
+    );
+    if (promotion === null) {
+      throw new Error('Expected a promotion pending handoff.');
+    }
+    expect(
+      pendingCommitHandoffHasCanonicalSuccessor({
+        dimensions: STANDARD_BOARD_DIMENSIONS,
+        handoff: promotion,
+        position: Object.freeze({
+          committedIntentId: INTENT_ID,
+          revision: BASE_REVISION + 1,
+          tier: 'envelope' as const,
+          value: Object.freeze({
+            a8: Object.freeze({ id: 'pawn', pieceType: 'wQ' }),
+          }),
+        }),
+      }),
+    ).toBe(true);
+  });
+
+  it('fails visual preparation closed for missing, foreign, and retained anonymous targets', () => {
+    const regular = derivePendingCommitHandoff(options());
+    if (regular === null) {
+      throw new Error('Expected a regular pending handoff.');
+    }
+    const successor = (value: PositionObject): NormalizedPositionValue =>
+      Object.freeze({
+        committedIntentId: INTENT_ID,
+        revision: BASE_REVISION + 1,
+        tier: 'envelope' as const,
+        value,
+      });
+    expect(
+      pendingCommitHandoffHasCanonicalSuccessor({
+        dimensions: STANDARD_BOARD_DIMENSIONS,
+        handoff: regular,
+        position: successor(Object.freeze({})),
+      }),
+    ).toBe(false);
+    expect(
+      pendingCommitHandoffHasCanonicalSuccessor({
+        dimensions: STANDARD_BOARD_DIMENSIONS,
+        handoff: regular,
+        position: successor(
+          Object.freeze({
+            b1: Object.freeze({ id: 'foreign', pieceType: 'wR' }),
+          }),
+        ),
+      }),
+    ).toBe(false);
+    expect(
+      pendingCommitHandoffHasCanonicalSuccessor({
+        dimensions: STANDARD_BOARD_DIMENSIONS,
+        handoff: regular,
+        position: successor(
+          Object.freeze({
+            b1: Object.freeze({ id: 'runner', pieceType: 'wQ' }),
+          }),
+        ),
+      }),
+    ).toBe(false);
+
+    const anonymousIntent = intent({
+      piece: Object.freeze({ pieceType: 'wR' }),
+    });
+    const anonymous = derivePendingCommitHandoff(
+      options({ lifecycle: awaitingCommit(anonymousIntent) }),
+    );
+    if (anonymous === null) {
+      throw new Error('Expected an anonymous pending handoff.');
+    }
+    expect(
+      pendingCommitHandoffHasCanonicalSuccessor({
+        dimensions: STANDARD_BOARD_DIMENSIONS,
+        handoff: anonymous,
+        position: successor(
+          Object.freeze({
+            a1: Object.freeze({ pieceType: 'wR' }),
+            b1: Object.freeze({ pieceType: 'wR' }),
+          }),
+        ),
+      }),
+    ).toBe(false);
   });
 });

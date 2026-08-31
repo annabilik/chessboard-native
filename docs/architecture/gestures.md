@@ -77,20 +77,40 @@ wrapping or reflowing provider children. The provider-level sibling escapes a
 clipping palette child. It is not a native window portal, so an ancestor that
 clips the entire provider scope can still crop it.
 
-Terminal release clears the semantic lease immediately. The same native
-overlay host then remains through one full quiescent frame with its animated
-style detached, static opacity zero, no renderer child, and no pointer or
-accessibility surface. The first generation-guarded frame lets Reanimated's
-native update registry drain; a second frame removes the transient host. A
-replacement gesture cancels both stages. This two-frame native-drain barrier
-retires the Fabric view descriptor and queued native props before host removal
-without making the provider a permanent layout or semantic owner. It governs
-ordinary retirement while the provider remains mounted; an ancestor deleting
-the entire provider cannot wait for a descendant retirement frame, so unmount
-cleanup does not publish presentation shared-value writes. On Android, any
-residual native pan/finalize frame can update only `left`/`top` through the
-shadow-tree commit path, never synchronous transform/opacity props on a removed
-host.
+A board release freezes its exact final UI-thread pointer frame while the
+terminal signal waits for the React Native runtime. The controller advances its
+gesture adapter and retains the exact provider lease before invoking the
+current consumer. A correlated native `ACTION_CANCEL` likewise freezes the
+terminal presentation and advances cancellation without invoking a move
+callback. `BoardSurface` first commits the latest pending target, correlated
+controlled target, or restored controlled source. The restored-source barrier
+also covers cancellation, a null target, a stale or invalid candidate,
+immediate request rejection, and a throwing consumer. An exact
+owner/token/presentation/source-guarded layout barrier then releases only that
+captured lease, so the provider overlay and board-local source ghost retire
+from the same provider snapshot. Only the following quiescent commit resets the
+retained shared values, after the overlay has detached its animated style and
+renderer child, the exact controller has acknowledged that it remains mounted,
+and no replacement descriptor uses that presentation.
+
+An uncorrelated, pre-activation, or provider-driven cancellation may release
+its exact lease directly. A correlated native `ACTION_CANCEL` instead uses the
+restored-source barrier above. If the surface refuses an exact private handoff,
+the controller releases only that lease and defers shared-value reset to a later
+mounted commit. The same native overlay host then remains through one full
+quiescent frame with its animated style detached, static opacity zero, no
+renderer child, and no pointer or accessibility surface. The first
+generation-guarded frame lets Reanimated's native update registry drain; a
+second frame removes the transient host. A replacement gesture cancels both
+stages and its token/presentation guard keeps old cleanup from resetting the
+new drag. This two-frame native-drain barrier retires the Fabric view descriptor
+and queued native props before host removal without making the provider a
+permanent layout or semantic owner. It governs ordinary retirement while the
+provider remains mounted; an ancestor deleting the entire provider cannot wait
+for a descendant retirement frame, so unmount cleanup does not publish
+presentation shared-value writes. On Android, any residual native pan/finalize
+frame can update only `left`/`top` through the shadow-tree commit path, never
+synchronous transform/opacity props on a removed host.
 
 The active overlay stays on the UI runtime on both platforms, but its native
 transport is platform-specific at the pinned React Native/Reanimated boundary.
@@ -230,13 +250,19 @@ inert.
 The same correlation can affect drag presentation without changing those
 semantics. For a drag intent with a matching newer revision and non-null target,
 a handoff is eligible only when its exact revision pair and intent source,
-piece, and target resolve to one current transition actor. The board then
-crossfades the pending target into the canonical actor instead of replaying the
-move from its source. Tap, keyboard, and accessibility commits retain their
-semantic confirmation but use ordinary configured transition behavior. A
-missing or mismatched `committedIntentId`, an actor mismatch, or a null
-off-board target also uses that ordinary path. The handoff is visual-only and
-cannot keep the interaction lifecycle or a position snapshot alive.
+piece, and target resolve to one current transition actor. The board mounts the
+pending-to-canonical crossfade paused at progress zero and waits for both exact
+structural hosts. The canonical host's UI-runtime opacity mapper then
+acknowledges its monotonic host-generation lease from the next UI frame; only
+that current lease can unmask the host and start a fresh full configured-
+duration clock instead of replaying the move from its source. If an exact
+handoff actor cannot mount or is lost after correlation, the board fails closed
+to the latest controlled output and uses a generation-guarded canonical drain
+when that actor is renderable. Tap, keyboard, and accessibility commits retain
+their semantic confirmation but use ordinary configured transition behavior.
+A missing or mismatched `committedIntentId` or a null off-board target also
+uses that ordinary path. The handoff is visual-only and cannot keep the
+interaction lifecycle or a position snapshot alive.
 
 Every asynchronous result carries the interaction epoch and intent ID. Effects
 also carry the reducer revision that produced them. The mounted runtime rejects
@@ -344,14 +370,18 @@ source ghost stays board-local. `SparePiece` uses its own one-pointer pan
 recognizer, crosses to JS for activation, canonical hover-square boundaries,
 release, and cancellation, and leaves the shared presentation active through
 fresh drop verification. Continuous pointer frames remain on the UI thread.
-Replacing or cancelling the active epoch revokes the prior overlay lease
-without retaining a position snapshot; its nonsemantic native shell follows
-the two-frame native-drain rule above. Pending decision and commit
-phases are reducer presentation only. Public drag-overlay and source-ghost
-styles now resolve from the named target board; pressed and pending remain
-renderer state rather than separate style slots. Controlled destination,
-selected, and disabled square styles remain derived directly from the current
-selection prop, while current hover supplies the visual-only drop-target slot.
+Replacing the active epoch, or cancelling it before a correlated native
+terminal exists, revokes the prior overlay lease without retaining a position
+snapshot; its nonsemantic native shell follows the two-frame native-drain rule
+above. A correlated native `ACTION_CANCEL` retains the exact lease until the
+restored source commits. A valid board release likewise keeps that shell and
+its source ghost until the pending/canonical successor commit, preventing a
+zero-actor frame across the UI-to-RN handoff. Pending decision and commit phases
+are reducer presentation only. Public drag-overlay and source-ghost styles now
+resolve from the named target board; pressed and pending remain renderer state
+rather than separate style slots. Controlled destination, selected, and
+disabled square styles remain derived directly from the current selection
+prop, while current hover supplies the visual-only drop-target slot.
 
 The public `ChessboardActions.cancelMove()` boundary routes through the same
 board-scoped cancellation paths. It revokes an active provider lease, including

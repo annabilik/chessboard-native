@@ -4,6 +4,7 @@ import { startTransition, Suspense, useState, type ReactElement } from 'react';
 import { ChessboardProvider } from '../../src/ChessboardProvider';
 import type { BoardGestureIntentCandidate } from '../../src/internal/board-gesture-adapter';
 import type { NormalizedControlledValue } from '../../src/internal/controlled-domain';
+import { INTERACTION_PRESENTATION_PHASE } from '../../src/internal/interaction-presentation';
 import {
   useChessboardProvider,
   type ChessboardProviderRuntime,
@@ -12,7 +13,10 @@ import type {
   PositionObject,
   SquarePressContext,
 } from '../../src/public-types';
-import { BoardInteractionController } from '../../src/render/board-interaction-controller';
+import {
+  BoardInteractionController,
+  type TerminalBoardDragAcknowledgement,
+} from '../../src/render/board-interaction-controller';
 import {
   BoardGestureLayer,
   type BoardGestureGeometry,
@@ -107,6 +111,23 @@ function dragTargetSignal(options: {
   });
 }
 
+function dragCancelSignal(options: {
+  readonly gestureToken: number;
+  readonly reason?: 'second-finger' | 'user';
+}): Readonly<BoardGestureSignal> {
+  return Object.freeze({
+    allowDragOffBoard: true,
+    allowDragOffBoardGeneration: 0,
+    boardId: 'race-board',
+    geometryRevision: 5,
+    gestureToken: options.gestureToken,
+    positionRevision: 9,
+    reason: options.reason ?? 'user',
+    sourceSquare: 'a2',
+    type: 'drag-cancel',
+  });
+}
+
 function pressSignal(options: {
   readonly gestureToken: number;
   readonly positionRevision?: number;
@@ -177,6 +198,635 @@ describe('board interaction controller races', () => {
         style: { transform: [{ scale: 1.15 }] },
         targetSquare: 'b1',
       }),
+    );
+  });
+
+  it('retains an exact terminal lease across controlled synchronization until the BoardSurface ACK', async () => {
+    const runtime: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    const onCandidate = jest.fn(() => true);
+    function RuntimeProbe(): null {
+      runtime.current = useChessboardProvider().runtime;
+      return null;
+    }
+
+    const result = await render(
+      <ChessboardProvider>
+        <RuntimeProbe />
+        <BoardInteractionController
+          boardId="race-board"
+          dragEnabled
+          geometry={geometry(5)}
+          onCandidate={onCandidate}
+          pieceRenderers={{}}
+          pieceStyle={{}}
+          position={controlledPosition(9)}
+        />
+      </ChessboardProvider>,
+    );
+    const signal = currentSignalHandler();
+    await act(() => {
+      signal(dragSignal({ gestureToken: 74, type: 'drag-start' }));
+    });
+    const activeBeforeTerminal = runtime.current?.drag.getSnapshot().active;
+    if (activeBeforeTerminal === null || activeBeforeTerminal === undefined) {
+      throw new Error('Expected the provider to own the active drag.');
+    }
+
+    await act(() => {
+      signal(
+        dragSignal({
+          gestureToken: 74,
+          targetSquare: 'b1',
+          type: 'drag-end',
+        }),
+      );
+    });
+
+    expect(onCandidate).toHaveBeenCalledWith(
+      expect.objectContaining({ input: 'drag', targetSquare: 'b1', token: 74 }),
+    );
+    expect(runtime.current?.drag.getSnapshot().active).toBe(
+      activeBeforeTerminal,
+    );
+
+    await result.rerender(
+      <ChessboardProvider>
+        <RuntimeProbe />
+        <BoardInteractionController
+          boardId="race-board"
+          dragEnabled
+          geometry={geometry(5)}
+          onCandidate={onCandidate}
+          pieceRenderers={{}}
+          pieceStyle={{}}
+          position={controlledPosition(10)}
+        />
+      </ChessboardProvider>,
+    );
+    expect(runtime.current?.drag.getSnapshot().active).toBe(
+      activeBeforeTerminal,
+    );
+    expect(activeBeforeTerminal.presentation.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.DRAG,
+    );
+
+    const acknowledgement: Readonly<TerminalBoardDragAcknowledgement> =
+      Object.freeze({
+        boardId: activeBeforeTerminal.boardId,
+        gestureToken: activeBeforeTerminal.gestureToken,
+        mountedResetPermit: { current: false },
+        owner: activeBeforeTerminal.owner,
+        presentation: activeBeforeTerminal.presentation,
+        sourceSquare: 'a2',
+      });
+    await act(() => {
+      runtime.current?.drag.release(
+        acknowledgement.owner,
+        acknowledgement.gestureToken,
+      );
+    });
+    await result.rerender(
+      <ChessboardProvider>
+        <RuntimeProbe />
+        <BoardInteractionController
+          boardId="race-board"
+          dragEnabled
+          geometry={geometry(5)}
+          onCandidate={onCandidate}
+          pieceRenderers={{}}
+          pieceStyle={{}}
+          position={controlledPosition(10)}
+          terminalDragAcknowledgement={acknowledgement}
+        />
+      </ChessboardProvider>,
+    );
+    expect(activeBeforeTerminal.presentation.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.DRAG,
+    );
+
+    await result.rerender(
+      <ChessboardProvider>
+        <RuntimeProbe />
+        <BoardInteractionController
+          boardId="race-board"
+          dragEnabled
+          geometry={geometry(5)}
+          onCandidate={onCandidate}
+          pieceRenderers={{}}
+          pieceStyle={{}}
+          position={controlledPosition(11)}
+        />
+      </ChessboardProvider>,
+    );
+    expect(activeBeforeTerminal.presentation.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.IDLE,
+    );
+  });
+
+  it('retains an exact native-cancel lease until the BoardSurface restore ACK', async () => {
+    const runtime: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    const cancellationLeases: TerminalBoardDragAcknowledgement[] = [];
+    function RuntimeProbe(): null {
+      runtime.current = useChessboardProvider().runtime;
+      return null;
+    }
+    const result = await render(
+      <ChessboardProvider>
+        <RuntimeProbe />
+        <BoardInteractionController
+          boardId="race-board"
+          dragEnabled
+          geometry={geometry(5)}
+          onTerminalDragCancellation={(lease) => {
+            cancellationLeases.push(
+              Object.freeze({
+                ...lease,
+                mountedResetPermit: { current: false },
+              }),
+            );
+            return true;
+          }}
+          pieceRenderers={{}}
+          pieceStyle={{}}
+          position={controlledPosition(9)}
+        />
+      </ChessboardProvider>,
+    );
+    const signal = currentSignalHandler();
+    await act(() => {
+      signal(dragSignal({ gestureToken: 741, type: 'drag-start' }));
+    });
+    const terminal = runtime.current?.drag.getSnapshot().active ?? null;
+    if (terminal === null) {
+      throw new Error('Expected an exact provider cancellation lease.');
+    }
+    terminal.presentation.phase.value =
+      INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL;
+    await act(() => {
+      signal(dragCancelSignal({ gestureToken: 741 }));
+    });
+
+    expect(cancellationLeases).toHaveLength(1);
+    expect(cancellationLeases[0]).toEqual(
+      expect.objectContaining({
+        gestureToken: 741,
+        owner: terminal.owner,
+        presentation: terminal.presentation,
+        sourceSquare: 'a2',
+      }),
+    );
+    expect(runtime.current?.drag.getSnapshot().active).toBe(terminal);
+    expect(terminal.presentation.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL,
+    );
+
+    const acknowledgement = cancellationLeases[0];
+    if (acknowledgement === undefined) {
+      throw new Error('Expected the retained cancellation acknowledgement.');
+    }
+    await act(() => {
+      runtime.current?.drag.release(
+        acknowledgement.owner,
+        acknowledgement.gestureToken,
+      );
+    });
+    await result.rerender(
+      <ChessboardProvider>
+        <RuntimeProbe />
+        <BoardInteractionController
+          boardId="race-board"
+          dragEnabled
+          geometry={geometry(5)}
+          onTerminalDragCancellation={() => true}
+          pieceRenderers={{}}
+          pieceStyle={{}}
+          position={controlledPosition(9)}
+          terminalDragAcknowledgement={acknowledgement}
+        />
+      </ChessboardProvider>,
+    );
+    expect(acknowledgement.mountedResetPermit.current).toBe(true);
+    expect(terminal.presentation.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL,
+    );
+    await result.unmount();
+  });
+
+  it('does not release or reset a same-token replacement during native-cancel fallback', async () => {
+    const runtime: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    const foreignOwner = Object.freeze({});
+    const replacement: {
+      current: NonNullable<
+        ReturnType<ChessboardProviderRuntime['drag']['getSnapshot']>['active']
+      > | null;
+    } = { current: null };
+    function RuntimeProbe(): null {
+      runtime.current = useChessboardProvider().runtime;
+      return null;
+    }
+    await render(
+      <ChessboardProvider>
+        <RuntimeProbe />
+        <BoardInteractionController
+          boardId="race-board"
+          dragEnabled
+          geometry={geometry(5)}
+          onTerminalDragCancellation={(lease) => {
+            const current = runtime.current?.drag.getSnapshot().active ?? null;
+            if (current === null) {
+              return false;
+            }
+            replacement.current = Object.freeze({
+              ...current,
+              onCancel: jest.fn(),
+              owner: foreignOwner,
+              source: Object.freeze({
+                kind: 'spare' as const,
+                spareId: 'cancel-replacement',
+              }),
+              square: null,
+            });
+            runtime.current?.drag.claim(replacement.current);
+            expect(lease.presentation).toBe(current.presentation);
+            return false;
+          }}
+          pieceRenderers={{}}
+          pieceStyle={{}}
+          position={controlledPosition(9)}
+        />
+      </ChessboardProvider>,
+    );
+    const signal = currentSignalHandler();
+    await act(() => {
+      signal(dragSignal({ gestureToken: 742, type: 'drag-start' }));
+    });
+    const terminal = runtime.current?.drag.getSnapshot().active ?? null;
+    if (terminal === null) {
+      throw new Error('Expected the original cancellation lease.');
+    }
+    terminal.presentation.phase.value =
+      INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL;
+    await act(() => {
+      signal(dragCancelSignal({ gestureToken: 742 }));
+    });
+
+    expect(replacement.current).not.toBeNull();
+    expect(runtime.current?.drag.getSnapshot().active).toBe(
+      replacement.current,
+    );
+    expect(terminal.presentation.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL,
+    );
+    const claimedReplacement = replacement.current;
+    if (claimedReplacement !== null) {
+      await act(() => {
+        runtime.current?.drag.release(
+          claimedReplacement.owner,
+          claimedReplacement.gestureToken,
+        );
+      });
+    }
+  });
+
+  it('establishes terminal retention before a candidate synchronously commits controlled position', async () => {
+    const runtime: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    function RuntimeProbe(): null {
+      runtime.current = useChessboardProvider().runtime;
+      return null;
+    }
+    function Harness(): ReactElement {
+      const [revision, setRevision] = useState(9);
+      return (
+        <ChessboardProvider>
+          <RuntimeProbe />
+          <BoardInteractionController
+            boardId="race-board"
+            dragEnabled
+            geometry={geometry(5)}
+            onCandidate={() => {
+              setRevision(10);
+              return true;
+            }}
+            pieceRenderers={{}}
+            pieceStyle={{}}
+            position={controlledPosition(revision)}
+          />
+        </ChessboardProvider>
+      );
+    }
+
+    const result = await render(<Harness />);
+    const signal = currentSignalHandler();
+    await act(() => {
+      signal(dragSignal({ gestureToken: 75, type: 'drag-start' }));
+    });
+    const terminal = runtime.current?.drag.getSnapshot().active;
+    if (terminal === null || terminal === undefined) {
+      throw new Error('Expected the provider terminal lease.');
+    }
+    await act(() => {
+      signal(
+        dragSignal({
+          gestureToken: 75,
+          targetSquare: 'b1',
+          type: 'drag-end',
+        }),
+      );
+    });
+
+    expect(runtime.current?.drag.getSnapshot().active).toBe(terminal);
+    expect(terminal.presentation.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.DRAG,
+    );
+    await result.unmount();
+  });
+
+  it('cleans an exact terminal lease after a synchronous controlled update rejects the candidate', async () => {
+    const runtime: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    function RuntimeProbe(): null {
+      runtime.current = useChessboardProvider().runtime;
+      return null;
+    }
+    function Harness(): ReactElement {
+      const [revision, setRevision] = useState(9);
+      return (
+        <ChessboardProvider>
+          <RuntimeProbe />
+          <BoardInteractionController
+            boardId="race-board"
+            dragEnabled
+            geometry={geometry(5)}
+            onCandidate={() => {
+              setRevision(10);
+              return false;
+            }}
+            pieceRenderers={{}}
+            pieceStyle={{}}
+            position={controlledPosition(revision)}
+          />
+        </ChessboardProvider>
+      );
+    }
+
+    await render(<Harness />);
+    const signal = currentSignalHandler();
+    await act(() => {
+      signal(dragSignal({ gestureToken: 76, type: 'drag-start' }));
+    });
+    const terminal = runtime.current?.drag.getSnapshot().active;
+    if (terminal === null || terminal === undefined) {
+      throw new Error('Expected the provider terminal lease.');
+    }
+    await act(() => {
+      signal(
+        dragSignal({
+          gestureToken: 76,
+          targetSquare: 'b1',
+          type: 'drag-end',
+        }),
+      );
+    });
+
+    expect(runtime.current?.drag.getSnapshot().active).toBeNull();
+    expect(terminal.presentation.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.IDLE,
+    );
+  });
+
+  it('does not let rejected terminal cleanup release or reset a synchronous same-token spare replacement', async () => {
+    const runtime: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    const foreignOwner = Object.freeze({});
+    const replacement: {
+      current: ReturnType<
+        ChessboardProviderRuntime['drag']['getSnapshot']
+      >['active'];
+    } = { current: null };
+    function RuntimeProbe(): null {
+      runtime.current = useChessboardProvider().runtime;
+      return null;
+    }
+
+    await render(
+      <ChessboardProvider>
+        <RuntimeProbe />
+        <BoardInteractionController
+          boardId="race-board"
+          dragEnabled
+          geometry={geometry(5)}
+          onCandidate={() => {
+            const current = runtime.current?.drag.getSnapshot().active;
+            if (current === null || current === undefined) {
+              return false;
+            }
+            replacement.current = Object.freeze({
+              ...current,
+              onCancel: jest.fn(),
+              owner: foreignOwner,
+              source: Object.freeze({
+                kind: 'spare' as const,
+                spareId: 'foreign-spare',
+              }),
+              square: null,
+            });
+            runtime.current?.drag.claim(replacement.current);
+            return false;
+          }}
+          pieceRenderers={{}}
+          pieceStyle={{}}
+          position={controlledPosition(9)}
+        />
+      </ChessboardProvider>,
+    );
+    const signal = currentSignalHandler();
+    await act(() => {
+      signal(dragSignal({ gestureToken: 77, type: 'drag-start' }));
+      signal(
+        dragSignal({
+          gestureToken: 77,
+          targetSquare: 'b1',
+          type: 'drag-end',
+        }),
+      );
+    });
+
+    expect(replacement.current).not.toBeNull();
+    expect(runtime.current?.drag.getSnapshot().active).toBe(
+      replacement.current,
+    );
+    expect(replacement.current?.presentation.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.DRAG,
+    );
+    const foreign = replacement.current;
+    if (foreign !== null) {
+      await act(() => {
+        runtime.current?.drag.release(foreign.owner, foreign.gestureToken);
+      });
+    }
+  });
+
+  it('does not apply the stale terminal reduction after a candidate synchronously starts a successor drag', async () => {
+    const runtime: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    const onPieceDragStart = jest.fn(() => true);
+    let signal: GestureLayerProps['onSignal'] | null = null;
+    function RuntimeProbe(): null {
+      runtime.current = useChessboardProvider().runtime;
+      return null;
+    }
+    await render(
+      <ChessboardProvider>
+        <RuntimeProbe />
+        <BoardInteractionController
+          boardId="race-board"
+          dragEnabled
+          geometry={geometry(5)}
+          onCandidate={() => {
+            signal?.(dragSignal({ gestureToken: 79, type: 'drag-start' }));
+            return true;
+          }}
+          onPieceDragStart={onPieceDragStart}
+          pieceRenderers={{}}
+          pieceStyle={{}}
+          position={controlledPosition(9)}
+        />
+      </ChessboardProvider>,
+    );
+    signal = currentSignalHandler();
+    await act(() => {
+      signal(dragSignal({ gestureToken: 78, type: 'drag-start' }));
+      signal(
+        dragSignal({
+          gestureToken: 78,
+          targetSquare: 'b1',
+          type: 'drag-end',
+        }),
+      );
+    });
+
+    expect(runtime.current?.drag.getSnapshot().active?.gestureToken).toBe(79);
+    expect(onPieceDragStart).toHaveBeenCalledTimes(2);
+  });
+
+  it('retains terminal ownership across a synchronous permission disable', async () => {
+    const runtime: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    function RuntimeProbe(): null {
+      runtime.current = useChessboardProvider().runtime;
+      return null;
+    }
+    function Harness(): ReactElement {
+      const [enabled, setEnabled] = useState(true);
+      return (
+        <ChessboardProvider>
+          <RuntimeProbe />
+          <BoardInteractionController
+            boardId="race-board"
+            dragEnabled={enabled}
+            geometry={geometry(5)}
+            onCandidate={() => {
+              setEnabled(false);
+              return true;
+            }}
+            pieceRenderers={{}}
+            pieceStyle={{}}
+            position={controlledPosition(9)}
+          />
+        </ChessboardProvider>
+      );
+    }
+
+    const result = await render(<Harness />);
+    const signal = currentSignalHandler();
+    await act(() => {
+      signal(dragSignal({ gestureToken: 80, type: 'drag-start' }));
+    });
+    const terminal = runtime.current?.drag.getSnapshot().active;
+    if (terminal === null || terminal === undefined) {
+      throw new Error('Expected the provider terminal lease.');
+    }
+    await act(() => {
+      signal(
+        dragSignal({
+          gestureToken: 80,
+          targetSquare: 'b1',
+          type: 'drag-end',
+        }),
+      );
+    });
+    expect(runtime.current?.drag.getSnapshot().active).toBe(terminal);
+    expect(terminal.presentation.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.DRAG,
+    );
+    await result.unmount();
+  });
+
+  it('releases only the exact terminal lease without shared writes on synchronous unmount', async () => {
+    const runtime: { current: ChessboardProviderRuntime | null } = {
+      current: null,
+    };
+    function RuntimeProbe(): null {
+      runtime.current = useChessboardProvider().runtime;
+      return null;
+    }
+    function Harness(): ReactElement {
+      const [mounted, setMounted] = useState(true);
+      return (
+        <ChessboardProvider>
+          <RuntimeProbe />
+          {mounted ? (
+            <BoardInteractionController
+              boardId="race-board"
+              dragEnabled
+              geometry={geometry(5)}
+              onCandidate={() => {
+                setMounted(false);
+                return true;
+              }}
+              pieceRenderers={{}}
+              pieceStyle={{}}
+              position={controlledPosition(9)}
+            />
+          ) : null}
+        </ChessboardProvider>
+      );
+    }
+
+    await render(<Harness />);
+    const signal = currentSignalHandler();
+    await act(() => {
+      signal(dragSignal({ gestureToken: 81, type: 'drag-start' }));
+    });
+    const terminal = runtime.current?.drag.getSnapshot().active;
+    if (terminal === null || terminal === undefined) {
+      throw new Error('Expected the provider terminal lease.');
+    }
+    await act(() => {
+      signal(
+        dragSignal({
+          gestureToken: 81,
+          targetSquare: 'b1',
+          type: 'drag-end',
+        }),
+      );
+    });
+
+    expect(runtime.current?.drag.getSnapshot().active).toBeNull();
+    expect(terminal.presentation.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.DRAG,
     );
   });
 
@@ -398,6 +1048,7 @@ describe('board interaction controller races', () => {
         geometry={geometry(5)}
         onCandidate={(candidate) => {
           candidates.push(candidate);
+          return false;
         }}
         pieceRenderers={{}}
         pieceStyle={{}}
@@ -447,6 +1098,12 @@ describe('board interaction controller races', () => {
       />,
     );
     const retainedSignal = currentSignalHandler();
+    const retainedPresentation = jest
+      .mocked(BoardGestureLayer)
+      .mock.calls.at(-1)?.[0].presentation;
+    if (retainedPresentation === undefined) {
+      throw new Error('Expected the retained gesture presentation.');
+    }
 
     await act(() => {
       retainedSignal(dragSignal({ gestureToken: 1, type: 'drag-start' }));
@@ -462,6 +1119,10 @@ describe('board interaction controller races', () => {
         position={controlledPosition(9)}
       />,
     );
+    retainedPresentation.phase.value =
+      INTERACTION_PRESENTATION_PHASE.DRAG_TERMINAL;
+    retainedPresentation.sourceSquare.value = 'a2';
+    retainedPresentation.targetSquare.value = 'b1';
     await act(() => {
       retainedSignal(
         dragSignal({
@@ -471,6 +1132,9 @@ describe('board interaction controller races', () => {
         }),
       );
     });
+    expect(retainedPresentation.phase.value).toBe(
+      INTERACTION_PRESENTATION_PHASE.IDLE,
+    );
 
     await result.rerender(
       <BoardInteractionController
@@ -681,7 +1345,6 @@ describe('board interaction controller races', () => {
 
   it('cancels an active drag when activation distance changes and ignores its retained terminal', async () => {
     const onCandidate = jest.fn();
-    const onDragSourceChange = jest.fn();
     const onPieceDragStart = jest.fn(() => true);
     const result = await render(
       <BoardInteractionController
@@ -690,7 +1353,6 @@ describe('board interaction controller races', () => {
         dragEnabled
         geometry={geometry(5)}
         onCandidate={onCandidate}
-        onDragSourceChange={onDragSourceChange}
         onPieceDragStart={onPieceDragStart}
         pieceRenderers={{}}
         pieceStyle={{}}
@@ -703,7 +1365,6 @@ describe('board interaction controller races', () => {
       retainedSignal(dragSignal({ gestureToken: 94, type: 'drag-start' }));
     });
     expect(onPieceDragStart).toHaveBeenCalledTimes(1);
-    expect(onDragSourceChange).toHaveBeenCalledWith('a2');
 
     await result.rerender(
       <BoardInteractionController
@@ -712,7 +1373,6 @@ describe('board interaction controller races', () => {
         dragEnabled
         geometry={geometry(5)}
         onCandidate={onCandidate}
-        onDragSourceChange={onDragSourceChange}
         onPieceDragStart={onPieceDragStart}
         pieceRenderers={{}}
         pieceStyle={{}}
@@ -722,7 +1382,6 @@ describe('board interaction controller races', () => {
 
     const latestLayer = jest.mocked(BoardGestureLayer).mock.calls.at(-1)?.[0];
     expect(latestLayer?.activationDistance).toBe(16);
-    expect(onDragSourceChange).toHaveBeenLastCalledWith(null);
     await act(() => {
       retainedSignal(
         dragSignal({

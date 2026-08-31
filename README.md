@@ -58,6 +58,23 @@ npm install \
 | `react-native-svg`             | `15.15.x`      |
 | `react-native-worklets`        | `0.10.x`       |
 
+### Temporary Android Reanimated patch
+
+Reanimated 4.5.x can replay a queued synchronous animated-props update after a
+Fabric view has unmounted on React Native 0.86. Until
+[Reanimated PR #10435](https://github.com/software-mansion/react-native-reanimated/pull/10435)
+ships in a release, Android consumers that can remove an animated board or
+provider must apply that PR's mounted-view guard to their own exact Reanimated
+installation. The failure and upstream tracking live in
+[Reanimated issue #10434](https://github.com/software-mansion/react-native-reanimated/issues/10434).
+
+This workspace pins the exact guard from PR head
+`58bb2e750d12ccf1a78bbb6a36756215497d275f` to Reanimated 4.5.0 and 4.5.1
+through pnpm `patchedDependencies`. That patch protects the private example and
+native harness only. It cannot travel through this package's Reanimated peer
+dependency; consuming applications remain responsible for the equivalent pin
+until an upstream fixed release replaces it.
+
 Mount the app beneath `GestureHandlerRootView`, configure Reanimated/Worklets
 for the host app, and give the board a constrained parent width. See the
 [package guide](packages/chessboard-native/README.md) for Expo and bare React

@@ -10,3 +10,7 @@ overrides:
   '@storybook/react-native-ui': 10.4.4
   '@storybook/react-native-ui-common': 10.4.4
   '@valibot/to-json-schema': 1.5.0
+patchedDependencies:
+  react-native-reanimated@4.5.0: patches/react-native-reanimated@4.5.0.patch
+  react-native-reanimated@4.5.1: patches/react-native-reanimated@4.5.1.patch
+allowUnusedPatches: false

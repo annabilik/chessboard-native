@@ -12,7 +12,11 @@ import {
   type ReactElement,
 } from 'react';
 import { View } from 'react-native';
-import type { SharedValue } from 'react-native-reanimated';
+import {
+  ReduceMotion,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
 
 import {
   STANDARD_BOARD_DIMENSIONS,
@@ -20,17 +24,36 @@ import {
   type ValidatedBoardDimensions,
 } from '../../src/core/dimensions';
 import type { NormalizedPositionValue } from '../../src/internal/position-domain';
+import type {
+  PendingCommitHandoffDescriptor,
+  PendingCommitTransitionAcknowledgement,
+} from '../../src/internal/pending-commit-handoff';
 import { sampleTransitionPresentation } from '../../src/internal/transition-presentation';
 import {
   DEFAULT_TRANSITION_DURATION_MS,
   normalizeTransitionDurationMs,
   usePositionTransitionRuntime,
+  type PendingHandoffTransitionExitDisposition,
 } from '../../src/internal/use-position-transition-runtime';
 import type { BoardTransition, PositionObject } from '../../src/public-types';
 import {
   createBoardSurfaceLayout,
   type BoardSurfaceLayout,
 } from '../../src/render/board-layout';
+
+jest.mock('react-native-reanimated', () => {
+  const actual = jest.requireActual<typeof import('react-native-reanimated')>(
+    'react-native-reanimated',
+  );
+  return {
+    ...actual,
+    withTiming: jest.fn((...args: Parameters<typeof actual.withTiming>) =>
+      actual.withTiming(...args),
+    ),
+  };
+});
+
+const mockWithTiming = jest.mocked(withTiming);
 
 const STANDARD_LAYOUT = createBoardSurfaceLayout(
   { height: 800, width: 800 },
@@ -61,6 +84,37 @@ function position(
   });
 }
 
+function pendingHandoff(
+  overrides: Partial<PendingCommitHandoffDescriptor> = {},
+): Readonly<PendingCommitHandoffDescriptor> {
+  return Object.freeze({
+    boardId: 'runtime',
+    epoch: 7,
+    fromRevision: 1,
+    intentId: 'intent:runtime',
+    piece: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    source: Object.freeze({ kind: 'board' as const, square: 'a1' }),
+    targetSquare: 'b1',
+    toRevision: 2,
+    ...overrides,
+  });
+}
+
+function mountedPendingAcknowledgement(
+  transition: ReturnType<typeof useHarness>,
+): Readonly<PendingCommitTransitionAcknowledgement> {
+  const actor = transition?.presentation.pending.find(
+    ({ kind }) => kind === 'pending-handoff',
+  );
+  if (transition === null || actor === undefined) {
+    throw new Error('Expected one mounted pending-handoff actor.');
+  }
+  return Object.freeze({
+    actorKey: actor.actorKey,
+    presentationEpoch: transition.presentation.epoch,
+  });
+}
+
 interface HarnessProps {
   readonly development?: boolean;
   readonly dimensions?: ValidatedBoardDimensions | null;
@@ -68,6 +122,13 @@ interface HarnessProps {
   readonly geometryEpoch?: number | null;
   readonly layout?: Readonly<BoardSurfaceLayout> | null;
   readonly logWarning?: (message: string) => void;
+  readonly onPendingHandoffExit?: (
+    acknowledgement: Readonly<PendingCommitTransitionAcknowledgement>,
+    disposition: PendingHandoffTransitionExitDisposition,
+  ) => void;
+  readonly pendingHandoff?: Readonly<PendingCommitHandoffDescriptor> | null;
+  readonly pendingHandoffAcknowledgement?: Readonly<PendingCommitTransitionAcknowledgement> | null;
+  readonly pendingHandoffRequired?: boolean;
   readonly position: NormalizedPositionValue | null;
   readonly reducedMotion?: boolean;
 }
@@ -79,6 +140,10 @@ function useHarness({
   geometryEpoch = 0,
   layout = STANDARD_LAYOUT,
   logWarning,
+  onPendingHandoffExit,
+  pendingHandoff = null,
+  pendingHandoffAcknowledgement = null,
+  pendingHandoffRequired = false,
   position: current,
   reducedMotion = false,
 }: HarnessProps) {
@@ -89,6 +154,10 @@ function useHarness({
     geometryEpoch,
     layout,
     ...(logWarning === undefined ? {} : { logWarning }),
+    ...(onPendingHandoffExit === undefined ? {} : { onPendingHandoffExit }),
+    pendingHandoff,
+    pendingHandoffAcknowledgement,
+    pendingHandoffRequired,
     position: current,
     reducedMotion,
   });
@@ -199,6 +268,363 @@ describe('mounted controlled-position transition runtime', () => {
       jest.advanceTimersByTime(160);
     });
     expect(hook.result.current).toBeNull();
+  });
+
+  it('forces an elected timing animation to ignore the system scale while the runtime reduced-motion gate still snaps', async () => {
+    const a = position(1, {
+      a1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    const b = position(2, {
+      b1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    mockWithTiming.mockClear();
+    const animated = await renderHook(useHarness, {
+      initialProps: {
+        durationMs: 200,
+        position: a,
+        reducedMotion: false,
+      },
+    });
+    await animated.rerender({
+      durationMs: 200,
+      position: b,
+      reducedMotion: false,
+    });
+
+    expect(mockWithTiming).toHaveBeenCalledWith(
+      1,
+      {
+        duration: 200,
+        reduceMotion: ReduceMotion.Never,
+      },
+      expect.any(Function),
+    );
+    await animated.unmount();
+
+    mockWithTiming.mockClear();
+    const reduced = await renderHook(useHarness, {
+      initialProps: {
+        durationMs: 200,
+        position: a,
+        reducedMotion: true,
+      },
+    });
+    await reduced.rerender({
+      durationMs: 200,
+      position: b,
+      reducedMotion: true,
+    });
+
+    expect(reduced.result.current).toBeNull();
+    expect(mockWithTiming).not.toHaveBeenCalled();
+    await reduced.unmount();
+  });
+
+  it('mounts an exact pending handoff paused, starts a fresh full clock only after ACK, and snaps on ACK revocation', async () => {
+    const a = position(1, {
+      a1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    const b = position(2, {
+      b1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    const onPendingHandoffExit = jest.fn();
+    const baseProps: HarnessProps = {
+      durationMs: 1_000,
+      onPendingHandoffExit,
+      pendingHandoff: null,
+      pendingHandoffAcknowledgement: null,
+      position: a,
+    };
+    const hook = await renderHook(useHarness, { initialProps: baseProps });
+
+    await hook.rerender({
+      ...baseProps,
+      pendingHandoff: pendingHandoff(),
+      position: b,
+    });
+    const paused = hook.result.current;
+    if (paused === null) {
+      throw new Error('Expected one paused pending handoff.');
+    }
+    expect(paused.progress.value).toBe(0);
+    expect(paused.presentation.pending).toEqual([
+      expect.objectContaining({ kind: 'pending-handoff' }),
+    ]);
+    await act(() => {
+      jest.advanceTimersByTime(32);
+    });
+    expect(paused.progress.value).toBe(0);
+
+    const acknowledgement = mountedPendingAcknowledgement(paused);
+    await hook.rerender({
+      ...baseProps,
+      pendingHandoff: pendingHandoff(),
+      pendingHandoffAcknowledgement: acknowledgement,
+      position: b,
+    });
+    expect(hook.result.current?.progress.value).toBe(0);
+    await act(() => {
+      jest.advanceTimersByTime(500);
+    });
+    expect(hook.result.current?.progress.value).toBeCloseTo(0.5);
+
+    await hook.rerender({
+      ...baseProps,
+      pendingHandoff: pendingHandoff(),
+      pendingHandoffAcknowledgement: null,
+      position: b,
+    });
+    expect(hook.result.current).toBeNull();
+    expect(onPendingHandoffExit).toHaveBeenCalledWith(
+      acknowledgement,
+      'aborted',
+    );
+  });
+
+  it('reports exact completion before retiring a completed pending handoff', async () => {
+    const a = position(1, {
+      a1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    const b = position(2, {
+      b1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    const onPendingHandoffExit = jest.fn();
+    const baseProps: HarnessProps = {
+      durationMs: 1_000,
+      onPendingHandoffExit,
+      pendingHandoff: null,
+      pendingHandoffAcknowledgement: null,
+      position: a,
+    };
+    const hook = await renderHook(useHarness, { initialProps: baseProps });
+
+    await hook.rerender({
+      ...baseProps,
+      pendingHandoff: pendingHandoff(),
+      position: b,
+    });
+    const acknowledgement = mountedPendingAcknowledgement(hook.result.current);
+    await hook.rerender({
+      ...baseProps,
+      pendingHandoff: pendingHandoff(),
+      pendingHandoffAcknowledgement: acknowledgement,
+      position: b,
+    });
+    await act(() => {
+      jest.advanceTimersByTime(1_000);
+    });
+
+    expect(onPendingHandoffExit).toHaveBeenCalledTimes(1);
+    expect(onPendingHandoffExit).toHaveBeenCalledWith(
+      acknowledgement,
+      'completed',
+    );
+    expect(hook.result.current).toBeNull();
+  });
+
+  it('reports an interrupted handoff when a semantic successor cannot mount', async () => {
+    const a = position(1, {
+      a1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    const b = position(2, {
+      b1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    const sameValueSuccessor = position(3, b.value);
+    const onPendingHandoffExit = jest.fn();
+    const baseProps: HarnessProps = {
+      durationMs: 1_000,
+      onPendingHandoffExit,
+      pendingHandoff: null,
+      pendingHandoffAcknowledgement: null,
+      position: a,
+    };
+    const hook = await renderHook(useHarness, { initialProps: baseProps });
+
+    await hook.rerender({
+      ...baseProps,
+      pendingHandoff: pendingHandoff(),
+      position: b,
+    });
+    const acknowledgement = mountedPendingAcknowledgement(hook.result.current);
+    await hook.rerender({
+      ...baseProps,
+      position: sameValueSuccessor,
+    });
+
+    expect(hook.result.current).toBeNull();
+    expect(onPendingHandoffExit).toHaveBeenCalledTimes(1);
+    expect(onPendingHandoffExit).toHaveBeenCalledWith(
+      acknowledgement,
+      'aborted',
+    );
+  });
+
+  it('fails closed for missing handoff actors and bounds an unacknowledged paused mount', async () => {
+    const a = position(1, {
+      a1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    const b = position(2, {
+      b1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    const baseProps: HarnessProps = {
+      durationMs: 1_000,
+      pendingHandoff: null,
+      pendingHandoffAcknowledgement: null,
+      position: a,
+    };
+    const malformed = await renderHook(useHarness, {
+      initialProps: baseProps,
+    });
+    await malformed.rerender({
+      ...baseProps,
+      pendingHandoff: pendingHandoff({ targetSquare: 'c1' }),
+      position: b,
+    });
+    expect(malformed.result.current).toBeNull();
+
+    const requiredButUnavailable = await renderHook(useHarness, {
+      initialProps: baseProps,
+    });
+    await requiredButUnavailable.rerender({
+      ...baseProps,
+      pendingHandoffRequired: true,
+      position: b,
+    });
+    expect(requiredButUnavailable.result.current).toBeNull();
+
+    const missingAck = await renderHook(useHarness, {
+      initialProps: baseProps,
+    });
+    await missingAck.rerender({
+      ...baseProps,
+      pendingHandoff: pendingHandoff(),
+      position: b,
+    });
+    expect(missingAck.result.current?.progress.value).toBe(0);
+    await act(() => {
+      jest.advanceTimersByTime(65);
+    });
+    expect(missingAck.result.current).toBeNull();
+  });
+
+  it('uses committed B as the successor baseline and snaps special handoffs on geometry changes', async () => {
+    const a = position(1, {
+      a1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    const b = position(2, {
+      b1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    const c = position(3, {
+      c1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    const onPendingHandoffExit = jest.fn();
+    const baseProps: HarnessProps = {
+      durationMs: 1_000,
+      geometryEpoch: 0,
+      onPendingHandoffExit,
+      pendingHandoff: null,
+      pendingHandoffAcknowledgement: null,
+      position: a,
+    };
+    const successor = await renderHook(useHarness, {
+      initialProps: baseProps,
+    });
+    await successor.rerender({
+      ...baseProps,
+      pendingHandoff: pendingHandoff(),
+      position: b,
+    });
+    expect(successor.result.current?.progress.value).toBe(0);
+    const supersededAcknowledgement = mountedPendingAcknowledgement(
+      successor.result.current,
+    );
+    await successor.rerender({ ...baseProps, position: c });
+    expect(onPendingHandoffExit).toHaveBeenCalledWith(
+      supersededAcknowledgement,
+      'superseded',
+    );
+    expect(successor.result.current?.plan).toEqual(
+      expect.objectContaining({ fromRevision: 2, toRevision: 3 }),
+    );
+    expect(successor.result.current?.plan.moves).toEqual([
+      expect.objectContaining({ from: 'b1', to: 'c1' }),
+    ]);
+
+    const pausedGeometry = await renderHook(useHarness, {
+      initialProps: baseProps,
+    });
+    await pausedGeometry.rerender({
+      ...baseProps,
+      pendingHandoff: pendingHandoff(),
+      position: b,
+    });
+    expect(pausedGeometry.result.current?.progress.value).toBe(0);
+    await pausedGeometry.rerender({
+      ...baseProps,
+      geometryEpoch: 1,
+      pendingHandoff: pendingHandoff(),
+      position: b,
+    });
+    expect(pausedGeometry.result.current).toBeNull();
+
+    const geometry = await renderHook(useHarness, {
+      initialProps: baseProps,
+    });
+    await geometry.rerender({
+      ...baseProps,
+      pendingHandoff: pendingHandoff(),
+      position: b,
+    });
+    const acknowledgement = mountedPendingAcknowledgement(
+      geometry.result.current,
+    );
+    await geometry.rerender({
+      ...baseProps,
+      pendingHandoff: pendingHandoff(),
+      pendingHandoffAcknowledgement: acknowledgement,
+      position: b,
+    });
+    await act(() => {
+      jest.advanceTimersByTime(500);
+    });
+    expect(geometry.result.current?.progress.value).toBeCloseTo(0.5);
+    await geometry.rerender({
+      ...baseProps,
+      geometryEpoch: 1,
+      pendingHandoff: pendingHandoff(),
+      pendingHandoffAcknowledgement: acknowledgement,
+      position: b,
+    });
+    expect(geometry.result.current).toBeNull();
+  });
+
+  it('bypasses pending preparation for zero duration and reduced motion', async () => {
+    const a = position(1, {
+      a1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    const b = position(2, {
+      b1: Object.freeze({ id: 'runner', pieceType: 'wR' }),
+    });
+    for (const options of [
+      { durationMs: 0, reducedMotion: false },
+      { durationMs: 1_000, reducedMotion: true },
+    ]) {
+      const hook = await renderHook(useHarness, {
+        initialProps: {
+          ...options,
+          pendingHandoff: null,
+          pendingHandoffAcknowledgement: null,
+          position: a,
+        } satisfies HarnessProps,
+      });
+      await hook.rerender({
+        ...options,
+        pendingHandoff: pendingHandoff(),
+        pendingHandoffAcknowledgement: null,
+        position: b,
+      });
+      expect(hook.result.current).toBeNull();
+    }
   });
 
   it('[PARITY-BEHAVIOR-B10] [CBN-CONTRACT-006-LATEST-PROP-WINS] replaces A-B with continuous exact B-C work and ignores stale completion', async () => {

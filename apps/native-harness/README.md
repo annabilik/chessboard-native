@@ -39,6 +39,7 @@ pnpm native:android:release
 pnpm native:android:accessibility
 pnpm native:android:accessibility:managed
 pnpm native:android:drag:gate
+pnpm native:android:drag:terminal-handoff:gate
 pnpm native:android:position-transition:interrupt:gate
 pnpm native:android:position-transition:interrupt:200ms:gate
 pnpm native:android:position-transition:whole-unmount:gate
@@ -63,6 +64,60 @@ succeeds. Set `ANDROID_SERIAL` when more than one device is connected. Evidence
 is written under
 `apps/native-harness/android/app/build/reports/fabric-drag-gate/`.
 
+`native:android:drag:terminal-handoff:gate` is the focused physical Release
+gate for the native terminal-drag presentation barrier. Its fixture uses one
+stable-id pawn and an explicit consumer commit control. The native test holds
+the React Native JavaScript queue after the active overlay is visibly at the
+target. It arms the terminal draw window before injecting `ACTION_UP`, forces a
+real draw on every vsync, ignores any draw generation already in flight when
+the window is armed, and marks `ACTION_UP` complete immediately after injection
+returns. Blocked coverage then proves at least eight strictly post-injection
+draws over 100 ms, each retaining the terminal overlay, before explicitly
+releasing and joining the blocked JavaScript task. Its exit reason must be that
+explicit release; the later safety timeout is a gate failure. Rejected,
+off-board, cancelled, and unblocked-reuse windows are likewise armed before
+their synchronous terminal event, so every subsequent draw through native
+overlay cleanup is classified. Every outcome requires exactly one full-opacity
+primary actor, except for the explicit accepted-move crossfade containing one
+pending target and one canonical actor co-located at the target with combined
+full opacity. Arbitrary co-located partial actors, blanks, overdraw, and spatial
+duplicates fail. Recovered outcomes may transfer the primary actor from the
+terminal pointer to the canonical source, but every frame must classify at one
+of those two locations. Accepted outcomes reject source snapback or any actor
+away from the target and observe the pending target and correlated 200 ms
+transition. Every session finishes from its actual latest draw with exactly one
+full-opacity canonical actor at the expected square and no other primary or
+overlay host. Here, primary means the overlay, pending target, canonical
+transition, or canonical piece; the intentional 0.45-opacity pending-source
+ghost is recorded separately.
+
+The same unchanged process must reject an in-board move and an off-board
+release at a measured point outside the board (with the overlay witnessed at
+that point), cancel without a callback, and accept and commit a final reuse
+drag. The unblocked final reuse proves continuous primary coverage and
+canonical settle without requiring a timing-racy post-`ACTION_UP` overlay
+frame.
+The shared gate runner requires a physical device, zero official
+Fabric/Reanimated scanner findings, and exactly one schema-valid terminal
+handoff logical record. The test emits that record after collecting
+all five sessions and before enforcing their visual assertions, so an expected
+negative control remains machine-readable. The logical record includes at most
+two visual-invalid frame witnesses, with explicit total/dropped-frame counts.
+Each witness preserves its violation labels, source and target centers,
+arm/injection-relative timing, and up to six actor role/alpha/center/visibility
+observations with explicit observed/dropped-actor counts. Hidden zero-alpha
+hosts therefore remain diagnosable without silently claiming a complete actor
+set. The record is capped at 8,192 UTF-8 bytes and uses at most six checksummed
+Base64 logcat chunks of 2,000 payload characters each. Structurally valid red
+summaries and their witnesses remain embedded in `result.json` alongside the
+continuity error; corrupt transport or schema evidence retains no summary. A
+missing, duplicate, malformed, or violating logical record fails the gate even
+when Gradle exits zero.
+Class-only and wrong-method filters for the terminal-handoff test also require
+that record, so a zero-test filter mismatch cannot pass closed-loop evidence.
+Evidence is written under
+`apps/native-harness/android/app/build/reports/fabric-drag-terminal-handoff-gate/`.
+
 `native:android:position-transition:interrupt:gate` runs a focused Release
 fixture that alternates one anonymous pawn between actual plain-FEN positions
 18 times at 190 ms while each controlled transition is configured for 300 ms,
@@ -72,6 +127,17 @@ Fabric/Reanimated log scanner. The gate requires a physical Android device by
 default; set `ANDROID_SERIAL` to select the release Galaxy when multiple devices
 are connected. Evidence is written under
 `apps/native-harness/android/app/build/reports/fabric-plain-fen-transition-interrupt-gate/`.
+
+The workspace applies the mounted-view guard from
+[Reanimated PR #10435](https://github.com/software-mansion/react-native-reanimated/pull/10435)
+to the harness's exact Reanimated 4.5.0 and the Expo example's exact 4.5.1 via
+pnpm `patchedDependencies`. Both patch files are generated from PR head
+`58bb2e750d12ccf1a78bbb6a36756215497d275f` and are checked against every exact
+workspace Reanimated resolution. The package itself remains peer-only, so this
+is native-consumer infrastructure rather than published library code. Remove
+the patches only after a fixed upstream release passes the same physical
+lifecycle gates.
+
 A clean-source Samsung `SM-A075F` run passed this gate and the corrected 200 ms,
 whole-provider-unmount, and transition/provider-overlap gates. See the
 [final commit-bound evidence record](../../docs/release-evidence/fabric-transition-retirement-bf151bd.md).

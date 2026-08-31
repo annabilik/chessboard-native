@@ -249,6 +249,17 @@ async function flushConsumerChoice(): Promise<void> {
   });
 }
 
+async function flushCanonicalDrainFrame(): Promise<void> {
+  await act(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
+      }),
+  );
+}
+
 describe('consumer-owned promotion over the public component', () => {
   it('aborts a pending chooser on public cancellation and makes a retained late choice inert', async () => {
     const { actionsRef, controller, result } = await mountPromotionConsumer();
@@ -329,6 +340,7 @@ describe('consumer-owned promotion over the public component', () => {
       choose('wQ');
     });
     await flushConsumerChoice();
+    await flushCanonicalDrainFrame();
 
     expect(controller.latestPosition).toEqual({
       committedIntentId: intent.intentId,

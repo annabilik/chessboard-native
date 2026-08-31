@@ -56,6 +56,13 @@ renderer or a `null` result retains the same fallback paint. Renderer content
 is contained by a pointerless, accessibility-hidden board- or spare-owned
 wrapper and cannot become an alternate event surface.
 
+Continuity guarantees cover the board-owned native hosts, masks, geometry, and
+resolved opacity. A canonical-drain fallback may mount a second renderer
+instance with the same canonical props, so seamless custom artwork assumes the
+selected renderer is pure, deterministic, and synchronous for those props.
+Suspended, `null`, random, or mount-local output cannot be pixel-preserved by a
+host-level handoff protocol.
+
 Static theme and style precedence is fixed as built-in defaults, `theme`,
 instance `styles`, then canonical `squareStyles`. Named square-state paint then
 applies in the fixed order destination, selected, disabled, and drop target.
@@ -220,13 +227,16 @@ dragging-piece, and source-ghost paint slots without changing layer ownership.
 P3.2 promotes the piece plane to stable `Animated.View` hosts. The latest
 controlled position still creates every current host; a detached transition
 plan may only add pointerless, accessibility-hidden exit hosts and animated
-style data. One shared progress value per mounted presentation epoch translates
-current move targets, fades current enter actors, and fades
-removed/captured/ambiguous exits below current pieces. Current and exit
-renderers receive
-`PieceVisualState.isTransitioning = true` only while that exact epoch remains
-active. Completion restores the same current hosts to static state and removes
-exit artwork.
+style data. Once a live current host is admitted to Android's native-prop
+registry, that admission remains sticky for the native-host lifetime and the
+host retains one Reanimated opacity mapper even while no transition is active.
+Its renderer state and transform return to static values; only quiescent
+retirement detaches the animated style. One shared progress value per mounted
+presentation epoch translates current move targets, fades current enter actors,
+and fades removed/captured/ambiguous exits below current pieces. Current and
+exit renderers receive `PieceVisualState.isTransitioning = true` only while
+that exact epoch remains active. Completion restores the same current hosts to
+static renderer state and removes exit artwork.
 
 P3.3 projects an accepted `rookMove` as a second ordinary move on that shared
 progress value and an accepted `capturedSquare` as one reserved stationary
@@ -252,11 +262,32 @@ without later replay.
 
 When a newer revision exactly correlates an active non-null pending target, the
 handoff's revision pair and source, piece, and target must also match one current
-plan actor. The pending layer and canonical target host then share that point
-while the former fades out and the latter fades in. The source-to-target move is
-not replayed; secondary operations still use their adjacent transition plan.
-Unrelated commits, actor mismatches, and off-board removals use the ordinary
-transition layers and never manufacture a pending target.
+plan actor. The transition mounts paused at progress zero. The pending layer
+remains fully visible while an inner non-Reanimated mask hides the canonical
+target without changing its persistent outer opacity mapper. Both layers must
+acknowledge the same actor, presentation epoch, mapper environment, and
+monotonic structural host generations. The canonical host's Reanimated style
+mapper observes progress zero and computed opacity zero before a same-host
+animated reaction schedules one UI-runtime frame. That frame revalidates the
+exact mapper inputs and sends the full lease to React Native only after the
+preceding UI update queue has flushed. The board removes the mask and publishes
+the exact start acknowledgement only while that lease still matches both live
+hosts. The runtime then starts a fresh full configured-duration clock. The
+source-to-target move is not replayed; secondary operations still use their
+adjacent transition plan.
+
+If that exact crossfade cannot mount or continue, a canonical-drain mode fails
+closed to the latest controlled position. A current-position-derived static
+canonical duplicate covers the hard-masked reused host. Any admitted pending
+host becomes the same quiescent native view—zero opacity, no renderer child,
+and no animated style—and follows its normal retained-host drain on Android.
+The duplicate and mask retire only after the exact renderer, geometry, and
+resolved-base-opacity generation survives a guarded JavaScript animation
+frame. Reduced motion, zero duration, actor or renderer loss, geometry abort,
+timeout, and non-viable semantic supersession use this drain rather than expose
+retained native props. Unrelated commits, missing or mismatched correlation,
+and off-board removals use the ordinary transition layers and never manufacture
+a pending target.
 
 Current, exit, replacement, and pending-handoff actors share one keyed host
 retirement protocol. Android bounds registry-backed admission across admitted
@@ -288,7 +319,19 @@ could otherwise outlive descendant hosts. Whole-layer, board, or provider
 teardown cannot retain descendant shells: hook cleanup only cancels timers and
 frame callbacks. Active-transition removal, a real native touch while absent,
 and a real touch after prompt remount remain a mandatory physical Android
-lifecycle gate.
+lifecycle gate. Reanimated 4.5.x also requires the native mounted-view fence
+tracked in
+[upstream PR #10435](https://github.com/software-mansion/react-native-reanimated/pull/10435):
+without it, a queued synchronous-props batch can be replayed after the provider
+has removed the Fabric view. The repository pins that guard in its host
+applications; the public library cannot carry it through a peer dependency.
+The exact-handoff host-ready acknowledgement is a UI-runtime
+mapper barrier: it is causally ordered after the opacity-zero native update
+queue flush, but does not by itself prove that a corresponding frame was drawn
+to the screen. The canonical-drain warm frame remains a JavaScript
+`requestAnimationFrame` ordering barrier. Deterministic tests prove their
+identity and commit ordering; the physical Release terminal-handoff gate
+remains mandatory for continuous native presentation.
 
 P2.2 adds the layer-six board gesture plane. When enabled by the public
 interaction boundaries, it is one absolute, accessibility-hidden native view
@@ -324,19 +367,30 @@ that source host and into the provider-level sibling, so a palette child may
 use `overflow: 'hidden'` without cropping artwork that travels to a board
 elsewhere in the same provider. The provider overlay is not a native window
 portal; clipping an ancestor of the full provider scope can still crop it. The
-overlay stays mounted during asynchronous release measurement. Every terminal
-verified, rejected, cancelled, or stale path clears the active lease
-immediately, detaches the animated style in a hidden pointerless retirement
-commit, retains that shell through one full native-update drain frame, and
-removes it on the next. A replacement path reuses the host and makes both
-obsolete retirement callbacks inert. This protocol applies while the provider
-remains mounted. Whole-provider teardown cannot retain a descendant shell, so
-its cleanup only revokes semantic ownership and never resets orphaned
-presentation shared values. On Android, residual native terminal frames use
-only the shadow-tree `left`/`top` path rather than synchronous props on a
-removed host. Resting board-piece hosts preserve native and custom-renderer
-identity while omitting their Reanimated style descriptor; only actors in a
-controlled transition attach one.
+overlay stays mounted during asynchronous release measurement. A valid
+on-board terminal freezes its final UI-thread frame until `BoardSurface`
+commits the pending, canonical, or restored successor actor. The captured
+owner, token, presentation, and board source must still match before that lease
+is released, so overlay and source ghost retire in one snapshot without
+touching an ABA replacement. A following quiescent commit resets the old shared
+values only after the animated style and renderer child are detached, the exact
+controller acknowledges that it remains mounted, and no replacement uses that
+presentation. Null-target, invalid, stale, throwing, and rejected-before-
+request terminals use the same barrier with the restored controlled source as
+their successor actor. A correlated native `ACTION_CANCEL` also restores the
+source through that barrier without invoking a move callback; only an
+uncorrelated or pre-activation cancellation may clear its exact active lease
+directly. Every retirement retains its hidden pointerless shell through one
+full native-update drain frame and removes it on the next. A replacement path
+reuses the host and makes both obsolete retirement callbacks and shared-value
+cleanup inert. This protocol applies while the provider remains mounted.
+Whole-provider teardown cannot retain a descendant shell, so its cleanup only
+revokes semantic ownership and never resets orphaned presentation shared
+values. On Android, residual native terminal frames use only the shadow-tree
+`left`/`top` path rather than synchronous props on a removed host. An admitted
+resting board-piece host preserves native and custom-renderer identity and
+retains its Reanimated opacity mapper; only quiescent retirement detaches that
+descriptor.
 
 P1.5 promotes only the stable outer host to one adjustable accessibility
 control. It uses `pointerEvents="box-none"` so ordinary touch remains available

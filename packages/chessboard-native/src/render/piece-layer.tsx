@@ -1,15 +1,23 @@
-import { memo, useMemo, type ReactElement } from 'react';
+import { memo, useLayoutEffect, useMemo, type ReactElement } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, {
+  useAnimatedReaction,
   useAnimatedStyle,
   type SharedValue,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import type { NormalizedControlledValue } from '../internal/controlled-domain';
+import type {
+  PendingCommitHandoffDescriptor,
+  PendingCommitMapperLease,
+  PendingCommitTransitionAcknowledgement,
+} from '../internal/pending-commit-handoff';
 import {
   MAX_TRANSITION_PRESENTATION_RESIDUALS,
   projectTransitionPresentationActor,
   type ProjectedTransitionPresentationActor,
+  type TransitionPresentation,
   type TransitionPresentationActorKind,
 } from '../internal/transition-presentation';
 import type { MountedPositionTransition } from '../internal/use-position-transition-runtime';
@@ -40,6 +48,19 @@ interface PieceLayerProps {
   readonly dragSourceSquare?: SquareId | null;
   readonly draggingPieceGhostStyle: Readonly<ViewStyle>;
   readonly layout: Readonly<BoardSurfaceLayout>;
+  /** Exact pending actor retained while its controlled target is prepared. */
+  readonly pendingCommitPreparation?: Readonly<PendingCommitHandoffDescriptor> | null;
+  readonly onPendingCommitCanonicalPrepared?: (
+    acknowledgement: Readonly<PendingCommitTransitionAcknowledgement>,
+    prepared: boolean,
+    environment: Readonly<object>,
+  ) => void;
+  readonly onPendingCommitCanonicalMapperReady?: (
+    lease: Readonly<PendingCommitMapperLease>,
+  ) => void;
+  readonly pendingCommitMapperEnvironment?: Readonly<object> | null;
+  readonly pendingCommitMapperLease?: Readonly<PendingCommitMapperLease> | null;
+  readonly pendingCommitTransitionReady?: Readonly<PendingCommitTransitionAcknowledgement> | null;
   readonly pieceRenderers: PieceRenderers;
   readonly pendingSourceSquare?: SquareId | null;
   readonly position: NormalizedControlledValue<PositionObject> | null;
@@ -198,16 +219,16 @@ function boardPieceLayoutAtSquare(
  * Current semantic actors always come from the latest position. A detached
  * replacement-before actor may accompany them for presentation only.
  */
-export function createPieceTransitionProjection(
+function createPieceTransitionProjectionFromPresentation(
   layout: Readonly<BoardSurfaceLayout>,
-  transition: Readonly<MountedPositionTransition> | null,
+  presentation: Readonly<TransitionPresentation> | null,
 ): Readonly<PieceTransitionProjection> {
-  if (transition === null) {
+  if (presentation === null) {
     return EMPTY_TRANSITION_PROJECTION;
   }
 
   const current = new Map<SquareId, Readonly<PieceTransitionVisual>>();
-  for (const actor of transition.presentation.current) {
+  for (const actor of presentation.current) {
     const projected = projectTransitionPresentationActor(actor, layout);
     if (projected !== null) {
       current.set(
@@ -219,7 +240,7 @@ export function createPieceTransitionProjection(
 
   const replacements: Readonly<DetachedReplacementLayout>[] = [];
   const exits: Readonly<DetachedReplacementLayout>[] = [];
-  for (const actor of transition.presentation.detached) {
+  for (const actor of presentation.detached) {
     const actorProjection = projectTransitionPresentationActor(actor, layout);
     if (actorProjection === null) {
       continue;
@@ -249,6 +270,16 @@ export function createPieceTransitionProjection(
     exits: exits.length === 0 ? EMPTY_DETACHED_LAYOUTS : Object.freeze(exits),
     replacements: Object.freeze(replacements),
   });
+}
+
+export function createPieceTransitionProjection(
+  layout: Readonly<BoardSurfaceLayout>,
+  transition: Readonly<MountedPositionTransition> | null,
+): Readonly<PieceTransitionProjection> {
+  return createPieceTransitionProjectionFromPresentation(
+    layout,
+    transition?.presentation ?? null,
+  );
 }
 
 /** Exact own-key renderer lookup for the deliberately open piece vocabulary. */
@@ -302,6 +333,16 @@ function pieceLayerPropsAreEqual(
     previous.dragSourceSquare === next.dragSourceSquare &&
     previous.draggingPieceGhostStyle === next.draggingPieceGhostStyle &&
     previous.layout === next.layout &&
+    previous.pendingCommitPreparation === next.pendingCommitPreparation &&
+    previous.onPendingCommitCanonicalPrepared ===
+      next.onPendingCommitCanonicalPrepared &&
+    previous.onPendingCommitCanonicalMapperReady ===
+      next.onPendingCommitCanonicalMapperReady &&
+    previous.pendingCommitMapperEnvironment ===
+      next.pendingCommitMapperEnvironment &&
+    previous.pendingCommitMapperLease === next.pendingCommitMapperLease &&
+    previous.pendingCommitTransitionReady ===
+      next.pendingCommitTransitionReady &&
     previous.pieceRenderers === next.pieceRenderers &&
     previous.pendingSourceSquare === next.pendingSourceSquare &&
     previous.style === next.style &&
@@ -374,10 +415,16 @@ interface BoardPieceHostProps {
   readonly boardId: string;
   readonly draggingPieceGhostStyle: Readonly<ViewStyle>;
   readonly isDragSource: boolean;
+  readonly isPendingCommitTarget: boolean;
   readonly isPendingSource: boolean;
   readonly layout: Readonly<BoardPieceLayout>;
   readonly progress: SharedValue<number> | null;
   readonly quiescent: boolean;
+  /** This mounted native lifetime has owned Reanimated props. */
+  readonly nativeDrain: boolean;
+  readonly onPendingCommitCanonicalMapperReady:
+    ((lease: Readonly<PendingCommitMapperLease>) => void) | undefined;
+  readonly pendingCommitMapperLease: Readonly<PendingCommitMapperLease> | null;
   readonly renderer: PieceRenderer;
   readonly style: Readonly<ViewStyle>;
   readonly transition: Readonly<PieceTransitionVisual> | null;
@@ -394,25 +441,55 @@ function boardPieceHostLayoutStyle(
   };
 }
 
+function boardPieceHostBaseOpacity(options: {
+  readonly draggingPieceGhostStyle: Readonly<ViewStyle>;
+  readonly isDragSource: boolean;
+  readonly isPendingSource: boolean;
+  readonly style: Readonly<ViewStyle>;
+}): Readonly<{ baseOpacity: number; hardOccluded: boolean }> {
+  const { draggingPieceGhostStyle, isDragSource, isPendingSource, style } =
+    options;
+  const resolvedStyle = isDragSource ? draggingPieceGhostStyle : style;
+  const resolvedOpacity =
+    typeof resolvedStyle.opacity === 'number' ? resolvedStyle.opacity : 1;
+  const canonicalOpacity =
+    typeof style.opacity === 'number' ? style.opacity : 1;
+  const hardOccluded = isDragSource && resolvedOpacity === 0;
+  return Object.freeze({
+    baseOpacity:
+      isPendingSource && !isDragSource
+        ? 0.45
+        : hardOccluded
+          ? canonicalOpacity
+          : resolvedOpacity,
+    hardOccluded,
+  });
+}
+
 function BoardPieceHost({
   boardId,
   draggingPieceGhostStyle,
   isDragSource,
+  isPendingCommitTarget,
   isPendingSource,
   layout,
   progress,
   quiescent,
+  nativeDrain,
+  onPendingCommitCanonicalMapperReady,
+  pendingCommitMapperLease,
   renderer: Renderer,
   style,
   transition,
 }: BoardPieceHostProps): ReactElement {
   const resolvedStyle = isDragSource ? draggingPieceGhostStyle : style;
-  const baseOpacity =
-    isPendingSource && !isDragSource
-      ? 0.45
-      : typeof resolvedStyle.opacity === 'number'
-        ? resolvedStyle.opacity
-        : 1;
+  const { baseOpacity, hardOccluded: dragSourceIsHardOccluded } =
+    boardPieceHostBaseOpacity({
+      draggingPieceGhostStyle,
+      isDragSource,
+      isPendingSource,
+      style,
+    });
   const animatedStyle = useAnimatedStyle(
     () =>
       resolvePieceTransitionAnimatedStyle(
@@ -421,6 +498,59 @@ function BoardPieceHost({
         baseOpacity,
       ),
     [baseOpacity, progress, transition],
+  );
+  useAnimatedReaction(
+    () => {
+      if (
+        pendingCommitMapperLease === null ||
+        progress === null ||
+        transition === null ||
+        !nativeDrain ||
+        quiescent
+      ) {
+        return null;
+      }
+      const amount = progress.get();
+      return amount === 0 &&
+        resolvePieceTransitionAnimatedStyle(transition, amount, baseOpacity)
+          .opacity === 0
+        ? pendingCommitMapperLease.serial
+        : null;
+    },
+    (serial, previousSerial) => {
+      if (
+        serial === null ||
+        serial === previousSerial ||
+        pendingCommitMapperLease === null ||
+        onPendingCommitCanonicalMapperReady === undefined ||
+        progress === null ||
+        transition === null
+      ) {
+        return;
+      }
+      const exactLease = pendingCommitMapperLease;
+      requestAnimationFrame(() => {
+        'worklet';
+        const amount = progress.get();
+        if (
+          amount !== 0 ||
+          resolvePieceTransitionAnimatedStyle(transition, amount, baseOpacity)
+            .opacity !== 0
+        ) {
+          return;
+        }
+        scheduleOnRN(onPendingCommitCanonicalMapperReady, exactLease);
+      });
+    },
+    [
+      baseOpacity,
+      nativeDrain,
+      onPendingCommitCanonicalMapperReady,
+      pendingCommitMapperLease,
+      progress,
+      quiescent,
+      transition,
+    ],
   );
   const rendererProps: PieceRendererProps = {
     boardId,
@@ -448,12 +578,24 @@ function BoardPieceHost({
         boardPieceHostLayoutStyle(layout),
         quiescent
           ? styles.quiescent
-          : transition === null || progress === null
-            ? { opacity: baseOpacity }
-            : animatedStyle,
+          : nativeDrain
+            ? animatedStyle
+            : { opacity: baseOpacity },
       ]}
     >
-      {quiescent ? null : <Renderer {...rendererProps} />}
+      {quiescent ? null : (
+        <View
+          collapsable={false}
+          style={[
+            styles.pieceContent,
+            isPendingCommitTarget || dragSourceIsHardOccluded
+              ? styles.hardOcclusion
+              : null,
+          ]}
+        >
+          <Renderer {...rendererProps} />
+        </View>
+      )}
     </Animated.View>
   );
 }
@@ -461,6 +603,8 @@ function BoardPieceHost({
 interface BoardPieceHostDescriptor {
   readonly canonical: boolean;
   readonly isDragSource: boolean;
+  readonly isPendingCommitPreparationTarget: boolean;
+  readonly isPendingCommitTarget: boolean;
   readonly isPendingSource: boolean;
   readonly key: string;
   readonly layout: Readonly<BoardPieceLayout>;
@@ -486,6 +630,12 @@ export const PieceLayer = memo(function PieceLayer({
   dragSourceSquare = null,
   draggingPieceGhostStyle,
   layout,
+  pendingCommitPreparation = null,
+  onPendingCommitCanonicalPrepared,
+  onPendingCommitCanonicalMapperReady,
+  pendingCommitMapperEnvironment = null,
+  pendingCommitMapperLease = null,
+  pendingCommitTransitionReady = null,
   pieceRenderers,
   pendingSourceSquare = null,
   position,
@@ -496,10 +646,36 @@ export const PieceLayer = memo(function PieceLayer({
     () => createBoardPieceLayouts(layout, position?.value ?? null),
     [layout, position?.value],
   );
+  const transitionPresentation = transition?.presentation ?? null;
   const transitionProjection = useMemo(
-    () => createPieceTransitionProjection(layout, transition),
-    [layout, transition],
+    () =>
+      createPieceTransitionProjectionFromPresentation(
+        layout,
+        transitionPresentation,
+      ),
+    [layout, transitionPresentation],
   );
+  const directPendingCommitTargetSquare =
+    pendingCommitPreparation !== null &&
+    pendingCommitPreparation.boardId === boardId &&
+    pendingCommitPreparation.targetSquare !== null &&
+    position?.revision === pendingCommitPreparation.toRevision
+      ? pendingCommitPreparation.targetSquare
+      : null;
+  const pendingTransitionActor = transition?.presentation.pending.find(
+    ({ kind }) => kind === 'pending-handoff',
+  );
+  const pendingTransitionIsReady =
+    pendingTransitionActor !== undefined &&
+    transition !== null &&
+    pendingCommitTransitionReady?.actorKey ===
+      pendingTransitionActor.actorKey &&
+    pendingCommitTransitionReady.presentationEpoch ===
+      transition.presentation.epoch;
+  const transitionPendingCommitTargetSquare =
+    pendingTransitionActor !== undefined && !pendingTransitionIsReady
+      ? pendingTransitionActor.rendererSquare
+      : null;
   const liveHosts = useMemo(() => {
     const hosts: Readonly<BoardPieceHostDescriptor>[] = [];
     const appendDetached = (
@@ -517,6 +693,8 @@ export const PieceLayer = memo(function PieceLayer({
         Object.freeze({
           canonical: false,
           isDragSource: false,
+          isPendingCommitPreparationTarget: false,
+          isPendingCommitTarget: false,
           isPendingSource: false,
           key: `${role}:${pieceLayout.key}`,
           layout: pieceLayout,
@@ -544,18 +722,30 @@ export const PieceLayer = memo(function PieceLayer({
       if (renderer === null) {
         continue;
       }
+      const isDragSource = pieceLayout.square === dragSourceSquare;
+      const isPendingSource = pieceLayout.square === pendingSourceSquare;
+      const isPendingCommitPreparationTarget =
+        pieceLayout.square === directPendingCommitTargetSquare;
+      const isPendingCommitTarget =
+        isPendingCommitPreparationTarget ||
+        pieceLayout.square === transitionPendingCommitTargetSquare;
       hosts.push(
         Object.freeze({
           canonical: true,
-          isDragSource: pieceLayout.square === dragSourceSquare,
-          isPendingSource: pieceLayout.square === pendingSourceSquare,
+          isDragSource,
+          isPendingCommitPreparationTarget,
+          isPendingCommitTarget,
+          isPendingSource,
           key: `current:${pieceLayout.key}`,
           layout: pieceLayout,
           nativeDrainToken:
             transitionProjection.current.has(pieceLayout.square) &&
             transition !== null
               ? `transition:${String(transition.presentation.epoch)}`
-              : null,
+              : isPendingCommitPreparationTarget &&
+                  pendingCommitPreparation !== null
+                ? `pending-commit:${String(pendingCommitPreparation.epoch)}:${pendingCommitPreparation.intentId}`
+                : null,
           progress: transition?.progress ?? null,
           renderer,
           transition:
@@ -566,16 +756,76 @@ export const PieceLayer = memo(function PieceLayer({
     return Object.freeze(hosts);
   }, [
     dragSourceSquare,
+    directPendingCommitTargetSquare,
+    pendingCommitPreparation,
     pendingSourceSquare,
     pieceRenderers,
     pieces,
     transition?.progress,
+    transitionPendingCommitTargetSquare,
     transitionProjection,
   ]);
   const displayedHosts = useTransitionHostRetirement(
     liveHosts,
     pieceLayerNativeDrainHostBudget(layout.cells.length),
   );
+  const pendingCanonicalHost =
+    pendingTransitionActor === undefined
+      ? undefined
+      : displayedHosts.find(
+          ({ descriptor, nativeDrain, quiescent }) =>
+            nativeDrain &&
+            !quiescent &&
+            descriptor.canonical &&
+            descriptor.layout.square ===
+              pendingTransitionActor.rendererSquare &&
+            transitionProjection.current.has(descriptor.layout.square),
+        );
+  const pendingCanonicalHostPrepared = pendingCanonicalHost !== undefined;
+  const pendingCanonicalHostProgress =
+    pendingCanonicalHost?.descriptor.progress ?? null;
+  const pendingCanonicalHostTransition =
+    pendingCanonicalHost?.descriptor.transition ?? null;
+  const pendingCanonicalHostNativeDrain =
+    pendingCanonicalHost?.nativeDrain ?? false;
+  const pendingCanonicalHostQuiescent = pendingCanonicalHost?.quiescent ?? true;
+  useLayoutEffect(() => {
+    if (
+      !pendingCanonicalHostPrepared ||
+      pendingTransitionActor === undefined ||
+      transition === null ||
+      pendingCommitMapperEnvironment === null ||
+      onPendingCommitCanonicalPrepared === undefined
+    ) {
+      return;
+    }
+    const acknowledgement = Object.freeze({
+      actorKey: pendingTransitionActor.actorKey,
+      presentationEpoch: transition.presentation.epoch,
+    });
+    onPendingCommitCanonicalPrepared(
+      acknowledgement,
+      true,
+      pendingCommitMapperEnvironment,
+    );
+    return () => {
+      onPendingCommitCanonicalPrepared(
+        acknowledgement,
+        false,
+        pendingCommitMapperEnvironment,
+      );
+    };
+  }, [
+    onPendingCommitCanonicalPrepared,
+    pendingCanonicalHostPrepared,
+    pendingCanonicalHostNativeDrain,
+    pendingCanonicalHostProgress,
+    pendingCanonicalHostQuiescent,
+    pendingCanonicalHostTransition,
+    pendingCommitMapperEnvironment,
+    pendingTransitionActor?.actorKey,
+    transition?.presentation.epoch,
+  ]);
 
   return (
     <View
@@ -585,23 +835,48 @@ export const PieceLayer = memo(function PieceLayer({
       pointerEvents="none"
       style={styles.layer}
     >
-      {displayedHosts.map(({ descriptor, nativeDrain, quiescent }) =>
-        !nativeDrain && !descriptor.canonical ? null : (
+      {displayedHosts.map(({ descriptor, nativeDrain, quiescent }) => {
+        if (!nativeDrain && !descriptor.canonical) {
+          return null;
+        }
+        const exactMapperLease =
+          pendingCommitMapperLease !== null &&
+          pendingTransitionActor !== undefined &&
+          transition !== null &&
+          nativeDrain &&
+          !quiescent &&
+          descriptor.canonical &&
+          descriptor.layout.square === pendingTransitionActor.rendererSquare &&
+          descriptor.transition !== null &&
+          descriptor.progress !== null &&
+          pendingCommitMapperLease.actorKey ===
+            pendingTransitionActor.actorKey &&
+          pendingCommitMapperLease.presentationEpoch ===
+            transition.presentation.epoch
+            ? pendingCommitMapperLease
+            : null;
+        return (
           <BoardPieceHost
             boardId={boardId}
             draggingPieceGhostStyle={draggingPieceGhostStyle}
             isDragSource={descriptor.isDragSource}
+            isPendingCommitTarget={descriptor.isPendingCommitTarget}
             isPendingSource={descriptor.isPendingSource}
             key={descriptor.key}
             layout={descriptor.layout}
+            nativeDrain={nativeDrain}
+            onPendingCommitCanonicalMapperReady={
+              onPendingCommitCanonicalMapperReady
+            }
+            pendingCommitMapperLease={exactMapperLease}
             progress={nativeDrain ? descriptor.progress : null}
             quiescent={quiescent}
             renderer={descriptor.renderer}
             style={style}
             transition={nativeDrain ? descriptor.transition : null}
           />
-        ),
-      )}
+        );
+      })}
     </View>
   );
 }, pieceLayerPropsAreEqual);
@@ -617,5 +892,12 @@ const styles = StyleSheet.create({
   },
   quiescent: {
     opacity: 0,
+  },
+  hardOcclusion: {
+    opacity: 0,
+  },
+  pieceContent: {
+    height: '100%',
+    width: '100%',
   },
 });

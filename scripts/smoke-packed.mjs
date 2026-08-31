@@ -33,6 +33,7 @@ const consumers = {
       '.watchmanconfig',
       'App.tsx',
       'PlainFenTransitionInterruptFixture.tsx',
+      'TerminalDragHandoffFixture.tsx',
       'TransitionProviderUnmountFixture.tsx',
       'Gemfile',
       'Gemfile.lock',

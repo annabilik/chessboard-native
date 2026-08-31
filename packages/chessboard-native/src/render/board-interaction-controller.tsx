@@ -31,7 +31,9 @@ import {
 } from '../internal/board-gesture-adapter';
 import {
   projectInteractionPresentation,
+  resetInteractionPresentationSharedValues,
   syncInteractionPresentationSharedValues,
+  type InteractionPresentationSharedValues,
   useInteractionPresentationSharedValues,
 } from '../internal/interaction-presentation';
 import {
@@ -40,6 +42,7 @@ import {
 } from '../internal/provider-context';
 import type {
   ProviderDragCancellationReason,
+  ProviderDragOverlayDescriptor,
   ProviderDragOwner,
 } from '../internal/provider-drag-coordinator';
 import type { AnnotationInputRuntime } from '../internal/use-annotation-input-runtime';
@@ -73,14 +76,17 @@ interface BoardInteractionControllerProps {
   readonly geometry: Readonly<BoardGestureGeometry>;
   readonly onCandidate?: (
     candidate: Readonly<BoardGestureIntentCandidate>,
-  ) => void;
-  readonly onDragSourceChange?: (sourceSquare: SquareId | null) => void;
+  ) => boolean;
   readonly onPieceDragStart?: (
     context: Readonly<PieceInteractionContext>,
   ) => boolean;
   readonly onPressedSquareChange?: (square: SquareId | null) => void;
   readonly onSquarePressIn?: OnSquarePressIn;
   readonly onSquarePressOut?: OnSquarePressOut;
+  /** Board-private source-restoration acknowledgement for native cancel. */
+  readonly onTerminalDragCancellation?: (
+    lease: Readonly<TerminalBoardDragLease>,
+  ) => boolean;
   readonly pieceRenderers: PieceRenderers;
   readonly pieceStyle: Readonly<ViewStyle>;
   readonly position: NormalizedControlledValue<PositionObject>;
@@ -88,7 +94,52 @@ interface BoardInteractionControllerProps {
   /** Invalidates retained taps when the provider's selected spare changes. */
   readonly spareSelectionRevision?: Revision;
   readonly tapEnabled?: boolean;
+  /** Exact provider lease retired by BoardSurface after its commit barrier. */
+  readonly terminalDragAcknowledgement?: Readonly<TerminalBoardDragAcknowledgement> | null;
   readonly trackPress?: boolean;
+}
+
+/** Exact identity retained between native drag-end and BoardSurface retirement. */
+export interface TerminalBoardDragLease {
+  readonly boardId: string;
+  readonly gestureToken: number;
+  readonly owner: ProviderDragOwner;
+  readonly presentation: Readonly<InteractionPresentationSharedValues>;
+  readonly sourceSquare: SquareId;
+}
+
+/** Mounted-controller permit for BoardSurface's post-detach shared reset. */
+export interface TerminalBoardDragAcknowledgement extends TerminalBoardDragLease {
+  readonly mountedResetPermit: { current: boolean };
+}
+
+function terminalDragLeaseMatches(
+  left: Readonly<TerminalBoardDragLease> | null,
+  right: Readonly<TerminalBoardDragLease>,
+): left is Readonly<TerminalBoardDragLease> {
+  return (
+    left !== null &&
+    left.boardId === right.boardId &&
+    left.gestureToken === right.gestureToken &&
+    left.owner === right.owner &&
+    left.presentation === right.presentation &&
+    left.sourceSquare === right.sourceSquare
+  );
+}
+
+function providerDragMatchesLease(
+  active: Readonly<ProviderDragOverlayDescriptor> | null,
+  lease: Readonly<TerminalBoardDragLease>,
+): active is Readonly<ProviderDragOverlayDescriptor> {
+  return (
+    active !== null &&
+    active.boardId === lease.boardId &&
+    active.gestureToken === lease.gestureToken &&
+    active.owner === lease.owner &&
+    active.presentation === lease.presentation &&
+    active.source.kind === 'board' &&
+    active.source.square === lease.sourceSquare
+  );
 }
 
 const EMPTY_OCCUPIED_SQUARES: readonly SquareId[] = Object.freeze([]);
@@ -248,17 +299,18 @@ function BoardInteractionControllerContent({
   draggingPieceStyle: draggingPieceStyleProp,
   geometry,
   onCandidate,
-  onDragSourceChange,
   onPieceDragStart,
   onPressedSquareChange,
   onSquarePressIn,
   onSquarePressOut,
+  onTerminalDragCancellation,
   pieceRenderers,
   pieceStyle,
   position,
   selectionRevision = null,
   spareSelectionRevision = 0,
   tapEnabled = false,
+  terminalDragAcknowledgement = null,
   trackPress = false,
 }: BoardInteractionControllerProps): ReactElement {
   const draggingPieceStyle = draggingPieceStyleProp ?? pieceStyle;
@@ -272,11 +324,22 @@ function BoardInteractionControllerContent({
   const reducedMotion = useReducedMotion();
   const presentation = useInteractionPresentationSharedValues();
   const [providerResetRevision, setProviderResetRevision] = useState(0);
+  const [terminalResetLease, setTerminalResetLease] =
+    useState<Readonly<TerminalBoardDragLease> | null>(null);
   const providerOwner = useRef<ProviderDragOwner>({});
+  const pendingTerminalReset = useRef<Readonly<TerminalBoardDragLease> | null>(
+    null,
+  );
+  const retainedTerminalDrag = useRef<Readonly<TerminalBoardDragLease> | null>(
+    null,
+  );
   const dragOverlayPolicy = useDragOverlayPolicyGeneration(allowDragOffBoard);
   const dragOverlayPolicyAtCommit = useRef(dragOverlayPolicy);
   const cancelFromProviderAtCommit = useRef<
-    (reason: ProviderDragCancellationReason) => void
+    (
+      reason: ProviderDragCancellationReason,
+      lease: Readonly<TerminalBoardDragLease>,
+    ) => void
   >(() => undefined);
   const snapshot = useMemo(
     () => createSnapshot({ boardId, geometry, position, selectionRevision }),
@@ -359,11 +422,11 @@ function BoardInteractionControllerContent({
   );
   const tapEnabledAtCommit = useRef(tapEnabled);
   const onCandidateAtCommit = useRef(onCandidate);
-  const onDragSourceChangeAtCommit = useRef(onDragSourceChange);
   const onPieceDragStartAtCommit = useRef(onPieceDragStart);
   const onPressedSquareChangeAtCommit = useRef(onPressedSquareChange);
   const onSquarePressInAtCommit = useRef(onSquarePressIn);
   const onSquarePressOutAtCommit = useRef(onSquarePressOut);
+  const onTerminalDragCancellationAtCommit = useRef(onTerminalDragCancellation);
   const snapshotAtCommit = useRef(snapshot);
   const pieceSize = Math.min(
     geometry.width / geometry.columns,
@@ -398,15 +461,54 @@ function BoardInteractionControllerContent({
 
   const applyReduction = useCallback(
     (reduction: Readonly<BoardGestureAdapterReduction>): void => {
+      const previousState = adapter.current;
       const previousDragToken =
-        adapter.current.lifecycle.phase === 'drag'
-          ? adapter.current.active?.correlation.token
+        previousState.lifecycle.phase === 'drag'
+          ? previousState.active?.correlation.token
           : undefined;
+      const previousDragSourceSquare =
+        previousState.lifecycle.phase === 'drag'
+          ? previousState.active?.sourceSquare
+          : undefined;
+      // A reentrant/new native start supersedes an older terminal handoff.
+      // Its provider claim below reuses this controller's presentation, so
+      // the old BoardSurface ACK must not clear or reset the successor.
+      if (
+        retainedTerminalDrag.current !== null &&
+        reduction.state.lifecycle.phase === 'drag'
+      ) {
+        retainedTerminalDrag.current = null;
+      }
+      if (
+        pendingTerminalReset.current !== null &&
+        reduction.state.lifecycle.phase === 'drag'
+      ) {
+        pendingTerminalReset.current = null;
+        setTerminalResetLease(null);
+      }
       adapter.current = reduction.state;
-      syncInteractionPresentationSharedValues(
-        presentation,
-        projectInteractionPresentation(reduction.state.lifecycle),
-      );
+      const retainsTerminalPresentation = retainedTerminalDrag.current !== null;
+      const providerActiveBeforeSync =
+        providerRuntime.drag.getSnapshot().active;
+      const providerDescriptorBelongsToPreviousDrag =
+        previousState.lifecycle.phase === 'drag' &&
+        previousDragToken !== undefined &&
+        previousDragSourceSquare !== undefined &&
+        providerActiveBeforeSync?.boardId === boardId &&
+        providerActiveBeforeSync.gestureToken === previousDragToken &&
+        providerActiveBeforeSync.owner === providerOwner.current &&
+        providerActiveBeforeSync.presentation === presentation &&
+        providerActiveBeforeSync.source.kind === 'board' &&
+        providerActiveBeforeSync.source.square === previousDragSourceSquare;
+      const unrelatedProviderUsesPresentation =
+        providerActiveBeforeSync?.presentation === presentation &&
+        !providerDescriptorBelongsToPreviousDrag;
+      if (!retainsTerminalPresentation && !unrelatedProviderUsesPresentation) {
+        syncInteractionPresentationSharedValues(
+          presentation,
+          projectInteractionPresentation(reduction.state.lifecycle),
+        );
+      }
       const lifecycle = reduction.state.lifecycle;
       if (
         lifecycle.phase === 'drag' &&
@@ -416,6 +518,13 @@ function BoardInteractionControllerContent({
         if (active !== null) {
           const piece = lifecycle.context.piece;
           const sourceSquare = lifecycle.context.source.square;
+          const lease: Readonly<TerminalBoardDragLease> = Object.freeze({
+            boardId,
+            gestureToken: active.correlation.token,
+            owner: providerOwner.current,
+            presentation,
+            sourceSquare,
+          });
           providerRuntime.drag.claim(
             Object.freeze({
               boardId,
@@ -424,7 +533,7 @@ function BoardInteractionControllerContent({
                 : dragOverlayBounds,
               gestureToken: active.correlation.token,
               onCancel: (reason: ProviderDragCancellationReason): void => {
-                cancelFromProviderAtCommit.current(reason);
+                cancelFromProviderAtCommit.current(reason, lease);
               },
               owner: providerOwner.current,
               piece,
@@ -442,23 +551,39 @@ function BoardInteractionControllerContent({
               targetSquare: lifecycle.targetSquare,
             }),
           );
-          onDragSourceChangeAtCommit.current?.(sourceSquare);
+          if (
+            !retainsTerminalPresentation &&
+            unrelatedProviderUsesPresentation
+          ) {
+            // The claim above atomically replaced the foreign descriptor. Only
+            // now is it safe for this controller to synchronize its values.
+            syncInteractionPresentationSharedValues(
+              presentation,
+              projectInteractionPresentation(reduction.state.lifecycle),
+            );
+          }
           if (previousDragToken !== active.correlation.token) {
             onPieceDragStartAtCommit.current?.(lifecycle.context);
           }
         }
-      } else {
+      } else if (
+        !retainsTerminalPresentation &&
+        providerDescriptorBelongsToPreviousDrag
+      ) {
         const active = providerRuntime.drag.getSnapshot().active;
-        if (active?.owner === providerOwner.current) {
+        if (
+          active?.boardId === boardId &&
+          active.gestureToken === previousDragToken &&
+          active.owner === providerOwner.current &&
+          active.presentation === presentation &&
+          active.source.kind === 'board' &&
+          active.source.square === previousDragSourceSquare
+        ) {
           providerRuntime.drag.release(
             providerOwner.current,
             active.gestureToken,
           );
         }
-        onDragSourceChangeAtCommit.current?.(null);
-      }
-      if (reduction.candidate !== null) {
-        onCandidateAtCommit.current?.(reduction.candidate);
       }
     },
     [
@@ -474,14 +599,67 @@ function BoardInteractionControllerContent({
     ],
   );
 
+  const queueTerminalPresentationReset = useCallback(
+    (lease: Readonly<TerminalBoardDragLease>): void => {
+      if (!acceptingSignals.current) {
+        return;
+      }
+      pendingTerminalReset.current = lease;
+      setTerminalResetLease(lease);
+    },
+    [],
+  );
+
+  const retireTerminalDrag = useCallback(
+    (lease: Readonly<TerminalBoardDragLease>): void => {
+      if (terminalDragLeaseMatches(retainedTerminalDrag.current, lease)) {
+        retainedTerminalDrag.current = null;
+      }
+      if (!acceptingSignals.current) {
+        return;
+      }
+      const active = providerRuntime.drag.getSnapshot().active;
+      if (providerDragMatchesLease(active, lease)) {
+        providerRuntime.drag.release(lease.owner, lease.gestureToken);
+      }
+      queueTerminalPresentationReset(lease);
+    },
+    [providerRuntime.drag, queueTerminalPresentationReset],
+  );
+
+  const handoffCancelledTerminalDrag = useCallback(
+    (lease: Readonly<TerminalBoardDragLease>): void => {
+      retainedTerminalDrag.current = lease;
+      let acknowledged = false;
+      try {
+        acknowledged =
+          onTerminalDragCancellationAtCommit.current?.(lease) === true;
+      } catch {
+        // A parent failure falls back to exact release/quiescent reset.
+      }
+      if (!acknowledged) {
+        retireTerminalDrag(lease);
+      }
+    },
+    [retireTerminalDrag],
+  );
+
   const cancelAnnotation = useCallback((): void => {
     annotationRuntimeAtCommit.current?.cancel();
   }, []);
 
   const cancelFromProvider = useCallback(
-    (reason: ProviderDragCancellationReason): void => {
-      const correlation = adapter.current.active?.correlation;
-      if (correlation === undefined) {
+    (
+      reason: ProviderDragCancellationReason,
+      lease: Readonly<TerminalBoardDragLease>,
+    ): void => {
+      const activeGesture = adapter.current.active;
+      const correlation = activeGesture?.correlation;
+      if (
+        correlation?.boardId !== lease.boardId ||
+        correlation.token !== lease.gestureToken ||
+        activeGesture?.sourceSquare !== lease.sourceSquare
+      ) {
         return;
       }
       signalGenerationAtCommit.current = REJECTED_SIGNAL_GENERATION;
@@ -514,9 +692,60 @@ function BoardInteractionControllerContent({
           return revision + 1;
         });
       }
+      if (reason === 'replacement') {
+        // The coordinator has revoked this lease but has not published the
+        // replacement yet. It may intentionally reuse the same presentation,
+        // so advance semantics without any shared write or provider release.
+        adapter.current = reduction.state;
+        return;
+      }
       applyReduction(reduction);
     },
     [applyReduction],
+  );
+
+  const cleanRejectedTerminalSignal = useCallback(
+    (signal: Readonly<BoardGestureSignal>): void => {
+      if (
+        (signal.type !== 'drag-end' && signal.type !== 'drag-cancel') ||
+        !acceptingSignals.current ||
+        terminalDragLeaseMatches(retainedTerminalDrag.current, {
+          boardId: signal.boardId,
+          gestureToken: signal.gestureToken,
+          owner: providerOwner.current,
+          presentation,
+          sourceSquare: signal.sourceSquare,
+        })
+      ) {
+        return;
+      }
+      const lease: Readonly<TerminalBoardDragLease> = Object.freeze({
+        boardId: signal.boardId,
+        gestureToken: signal.gestureToken,
+        owner: providerOwner.current,
+        presentation,
+        sourceSquare: signal.sourceSquare,
+      });
+      if (signal.type === 'drag-cancel') {
+        if (signalMatchesActive(adapter.current, signal)) {
+          const correlation = adapter.current.active?.correlation;
+          if (correlation !== undefined) {
+            adapter.current = reduceBoardGestureAdapter(adapter.current, {
+              correlation,
+              reason: signal.reason,
+              type: 'cancel',
+            }).state;
+          }
+        }
+        // A stale JS generation can still own the exact native overlay. Give
+        // BoardSurface the same source-restoration barrier as an ordinary
+        // cancel; exact identity checks decide whether it may acknowledge.
+        handoffCancelledTerminalDrag(lease);
+        return;
+      }
+      retireTerminalDrag(lease);
+    },
+    [handoffCancelledTerminalDrag, presentation, retireTerminalDrag],
   );
 
   const handleSignal = useCallback(
@@ -529,6 +758,7 @@ function BoardInteractionControllerContent({
         providerRuntime.getTransientRevision() !== providerTransientRevision ||
         signal.boardId !== boardId
       ) {
+        cleanRejectedTerminalSignal(signal);
         return;
       }
       if (
@@ -538,6 +768,7 @@ function BoardInteractionControllerContent({
           signal.allowDragOffBoardGeneration !==
             dragOverlayPolicyAtCommit.current.generation)
       ) {
+        cleanRejectedTerminalSignal(signal);
         return;
       }
       const currentSnapshot = snapshotAtCommit.current;
@@ -577,20 +808,62 @@ function BoardInteractionControllerContent({
         }
         case 'drag-end': {
           if (!signalMatchesActive(adapter.current, signal)) {
+            cleanRejectedTerminalSignal(signal);
             return;
           }
           const correlation = adapter.current.active?.correlation;
           if (correlation === undefined) {
+            cleanRejectedTerminalSignal(signal);
             return;
           }
-          applyReduction(
-            reduceBoardGestureAdapter(adapter.current, {
-              correlation,
-              snapshot: currentSnapshot,
-              targetSquare: signal.targetSquare,
-              type: 'drag-finalize',
-            }),
-          );
+          const reduction = reduceBoardGestureAdapter(adapter.current, {
+            correlation,
+            snapshot: currentSnapshot,
+            targetSquare: signal.targetSquare,
+            type: 'drag-finalize',
+          });
+          const terminalCandidate = reduction.candidate;
+          const active = providerRuntime.drag.getSnapshot().active;
+          const terminalLease: Readonly<TerminalBoardDragLease> | null =
+            active?.boardId === boardId &&
+            active.gestureToken === signal.gestureToken &&
+            active.owner === providerOwner.current &&
+            active.presentation === presentation &&
+            active.source.kind === 'board' &&
+            active.source.square === signal.sourceSquare
+              ? Object.freeze({
+                  boardId,
+                  gestureToken: signal.gestureToken,
+                  owner: providerOwner.current,
+                  presentation,
+                  sourceSquare: signal.sourceSquare,
+                })
+              : null;
+          if (terminalCandidate?.input !== 'drag' || terminalLease === null) {
+            if (terminalLease !== null) {
+              adapter.current = reduction.state;
+              retireTerminalDrag(terminalLease);
+              return;
+            }
+            applyReduction(reduction);
+            return;
+          }
+          // Advance the semantic adapter and establish exact terminal
+          // ownership before invoking app code. A synchronous controlled
+          // commit, replacement, permission change, or unmount therefore
+          // cannot observe the old gesture as active or retire a foreign one.
+          adapter.current = reduction.state;
+          retainedTerminalDrag.current = terminalLease;
+          let accepted = false;
+          try {
+            accepted =
+              onCandidateAtCommit.current?.(terminalCandidate) === true;
+          } catch {
+            // A consumer exception rejects the exact terminal lease below.
+          }
+          if (!accepted) {
+            retireTerminalDrag(terminalLease);
+          }
           return;
         }
         case 'drag-target': {
@@ -612,19 +885,43 @@ function BoardInteractionControllerContent({
         }
         case 'drag-cancel': {
           if (!signalMatchesActive(adapter.current, signal)) {
+            cleanRejectedTerminalSignal(signal);
             return;
           }
           const correlation = adapter.current.active?.correlation;
           if (correlation === undefined) {
+            cleanRejectedTerminalSignal(signal);
             return;
           }
-          applyReduction(
-            reduceBoardGestureAdapter(adapter.current, {
-              correlation,
-              reason: signal.reason,
-              type: 'cancel',
-            }),
-          );
+          const reduction = reduceBoardGestureAdapter(adapter.current, {
+            correlation,
+            reason: signal.reason,
+            type: 'cancel',
+          });
+          const active = providerRuntime.drag.getSnapshot().active;
+          const terminalLease: Readonly<TerminalBoardDragLease> | null =
+            active?.boardId === boardId &&
+            active.gestureToken === signal.gestureToken &&
+            active.owner === providerOwner.current &&
+            active.presentation === presentation &&
+            active.source.kind === 'board' &&
+            active.source.square === signal.sourceSquare
+              ? Object.freeze({
+                  boardId,
+                  gestureToken: signal.gestureToken,
+                  owner: providerOwner.current,
+                  presentation,
+                  sourceSquare: signal.sourceSquare,
+                })
+              : null;
+          if (terminalLease === null) {
+            applyReduction(reduction);
+            return;
+          }
+          // As with drag-end, advance semantics and retain exact ownership
+          // before a parent callback can synchronously replace or unmount us.
+          adapter.current = reduction.state;
+          handoffCancelledTerminalDrag(terminalLease);
           return;
         }
         case 'tap': {
@@ -653,18 +950,20 @@ function BoardInteractionControllerContent({
           if (!tapEnabledAtCommit.current) {
             return;
           }
-          applyReduction(
-            reduceBoardGestureAdapter(adapter.current, {
-              correlation: createCorrelation(
-                signal,
-                currentSnapshot.selectionRevision,
-              ),
-              endSquare: signal.targetSquare,
-              snapshot: currentSnapshot,
-              startSquare: signal.sourceSquare,
-              type: 'tap',
-            }),
-          );
+          const reduction = reduceBoardGestureAdapter(adapter.current, {
+            correlation: createCorrelation(
+              signal,
+              currentSnapshot.selectionRevision,
+            ),
+            endSquare: signal.targetSquare,
+            snapshot: currentSnapshot,
+            startSquare: signal.sourceSquare,
+            type: 'tap',
+          });
+          applyReduction(reduction);
+          if (reduction.candidate !== null) {
+            onCandidateAtCommit.current?.(reduction.candidate);
+          }
           return;
         }
         case 'press-start': {
@@ -790,12 +1089,16 @@ function BoardInteractionControllerContent({
       applyReduction,
       boardId,
       cancelAnnotation,
+      cleanRejectedTerminalSignal,
       providerGeometryRevision,
       providerRuntime,
       providerTransientRevision,
+      retireTerminalDrag,
       signalGeneration,
       finishNativePress,
       geometry.visualSquares,
+      handoffCancelledTerminalDrag,
+      presentation,
       trackPress,
     ],
   );
@@ -804,20 +1107,20 @@ function BoardInteractionControllerContent({
     annotationRuntimeAtCommit.current = annotationRuntime;
     cancelFromProviderAtCommit.current = cancelFromProvider;
     onCandidateAtCommit.current = onCandidate;
-    onDragSourceChangeAtCommit.current = onDragSourceChange;
     onPieceDragStartAtCommit.current = onPieceDragStart;
     onPressedSquareChangeAtCommit.current = onPressedSquareChange;
     onSquarePressInAtCommit.current = onSquarePressIn;
     onSquarePressOutAtCommit.current = onSquarePressOut;
+    onTerminalDragCancellationAtCommit.current = onTerminalDragCancellation;
   }, [
     annotationRuntime,
     cancelFromProvider,
     onCandidate,
-    onDragSourceChange,
     onPieceDragStart,
     onPressedSquareChange,
     onSquarePressIn,
     onSquarePressOut,
+    onTerminalDragCancellation,
   ]);
 
   useLayoutEffect(() => {
@@ -828,8 +1131,19 @@ function BoardInteractionControllerContent({
     if (!changed || adapter.current.lifecycle.phase !== 'drag') {
       return;
     }
+    const currentActive = adapter.current.active;
+    if (currentActive === null) {
+      return;
+    }
     const active = providerRuntime.drag.getSnapshot().active;
-    if (active?.owner === providerOwner.current) {
+    if (
+      active?.boardId === boardId &&
+      active.gestureToken === currentActive.correlation.token &&
+      active.owner === providerOwner.current &&
+      active.presentation === presentation &&
+      active.source.kind === 'board' &&
+      active.source.square === currentActive.sourceSquare
+    ) {
       providerRuntime.drag.cancel(
         providerOwner.current,
         active.gestureToken,
@@ -837,8 +1151,17 @@ function BoardInteractionControllerContent({
       );
       return;
     }
-    cancelFromProviderAtCommit.current('user');
-  }, [dragOverlayPolicy, providerRuntime]);
+    cancelFromProviderAtCommit.current(
+      'user',
+      Object.freeze({
+        boardId,
+        gestureToken: currentActive.correlation.token,
+        owner: providerOwner.current,
+        presentation,
+        sourceSquare: currentActive.sourceSquare,
+      }),
+    );
+  }, [boardId, dragOverlayPolicy, presentation, providerRuntime]);
 
   useLayoutEffect(() => {
     const signalGenerationChanged =
@@ -912,6 +1235,52 @@ function BoardInteractionControllerContent({
   ]);
 
   useLayoutEffect(() => {
+    const lease = terminalResetLease;
+    if (
+      lease === null ||
+      pendingTerminalReset.current !== lease ||
+      lease.boardId !== boardId ||
+      lease.owner !== providerOwner.current ||
+      lease.presentation !== presentation
+    ) {
+      return;
+    }
+    const active = providerRuntime.drag.getSnapshot().active;
+    if (active?.presentation !== lease.presentation) {
+      // The provider release has now committed the restored source and a
+      // quiescent overlay host. This mounted controller may safely clear the
+      // detached presentation; a same-presentation replacement blocks it.
+      resetInteractionPresentationSharedValues(lease.presentation);
+    }
+    pendingTerminalReset.current = null;
+    setTerminalResetLease((current) => (current === lease ? null : current));
+  }, [boardId, presentation, providerRuntime.drag, terminalResetLease]);
+
+  useLayoutEffect(() => {
+    if (
+      terminalDragAcknowledgement?.boardId !== boardId ||
+      terminalDragAcknowledgement.owner !== providerOwner.current ||
+      terminalDragAcknowledgement.presentation !== presentation
+    ) {
+      return;
+    }
+    if (
+      terminalDragLeaseMatches(
+        retainedTerminalDrag.current,
+        terminalDragAcknowledgement,
+      )
+    ) {
+      // BoardSurface has already committed the pending/canonical successor
+      // and detached this exact provider overlay. It owns the following
+      // quiescent presentation reset; this ACK only retires controller state.
+      retainedTerminalDrag.current = null;
+    }
+    // The child is still mounted in this quiescent commit, so the parent may
+    // safely clear this presentation after all child layout effects finish.
+    terminalDragAcknowledgement.mountedResetPermit.current = true;
+  }, [boardId, presentation, terminalDragAcknowledgement]);
+
+  useLayoutEffect(() => {
     acceptingSignals.current = true;
     return () => {
       acceptingSignals.current = false;
@@ -921,7 +1290,11 @@ function BoardInteractionControllerContent({
       dragEnabledAtCommit.current = false;
       interactionEnabledAtCommit.current = false;
       tapEnabledAtCommit.current = false;
+      const terminalLease = retainedTerminalDrag.current;
+      retainedTerminalDrag.current = null;
+      pendingTerminalReset.current = null;
       const correlation = adapter.current.active?.correlation;
+      const sourceSquare = adapter.current.active?.sourceSquare;
       if (correlation !== undefined) {
         adapter.current = reduceBoardGestureAdapter(adapter.current, {
           correlation,
@@ -934,18 +1307,47 @@ function BoardInteractionControllerContent({
       onPressedSquareChangeAtCommit.current?.(null);
       annotationRuntimeAtCommit.current?.cancel();
       const active = providerRuntime.drag.getSnapshot().active;
-      if (active?.owner === providerOwner.current) {
+      if (
+        terminalLease !== null &&
+        providerDragMatchesLease(active, terminalLease)
+      ) {
         providerRuntime.drag.release(
-          providerOwner.current,
-          active.gestureToken,
+          terminalLease.owner,
+          terminalLease.gestureToken,
         );
+      } else if (
+        correlation !== undefined &&
+        active?.boardId === boardId &&
+        active.gestureToken === correlation.token &&
+        active.owner === providerOwner.current &&
+        active.presentation === presentation &&
+        active.source.kind === 'board' &&
+        active.source.square === sourceSquare
+      ) {
+        providerRuntime.drag.release(providerOwner.current, correlation.token);
       }
-      onDragSourceChangeAtCommit.current?.(null);
       // Do not mutate UI-thread presentation values during teardown. Their
       // consumers are being removed in the same Fabric commit, so queued
       // Reanimated writes could otherwise target an already-deleted host.
     };
-  }, [providerRuntime]);
+  }, [boardId, presentation, providerRuntime]);
+
+  const shouldResetPresentation = useCallback((): boolean => {
+    const active = providerRuntime.drag.getSnapshot().active;
+    if (active?.presentation !== presentation) {
+      return true;
+    }
+    const current = adapter.current;
+    return (
+      current.lifecycle.phase === 'drag' &&
+      current.active !== null &&
+      active.boardId === boardId &&
+      active.gestureToken === current.active.correlation.token &&
+      active.owner === providerOwner.current &&
+      active.source.kind === 'board' &&
+      active.source.square === current.active.sourceSquare
+    );
+  }, [boardId, presentation, providerRuntime.drag]);
 
   return (
     <BoardGestureLayer
@@ -963,6 +1365,7 @@ function BoardInteractionControllerContent({
       presentation={presentation}
       resetKey={providerGestureResetKey}
       selectionRevision={selectionRevision}
+      shouldResetPresentation={shouldResetPresentation}
       tapEnabled={tapEnabled || annotationSnapshot !== null}
       trackDragTarget={dragEnabled}
       trackPress={trackPress}
