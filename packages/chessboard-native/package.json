@@ -1,6 +1,6 @@
 {
   "name": "@vibechess/chessboard-native",
-  "version": "0.1.1",
+  "version": "0.1.2-next.0",
   "description": "Controlled, rules-free React Native chessboard component",
   "type": "module",
   "source": "./src/index.ts",
@@ -68,7 +68,7 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/",
-    "tag": "latest"
+    "tag": "next"
   },
   "peerDependencies": {
     "react": "19.2.x",
