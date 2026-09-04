@@ -1,5 +1,11 @@
 import { act, render, renderHook } from '@testing-library/react-native';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  Platform,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { getAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 
 import { ReducedMotionProvider } from '../../src/accessibility/reduced-motion';
@@ -668,6 +674,62 @@ describe('interaction presentation foundation', () => {
           width: '100%',
         }),
       );
+    },
+  );
+
+  it.each([
+    { quiescent: false, transform: [{ scale: 1.35 }] },
+    { quiescent: true, transform: undefined },
+  ])(
+    'never emits an explicit undefined transform on Android (quiescent: $quiescent)',
+    async ({ quiescent, transform }) => {
+      // React Native's Fabric prop diff rewrites an explicit `undefined` to
+      // `null` and hands it to the transform processor, whose development-only
+      // validator throws. The static entry must omit the key instead.
+      jest.replaceProperty(Platform, 'OS', 'android');
+      const presentation = testPresentationSharedValues();
+      const Renderer: PieceRenderer = () => <View testID="static-art" />;
+      const result = await render(
+        <ReducedMotionProvider preference="never">
+          <DragOverlay
+            boardId="static-board"
+            piece={{ pieceType: 'wN' }}
+            presentation={presentation}
+            quiescent={quiescent}
+            reducedMotion={false}
+            renderer={Renderer}
+            size={40}
+            source={{ kind: 'board', square: 'b1' }}
+            square="b1"
+            style={Object.freeze<ViewStyle>({ transform: [{ scale: 1.35 }] })}
+            testID={`static-overlay-${String(quiescent)}`}
+          />
+        </ReducedMotionProvider>,
+      );
+      const overlay = result.getByTestId(
+        `static-overlay-${String(quiescent)}`,
+        {
+          includeHiddenElements: true,
+        },
+      );
+      const entries = ([] as unknown[])
+        .concat(overlay.props['style'] as StyleProp<ViewStyle>)
+        .filter(
+          (entry): entry is ViewStyle =>
+            typeof entry === 'object' && entry !== null,
+        );
+
+      for (const entry of entries) {
+        if (Object.prototype.hasOwnProperty.call(entry, 'transform')) {
+          expect(entry.transform).not.toBeUndefined();
+        }
+      }
+      const flattened = StyleSheet.flatten<ViewStyle>(entries);
+      if (transform === undefined) {
+        expect(flattened).not.toHaveProperty('transform');
+      } else {
+        expect(flattened.transform).toEqual(transform);
+      }
     },
   );
 });

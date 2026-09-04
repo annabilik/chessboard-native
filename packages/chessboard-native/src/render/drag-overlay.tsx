@@ -188,7 +188,14 @@ export function DragOverlay({
       style={[
         internalStyles.overlay,
         { height: size, width: size },
-        useLayoutPosition ? { transform: staticTransform } : null,
+        // Never emit an explicit `transform: undefined`: React Native's Fabric
+        // prop diff rewrites an explicit undefined to null and hands it to the
+        // transform processor, whose development-only validator throws on the
+        // first quiescent commit after every drop. Omitting the key lets the
+        // diff emit its removal sentinel without running the processor.
+        useLayoutPosition && staticTransform !== undefined
+          ? { transform: staticTransform }
+          : null,
         // Omitting the animated style is the descriptor-retirement barrier;
         // overriding its values would leave the stale native descriptor live.
         quiescent ? internalStyles.quiescent : animatedStyle,
