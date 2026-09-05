@@ -8,6 +8,7 @@ import {
   type SetStateAction,
 } from 'react';
 import {
+  PixelRatio,
   StyleSheet,
   View,
   type StyleProp,
@@ -232,6 +233,7 @@ describe('Chessboard controlled boundary', () => {
   });
 
   it('remeasures independently and clears stale geometry at zero size or dimension changes', async () => {
+    jest.spyOn(PixelRatio, 'get').mockReturnValue(2);
     const result = await render(
       <Chessboard
         boardId="resize"
@@ -243,8 +245,20 @@ describe('Chessboard controlled boundary', () => {
     const firstSquareStyle = flattenedStyle(
       requiredNode(squareNodes(rootOf(result)), 0),
     );
-    expect(firstSquareStyle.height).toBeCloseTo(100.125, 12);
-    expect(firstSquareStyle.width).toBeCloseTo(300.5 / 3, 12);
+    // Paint snaps shared edges to physical pixels; logical layout remains
+    // fractional and is covered independently by the board-layout contracts.
+    expect(firstSquareStyle.height).toBe(100);
+    expect(firstSquareStyle.width).toBe(100);
+    expect(
+      flattenedStyle(requiredNode(squareNodes(rootOf(result)), 5)),
+    ).toEqual(
+      expect.objectContaining({
+        height: 100.5,
+        left: 200.5,
+        top: 100,
+        width: 100,
+      }),
+    );
 
     await measure(rootOf(result), 0, 0);
     expect(squareNodes(rootOf(result))).toEqual([]);
