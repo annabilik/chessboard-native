@@ -8,6 +8,7 @@
   },
   "changesets": [
     "bright-drag-handoff",
+    "bright-square-pixels",
     "quiet-overlay-transform"
   ]
 }
