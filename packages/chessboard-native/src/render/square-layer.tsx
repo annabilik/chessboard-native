@@ -1,5 +1,5 @@
 import { memo, type ReactElement } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { PixelRatio, StyleSheet, View } from 'react-native';
 
 import type { NormalizedControlledValue } from '../internal/controlled-domain';
 import type {
@@ -13,7 +13,7 @@ import type {
   SquareStyles,
   SquareVisualState,
 } from '../public-types';
-import type { BoardSurfaceLayout } from './board-layout';
+import type { BoardCellRect, BoardSurfaceLayout } from './board-layout';
 import { resolveSquareStyle } from './style-resolution';
 
 interface SquareLayerProps {
@@ -31,6 +31,18 @@ interface SquareLayerProps {
   readonly squareStyles?: SquareStyles | undefined;
   readonly styles?: ChessboardStyles | undefined;
   readonly theme?: ChessboardTheme | undefined;
+}
+
+function pixelAlignedPaintRect(rect: Readonly<BoardCellRect>): BoardCellRect {
+  // Yoga rounds local offsets separately from absolute-edge-derived sizes.
+  // Fractional parent origins can therefore separate adjacent native frames.
+  // Snap shared paint edges, never each width independently; the canonical
+  // layout remains fractional for gestures, pieces, and renderer context.
+  const left = PixelRatio.roundToNearestPixel(rect.left);
+  const right = PixelRatio.roundToNearestPixel(rect.left + rect.width);
+  const top = PixelRatio.roundToNearestPixel(rect.top);
+  const bottom = PixelRatio.roundToNearestPixel(rect.top + rect.height);
+  return { height: bottom - top, left, top, width: right - left };
 }
 
 /** Measured, visual-only canonical square paint and custom content layer. */
@@ -97,7 +109,10 @@ export const SquareLayer = memo(function SquareLayer({
             importantForAccessibility="no-hide-descendants"
             key={cell.square}
             pointerEvents="none"
-            style={[internalStyles.squareFrame, cell.rect]}
+            style={[
+              internalStyles.squareFrame,
+              pixelAlignedPaintRect(cell.rect),
+            ]}
           >
             <View
               accessible={false}

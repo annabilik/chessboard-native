@@ -1,6 +1,12 @@
 import { render } from '@testing-library/react-native';
 import { useState, type ReactElement } from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  PixelRatio,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import type { TestInstance } from 'test-renderer';
 
 import type { NormalizedControlledValue } from '../../src/internal/controlled-domain';
@@ -67,6 +73,34 @@ function requiredRendererProps(
   return value;
 }
 
+function nativePaintBounds(paint: TestInstance, density: number) {
+  if (paint.parent === null) {
+    throw new Error('Expected square paint inside a frame.');
+  }
+  const { left, top, width, height } = flattenedStyle(paint.parent);
+  if (
+    typeof left !== 'number' ||
+    typeof top !== 'number' ||
+    typeof width !== 'number' ||
+    typeof height !== 'number'
+  ) {
+    throw new Error('Expected numeric square frame bounds.');
+  }
+  // Model Yoga's local-offset and absolute-edge-derived size rounding.
+  // A small tolerance stabilizes exact half-pixel cases under JS arithmetic.
+  const pixel = (value: number) => Math.round(value * density + 1e-7);
+  const parentLeft = 7.5 / density;
+  const parentTop = 13.25 / density;
+  const x = pixel(parentLeft) + pixel(left);
+  const y = pixel(parentTop) + pixel(top);
+  return {
+    bottom: y + pixel(parentTop + top + height) - pixel(parentTop + top),
+    left: x,
+    right: x + pixel(parentLeft + left + width) - pixel(parentLeft + left),
+    top: y,
+  };
+}
+
 function assertNoBrowserHoverLifecycle(
   props: Readonly<SquareRendererProps>,
 ): void {
@@ -79,6 +113,80 @@ function assertNoBrowserHoverLifecycle(
 }
 
 describe('controlled selection square presentation', () => {
+  it.each([
+    {
+      columns: 8,
+      density: 1.875,
+      heightPixels: 705,
+      rows: 8,
+      widthPixels: 705,
+    },
+    {
+      columns: 10,
+      density: 2.625,
+      heightPixels: 731,
+      rows: 6,
+      widthPixels: 977,
+    },
+    { columns: 8, density: 3, heightPixels: 1007, rows: 8, widthPixels: 1000 },
+  ])(
+    'covers every native pixel at density $density with a fractional parent origin',
+    async ({ columns, density, heightPixels, rows, widthPixels }) => {
+      jest.spyOn(PixelRatio, 'get').mockReturnValue(density);
+      for (const orientation of ['white', 'black'] as const) {
+        const layout = createBoardSurfaceLayout(
+          { height: heightPixels / density, width: widthPixels / density },
+          { columns, rows },
+          orientation,
+        );
+        const rendererSizes: number[] = [];
+        const result = await render(
+          <SquareLayer
+            boardId="fractional-paint"
+            layout={layout}
+            position={null}
+            renderSquare={({ size }) => {
+              rendererSizes.push(size);
+              return null;
+            }}
+            selection={null}
+          />,
+        );
+        const paints = squarePaints(rootOf(result));
+        expect(paints).toHaveLength(columns * rows);
+        for (let row = 0; row < rows; row += 1) {
+          let nextLeft = 8;
+          for (let column = 0; column < columns; column += 1) {
+            const bounds = nativePaintBounds(
+              requiredNode(paints, row * columns + column),
+              density,
+            );
+            expect(bounds.left).toBe(nextLeft);
+            nextLeft = bounds.right;
+            if (row === 0) expect(bounds.top).toBe(13);
+            else {
+              const above = nativePaintBounds(
+                requiredNode(paints, (row - 1) * columns + column),
+                density,
+              );
+              expect(bounds.top).toBe(above.bottom);
+            }
+            if (row === rows - 1) expect(bounds.bottom).toBe(13 + heightPixels);
+          }
+          expect(nextLeft).toBe(8 + widthPixels);
+        }
+        // Paint rounding must not change the public renderer's logical size.
+        expect(rendererSizes).toHaveLength(columns * rows);
+        for (const size of rendererSizes) {
+          expect(size).toBeCloseTo(
+            Math.min(layout.cellHeight, layout.cellWidth),
+          );
+        }
+        await result.unmount();
+      }
+    },
+  );
+
   it('projects canonical selected, destination, and disabled squares in either orientation', async () => {
     for (const orientation of ['white', 'black'] as const) {
       const layout = createBoardSurfaceLayout(

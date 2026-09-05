@@ -83,8 +83,15 @@ therefore a parent-layout constraint; this slice does not add a public sizing
 prop that could conflict with the later styling contract. It never reads global
 screen dimensions.
 
+Square background frames snap their shared cumulative edges to the device pixel
+grid before native layout. This avoids gaps from Yoga rounding local offsets
+separately from absolute-edge-derived sizes when a parent has a fractional
+origin. Width and height come from adjacent snapped edges, so rounding cannot
+accumulate across a row. Gesture geometry, piece placement, notation, and custom
+renderer sizes keep the original measured coordinates.
+
 The visual layer waits for a positive `onLayout` measurement. Its exact native
-width and height become the board-local coordinate system. Every absolute cell
+width and height become the board-local coordinate system. Every logical cell
 uses cumulative proportional edges on both axes; values are not rounded, so
 adjacent cells share an edge and the final row and column end at the exact
 measured bounds. A zero layout clears the visual layer. A dimension change with
