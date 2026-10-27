@@ -1073,7 +1073,13 @@ describe('public controlled move requests', () => {
     const canonicalStyle = animatedStyle(canonicalHost);
     const pendingStyle = animatedStyle(pendingHandoffHost);
     expect(canonicalHost).toBe(pendingSourceHost);
-    expect(canonicalStyle['transform']).toBeUndefined();
+    // The canonical host stays on its square: an explicit identity transform,
+    // never `undefined`, so a stale transition offset can never survive in
+    // Reanimated's props registry.
+    expect(canonicalStyle['transform']).toEqual([
+      { translateX: 0 },
+      { translateY: 0 },
+    ]);
     // Exact preparation first admits this otherwise-static pending-source
     // host. Its unattached source worklet can still expose .45, or the
     // replacement base-one mapper can already have evaluated. The independent

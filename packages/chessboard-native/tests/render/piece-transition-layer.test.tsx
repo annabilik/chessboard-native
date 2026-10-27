@@ -2063,7 +2063,10 @@ describe('mounted piece transition projection', () => {
         0.4,
         1,
       ),
-    ).toEqual({ opacity: 0.4, transform: undefined });
+    ).toEqual({
+      opacity: 0.4,
+      transform: [{ translateX: 0 }, { translateY: 0 }],
+    });
     expect(
       resolvePieceTransitionAnimatedStyle(
         projection.current.get('d1') ?? null,

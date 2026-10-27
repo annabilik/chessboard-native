@@ -362,7 +362,17 @@ function clampProgress(progress: number): number {
   return progress;
 }
 
-/** Pure style resolver shared by Reanimated worklets and deterministic tests. */
+/**
+ * Pure style resolver shared by Reanimated worklets and deterministic tests.
+ *
+ * The transform is always an explicit array, never `undefined`: Reanimated's
+ * props builder drops `undefined` members, and its Fabric props registry keeps
+ * a host's last written transform until the host unmounts. An admitted host
+ * writes its transition start offset at progress 0 before the transition is
+ * started (a dragged piece's transition waits for the overlay handoff first);
+ * if that transition is aborted or torn down before its final frame reaches
+ * the host, only an explicit identity write here can replace the stale offset.
+ */
 export function resolvePieceTransitionAnimatedStyle(
   transition: Readonly<PieceTransitionVisual> | null,
   progress: number,
@@ -371,7 +381,10 @@ export function resolvePieceTransitionAnimatedStyle(
   'worklet';
   const amount = clampProgress(progress);
   if (transition === null) {
-    return { opacity: baseOpacity, transform: undefined };
+    return {
+      opacity: baseOpacity,
+      transform: [{ translateX: 0 }, { translateY: 0 }],
+    };
   }
   const opacity =
     transition.startOpacity +
@@ -382,14 +395,9 @@ export function resolvePieceTransitionAnimatedStyle(
   const translateY =
     transition.startTranslateY +
     (transition.endTranslateY - transition.startTranslateY) * amount;
-  const hasTranslation =
-    transition.startTranslateX !== 0 ||
-    transition.startTranslateY !== 0 ||
-    transition.endTranslateX !== 0 ||
-    transition.endTranslateY !== 0;
   return {
     opacity: baseOpacity * opacity,
-    transform: hasTranslation ? [{ translateX }, { translateY }] : undefined,
+    transform: [{ translateX }, { translateY }],
   };
 }
 
